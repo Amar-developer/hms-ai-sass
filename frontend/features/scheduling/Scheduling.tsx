@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
 import {
@@ -11,10 +12,7 @@ import {
   SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import {
-  groupSchedules,
-  selectedSchedulePayloadsFromRHF,
-} from "@/features/scheduling/helpers";
+import { selectedSchedulePayloadsFromRHF } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { pageSize, weekdays } from "./constants";
@@ -26,7 +24,13 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { ScheduleFormValues } from "./schedule.schema";
 import { useSchedulingData, useSchedulingActions } from "./api";
 
-export function Scheduling({ apiSession, branchId }: any) {
+export function Scheduling({
+  apiSession,
+  branchId,
+  view = "list",
+  selectedId = "",
+}: any) {
+  const router = useRouter();
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
 
@@ -40,8 +44,6 @@ export function Scheduling({ apiSession, branchId }: any) {
   const { create, update, remove, busy } = useSchedulingActions(apiSession);
 
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
-  const [view, setView] = useState("list");
-  const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [filterBranch, setFilterBranch] = useState("all");
   const [filterWeekday, setFilterWeekday] = useState("all");
@@ -53,13 +55,25 @@ export function Scheduling({ apiSession, branchId }: any) {
   const scopedSession =
     apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
 
-  const selected = groupSchedules(rows).find(
-    (row: any) => row.id === selectedId,
-  );
+  // `rows` now arrives pre-grouped from /practitioners/schedules/grouped —
+  // one object per editable schedule, timings nested under `slots`.
+  const selected = rows.find((row: any) => row.group_key === selectedId);
+
+  // Bounce back to the list if a direct/bookmarked edit link no longer
+  // resolves to a real schedule, but only once loading has finished.
+  useEffect(() => {
+    if (view !== "edit" || !selectedId || loading) return;
+    if (!selected) router.replace("/scheduling");
+  }, [view, selectedId, loading, selected, router]);
 
   function open(nextView: string, id = "") {
-    setSelectedId(id);
-    setView(nextView);
+    const path =
+      nextView === "create"
+        ? "/scheduling/new"
+        : nextView === "edit"
+          ? `/scheduling/${encodeURIComponent(id)}/edit`
+          : "/scheduling";
+    router.push(path);
     setMessage("");
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
@@ -100,19 +114,10 @@ export function Scheduling({ apiSession, branchId }: any) {
       return;
     }
 
-    const duplicateDepartmentId = data.departmentId;
-    const hasDuplicateSchedule = rows.some(
-      (row: any) =>
-        row.is_active !== false &&
-        String(row.practitioner_id) === String(practitionerId) &&
-        String(row.department_id) === String(duplicateDepartmentId),
-    );
-
-    if (hasDuplicateSchedule) {
-      setMessage("This doctor already has a schedule for this department.");
-      return;
-    }
-
+    // Duplicate detection lives on the server, which compares the actual
+    // time windows: separate morning/evening sessions in one department are
+    // legitimate, only overlapping ones are rejected. Checking department
+    // alone here would block those valid additions.
     setMessage("");
 
     try {
@@ -163,27 +168,11 @@ export function Scheduling({ apiSession, branchId }: any) {
       return;
     }
 
-    const existingRows = (selected.schedules || [selected]).filter(
+    const existingRows = (selected.slots || []).filter(
       (row: any) => row && row.is_active !== false,
     );
 
-    const currentGroupIds = new Set(
-      (selected.schedules || [selected]).map((row: any) => row.id),
-    );
-    const duplicateDepartmentId = data.departmentId;
-    const hasDuplicateSchedule = rows.some(
-      (row: any) =>
-        row.is_active !== false &&
-        !currentGroupIds.has(row.id) &&
-        String(row.practitioner_id) === String(practitionerId) &&
-        String(row.department_id) === String(duplicateDepartmentId),
-    );
-
-    if (hasDuplicateSchedule) {
-      setMessage("This doctor already has a schedule for this department.");
-      return;
-    }
-
+    // As with create, overlap-based duplicate detection is the server's job.
     setMessage("");
 
     try {
@@ -234,7 +223,7 @@ export function Scheduling({ apiSession, branchId }: any) {
   async function deleteSchedule(row: any) {
     if (!scopedSession) return;
 
-    const rowsToDelete = row.schedules || [row];
+    const rowsToDelete = row.slots || [row];
     setMessage("");
 
     try {
@@ -296,7 +285,7 @@ export function Scheduling({ apiSession, branchId }: any) {
       />
     );
 
-  const filtered = rows
+  const groupedRows = rows
     .filter((row: any) => {
       const doctor = doctors.find(
         (item: any) => item.id === row.practitioner_id,
@@ -305,10 +294,10 @@ export function Scheduling({ apiSession, branchId }: any) {
         (item: any) => item.id === row.department_id,
       );
       const text = [
-        doctor?.full_name,
+        row.practitioner_full_name || doctor?.full_name,
         row.room_number,
-        department?.name,
-        row.id,
+        row.department_name || department?.name,
+        row.group_key,
       ]
         .join(" ")
         .toLowerCase();
@@ -317,21 +306,15 @@ export function Scheduling({ apiSession, branchId }: any) {
         (filterBranch === "all" || row.branch_id === filterBranch) &&
         (filterDepartment === "all" ||
           row.department_id === filterDepartment) &&
-        (filterWeekday === "all" || String(row.weekday) === filterWeekday)
+        // A schedule matches a weekday filter when any of its timings do.
+        (filterWeekday === "all" ||
+          (row.slots || []).some(
+            (slot: any) => String(slot.weekday) === filterWeekday,
+          )) &&
+        (filterStatus === "all" ||
+          (filterStatus === "active" ? row.is_active : !row.is_active))
       );
     })
-    .sort(
-      (a: any, b: any) =>
-        new Date(b.updated_at || b.created_at).getTime() -
-        new Date(a.updated_at || a.created_at).getTime(),
-    );
-
-  const groupedRows = groupSchedules(filtered)
-    .filter(
-      (group: any) =>
-        filterStatus === "all" ||
-        (filterStatus === "active" ? group.is_active : !group.is_active),
-    )
     .sort(
       (a: any, b: any) =>
         new Date(b.updated_at || b.created_at).getTime() -
@@ -494,12 +477,12 @@ export function Scheduling({ apiSession, branchId }: any) {
             )}
             {pageRows.map((row: any) => (
               <ScheduleRow
-                key={row.id}
+                key={row.group_key}
                 row={row}
                 branches={branches}
                 departments={departments}
                 doctors={doctors}
-                onEdit={() => open("edit", row.id)}
+                onEdit={() => open("edit", row.group_key)}
                 onDelete={() => setConfirm({ row })}
               />
             ))}

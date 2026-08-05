@@ -14,6 +14,8 @@ export type Props = {
   loadLiveData: (session: ApiSession) => Promise<void>;
   setActive?: (page: string) => void;
   isInitialLoading?: boolean;
+  /** Top-level view, driven by the route: /appointments vs /appointments/new. */
+  mode?: "list" | "book";
 };
 
 export type BookingStep = "appointment" | "newPatient" | "success";

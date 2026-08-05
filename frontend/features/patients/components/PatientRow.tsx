@@ -1,6 +1,6 @@
 import { capitalizeFirst } from "@/utils/helper";
 import { Badge } from "@/app/components/common/ui";
-import { displayPatientGender } from "../helpers";
+import { displayPatientGender, patientDisplayMobile } from "../helpers";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
@@ -53,7 +53,7 @@ export function PatientRow({
             Mobile
           </p> */}
           <span className="block truncate text-sm  text-slate-700">
-            {row.mobile || row.guardian_mobile || "-"}
+            {patientDisplayMobile(row) || "-"}
           </span>
         </div>
         <div className="min-w-0">

@@ -38,6 +38,7 @@ from app.modules.practitioners.services.schedule_service import (  # noqa: F401
     create_schedule,
     delete_schedule,
     list_all_schedules,
+    list_all_schedules_grouped,
     list_leaves,
     list_practitioner_schedules,
     list_room_assignments,

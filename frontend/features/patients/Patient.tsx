@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { Empty } from "@/app/components/common/Empty";
@@ -44,7 +45,10 @@ export function Patient({
   loadLiveData,
   setActive,
   setPatients,
-}: PatientProps) {
+  view = "list",
+  selectedId = "",
+}: PatientProps & { view?: string; selectedId?: string }) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
@@ -58,13 +62,11 @@ export function Patient({
   const canCreatePatient = hasPermission("patients.write", "patients.create");
   const canEditPatient = hasPermission("patients.edit");
   const canDeletePatient = hasPermission("patients.delete");
-  const [view, setView] = useState("list");
   const [tenants, setTenants] = useState<any[]>([]);
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
   const [branches, setBranches] = useState<any[]>([]);
   const [rows, setRows] = useState<any[]>([]);
   const [totalRows, setTotalRows] = useState(0);
-  const [selectedId, setSelectedId] = useState("");
   const [selectedDetail, setSelectedDetail] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
   const [consultations, setConsultations] = useState<any[]>([]);
@@ -154,8 +156,6 @@ export function Patient({
       setBranches(branchRows);
       setRows(patientRows.items || []);
       setTotalRows(patientRows.total || 0);
-      if (!selectedId && patientRows.items?.[0]?.id)
-        setSelectedId(patientRows.items[0].id);
     } catch (err: any) {
       setMessage(err.message || "Could not load patients.");
     } finally {
@@ -222,7 +222,6 @@ export function Patient({
       ]);
       setSelectedDetail(detail);
       setSummary(summaryData);
-      setSelectedId(id);
       setConsultations(Array.isArray(consultationRows) ? consultationRows : []);
       setLabOrders(Array.isArray(labRows) ? labRows : []);
       setPharmacyIssues(Array.isArray(pharmacyRows) ? pharmacyRows : []);
@@ -267,56 +266,73 @@ export function Patient({
   }, [query]);
 
   useEffect(() => {
-    if (!apiSession || !tenantId || typeof window === "undefined") return;
+    if (
+      view !== "list" ||
+      !apiSession ||
+      !tenantId ||
+      typeof window === "undefined"
+    )
+      return;
     const pendingPatientId =
       sessionStorage.getItem("medizinhub.patientId") ||
       readNotificationTarget("patient")?.resourceId;
     if (!pendingPatientId) return;
     sessionStorage.removeItem("medizinhub.patientId");
-    setSelectedId(pendingPatientId);
-    setView("detail");
-    loadPatientDetail(pendingPatientId);
-    requestAnimationFrame(() =>
-      window.scrollTo({ top: 0, behavior: "smooth" }),
-    );
-  }, [apiSession?.email, tenantId]);
+    router.push(`/patients/${pendingPatientId}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiSession?.email, tenantId, view]);
+
+  // Fetch (or refetch) the full record whenever the URL names a different
+  // patient than what's currently cached — covers detail/edit views for
+  // both in-app navigation and direct/bookmarked links. The ref bridges the
+  // one-render gap before setBusy(true) (fired inside loadPatientDetail)
+  // actually takes effect, so the guard effect below can't mistake "about
+  // to fetch" for "finished loading, found nothing" and bounce prematurely.
+  const detailFetchInFlightRef = useRef(false);
+  useEffect(() => {
+    if ((view !== "detail" && view !== "edit") || !selectedId) return;
+    if (selectedDetail?.id === selectedId) return;
+    detailFetchInFlightRef.current = true;
+    loadPatientDetail(selectedId).finally(() => {
+      detailFetchInFlightRef.current = false;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedId, selectedDetail?.id]);
+
+  // Bounce back to the list if a direct/bookmarked detail or edit link no
+  // longer resolves to a real patient, but only once loading has finished.
+  useEffect(() => {
+    if (
+      (view !== "detail" && view !== "edit") ||
+      !selectedId ||
+      busy ||
+      detailFetchInFlightRef.current ||
+      selectedDetail?.id === selectedId
+    )
+      return;
+    router.replace("/patients");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedId, busy, selectedDetail?.id]);
 
   function open(nextView: string, id = "") {
-    if (id) setSelectedId(id);
-    if (nextView === "detail" && id) loadPatientDetail(id);
-    setView(nextView);
+    const path =
+      nextView === "create"
+        ? "/patients/new"
+        : nextView === "edit" && id
+          ? `/patients/${id}/edit`
+          : nextView === "detail" && id
+            ? `/patients/${id}`
+            : "/patients";
+    router.push(path);
     setMessage("");
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
     );
   }
 
-  async function openPatientEdit(id: string) {
-    if (!scopedSession || !id) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const hasCompleteEditRecord =
-        selectedDetail?.id === id &&
-        "date_of_birth" in selectedDetail &&
-        "email" in selectedDetail &&
-        "alternate_mobile" in selectedDetail &&
-        "address" in selectedDetail &&
-        "blood_group" in selectedDetail;
-      const detail = hasCompleteEditRecord
-        ? selectedDetail
-        : await apiFetch(`/patients/${id}`, scopedSession);
-      setSelectedId(id);
-      setSelectedDetail(detail);
-      setView("edit");
-      requestAnimationFrame(() =>
-        window.scrollTo({ top: 0, behavior: "smooth" }),
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not load the complete patient record.");
-    } finally {
-      setBusy(false);
-    }
+  function openPatientEdit(id: string) {
+    if (!id) return;
+    open("edit", id);
   }
 
   async function createPatient(data: any) {
@@ -350,7 +366,6 @@ export function Patient({
         ...previous.filter((row: any) => row.id !== created.id),
       ]);
       syncSharedPatient(created);
-      setSelectedId(created.id);
       await loadData(tenantId);
       open("detail", created.id);
       setMessage(`Patient created: ${created.full_name}`);

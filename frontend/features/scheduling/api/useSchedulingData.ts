@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   getTenants,
   getDoctors,
-  getSchedules,
+  getGroupedSchedules,
 } from "../api";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { activeTenantOptions } from "@/utils/helper";
@@ -23,7 +23,10 @@ export function useSchedulingData({
   const [branches, setBranches] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Starts true: on mount there is a render before loadData runs, and
+  // loading=false there looks identical to "loaded, found nothing" to any
+  // not-found redirect guard.
+  const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<any[]>([]);
   const [error, setError] = useState("");
 
@@ -35,7 +38,10 @@ export function useSchedulingData({
   }
 
   async function loadData() {
-    if (!apiSession || !tenantId) return;
+    if (!apiSession || !tenantId) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
 
@@ -53,7 +59,7 @@ export function useSchedulingData({
 
           getDoctors(session),
 
-          getSchedules(session),
+          getGroupedSchedules(session),
         ]);
 
       setBranches(branchRows);

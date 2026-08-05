@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
 from fastapi import HTTPException, status
 from sqlmodel import Session
@@ -18,6 +18,7 @@ from app.modules.practitioners.schemas import (
     PractitionerLeaveCreate,
     PractitionerRoomAssignmentCreate,
     PractitionerScheduleCreate,
+    PractitionerScheduleGroupRead,
     PractitionerScheduleRead,
     PractitionerScheduleUpdate,
 )
@@ -25,7 +26,10 @@ from app.modules.practitioners.services.availability import (
     practitioner_is_eligible,
     room_assignment_conflicts,
 )
-from app.modules.practitioners.services.read_models import enrich_schedules
+from app.modules.practitioners.services.read_models import (
+    enrich_schedules,
+    group_schedules,
+)
 from app.modules.practitioners.services.validation import (
     department_filter_ids,
     get_practitioner_or_404,
@@ -33,6 +37,25 @@ from app.modules.practitioners.services.validation import (
     validate_links,
     validate_time_window,
 )
+
+
+def _times_overlap(start_a: time, end_a: time, start_b: time, end_b: time) -> bool:
+    """True when two time windows intersect. Back-to-back windows (one ends
+    exactly when the next begins) do not count as overlapping, so a doctor
+    can run consecutive sessions."""
+    return start_a < end_b and start_b < end_a
+
+
+def _duplicate_schedule_detail(schedule_date: date | None) -> str:
+    if schedule_date:
+        return (
+            "This doctor already has an overlapping schedule for this "
+            f"department on {schedule_date}"
+        )
+    return (
+        "This doctor already has an overlapping schedule for this department "
+        "at this time"
+    )
 
 
 def list_all_schedules(
@@ -55,6 +78,29 @@ def list_all_schedules(
         is_active=is_active,
     )
     return enrich_schedules(session, schedules)
+
+
+def list_all_schedules_grouped(
+    session: Session,
+    *,
+    tenant_id: str,
+    practitioner_id: str | None,
+    branch_id: str | None,
+    department_id: str | None,
+    is_active: bool | None,
+) -> list[PractitionerScheduleGroupRead]:
+    """Same filters as list_all_schedules, but one object per editable
+    schedule with its timings nested under `slots`."""
+    return group_schedules(
+        list_all_schedules(
+            session,
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            branch_id=branch_id,
+            department_id=department_id,
+            is_active=is_active,
+        )
+    )
 
 
 def update_schedule(
@@ -87,23 +133,28 @@ def update_schedule(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Practitioner is not assigned to this branch and department",
         )
+    schedule_date = updates.get("schedule_date", schedule.schedule_date)
+    weekday = updates.get("weekday", schedule.weekday)
+    start_time = updates.get("start_time", schedule.start_time)
+    end_time = updates.get("end_time", schedule.end_time)
+    validate_time_window(start_time, end_time)
     if department_id and any(
         row.id != schedule.id
+        and _times_overlap(start_time, end_time, row.start_time, row.end_time)
         for row in PractitionerScheduleRepository(
             session
         ).active_for_practitioner_department(
             tenant_id=tenant_id,
             practitioner_id=practitioner_id,
             department_id=department_id,
+            schedule_date=schedule_date,
+            weekday=weekday,
         )
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This doctor already has a schedule for this department",
+            detail=_duplicate_schedule_detail(schedule_date),
         )
-    start_time = updates.get("start_time", schedule.start_time)
-    end_time = updates.get("end_time", schedule.end_time)
-    validate_time_window(start_time, end_time)
     for key, value in updates.items():
         setattr(schedule, key, value)
     schedule.updated_at = datetime.now(timezone.utc)
@@ -170,18 +221,25 @@ def create_schedule(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Practitioner is not assigned to this branch and department",
         )
-    if payload.department_id and PractitionerScheduleRepository(
-        session
-    ).active_for_practitioner_department(
-        tenant_id=tenant_id,
-        practitioner_id=practitioner_id,
-        department_id=payload.department_id,
+    validate_time_window(payload.start_time, payload.end_time)
+    if payload.department_id and any(
+        _times_overlap(
+            payload.start_time, payload.end_time, row.start_time, row.end_time
+        )
+        for row in PractitionerScheduleRepository(
+            session
+        ).active_for_practitioner_department(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            department_id=payload.department_id,
+            schedule_date=payload.schedule_date,
+            weekday=payload.weekday,
+        )
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This doctor already has a schedule for this department",
+            detail=_duplicate_schedule_detail(payload.schedule_date),
         )
-    validate_time_window(payload.start_time, payload.end_time)
     schedule = PractitionerSchedule.model_validate(
         payload, update={"tenant_id": tenant_id, "practitioner_id": practitioner_id}
     )

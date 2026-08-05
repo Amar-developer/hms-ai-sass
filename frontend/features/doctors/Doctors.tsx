@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import {
   Card,
@@ -32,7 +33,14 @@ import { FilterSection } from "@/app/components/common/FilterSection";
 
 const pageSize = 10;
 
-export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
+export function Doctors({
+  apiSession,
+  clinic,
+  allowedDepartments = [],
+  view = "list",
+  selectedId = "",
+}: any) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
@@ -55,7 +63,6 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
     "practitioners.manage",
     "practitioners.delete",
   );
-  const [view, setView] = useState("list");
   const [tenants, setTenants] = useState<any[]>([]);
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
   const scopedSession =
@@ -75,7 +82,6 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
   const [feeRules, setFeeRules] = useState<any[]>([]);
   const [usersTenantId, setUsersTenantId] = useState("");
   const [feeRulesTenantId, setFeeRulesTenantId] = useState("");
-  const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [branchFilter, setBranchFilter] = useState("all");
@@ -87,6 +93,14 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
   const [confirm, setConfirm] = useState<any>(null);
   const selected = rows.find((row: any) => row.id === selectedId);
   const listLoading = practitionersLoading || referenceLoading;
+
+  // Bounce back to the list if a direct/bookmarked edit link no longer
+  // resolves to a real practitioner, but only once loading has actually
+  // finished.
+  useEffect(() => {
+    if (view !== "edit" || !selectedId || listLoading) return;
+    if (!selected) router.replace("/practitioners");
+  }, [view, selectedId, listLoading, selected, router]);
 
   function syncSharedPractitioner(practitioner: any) {
     if (!setLivePractitioners || !practitioner?.id) return;
@@ -201,8 +215,13 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
 
   function open(nextView: string, id = "") {
     const finish = () => {
-      setSelectedId(id);
-      setView(nextView);
+      const path =
+        nextView === "create"
+          ? "/practitioners/new"
+          : nextView === "edit"
+            ? `/practitioners/${id}/edit`
+            : "/practitioners";
+      router.push(path);
       requestAnimationFrame(() =>
         window.scrollTo({ top: 0, behavior: "smooth" }),
       );

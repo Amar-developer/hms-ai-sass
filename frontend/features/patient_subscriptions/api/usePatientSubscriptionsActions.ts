@@ -37,12 +37,12 @@ type UsePatientSubscriptionsActionsParams = {
   editFreeMedIds: string[];
   editFreeMedQuantities: Record<string, number>;
   editDiscountedMedIds: string[];
+  view: string;
+  selectedId: string;
   setBusy: (value: string) => void;
   setToast: (value: Toast) => void;
-  setView: (value: string) => void;
-  setEditingPlan: (value: any | null) => void;
+  navigateToList: () => void;
   setConfirmDelete: (value: string) => void;
-  setDetailPlanId: (updater: (current: string) => string) => void;
   setFreeConsultDeptIds: (ids: string[]) => void;
   setFreeLabTestIds: (ids: string[]) => void;
   setFreeLabQuantities: (value: Record<string, number>) => void;
@@ -83,12 +83,12 @@ export function usePatientSubscriptionsActions({
   editFreeMedIds,
   editFreeMedQuantities,
   editDiscountedMedIds,
+  view,
+  selectedId,
   setBusy,
   setToast,
-  setView,
-  setEditingPlan,
+  navigateToList,
   setConfirmDelete,
-  setDetailPlanId,
   setFreeConsultDeptIds,
   setFreeLabTestIds,
   setFreeLabQuantities,
@@ -228,7 +228,7 @@ export function usePatientSubscriptionsActions({
       setFreeMedicineIds([]);
       setFreeMedicineQuantities({});
       setDiscountedMedicineIds([]);
-      setView("list");
+      navigateToList();
       await load();
       setToast({
         text: "Tenant-scoped patient subscription plan created.",
@@ -321,8 +321,7 @@ export function usePatientSubscriptionsActions({
           updated_by_user_id: (apiSession as ApiSession).user?.id,
         },
       );
-      setEditingPlan(null);
-      setView("list");
+      navigateToList();
       await load();
       setToast({ text: "Plan updated successfully.", kind: "success" });
     } catch (err: any) {
@@ -371,7 +370,9 @@ export function usePatientSubscriptionsActions({
         planId,
       );
       setConfirmDelete("");
-      setDetailPlanId((current) => (current === planId ? "" : current));
+      if (view !== "list" && selectedId === planId) {
+        navigateToList();
+      }
       await load();
       setToast({ text: "Plan deactivated.", kind: "success" });
     } catch (err: any) {

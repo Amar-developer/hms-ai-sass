@@ -4,8 +4,6 @@ import type { ApiSession } from "@/lib/api";
 import { inr, patientName, today } from "@/utils/helper";
 import * as ipApi from "./ip.api";
 
-type IPView = "list" | "convert" | "direct" | "detail";
-
 type UseIPAdmissionActionsParams = {
   apiSession: ApiSession | null | undefined;
   branchId?: string;
@@ -14,8 +12,7 @@ type UseIPAdmissionActionsParams = {
   ipAdmissions: any[];
   setIpAdmissions: (rows: any[]) => void;
   selectedAdmission: any;
-  setSelectedId: (id: string) => void;
-  setView: (view: IPView) => void;
+  navigateToAdmission: (id: string) => void;
   setBusy: (value: string) => void;
   setError: (value: string) => void;
   setMessage: (value: string) => void;
@@ -41,8 +38,7 @@ export function useIPAdmissionActions({
   ipAdmissions,
   setIpAdmissions,
   selectedAdmission,
-  setSelectedId,
-  setView,
+  navigateToAdmission,
   setBusy,
   setError,
   setMessage,
@@ -121,8 +117,7 @@ export function useIPAdmissionActions({
           await ipApi.uploadAdmissionDocument(apiSession, row.id, documentFile);
         }
         await refresh();
-        setSelectedId(row.id);
-        setView("detail");
+        navigateToAdmission(row.id);
         setMessage("IP admission created successfully.");
       } else {
         const p = patients.find((row: any) => row.id === patientId);
@@ -135,8 +130,7 @@ export function useIPAdmissionActions({
           patient: patientName(p),
         };
         setIpAdmissions([row, ...ipAdmissions]);
-        setSelectedId(row.id);
-        setView("detail");
+        navigateToAdmission(row.id);
       }
       form.reset();
     } catch (err: any) {

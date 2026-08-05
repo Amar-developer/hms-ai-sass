@@ -31,6 +31,7 @@ from app.modules.billing.schemas import (
 )
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.membership import invoice_membership_benefit
+from app.modules.billing.services.offers import invoice_offer_benefit
 from app.modules.billing.services.money import ZERO, money_value, percentage_amount
 from app.modules.billing.services.source_sync import sync_invoice_source_after_reversal
 from app.modules.patients.services.references import (
@@ -406,4 +407,5 @@ def read_invoice_detail(
             session, invoice, adjustment_requests
         ),
         membership_benefit=invoice_membership_benefit(session, invoice),
+        offer_benefit=invoice_offer_benefit(session, invoice),
     )

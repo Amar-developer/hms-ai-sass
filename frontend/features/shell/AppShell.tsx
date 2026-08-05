@@ -15,6 +15,10 @@ import { ChangePassword } from "@/features/auth/ChangePassword";
 import { canUseTenantAdminSection } from "../admin/permissions";
 import { tenantAdminSections } from "../admin/constants";
 import { platformSectionsForUser } from "@/features/superAdmin/SuperAdminDashboard";
+import {
+  parseSuperAdminSegments,
+  superAdminPath,
+} from "@/features/superAdmin/routing";
 import { reportSections } from "@/features/reports/constants";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/app/components/common/Sidebar";
@@ -197,7 +201,15 @@ export function AppShell({
     const parentSection = superAdminSectionParents[sectionId] || sectionId;
     return visiblePlatformSections.some(([id]: any) => id === parentSection);
   };
-  const [superAdminSection, setSuperAdminSection] = useState("overview");
+  // Platform sections are real nested routes (/superadmin/roles,
+  // /superadmin/roles/{id}/edit, ...), so the active section is derived from
+  // the URL instead of tracked separately.
+  const superAdminSection = pathname.startsWith("/superadmin")
+    ? parseSuperAdminSegments(pathname.split("/").slice(2)).section
+    : "overview";
+  function setSuperAdminSection(value: string) {
+    router.push(superAdminPath(value));
+  }
   const activeSuperAdminSection = isVisibleSuperAdminSection(superAdminSection)
     ? superAdminSection
     : visiblePlatformSections[0]?.[0] || superAdminSection;
@@ -225,7 +237,16 @@ export function AppShell({
     : visibleTenantAdminSections[0]?.[0] || tenantAdminSection;
   const [profileOpen, setProfileOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(true);
-  const [reportsSection, setReportsSection] = useState("metrix");
+  // Report tabs are real nested routes (/reports/metrix, /reports/lab, ...),
+  // so the active tab is derived from the URL rather than tracked separately
+  // — that keeps the breadcrumb and sidebar highlight correct on
+  // back/forward and on direct navigation.
+  const reportsSection = pathname.startsWith("/reports/")
+    ? pathname.split("/")[2] || "metrix"
+    : "metrix";
+  function setReportsSection(value: string) {
+    router.push(`/reports/${value}`);
+  }
   const [sideBarOpen, setSidebarOpen] = useState(true);
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -331,6 +352,7 @@ export function AppShell({
     if (id === "reports" && section) {
       setReportsOpen(true);
       setReportsSection(section);
+      return;
     }
 
     if (id === "superadmin" && section) {
@@ -338,6 +360,7 @@ export function AppShell({
 
       if (isVisibleSuperAdminSection(section)) {
         setSuperAdminSection(section);
+        return;
       }
     }
 
@@ -345,7 +368,15 @@ export function AppShell({
 
     setPendingPage(id);
     setActive(id);
-    router.push(id === "admin" ? `/admin/${tenantAdminSection}` : `/${id}`);
+    router.push(
+      id === "admin"
+        ? `/admin/${tenantAdminSection}`
+        : id === "reports"
+          ? `/reports/${reportsSection}`
+          : id === "superadmin"
+            ? superAdminPath(superAdminSection)
+            : `/${id}`,
+    );
   }
 
   // Permission/entitlement gating can make the pathname's module unavailable

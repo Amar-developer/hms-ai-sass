@@ -457,3 +457,73 @@ def test_patient_view_and_summary_write_audit_events(client: TestClient):
 
     assert "patient.record.viewed" in actions
     assert "patient.summary.viewed" in actions
+
+
+def test_patient_contact_falls_back_primary_then_alternate_then_guardian():
+    from types import SimpleNamespace
+
+    from app.modules.patients.contact import (
+        patient_contact_mobile,
+        patient_contact_numbers,
+    )
+
+    def patient(mobile="", alternate="", guardian=""):
+        return SimpleNamespace(
+            mobile=mobile,
+            alternate_mobile=alternate,
+            guardian_mobile=guardian,
+        )
+
+    assert patient_contact_mobile(patient(mobile="111")) == "111"
+    # No primary: fall through to the alternate, then the guardian.
+    assert patient_contact_mobile(patient(alternate="222")) == "222"
+    assert patient_contact_mobile(patient(guardian="333")) == "333"
+    assert patient_contact_mobile(patient(alternate="222", guardian="333")) == "222"
+    # Blank strings must not count as a usable number.
+    assert patient_contact_mobile(patient(mobile="   ", alternate="222")) == "222"
+    assert patient_contact_mobile(patient()) is None
+    assert patient_contact_mobile(None) is None
+
+    # Priority order is preserved, and a number repeated across fields is
+    # listed once so the patient is never messaged twice.
+    assert patient_contact_numbers(
+        patient(mobile="111", alternate="222", guardian="333")
+    ) == ["111", "222", "333"]
+    assert patient_contact_numbers(patient(mobile="111", alternate="111")) == ["111"]
+
+
+def test_whatsapp_destination_uses_one_number_per_patient():
+    from types import SimpleNamespace
+
+    from app.modules.integrations.whatsapp_consent import (
+        patient_notification_destination,
+    )
+
+    def patient(mobile="", alternate="", guardian=""):
+        return SimpleNamespace(
+            mobile=mobile,
+            alternate_mobile=alternate,
+            guardian_mobile=guardian,
+        )
+
+    # Exactly one destination is returned even when several numbers exist,
+    # so an invoice or reminder is delivered a single time.
+    assert (
+        patient_notification_destination(
+            patient(mobile="9876500040", alternate="9876500041"), "+91"
+        )
+        == "+919876500040"
+    )
+    # Guardian is used when it is the only number on file.
+    assert (
+        patient_notification_destination(patient(guardian="9876500042"), "+91")
+        == "+919876500042"
+    )
+    # An unusable primary must not block a valid fallback.
+    assert (
+        patient_notification_destination(
+            patient(mobile="abc", alternate="9876500043"), "+91"
+        )
+        == "+919876500043"
+    )
+    assert patient_notification_destination(patient(), "+91") is None

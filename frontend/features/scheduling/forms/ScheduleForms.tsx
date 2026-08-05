@@ -2,6 +2,7 @@ import { PractitionerPicker } from "../components/PractitionerPicker";
 import React, { useEffect, useState } from "react";
 import { ALL_BRANCHES, weekdays } from "../constants";
 import {
+  DateField,
   FormField,
   NumberField,
   TextField,
@@ -36,7 +37,8 @@ export function ScheduleForm({
   back,
 }: any) {
   const defaultRanges = React.useMemo(() => {
-    const schedules = schedule?.schedules ?? [];
+    // `slots` is the grouped API shape; `schedules` kept as a fallback.
+    const schedules = schedule?.slots ?? schedule?.schedules ?? [];
     if (!schedules.length) {
       return [
         {
@@ -65,10 +67,18 @@ export function ScheduleForm({
 
     return Array.from(unique.values());
   }, [schedule]);
+  // If every timing in this schedule is pinned to one calendar date, the
+  // form opens in date mode rather than weekly mode.
+  const defaultDatedSlot = React.useMemo(() => {
+    const slots = schedule?.slots || schedule?.schedules || [];
+    const dated = slots.filter((row: any) => row?.schedule_date);
+    return dated.length && dated.length === slots.length ? dated[0] : null;
+  }, [schedule]);
+
   // Add this before useForm
   const defaultWeekdays: string[] = Array.from(
     new Set(
-      (schedule?.schedules || [schedule])
+      (schedule?.slots || schedule?.schedules || [schedule])
         .filter(Boolean)
         .map((row: any) => String(row?.weekday ?? 0)),
     ),
@@ -100,6 +110,9 @@ export function ScheduleForm({
       practitionerId: schedule?.practitioner_id || "",
       branchId: schedule?.branch_id || "",
       departmentId: schedule?.department_id || "",
+      scheduleMode: defaultDatedSlot ? "date" : "weekly",
+      scheduleDate: defaultDatedSlot?.schedule_date || "",
+      dateMode: defaultDatedSlot?.date_mode || "override",
       weekdays: defaultWeekdays.length
         ? defaultWeekdays
         : [String(schedule?.weekday ?? 0)],
@@ -118,6 +131,7 @@ export function ScheduleForm({
   const selectedBranchId = watch("branchId");
   const selectedDepartmentId = watch("departmentId");
   const selectedDays = watch("weekdays");
+  const scheduleMode = watch("scheduleMode");
 
   useEffect(() => {
     setValue("ranges", ranges, { shouldValidate: true });
@@ -290,23 +304,82 @@ export function ScheduleForm({
           <FormError error={errors.departmentId?.message} />
         </FormField>
 
+        {/* Repeats weekly, or applies to a single date */}
+        <FormField label="Applies To" required>
+          <Controller
+            name="scheduleMode"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                value={field.value}
+                onChange={field.onChange}
+                options={[
+                  { value: "weekly", label: "Repeats weekly" },
+                  { value: "date", label: "A specific date" },
+                ]}
+                searchable={false}
+              />
+            )}
+          />
+        </FormField>
+
+        {scheduleMode === "date" && (
+          <>
+            <Controller
+              name="scheduleDate"
+              control={control}
+              render={({ field }) => (
+                <DateField
+                  label="Schedule Date"
+                  required
+                  value={field.value || ""}
+                  onChange={field.onChange}
+                  error={(errors as any).scheduleDate?.message}
+                />
+              )}
+            />
+            <FormField label="On That Date" required>
+              <Controller
+                name="dateMode"
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={[
+                      {
+                        value: "override",
+                        label: "Replace the weekly hours",
+                      },
+                      { value: "extra", label: "Add extra hours" },
+                    ]}
+                    searchable={false}
+                  />
+                )}
+              />
+            </FormField>
+          </>
+        )}
+
         {/* Weekdays */}
         <div className="md:col-span-2 xl:col-span-3">
           <div className="grid gap-3 md:grid-cols-3">
-            <FormField label="Weekdays" required>
-              <WeekdaySelector
-                mode={mode}
-                selectedDays={selectedDays}
-                onModeChange={setMode}
-                onDaysChange={(days) =>
-                  setValue("weekdays", days, {
-                    shouldValidate: true,
-                    shouldDirty: true,
-                  })
-                }
-              />
-              <FormError error={errors.weekdays?.message} />
-            </FormField>
+            {scheduleMode === "weekly" && (
+              <FormField label="Weekdays" required>
+                <WeekdaySelector
+                  mode={mode}
+                  selectedDays={selectedDays}
+                  onModeChange={setMode}
+                  onDaysChange={(days) =>
+                    setValue("weekdays", days, {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                    })
+                  }
+                />
+                <FormError error={errors.weekdays?.message} />
+              </FormField>
+            )}
 
             <div>
               <Controller

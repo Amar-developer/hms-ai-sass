@@ -1400,3 +1400,241 @@ def test_practitioner_calendar_rejects_large_date_range(client):
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Calendar range cannot exceed 62 days"
+
+
+def _schedule_doctor(client, tenant, branch):
+    return client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. Date Schedule",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
+    ).json()
+
+
+def test_doctor_can_hold_split_sessions_but_not_overlapping_ones(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
+    practitioner = _schedule_doctor(client, tenant, branch)
+    headers = {"X-Tenant-ID": tenant["id"]}
+
+    def create(start_time, end_time):
+        return client.post(
+            f"/api/v1/practitioners/{practitioner['id']}/schedules",
+            headers=headers,
+            json={
+                "branch_id": branch["id"],
+                "department_id": "general",
+                "weekday": 0,
+                "start_time": start_time,
+                "end_time": end_time,
+                "slot_minutes": 15,
+            },
+        )
+
+    morning = create("09:00:00", "12:00:00")
+    evening = create("18:00:00", "21:00:00")
+    overlapping = create("11:00:00", "13:00:00")
+    other_weekday = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "weekday": 1,
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
+
+    assert morning.status_code == 201
+    # Separate sessions in one department are legitimate (morning + evening).
+    assert evening.status_code == 201
+    # A window that overlaps an existing one is still a duplicate.
+    assert overlapping.status_code == 400
+    assert "overlapping" in overlapping.json()["detail"]
+    # The same window on a different weekday is a different slot entirely.
+    assert other_weekday.status_code == 201
+
+
+def test_date_override_replaces_weekly_hours_for_that_date_only(client):
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
+    practitioner = _schedule_doctor(client, tenant, branch)
+    headers = {"X-Tenant-ID": tenant["id"]}
+
+    # Recurring Monday morning clinic.
+    recurring = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "weekday": 0,
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
+    # This one Monday runs in the afternoon instead.
+    override = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "schedule_date": "2026-05-04",
+            "date_mode": "override",
+            "start_time": "14:00:00",
+            "end_time": "17:00:00",
+            "slot_minutes": 15,
+        },
+    )
+
+    assert recurring.status_code == 201
+    assert override.status_code == 201
+    # weekday is derived from the date so recurring queries still match.
+    assert override.json()["weekday"] == 0
+    assert override.json()["date_mode"] == "override"
+
+    def book(appointment_date, appointment_time):
+        return client.post(
+            "/api/v1/appointments",
+            headers=headers,
+            json={
+                "branch_id": branch["id"],
+                "patient_id": patient["id"],
+                "department_id": "general",
+                "practitioner_id": practitioner["id"],
+                "appointment_type": "op",
+                "appointment_date": appointment_date,
+                "appointment_time": appointment_time,
+            },
+        )
+
+    # On the overridden date the normal morning hours no longer apply...
+    assert book("2026-05-04", "09:15:00").status_code == 400
+    # ...but the override's own hours do.
+    assert book("2026-05-04", "14:00:00").status_code == 201
+    # A different Monday still uses the weekly recurrence.
+    assert book("2026-05-11", "09:15:00").status_code == 201
+
+
+def test_date_extra_adds_hours_without_removing_the_weekly_ones(client):
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
+    practitioner = _schedule_doctor(client, tenant, branch)
+    headers = {"X-Tenant-ID": tenant["id"]}
+
+    client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "weekday": 0,
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
+    extra = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "schedule_date": "2026-05-04",
+            "date_mode": "extra",
+            "start_time": "18:00:00",
+            "end_time": "20:00:00",
+            "slot_minutes": 15,
+        },
+    )
+
+    assert extra.status_code == 201
+    assert extra.json()["date_mode"] == "extra"
+
+    def book(appointment_time):
+        return client.post(
+            "/api/v1/appointments",
+            headers=headers,
+            json={
+                "branch_id": branch["id"],
+                "patient_id": patient["id"],
+                "department_id": "general",
+                "practitioner_id": practitioner["id"],
+                "appointment_type": "op",
+                "appointment_date": "2026-05-04",
+                "appointment_time": appointment_time,
+            },
+        )
+
+    # Both the normal morning hours and the extra evening block are bookable.
+    assert book("09:15:00").status_code == 201
+    assert book("18:00:00").status_code == 201
+
+
+def test_grouped_schedules_nest_timings_under_one_row_per_schedule(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
+    practitioner = _schedule_doctor(client, tenant, branch)
+    headers = {"X-Tenant-ID": tenant["id"]}
+
+    for weekday in (0, 1, 2):
+        client.post(
+            f"/api/v1/practitioners/{practitioner['id']}/schedules",
+            headers=headers,
+            json={
+                "branch_id": branch["id"],
+                "department_id": "general",
+                "weekday": weekday,
+                "start_time": "09:00:00",
+                "end_time": "12:00:00",
+                "slot_minutes": 15,
+                "room_number": "12",
+            },
+        )
+    client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "schedule_date": "2026-05-04",
+            "date_mode": "override",
+            "start_time": "14:00:00",
+            "end_time": "17:00:00",
+            "slot_minutes": 15,
+            "room_number": "12",
+        },
+    )
+
+    flat = client.get("/api/v1/practitioners/schedules", headers=headers)
+    grouped = client.get("/api/v1/practitioners/schedules/grouped", headers=headers)
+
+    assert flat.status_code == 200
+    assert len(flat.json()) == 4
+
+    assert grouped.status_code == 200
+    body = grouped.json()
+    # All four timings share one doctor/branch/department/room/slot-size, so
+    # they collapse into a single editable schedule.
+    assert len(body) == 1
+    group = body[0]
+    assert group["practitioner_id"] == practitioner["id"]
+    assert group["practitioner_full_name"] == "Dr. Date Schedule"
+    assert group["room_number"] == "12"
+    assert len(group["slots"]) == 4
+    # Recurring rows come first, ordered by weekday; dated rows follow.
+    assert [slot["weekday"] for slot in group["slots"]] == [0, 1, 2, 0]
+    assert [slot["schedule_date"] for slot in group["slots"]][:3] == [None] * 3
+    assert group["slots"][3]["schedule_date"] == "2026-05-04"
+    assert group["slots"][3]["date_mode"] == "override"

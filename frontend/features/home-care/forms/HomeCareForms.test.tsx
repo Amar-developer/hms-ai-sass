@@ -136,6 +136,8 @@ describe("Home Care booking validation", () => {
     const base = {
       patient_id: "patient-one",
       recurrence: "daily",
+      visit_day_mode: "all" as const,
+      visit_weekdays: [],
       start_date: "2026-07-23",
       end_date: "2026-07-23",
       status: "requested",

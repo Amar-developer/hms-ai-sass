@@ -16,13 +16,20 @@ const timeRangeSchema = z.object({
   }
 });
 
-export const scheduleSchema = z.object({
+export const scheduleSchema = z
+  .object({
   practitionerId: z.string().min(1, "Doctor is required"),
   branchId: z.string().min(1, "Branch is required"),
   departmentId: z.string().min(1,'Department is required'),
 
+  // "weekly" repeats on the chosen weekdays; "date" pins the schedule to one
+  // calendar date that either replaces or supplements the weekly hours.
+  scheduleMode: z.enum(["weekly", "date"]),
+  scheduleDate: z.string(),
+  dateMode: z.enum(["override", "extra"]),
+
   // Multiple weekdays
-  weekdays: z.array(z.string()).min(1, "Select at least one weekday"),
+  weekdays: z.array(z.string()),
 
   // Time ranges
   ranges: z.array(timeRangeSchema).min(1, "Add at least one time range"),
@@ -40,6 +47,23 @@ export const scheduleSchema = z.object({
     .refine((val) => !val || (!isNaN(Number(val)) && Number(val) >= 1), {
       message: "Room number must be a positive number",
     }),
-});
+  })
+  .superRefine((data, ctx) => {
+    if (data.scheduleMode === "date") {
+      if (!data.scheduleDate) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["scheduleDate"],
+          message: "Pick the date this schedule applies to",
+        });
+      }
+    } else if (data.weekdays.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["weekdays"],
+        message: "Select at least one weekday",
+      });
+    }
+  });
 
 export type ScheduleFormValues = z.infer<typeof scheduleSchema>;

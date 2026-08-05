@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Badge,
   Button,
@@ -38,7 +39,10 @@ export function IPAdmission({
   departmentId,
   appointments = [],
   apiSession,
+  view = "list",
+  selectedId = "",
 }: any) {
+  const router = useRouter();
   const {
     ipAdmissions,
     refetch: refetchAdmissions,
@@ -48,7 +52,6 @@ export function IPAdmission({
     apiSession,
     ipAdmissions.map((row: any) => row.patient_id || row.patientId),
   );
-  const [selectedId, setSelectedId] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -57,11 +60,22 @@ export function IPAdmission({
   const [latestDischarge, setLatestDischarge] = useState<any>(null);
   const [admissionDate, setAdmissionDate] = useState(today());
   const [expectedDischargeDate, setExpectedDischargeDate] = useState(today());
-  const [view, setView] = useState<IPView>("list");
   const [admissionPage, setAdmissionPage] = useState(1);
   const [admissionFilter, setAdmissionFilter] = useState<
     "active" | "completed" | "all"
   >("active");
+
+  function navigate(nextView: IPView, id = "") {
+    const path =
+      nextView === "convert"
+        ? "/ip/convert"
+        : nextView === "direct"
+          ? "/ip/direct"
+          : id
+            ? `/ip/${id}`
+            : "/ip";
+    router.push(path);
+  }
 
   const { ipRooms, medicineCatalog, labCatalog } = useIPAdmissionData({
     apiSession,
@@ -180,8 +194,7 @@ export function IPAdmission({
     ipAdmissions,
     setIpAdmissions,
     selectedAdmission,
-    setSelectedId,
-    setView,
+    navigateToAdmission: (id: string) => navigate("list", id),
     setBusy,
     setError,
     setMessage,
@@ -194,10 +207,7 @@ export function IPAdmission({
   });
 
   useEffect(() => {
-    if (!selectedId && (activeAdmissions[0] || ipAdmissions[0]))
-      setSelectedId((activeAdmissions[0] || ipAdmissions[0]).id);
-  }, [activeAdmissions.length, ipAdmissions, selectedId]);
-  useEffect(() => {
+    if (view !== "list") return;
     const target = readNotificationTarget("ip_admission");
     if (
       !target ||
@@ -205,9 +215,9 @@ export function IPAdmission({
     )
       return;
     setAdmissionFilter("all");
-    setSelectedId(target.resourceId);
-    setView("detail");
-  }, [apiSession?.tenantId, departmentId, departmentAdmissions.length]);
+    router.push(`/ip/${target.resourceId}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiSession?.tenantId, departmentId, departmentAdmissions.length, view]);
   useEffect(() => {
     setAdmissionPage(1);
   }, [admissionFilter]);
@@ -222,7 +232,7 @@ export function IPAdmission({
   if (view === "convert") {
     return (
       <div className="space-y-6">
-        <IPHeader view={view} setView={setView} />
+        <IPHeader view={view} setView={navigate} />
         <StatusToast
           message={message}
           tone="success"
@@ -277,7 +287,7 @@ export function IPAdmission({
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => setView("list")}
+                onClick={() => navigate("list")}
                 className="rounded-2xl border px-5 py-3 text-sm font-bold"
               >
                 Cancel
@@ -297,7 +307,7 @@ export function IPAdmission({
   if (view === "direct") {
     return (
       <div className="space-y-6">
-        <IPHeader view={view} setView={setView} />
+        <IPHeader view={view} setView={navigate} />
         <StatusToast
           message={message}
           tone="success"
@@ -332,7 +342,7 @@ export function IPAdmission({
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => setView("list")}
+                onClick={() => navigate("list")}
                 className="rounded-2xl border px-5 py-3 text-sm font-bold"
               >
                 Cancel
@@ -351,7 +361,7 @@ export function IPAdmission({
 
   return (
     <div className="space-y-6">
-      <IPHeader view={view} setView={setView} />
+      <IPHeader view={view} setView={navigate} />
       <StatusToast
         message={message}
         tone="success"
@@ -406,10 +416,7 @@ export function IPAdmission({
                 <button
                   key={row.id}
                   type="button"
-                  onClick={() => {
-                    setSelectedId(row.id);
-                    setView("detail");
-                  }}
+                  onClick={() => navigate("list", row.id)}
                   className={`min-h-32 rounded-2xl p-4 text-left transition ${selectedAdmission?.id === row.id ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-900 hover:bg-slate-100"}`}
                 >
                   <div className="line-clamp-2 font-bold">

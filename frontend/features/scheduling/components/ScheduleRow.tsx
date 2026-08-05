@@ -16,7 +16,9 @@ export function ScheduleRow({
   const department = departments.find(
     (item: any) => item.id === row.department_id,
   );
-  const scheduleRows = row.schedules || [row];
+  // `slots` is the grouped API shape; `schedules` is the older client-side
+  // grouping, kept as a fallback for any caller still passing that.
+  const scheduleRows = row.slots || row.schedules || [row];
   const nameSource = scheduleRows[0] || row;
   // Prefer the name the API now sends on the row itself, then the resolved
   // lookup, and only ever fall back to a clean label — never a raw id/slug.

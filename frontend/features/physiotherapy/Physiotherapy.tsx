@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge, Button, Card, Input, RefreshButton, Select, StatusToast } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { uploadAssetUrl } from "@/lib/api";
@@ -30,9 +31,22 @@ export function Physiotherapy({
   appointments = [],
   apiSession,
   loadLiveData,
+  view = "list",
+  selectedId = "",
 }: any) {
+  const router = useRouter();
   const { ipAdmissions } = useIpAdmissionsQuery(apiSession);
-  const [view, setView] = useState<View>("list");
+  function navigate(nextView: View, id = "") {
+    const path =
+      nextView === "op"
+        ? "/physiotherapy/op"
+        : nextView === "ip"
+          ? "/physiotherapy/ip"
+          : nextView === "detail" && id
+            ? `/physiotherapy/${id}`
+            : "/physiotherapy";
+    router.push(path);
+  }
   const {
     cases,
     setCases,
@@ -43,7 +57,6 @@ export function Physiotherapy({
     dataError,
     loadPhysio,
   } = usePhysiotherapyData({ apiSession });
-  const [selectedId, setSelectedId] = useState("");
   const [sessionPhysiotherapistId, setSessionPhysiotherapistId] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -105,8 +118,7 @@ export function Physiotherapy({
     appointments,
     ipAdmissions,
     selected,
-    setSelectedId,
-    setView,
+    navigateToCase: (id: string) => navigate("detail", id),
     setBusy,
     setError,
     setMessage,
@@ -119,15 +131,13 @@ export function Physiotherapy({
   });
 
   useEffect(() => {
-    if (!selectedId && cases[0]?.id) setSelectedId(cases[0].id);
-  }, [cases, selectedId]);
-  useEffect(() => {
+    if (view !== "list") return;
     const target = readNotificationTarget("physiotherapy_case");
     if (!target || !cases.some((row: any) => row.id === target.resourceId))
       return;
-    setSelectedId(target.resourceId);
-    setView("detail");
-  }, [apiSession?.tenantId, cases.length]);
+    navigate("detail", target.resourceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiSession?.tenantId, cases.length, view]);
   useEffect(() => {
     setSessionPhysiotherapistId(selected?.physiotherapist_id || "");
   }, [selected?.id, selected?.physiotherapist_id]);
@@ -140,7 +150,7 @@ export function Physiotherapy({
 
   return (
     <div className="space-y-6">
-      <Header view={view} setView={setView} />
+      <Header view={view} setView={navigate} />
       <StatusToast message={message} tone="success" onClose={() => setMessage("")} />
       <StatusToast message={error} onClose={() => setError("")} />
 
@@ -154,7 +164,7 @@ export function Physiotherapy({
           physiotherapists={physiotherapists}
           onSubmit={(e: any) => submitCase(e, "op")}
           busy={busy === "case"}
-          onCancel={() => setView("list")}
+          onCancel={() => navigate("list")}
         />
       )}
       {view === "ip" && (
@@ -164,7 +174,7 @@ export function Physiotherapy({
           physiotherapists={physiotherapists}
           onSubmit={(e: any) => submitCase(e, "ip")}
           busy={busy === "case"}
-          onCancel={() => setView("list")}
+          onCancel={() => navigate("list")}
         />
       )}
       {(view === "list" || view === "detail") && (
@@ -180,7 +190,7 @@ export function Physiotherapy({
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <button
                 type="button"
-                onClick={() => setView("op")}
+                onClick={() => navigate("op")}
                 className="rounded-lg bg-slate-900 p-4 text-left text-white"
               >
                 <b className="table-data">New OP Physio</b>
@@ -190,7 +200,7 @@ export function Physiotherapy({
               </button>
               <button
                 type="button"
-                onClick={() => setView("ip")}
+                onClick={() => navigate("ip")}
                 className="rounded-lg border border-slate-200 bg-white p-4 text-left"
               >
                 <b>New IP Bedside Physio</b>
@@ -219,10 +229,7 @@ export function Physiotherapy({
                   <button
                     key={row.id}
                     type="button"
-                    onClick={() => {
-                      setSelectedId(row.id);
-                      setView("detail");
-                    }}
+                    onClick={() => navigate("detail", row.id)}
                     className={`rounded-lg p-4 text-left ${active ? "bg-slate-900 text-white" : "bg-slate-50"}`}
                   >
                     <b>{row.patient_name || patientName(patient)}</b>

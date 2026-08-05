@@ -221,6 +221,7 @@ Patient subscription APIs enforce the `patient_subscriptions` module entitlement
 | `PATCH` | `/api/v1/practitioners/{practitioner_id}` | `practitioners.manage` or `practitioners.edit` | Admin update |
 | `DELETE` | `/api/v1/practitioners/{practitioner_id}` | `practitioners.manage` or `practitioners.delete` | Soft delete by deactivating practitioner |
 | `GET` | `/api/v1/practitioners/schedules` | `scheduling.manage` or `scheduling.read` | Tenant-wide schedule management list |
+| `GET` | `/api/v1/practitioners/schedules/grouped` | `scheduling.manage` or `scheduling.read` | Schedules grouped per doctor/branch/department/room with timings nested under `slots` |
 | `PATCH` | `/api/v1/practitioners/schedules/{schedule_id}` | `scheduling.manage` or `scheduling.edit` | Update weekly schedule |
 | `DELETE` | `/api/v1/practitioners/schedules/{schedule_id}` | `scheduling.manage` or `scheduling.delete` | Soft delete by deactivating schedule |
 | `POST` | `/api/v1/practitioners/{practitioner_id}/schedules` | `scheduling.manage` or `scheduling.create` | Create weekly schedule |
@@ -339,6 +340,8 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `GET` | `/api/v1/billing/invoices/{invoice_id}/delivery` | `billing.manage`, `billing.read`, or `invoices.read` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}/deliveries` | `billing.manage`, `billing.read`, or `invoices.read` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/membership-benefit/apply` | `billing.manage` |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/offer/apply` | `billing.manage` or `invoices.edit`; offers are never applied automatically |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/offer/remove` | `billing.manage` or `invoices.edit`; blocked once a payment is recorded |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/payments` | `payments.manage` |
 | `POST` | `/api/v1/billing/payments/{payment_id}/refund` | `payments.manage` |

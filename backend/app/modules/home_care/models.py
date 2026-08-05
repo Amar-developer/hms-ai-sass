@@ -34,6 +34,13 @@ class HomeCareBooking(SQLModel, table=True):
     booking_type: str = Field(default="home_care", index=True, max_length=40)
     booking_number: str = Field(index=True, min_length=3, max_length=60)
     recurrence: str = Field(default="daily", index=True, max_length=40)
+    # Which days inside start_date..end_date the visits actually fall on.
+    # "all" = every day in the range, "alternate" = every second day from the
+    # start, "weekdays" = only the weekdays listed in visit_weekdays_json
+    # (e.g. "[1,3,5]" for Tue/Thu/Sat). Without this a Mon-Fri fortnight
+    # booking could only ever be read as 15 consecutive visits.
+    visit_day_mode: str = Field(default="all", index=True, max_length=20)
+    visit_weekdays_json: str | None = Field(default=None, max_length=40)
     start_date: date = Field(default_factory=date.today, index=True)
     end_date: date | None = Field(default=None, index=True)
     status: str = Field(default="requested", index=True, max_length=40)

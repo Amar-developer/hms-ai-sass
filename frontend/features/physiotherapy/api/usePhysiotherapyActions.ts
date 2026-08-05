@@ -11,8 +11,7 @@ type UsePhysiotherapyActionsParams = {
   appointments: any[];
   ipAdmissions: any[];
   selected: any;
-  setSelectedId: (id: string) => void;
-  setView: (view: "list" | "op" | "ip" | "detail") => void;
+  navigateToCase: (id: string) => void;
   setBusy: (value: string) => void;
   setError: (value: string) => void;
   setMessage: (value: string) => void;
@@ -36,8 +35,7 @@ export function usePhysiotherapyActions({
   appointments,
   ipAdmissions,
   selected,
-  setSelectedId,
-  setView,
+  navigateToCase,
   setBusy,
   setError,
   setMessage,
@@ -99,8 +97,7 @@ export function usePhysiotherapyActions({
         payload,
       );
       await refresh();
-      setSelectedId(row.id);
-      setView("detail");
+      navigateToCase(row.id);
       setMessage("Physiotherapy case created successfully.");
       form.reset();
     } catch (err: any) {

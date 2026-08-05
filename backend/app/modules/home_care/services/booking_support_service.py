@@ -22,6 +22,7 @@ from app.modules.home_care.schemas import (
     HomeCareBookingUpdate,
     HomeCareVisitLogRead,
 )
+from app.modules.home_care.visit_days import parse_weekdays, planned_visit_count
 from app.modules.identity.models import User
 from app.modules.patients.services.references import PatientReference
 
@@ -63,6 +64,16 @@ class HomeCareBookingSupportService:
         data = HomeCareBookingRead.model_validate(
             booking, from_attributes=True
         ).model_dump()
+        # Expand the stored day selection into the plan, so callers never have
+        # to re-derive "how many visits is this booking actually for".
+        weekdays = parse_weekdays(booking.visit_weekdays_json)
+        data["visit_weekdays"] = weekdays
+        data["planned_visit_count"] = planned_visit_count(
+            start_date=booking.start_date,
+            end_date=booking.end_date,
+            visit_day_mode=booking.visit_day_mode,
+            visit_weekdays=weekdays,
+        )
         if patient_reference is None:
             patient = self.references.get_patient_for_tenant(
                 booking.tenant_id, booking.patient_id

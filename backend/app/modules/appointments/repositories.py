@@ -156,7 +156,14 @@ class AppointmentGridRepository:
                 Branch.name,
                 Patient.id,
                 Patient.full_name,
-                Patient.mobile,
+                # Fall back the same way outbound messaging does, so the grid
+                # never shows a blank for a patient reachable on an alternate
+                # or guardian number.
+                func.coalesce(
+                    func.nullif(Patient.mobile, ""),
+                    func.nullif(Patient.alternate_mobile, ""),
+                    func.nullif(Patient.guardian_mobile, ""),
+                ).label("patient_mobile"),
                 Department.id,
                 Department.name,
                 Practitioner.id,

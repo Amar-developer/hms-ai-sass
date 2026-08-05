@@ -336,7 +336,24 @@ export function TenantAdmin({
     // Wait for the admin data fetch to finish before concluding a row is
     // missing — otherwise a direct/bookmarked visit to an edit URL bounces
     // back to the list while data.departments (etc.) is still loading.
-    if (view !== "edit" || !selectedId || data.busy) return;
+    // Sections that manage their own record lookup (e.g. membership, via
+    // PatientSubscriptions) aren't covered here — they guard themselves.
+    const guardedSections = [
+      "users",
+      "roles",
+      "departments",
+      "branches",
+      "suppliers",
+      "tax",
+      "offers",
+    ];
+    if (
+      view !== "edit" ||
+      !selectedId ||
+      data.busy ||
+      !guardedSections.includes(section)
+    )
+      return;
     const selectedExists =
       (section === "users" && Boolean(selectedUser)) ||
       (section === "roles" && Boolean(selectedRole)) ||
@@ -928,6 +945,8 @@ export function TenantAdmin({
           apiSession={apiSession}
           branchId={branchId}
           branches={data.branches}
+          view={view}
+          selectedId={selectedId}
         />
       )}
 

@@ -124,6 +124,23 @@ export function applyInvoiceMembershipBenefit(
   );
 }
 
+export function applyInvoiceOffer(
+  session: ApiSession,
+  invoiceId: string,
+  payload?: { discount_offer_id?: string; code?: string },
+) {
+  return apiFetch(`/billing/invoices/${invoiceId}/offer/apply`, session, {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
+  });
+}
+
+export function removeInvoiceOffer(session: ApiSession, invoiceId: string) {
+  return apiFetch(`/billing/invoices/${invoiceId}/offer/remove`, session, {
+    method: "POST",
+  });
+}
+
 export function createInvoiceCreditNote(
   session: ApiSession,
   invoiceId: string,

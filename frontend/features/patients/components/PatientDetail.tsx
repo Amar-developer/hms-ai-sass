@@ -1,5 +1,5 @@
 import { ApiSession, uploadAssetUrl } from "@/lib/api";
-import { clinicalRecordsWithUniqueItems, displayPatientGender, fmtDate, uniqueClinicalRecords } from "../helpers";
+import { clinicalRecordsWithUniqueItems, displayPatientGender, fmtDate, patientDisplayMobile, uniqueClinicalRecords } from "../helpers";
 import { DataTable } from "@/features/reports/components/DataTable";
 import { Column } from "@/features/reports/types";
 import { MembershipEnrollForm } from "../forms/PatientForms";
@@ -362,7 +362,8 @@ export function PatientDetail({
                 </Badge>
               </div>
               <p className="table-data mt-1 text-slate-500">
-                {patient.patient_number} · {patient.mobile || "No mobile"}
+                {patient.patient_number} ·{" "}
+                {patientDisplayMobile(patient) || "No mobile"}
               </p>
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { searchPatients } from "@/lib/hmsLogic";
 import { usePatientSearch } from "@/features/patients/components/PatientSearchSelect";
@@ -37,7 +38,15 @@ export function AppointmentCalendarBooking(props: Props) {
     loadLiveData,
     setActive,
     isInitialLoading,
+    mode = "list",
   } = props;
+  const router = useRouter();
+  // Only the top-level mode is a route (/appointments vs /appointments/new).
+  // The wizard's internal steps stay client state: "newPatient" is an inline
+  // sub-form and "success" is a post-submit confirmation, so a direct link
+  // to either without the in-progress form data would render a broken screen.
+  const setMode = (next: "list" | "book") =>
+    router.push(next === "book" ? "/appointments/new" : "/appointments");
   const [offlinePatients, setOfflinePatients] = useState<any[]>([]);
   const { patients: referencedPatients, patientMap } =
     usePatientReferencesQuery(
@@ -46,7 +55,6 @@ export function AppointmentCalendarBooking(props: Props) {
     );
   const patients = apiSession ? referencedPatients : offlinePatients;
   const setPatients = setOfflinePatients;
-  const [mode, setMode] = useState<"list" | "book">("list");
   const [query, setQuery] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [page, setPage] = useState(1);

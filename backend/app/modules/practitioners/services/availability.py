@@ -176,11 +176,11 @@ def check_practitioner_availability(
             False, "Practitioner is not assigned to this branch and department"
         )
 
-    schedules = PractitionerScheduleRepository(session).active_for_weekday(
+    schedules = PractitionerScheduleRepository(session).active_for_date(
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
         branch_id=branch_id,
-        weekday=appointment_date.weekday(),
+        appointment_date=appointment_date,
     )
     matching_schedules = [
         schedule
@@ -269,11 +269,11 @@ def check_practitioner_date_availability(
             False, "Practitioner is not assigned to this branch and department"
         )
 
-    schedules = PractitionerScheduleRepository(session).active_for_weekday(
+    schedules = PractitionerScheduleRepository(session).active_for_date(
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
         branch_id=branch_id,
-        weekday=appointment_date.weekday(),
+        appointment_date=appointment_date,
     )
     matching_schedules = [
         schedule
@@ -350,11 +350,11 @@ def generate_practitioner_calendar(
     days: list[PractitionerCalendarDay] = []
     current_date = start_date
     while current_date <= end_date:
-        schedules = PractitionerScheduleRepository(session).active_for_weekday(
+        schedules = PractitionerScheduleRepository(session).active_for_date(
             tenant_id=tenant_id,
             practitioner_id=practitioner_id,
             branch_id=branch_id,
-            weekday=current_date.weekday(),
+            appointment_date=current_date,
         )
         slots: list[PractitionerGeneratedSlot] = []
         for schedule in schedules:

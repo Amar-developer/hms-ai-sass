@@ -636,6 +636,242 @@ def test_percentage_offer_is_applied_before_percentage_tax(client: TestClient):
     assert invoice["tax_label"] == "GST"
 
 
+def _offer_invoice_setup(client: TestClient) -> tuple[str, dict, dict]:
+    """A signed consultation billed at ₹1000, with an eligible 10% offer and
+    18% GST configured but no offer chosen at invoice creation."""
+    data = setup_signed_consultation(client, "op")
+    tenant_id = data["tenant"]["id"]
+    create_fee_rule(client, tenant_id, "op", 1000, doctor_share_percentage=60)
+    offer = client.post(
+        "/api/v1/billing/discount-offers",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "name": "Consultation 10%",
+            "code": "CONSULT10",
+            "service_scope": "consultation",
+            "discount_type": "percentage",
+            "value": 10,
+        },
+    ).json()
+    tax_rule = client.post(
+        "/api/v1/billing/tax-rules",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "name": "GST 18",
+            "tax_percentage": 18,
+            "tax_label": "GST",
+            "service_scope": "consultation",
+        },
+    ).json()
+    detail = client.post(
+        "/api/v1/billing/invoices/from-consultation",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "consultation_id": data["consultation"]["id"],
+            "tax_rule_id": tax_rule["id"],
+        },
+    ).json()
+    return tenant_id, offer, detail
+
+
+def test_eligible_offer_is_not_applied_without_staff_action(client: TestClient):
+    tenant_id, offer, detail = _offer_invoice_setup(client)
+
+    # The offer exists and matches, but nothing was chosen, so the patient is
+    # billed the full amount.
+    invoice = detail["invoice"]
+    assert invoice["discount_offer_id"] is None
+    assert invoice["discount_amount"] == 0
+    assert invoice["offer_discount_amount"] == 0
+    assert invoice["total_amount"] == 1180
+
+    # It is surfaced as something staff *may* apply.
+    benefit = detail["offer_benefit"]
+    assert benefit["is_applied"] is False
+    assert benefit["can_apply"] is True
+    assert benefit["offer_id"] == offer["id"]
+    assert benefit["offer_name"] == "Consultation 10%"
+    assert benefit["discount_amount"] == 100
+    assert benefit["eligible_count"] == 1
+
+
+def test_offer_apply_endpoint_discounts_and_recomputes_tax(client: TestClient):
+    tenant_id, offer, detail = _offer_invoice_setup(client)
+    invoice_id = detail["invoice"]["id"]
+
+    response = client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/offer/apply",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"discount_offer_id": offer["id"]},
+    )
+
+    assert response.status_code == 200
+    invoice = response.json()["invoice"]
+    assert invoice["discount_offer_id"] == offer["id"]
+    assert invoice["discount_amount"] == 100
+    assert invoice["offer_discount_amount"] == 100
+    assert invoice["taxable_amount"] == 900
+    # Tax is recharged on the discounted base, not the original ₹1000.
+    assert invoice["tax_amount"] == 162
+    assert invoice["total_amount"] == 1062
+    assert invoice["balance_amount"] == 1062
+    benefit = response.json()["offer_benefit"]
+    assert benefit["is_applied"] is True
+    assert benefit["can_remove"] is True
+
+
+def test_offer_apply_without_a_body_picks_the_best_eligible_offer(
+    client: TestClient,
+):
+    tenant_id, _, detail = _offer_invoice_setup(client)
+    better = client.post(
+        "/api/v1/billing/discount-offers",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "name": "Consultation 25%",
+            "service_scope": "consultation",
+            "discount_type": "percentage",
+            "value": 25,
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/v1/billing/invoices/{detail['invoice']['id']}/offer/apply",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["invoice"]["discount_offer_id"] == better["id"]
+    assert response.json()["invoice"]["discount_amount"] == 250
+
+
+def test_offer_remove_restores_the_full_invoice_amount(client: TestClient):
+    tenant_id, offer, detail = _offer_invoice_setup(client)
+    invoice_id = detail["invoice"]["id"]
+    client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/offer/apply",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"discount_offer_id": offer["id"]},
+    )
+
+    response = client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/offer/remove",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+
+    assert response.status_code == 200
+    invoice = response.json()["invoice"]
+    assert invoice["discount_offer_id"] is None
+    assert invoice["discount_amount"] == 0
+    assert invoice["taxable_amount"] == 1000
+    assert invoice["tax_amount"] == 180
+    assert invoice["total_amount"] == 1180
+    assert response.json()["offer_benefit"]["can_apply"] is True
+
+
+def test_removing_an_offer_keeps_an_admin_approved_discount(client: TestClient):
+    tenant_id, offer, detail = _offer_invoice_setup(client)
+    invoice_id = detail["invoice"]["id"]
+    request = client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "discount",
+            "amount": 200,
+            "reason": "Goodwill discount",
+        },
+    ).json()
+    client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/approve",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+    client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/execute",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+
+    applied = client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/offer/apply",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"discount_offer_id": offer["id"]},
+    )
+    # ₹200 approved + ₹100 offer, both retained.
+    assert applied.status_code == 200
+    assert applied.json()["invoice"]["discount_amount"] == 300
+
+    removed = client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/offer/remove",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+
+    # Removing the offer must not take the approved discount with it.
+    assert removed.status_code == 200
+    assert removed.json()["invoice"]["discount_amount"] == 200
+    assert removed.json()["invoice"]["discount_offer_id"] is None
+
+
+def test_offer_cannot_be_applied_after_payment(client: TestClient):
+    tenant_id, offer, detail = _offer_invoice_setup(client)
+    invoice_id = detail["invoice"]["id"]
+    paid = client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/payments",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"method": "cash", "amount": 1180},
+    )
+    assert paid.status_code == 201
+
+    response = client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/offer/apply",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"discount_offer_id": offer["id"]},
+    )
+
+    assert response.status_code == 409
+
+
+def test_deactivating_an_offer_does_not_rebill_an_invoice_it_was_applied_to(
+    client: TestClient,
+):
+    tenant_id, offer, detail = _offer_invoice_setup(client)
+    invoice_id = detail["invoice"]["id"]
+    client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/offer/apply",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"discount_offer_id": offer["id"]},
+    )
+    client.patch(
+        f"/api/v1/billing/discount-offers/{offer['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"is_active": False},
+    )
+
+    detail_after = client.get(
+        f"/api/v1/billing/invoices/{invoice_id}",
+        headers={"X-Tenant-ID": tenant_id},
+    ).json()
+
+    # The campaign ending must not claw back a discount already granted.
+    assert detail_after["invoice"]["discount_amount"] == 100
+    assert detail_after["invoice"]["total_amount"] == 1062
+    assert detail_after["offer_benefit"]["is_applied"] is True
+    assert detail_after["offer_benefit"]["can_apply"] is False
+
+
+def test_offer_can_be_applied_by_code(client: TestClient):
+    tenant_id, offer, detail = _offer_invoice_setup(client)
+
+    response = client.post(
+        f"/api/v1/billing/invoices/{detail['invoice']['id']}/offer/apply",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"code": "consult10"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["invoice"]["discount_offer_id"] == offer["id"]
+
+
 def test_percentage_offer_rejects_value_above_one_hundred(client: TestClient):
     data = setup_signed_consultation(client, "op")
     response = client.post(

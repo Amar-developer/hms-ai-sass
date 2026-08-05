@@ -228,6 +228,8 @@ export function Billing({
     collectPayment: collectPaymentAction,
     collectSplitPayment: collectSplitPaymentAction,
     applyMembershipBenefit,
+    applyOffer,
+    removeOffer,
     submitCreditNote: submitCreditNoteAction,
     openReceipt,
     updateInvoiceItemSupplier,
@@ -647,6 +649,8 @@ export function Billing({
           sendInvoice={sendInvoice}
           regenerateInvoice={() => setRegeneratePrompt(detail.invoice)}
           applyMembershipBenefit={applyMembershipBenefit}
+          applyOffer={applyOffer}
+          removeOffer={removeOffer}
           openReceipt={openReceipt}
           issueCreditNote={issueCreditNote}
           cancelInvoice={cancelInvoice}

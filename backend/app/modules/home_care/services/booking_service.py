@@ -17,6 +17,7 @@ from app.modules.home_care.models import (
     HomeCareVisitLog,
 )
 from app.modules.home_care.repositories import HomeCareBookingRepository
+from app.modules.home_care.visit_days import dump_weekdays
 from app.modules.home_care.schemas import (
     HomeCareBookingCreate,
     HomeCareBookingRead,
@@ -110,6 +111,8 @@ class HomeCareBookingLifecycleService:
                 "start_date": payload.start_date or date.today(),
                 "booking_type": payload.booking_type.lower(),
                 "recurrence": payload.recurrence.lower(),
+                "visit_day_mode": (payload.visit_day_mode or "all").lower(),
+                "visit_weekdays_json": dump_weekdays(payload.visit_weekdays),
                 "status": payload.status.lower(),
                 "created_by_user_id": actor.id,
                 "updated_by_user_id": actor.id,
@@ -149,6 +152,11 @@ class HomeCareBookingLifecycleService:
             )
         self.booking_support.validate_patient_and_staff(tenant_id, payload)
         data = payload.model_dump(exclude_unset=True, exclude={"services"})
+        # The API takes weekdays as a list but the column stores JSON, so
+        # translate before the generic setattr loop (which would otherwise
+        # set a phantom attribute that never persists).
+        if "visit_weekdays" in data:
+            data["visit_weekdays_json"] = dump_weekdays(data.pop("visit_weekdays"))
         before = {key: getattr(booking, key) for key in data}
         for key, value in data.items():
             setattr(

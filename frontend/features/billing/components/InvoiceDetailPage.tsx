@@ -50,6 +50,8 @@ export function InvoiceDetailPage({
   sendInvoice,
   regenerateInvoice,
   applyMembershipBenefit,
+  applyOffer,
+  removeOffer,
   openReceipt,
   issueCreditNote,
   cancelInvoice,
@@ -169,6 +171,20 @@ export function InvoiceDetailPage({
                 )
           }`
         : membershipBenefit?.reason || "No membership benefit applied";
+  const offerBenefit = detail.offer_benefit;
+  const offerBusy = busy === `offer-${invoice.id}`;
+  const offerNote =
+    discountParts.offerDiscount > 0
+      ? claimedDetail(discountParts.offerDiscount, invoice.subtotal_amount)
+      : offerBenefit?.can_apply
+        ? `${offerBenefit.offer_name} available · saves ${money(
+            offerBenefit.discount_amount,
+          )}${
+            offerBenefit.eligible_count > 1
+              ? ` (best of ${offerBenefit.eligible_count} eligible offers)`
+              : ""
+          }`
+        : offerBenefit?.reason || "No Offer & Discount Applied";
   const taxableAmount = numberValue(invoice.taxable_amount);
   const taxAmount = numberValue(invoice.tax_amount);
   const balanceDue = numberValue(invoice.balance_amount);
@@ -729,13 +745,35 @@ export function InvoiceDetailPage({
                     }
                     muted={discountParts.offerDiscount <= 0}
                     savings={discountParts.offerDiscount > 0}
-                    note={
-                      discountParts.offerDiscount > 0
-                        ? claimedDetail(
-                            discountParts.offerDiscount,
-                            invoice.subtotal_amount,
-                          )
-                        : "No Offer & Discount Applied"
+                    note={offerNote}
+                    action={
+                      offerBenefit?.is_applied ? (
+                        offerBenefit.can_remove ? (
+                          <ActionButton
+                            onClick={() => removeOffer(invoice)}
+                            disabled={offerBusy}
+                          >
+                            <ButtonLoader loading={offerBusy}>
+                              {offerBusy ? "Removing..." : "Remove"}
+                            </ButtonLoader>
+                          </ActionButton>
+                        ) : (
+                          <ActionButton disabled>Applied</ActionButton>
+                        )
+                      ) : offerBenefit?.can_apply ? (
+                        <ActionButton
+                          onClick={() =>
+                            applyOffer(invoice, offerBenefit.offer_id)
+                          }
+                          disabled={offerBusy}
+                        >
+                          <ButtonLoader loading={offerBusy}>
+                            {offerBusy
+                              ? "Applying..."
+                              : `Apply ${money(offerBenefit.discount_amount)}`}
+                          </ButtonLoader>
+                        </ActionButton>
+                      ) : null
                     }
                   />
                   <BillLine

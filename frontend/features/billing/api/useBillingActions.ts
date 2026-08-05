@@ -11,6 +11,8 @@ import {
 } from "../downloadInvoiceReceipt";
 import {
   applyInvoiceMembershipBenefit,
+  applyInvoiceOffer,
+  removeInvoiceOffer,
   createInvoiceAdjustmentRequest,
   createInvoiceCreditNote,
   createInvoiceFromConsultation,
@@ -419,6 +421,42 @@ export function useBillingActions(
     }
   }
 
+  async function applyOffer(invoice: any, offerId?: string) {
+    if (!session) return;
+    setBusy(`offer-${invoice.id}`);
+    setMessage("");
+    try {
+      const row = await applyInvoiceOffer(
+        session,
+        invoice.id,
+        offerId ? { discount_offer_id: offerId } : undefined,
+      );
+      setDetail(row);
+      await Promise.all([refreshInvoices(), loadReports()]);
+      setMessage(`Offer applied to ${invoice.invoice_number}.`);
+    } catch (err: any) {
+      setMessage(err.message || "Could not apply offer.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function removeOffer(invoice: any) {
+    if (!session) return;
+    setBusy(`offer-${invoice.id}`);
+    setMessage("");
+    try {
+      const row = await removeInvoiceOffer(session, invoice.id);
+      setDetail(row);
+      await Promise.all([refreshInvoices(), loadReports()]);
+      setMessage(`Offer removed from ${invoice.invoice_number}.`);
+    } catch (err: any) {
+      setMessage(err.message || "Could not remove offer.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function submitCreditNote(invoice: any, reason: string) {
     if (!session || !invoice || !reason) return false;
     setBusy(invoice.id);
@@ -605,6 +643,8 @@ export function useBillingActions(
     collectPayment,
     collectSplitPayment,
     applyMembershipBenefit,
+    applyOffer,
+    removeOffer,
     submitCreditNote,
     openReceipt,
     updateInvoiceItemSupplier,

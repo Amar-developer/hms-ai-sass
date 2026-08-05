@@ -68,65 +68,24 @@ export function selectedSchedulePayloads(
   );
 }
 
-export function scheduleGroupKey(row: any) {
-  return [
-    row.practitioner_id,
-    row.branch_id,
-    row.department_id || "",
-    row.room_number || "",
-    row.slot_minutes,
-    row.is_active === false ? "inactive" : "active",
-  ].join("|");
-}
-
-export function groupSchedules(rows: any[]) {
-  const groups = new Map<string, any>();
-  for (const row of rows) {
-    const key = scheduleGroupKey(row);
-    const existing = groups.get(key);
-    if (existing) {
-      existing.schedules.push(row);
-      existing.updated_at = [
-        existing.updated_at,
-        row.updated_at,
-        row.created_at,
-      ]
-        .filter(Boolean)
-        .sort()
-        .at(-1);
-      existing.is_active = existing.schedules.some(
-        (item: any) => item.is_active,
-      );
-    } else {
-      groups.set(key, {
-        ...row,
-        id: key,
-        schedules: [row],
-        group_key: key,
-        is_active: row.is_active,
-      });
-    }
-  }
-  return Array.from(groups.values()).map((group: any) => ({
-    ...group,
-    schedules: [...group.schedules].sort(
-      (a: any, b: any) =>
-        a.weekday - b.weekday ||
-        String(a.start_time).localeCompare(String(b.start_time)),
-    ),
-  }));
-}
+// Schedule grouping now happens server-side and arrives from
+// GET /practitioners/schedules/grouped as one row per editable schedule with
+// its timings under `slots`, so the old client-side groupSchedules /
+// scheduleGroupKey pair has been removed.
 
 export function selectedSchedulePayloadsFromRHF(
   data: ScheduleFormValues,
   doctorBranchIds: string[]
 ) {
   const payloads: any[] = [];
+  const isDateSchedule = data.scheduleMode === "date" && Boolean(data.scheduleDate);
+  // A date-specific schedule targets one calendar date, so the weekday list
+  // does not apply — the server derives the weekday from the date itself.
+  const recurrenceKeys = isDateSchedule ? [null] : data.weekdays;
 
   data.ranges.forEach((range) => {
-    data.weekdays.forEach((weekday) => {
+    recurrenceKeys.forEach((weekday) => {
       const payload: any = {
-        weekday: Number(weekday),
         start_time: range.start,
         end_time: range.end,
         is_active: range.isActive,
@@ -135,6 +94,12 @@ export function selectedSchedulePayloadsFromRHF(
         // FIX: Send room_number as STRING or null
         room_number: data.roomNumber ? String(data.roomNumber) : null,
       };
+      if (isDateSchedule) {
+        payload.schedule_date = data.scheduleDate;
+        payload.date_mode = data.dateMode;
+      } else {
+        payload.weekday = Number(weekday);
+      }
 
       if (data.branchId === ALL_BRANCHES) {
         doctorBranchIds.forEach((branchId) => {

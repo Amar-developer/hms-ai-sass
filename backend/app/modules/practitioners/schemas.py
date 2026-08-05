@@ -1,9 +1,13 @@
 from datetime import date, datetime, time
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.validation import BranchId, DepartmentId, UserId
-from app.modules.practitioners.models import PractitionerStatus, PractitionerType
+from app.modules.practitioners.models import (
+    PractitionerStatus,
+    PractitionerType,
+    ScheduleDateMode,
+)
 
 
 class PractitionerCreate(BaseModel):
@@ -65,7 +69,12 @@ class PractitionerEligibilityRead(BaseModel):
 class PractitionerScheduleCreate(BaseModel):
     branch_id: BranchId
     department_id: DepartmentId | None = None
-    weekday: int = Field(ge=0, le=6)
+    # weekday is required even for a date-specific row: it is derived from
+    # schedule_date server-side, so the recurring-slot queries keep working
+    # unchanged for every row.
+    weekday: int | None = Field(default=None, ge=0, le=6)
+    schedule_date: date | None = None
+    date_mode: ScheduleDateMode | None = None
     start_time: time
     end_time: time
     slot_minutes: int = Field(default=15, ge=1, le=240)
@@ -74,12 +83,29 @@ class PractitionerScheduleCreate(BaseModel):
     is_active: bool = True
     actor_user_id: UserId | None = None
 
+    @model_validator(mode="after")
+    def _check_recurrence(self) -> "PractitionerScheduleCreate":
+        if self.schedule_date is None and self.weekday is None:
+            raise ValueError("Provide either a weekday or a schedule date")
+        if self.schedule_date is not None:
+            # A date row must say how it relates to the weekly recurrence,
+            # otherwise the availability engine cannot decide whether it
+            # replaces or supplements the normal hours.
+            if self.date_mode is None:
+                self.date_mode = ScheduleDateMode.OVERRIDE
+            self.weekday = self.schedule_date.weekday()
+        elif self.date_mode is not None:
+            raise ValueError("date_mode only applies to a date-specific schedule")
+        return self
+
 
 class PractitionerScheduleUpdate(BaseModel):
     practitioner_id: str | None = None
     branch_id: BranchId | None = None
     department_id: DepartmentId | None = None
     weekday: int | None = Field(default=None, ge=0, le=6)
+    schedule_date: date | None = None
+    date_mode: ScheduleDateMode | None = None
     start_time: time | None = None
     end_time: time | None = None
     slot_minutes: int | None = Field(default=None, ge=1, le=240)
@@ -87,6 +113,14 @@ class PractitionerScheduleUpdate(BaseModel):
     room_number: str | None = Field(default=None, max_length=10)
     is_active: bool | None = None
     actor_user_id: UserId | None = None
+
+    @model_validator(mode="after")
+    def _sync_weekday(self) -> "PractitionerScheduleUpdate":
+        if self.schedule_date is not None:
+            if self.date_mode is None:
+                self.date_mode = ScheduleDateMode.OVERRIDE
+            self.weekday = self.schedule_date.weekday()
+        return self
 
 
 class PractitionerScheduleRead(BaseModel):
@@ -99,12 +133,49 @@ class PractitionerScheduleRead(BaseModel):
     department_id: str | None
     department_name: str | None = None
     weekday: int
+    schedule_date: date | None = None
+    date_mode: ScheduleDateMode | None = None
     start_time: time
     end_time: time
     slot_minutes: int
     room_name: str | None
     room_number: str | None
     is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PractitionerScheduleSlotRead(BaseModel):
+    """One concrete timing row inside a grouped schedule."""
+
+    id: str
+    weekday: int
+    schedule_date: date | None = None
+    date_mode: ScheduleDateMode | None = None
+    start_time: time
+    end_time: time
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PractitionerScheduleGroupRead(BaseModel):
+    """A practitioner's schedule for one branch/department/room/slot-size,
+    with every timing row nested under `slots` — the shape the scheduling
+    UI actually renders, so it no longer has to regroup flat rows itself."""
+
+    group_key: str
+    practitioner_id: str
+    practitioner_full_name: str | None = None
+    branch_id: str
+    branch_name: str | None = None
+    department_id: str | None = None
+    department_name: str | None = None
+    room_name: str | None = None
+    room_number: str | None = None
+    slot_minutes: int
+    is_active: bool
+    slots: list[PractitionerScheduleSlotRead]
     created_at: datetime
     updated_at: datetime
 

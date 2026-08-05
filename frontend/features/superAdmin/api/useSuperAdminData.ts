@@ -39,7 +39,10 @@ export function useSuperAdminData(apiSession: any) {
   const [permissionCatalog, setPermissionCatalog] = useState<any[]>([]);
   const [moduleRegistry, setModuleRegistry] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState("");
-  const [busy, setBusy] = useState(false);
+  // Starts true: on mount there's a render before the load effect runs where
+  // the collections are still empty, and busy=false there would look
+  // identical to "finished, found nothing" to a not-found redirect guard.
+  const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
 
   const tenantAccessLoadSequence = useRef(0);

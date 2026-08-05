@@ -6,23 +6,19 @@ import { today } from "@/utils/helper";
 import { BookingFormValues } from "@/features/home-care/homecare.schema";
 import * as homeCareApi from "./homecare.api";
 
-type View = "list" | "create" | "edit" | "view" | "invoice";
-
 type UseHomeCareActionsParams = {
   apiSession: ApiSession | null | undefined;
   branchId?: string;
   loadLiveData?: (session: ApiSession) => Promise<void>;
   selected: any;
   editing: any;
-  setEditing: (booking: any) => void;
   lineItems: any[];
   visitForm: any;
   setVisitForm: (updater: (prev: any) => any) => void;
   setBusy: (value: string) => void;
   setError: (value: string) => void;
   setMessage: (value: string) => void;
-  setSelectedId: (id: string) => void;
-  setView: (view: View) => void;
+  navigateToView: (id: string) => void;
   setInvoiceDetail: (value: any) => void;
   load: () => Promise<void>;
 };
@@ -39,15 +35,13 @@ export function useHomeCareActions({
   loadLiveData,
   selected,
   editing,
-  setEditing,
   lineItems,
   visitForm,
   setVisitForm,
   setBusy,
   setError,
   setMessage,
-  setSelectedId,
-  setView,
+  navigateToView,
   setInvoiceDetail,
   load,
 }: UseHomeCareActionsParams) {
@@ -130,6 +124,8 @@ export function useHomeCareActions({
         booking_type: data.booking_type,
         location: data.location || null,
         recurrence: data.recurrence,
+        visit_day_mode: data.visit_day_mode || "all",
+        visit_weekdays: data.visit_weekdays || [],
         start_date: data.start_date || today(),
         end_date: data.end_date || null,
         status: data.status,
@@ -149,12 +145,10 @@ export function useHomeCareActions({
         : await homeCareApi.createBooking(apiSession, payload);
       await load();
       if (loadLiveData) await loadLiveData(apiSession);
-      setSelectedId(saved.id);
       setMessage(
         editing ? "Home care booking updated." : "Home care booking created.",
       );
-      setEditing(null);
-      setView("view");
+      navigateToView(saved.id);
       return true;
     } catch (err: any) {
       setError(err.message || "Unable to save home care booking.");
@@ -276,7 +270,6 @@ export function useHomeCareActions({
         { status: "cancelled" },
       );
       await load();
-      setSelectedId(saved.id);
       setMessage("Home care booking cancelled.");
     } catch (err: any) {
       setError(err.message || "Unable to cancel home care booking.");
@@ -298,7 +291,6 @@ export function useHomeCareActions({
       );
       await load();
       if (loadLiveData) await loadLiveData(apiSession);
-      setSelectedId(saved.id);
       setMessage(
         `Booking status changed to ${humanizeOptionLabel(saved.status)}.`,
       );

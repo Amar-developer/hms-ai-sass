@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { humanizeOptionLabel } from "@/lib/options";
 import { today } from "@/utils/helper";
@@ -30,13 +31,13 @@ export function HomeCare({
   branchId,
   loadLiveData,
   setActive,
+  view = "list",
+  selectedId = "",
 }: any) {
+  const router = useRouter();
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
-  const [view, setView] = useState<View>("list");
   const { services, bookings, staff, loading, dataError, serviceLoadError, load } =
     useHomeCareData({ apiSession, branchId });
-  const [selectedId, setSelectedId] = useState("");
-  const [editing, setEditing] = useState<any>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -95,6 +96,21 @@ export function HomeCare({
     [services],
   );
   const selected = bookings.find((row) => row.id === selectedId);
+  const editing = view === "edit" ? selected : null;
+
+  // Bounce back to the list if a direct/bookmarked view/edit/invoice link
+  // no longer resolves to a real booking, but only once loading finished.
+  useEffect(() => {
+    if (
+      (view !== "view" && view !== "edit" && view !== "invoice") ||
+      !selectedId ||
+      loading ||
+      selected
+    )
+      return;
+    router.replace("/home_care");
+  }, [view, selectedId, loading, selected, router]);
+
   const filteredBookings = useMemo(
     () =>
       bookings.filter((booking: any) => {
@@ -158,26 +174,24 @@ export function HomeCare({
     loadLiveData,
     selected,
     editing,
-    setEditing,
     lineItems,
     visitForm,
     setVisitForm,
     setBusy,
     setError,
     setMessage,
-    setSelectedId,
-    setView,
+    navigateToView: (id: string) => router.push(`/home_care/${id}`),
     setInvoiceDetail,
     load,
   });
 
   useEffect(() => {
+    if (view !== "list") return;
     const target = readNotificationTarget("home_care_booking");
     if (!target || !bookings.some((row: any) => row.id === target.resourceId))
       return;
-    setSelectedId(target.resourceId);
-    setView("view");
-  }, [apiSession?.tenantId, bookings.length]);
+    router.push(`/home_care/${target.resourceId}`);
+  }, [apiSession?.tenantId, bookings.length, view, router]);
   useEffect(() => {
     setPage(1);
   }, [filters.query, filters.status]);
@@ -245,20 +259,17 @@ export function HomeCare({
 
   function openCreate() {
     resetForm();
-    setSelectedId("");
-    setView("create");
+    router.push("/home_care/new");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function openView(booking: any) {
-    setSelectedId(booking.id);
-    setView("view");
+    router.push(`/home_care/${booking.id}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function openInvoice(booking: any) {
-    setSelectedId(booking.id);
-    setView("invoice");
+    router.push(`/home_care/${booking.id}/invoice`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -272,18 +283,24 @@ export function HomeCare({
 
   function startEdit(booking: any) {
     if (isBookingLocked(booking)) {
-      setSelectedId(booking.id);
-      setView("view");
+      router.push(`/home_care/${booking.id}`);
       setError(
         `This booking is ${humanizeOptionLabel(booking.status)} and can no longer be edited.`,
       );
       return;
     }
-    setEditing(booking);
-    setSelectedId(booking.id);
+    router.push(`/home_care/${booking.id}/edit`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Populate the edit-form line items once per target booking, not on
+  // every render — startEdit no longer does this directly since it (and
+  // direct/bookmarked links) only navigate; this reacts to the URL.
+  useEffect(() => {
+    if (view !== "edit" || !editing) return;
     setLineItems(
-      booking.services?.length
-        ? booking.services.map((row: any) => ({
+      editing.services?.length
+        ? editing.services.map((row: any) => ({
             service_id: row.service_id || "",
             description: row.description || "",
             quantity: String(Math.max(1, Number(row.quantity || 1))),
@@ -291,18 +308,15 @@ export function HomeCare({
           }))
         : [{ ...emptyLine }],
     );
-    setView("edit");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedId]);
 
   function resetForm() {
-    setEditing(null);
     setLineItems([{ ...emptyLine }]);
   }
 
   function backToList() {
-    setEditing(null);
-    setView("list");
+    router.push("/home_care");
   }
 
   const isFormView = view === "create" || view === "edit";

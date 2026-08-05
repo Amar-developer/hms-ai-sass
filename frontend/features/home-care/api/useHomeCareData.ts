@@ -20,7 +20,10 @@ export function useHomeCareData({ apiSession, branchId }: UseHomeCareDataParams)
   const [services, setServices] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Starts true: on mount there's a render before the load effect has run,
+  // where loading=false would look identical to "finished, found nothing"
+  // to anything gating a not-found redirect on it.
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [serviceLoadError, setServiceLoadError] = useState("");
 

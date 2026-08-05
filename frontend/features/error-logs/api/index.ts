@@ -1,5 +1,6 @@
 export {
   fetchErrorLogs,
+  fetchErrorLog,
   updateErrorLog,
   deleteErrorLog,
 } from "./errorLogs.api";

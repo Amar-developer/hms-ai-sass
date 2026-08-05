@@ -2,6 +2,7 @@ export {
   getTenants,
   getDoctors,
   getSchedules,
+  getGroupedSchedules,
   createSchedule,
   updateSchedule,
   deleteSchedule,

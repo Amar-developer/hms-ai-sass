@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Button,
   Card,
@@ -35,8 +36,10 @@ export function PatientSubscriptions({
   branches,
   clinic,
   showEnrollment = false,
+  view = "list",
+  selectedId = "",
 }: any) {
-  const [view, setView] = useState("list");
+  const router = useRouter();
   const [toast, setToast] = useState<{
     text: string;
     kind: "success" | "error" | "warn";
@@ -62,7 +65,6 @@ export function PatientSubscriptions({
   const [discountedMedicineIds, setDiscountedMedicineIds] = useState<string[]>(
     [],
   );
-  const [editingPlan, setEditingPlan] = useState<any | null>(null);
   const [editFreeLabIds, setEditFreeLabIds] = useState<string[]>([]);
   const [editFreeLabQuantities, setEditFreeLabQuantities] = useState<
     Record<string, number>
@@ -78,7 +80,6 @@ export function PatientSubscriptions({
     [],
   );
   const [confirmDelete, setConfirmDelete] = useState("");
-  const [detailPlanId, setDetailPlanId] = useState("");
   const [planPage, setPlanPage] = useState(1);
   const [confirm, setConfirm] = useState<any>(null);
   const {
@@ -95,8 +96,60 @@ export function PatientSubscriptions({
     apiSession,
     branchId,
     setSelectedPlan,
-    setDetailPlanId,
   });
+
+  function goTo(nextView: string, id = "", opts: { replace?: boolean } = {}) {
+    const path =
+      nextView === "create"
+        ? "/admin/membership/new"
+        : nextView === "edit"
+          ? `/admin/membership/${id}/edit`
+          : nextView === "detail"
+            ? `/admin/membership/${id}`
+            : "/admin/membership";
+    if (opts.replace) {
+      router.replace(path);
+    } else {
+      router.push(path);
+    }
+  }
+
+  const editingPlan =
+    view === "edit" ? plans.find((plan: any) => plan.id === selectedId) : null;
+  const detailPlan =
+    view === "detail"
+      ? plans.find((plan: any) => plan.id === selectedId)
+      : null;
+
+  // Populate the edit-form working state once per target plan, not on
+  // every render — editingPlan is re-derived from `plans` each render, but
+  // the fields below hold in-progress edits the user is actively changing.
+  useEffect(() => {
+    if (view !== "edit" || !editingPlan) return;
+    setEditFreeConsultDeptIds(
+      editingPlan.free_consultation_department_ids || [],
+    );
+    setEditFreeLabIds(editingPlan.free_lab_test_ids || []);
+    setEditFreeLabQuantities(editingPlan.free_lab_test_quantities || {});
+    setEditDiscountedLabIds(editingPlan.discounted_lab_test_ids || []);
+    setEditFreeMedIds(editingPlan.free_medicine_ids || []);
+    setEditFreeMedQuantities(editingPlan.free_medicine_quantities || {});
+    setEditDiscountedMedIds(editingPlan.discounted_medicine_ids || []);
+    setToast(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedId]);
+
+  // Bounce back to the list if a direct/bookmarked edit or detail link no
+  // longer resolves to a real plan, but only once loading has actually
+  // finished — otherwise this fires while `plans` is still empty.
+  useEffect(() => {
+    if ((view !== "edit" && view !== "detail") || !selectedId || loading)
+      return;
+    if (!plans.some((plan: any) => plan.id === selectedId)) {
+      goTo("list", "", { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedId, loading, plans]);
   const { patients, patientMap } = usePatientReferencesQuery(
     apiSession,
     enrollments.map((row: any) => row.patient_id),
@@ -164,12 +217,12 @@ export function PatientSubscriptions({
     editFreeMedIds,
     editFreeMedQuantities,
     editDiscountedMedIds,
+    view,
+    selectedId,
     setBusy,
     setToast,
-    setView,
-    setEditingPlan,
+    navigateToList: () => goTo("list"),
     setConfirmDelete,
-    setDetailPlanId,
     setFreeConsultDeptIds,
     setFreeLabTestIds,
     setFreeLabQuantities,
@@ -181,22 +234,12 @@ export function PatientSubscriptions({
   });
 
   function startEdit(plan: any) {
-    setEditingPlan(plan);
-    setView("edit");
-    setEditFreeConsultDeptIds(plan.free_consultation_department_ids || []);
-    setEditFreeLabIds(plan.free_lab_test_ids || []);
-    setEditFreeLabQuantities(plan.free_lab_test_quantities || {});
-    setEditDiscountedLabIds(plan.discounted_lab_test_ids || []);
-    setEditFreeMedIds(plan.free_medicine_ids || []);
-    setEditFreeMedQuantities(plan.free_medicine_quantities || {});
-    setEditDiscountedMedIds(plan.discounted_medicine_ids || []);
-    setToast(null);
+    goTo("edit", plan.id);
   }
 
   function cancelEdit() {
-    setEditingPlan(null);
     setConfirmDelete("");
-    setView("list");
+    goTo("list");
   }
 
   function requestCancelEnrollment(row: any) {
@@ -253,9 +296,6 @@ export function PatientSubscriptions({
     });
     return counts;
   }, [activeEnrollments]);
-  const detailPlan = detailPlanId
-    ? plans.find((plan: any) => plan.id === detailPlanId)
-    : null;
   const pagedPlans = plans.slice(
     (safePlanPage - 1) * pageSize,
     safePlanPage * pageSize,
@@ -300,10 +340,7 @@ export function PatientSubscriptions({
           labTests={labTests}
           medicines={medicines}
           departments={departments}
-          onBack={() => {
-            setDetailPlanId("");
-            setView("list");
-          }}
+          onBack={() => goTo("list")}
           onEdit={() => startEdit(detailPlan)}
           onToggle={() => togglePlanActive(detailPlan)}
           activeEnrollmentCount={
@@ -318,7 +355,7 @@ export function PatientSubscriptions({
           busy={busy === "plan"}
           submitLabel="Create Plan"
           onSubmit={createPlan}
-          back={() => setView("list")}
+          back={() => goTo("list")}
           labTests={labTests}
           medicines={medicines}
           departments={departments}
@@ -431,7 +468,7 @@ export function PatientSubscriptions({
                 {canCreatePlan && (
                   <Button
                     type="button"
-                    onClick={() => setView("create")}
+                    onClick={() => goTo("create")}
                     className="save-button text-xs"
                   >
                     Create Plan
@@ -480,10 +517,7 @@ export function PatientSubscriptions({
                               togglePlanActive={togglePlanActive}
                               canDeletePlans={canDeletePlans}
                               canEditPlans={canEditPlans}
-                              openDetail={() => {
-                                setDetailPlanId(plan.id);
-                                setView("detail");
-                              }}
+                              openDetail={() => goTo("detail", plan.id)}
                             />
                           );
                         })}

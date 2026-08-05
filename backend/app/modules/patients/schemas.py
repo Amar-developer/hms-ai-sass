@@ -1,8 +1,9 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator
 
+from app.modules.patients.contact import patient_contact_mobile
 from app.modules.patients.models import (
     AlertSeverity,
     AlertType,
@@ -109,6 +110,13 @@ class PatientRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def contact_mobile(self) -> str | None:
+        """Primary, else alternate, else guardian - the number the UI should
+        display and messaging will actually use."""
+        return patient_contact_mobile(self)
+
 
 class PatientAlertCreate(BaseModel):
     alert_type: AlertType
@@ -133,6 +141,7 @@ class PatientSearchResult(BaseModel):
     patient_number: str
     full_name: str
     mobile: str | None
+    alternate_mobile: str | None = None
     guardian_name: str | None
     guardian_mobile: str | None
     area: str | None
@@ -143,6 +152,13 @@ class PatientSearchResult(BaseModel):
     updated_at: datetime
     active_alert_count: int
     critical_alert_count: int
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def contact_mobile(self) -> str | None:
+        """Primary, else alternate, else guardian."""
+        return patient_contact_mobile(self)
+
     subscription_plan_name: str | None = None
     subscription_status: str | None = None
 

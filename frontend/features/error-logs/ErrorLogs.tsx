@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { AlertTriangle, CheckCircle2, CircleAlert, Trash2 } from "lucide-react";
 
@@ -31,10 +32,15 @@ import {
   eror_status_options,
 } from "./constants";
 
-import { useErrorLogsData, useErrorLogsActions } from "./api";
+import {
+  fetchErrorLog,
+  useErrorLogsData,
+  useErrorLogsActions,
+} from "./api";
 import { levelTone, statusLabel } from "./helpers";
 
-export function ErrorLogs({ apiSession }: any) {
+export function ErrorLogs({ apiSession, selectedId = "" }: any) {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
@@ -42,7 +48,7 @@ export function ErrorLogs({ apiSession }: any) {
   const [source, setSource] = useState("all");
   const [category, setCategory] = useState("all");
   const [resolved, setResolved] = useState("all");
-  const [selected, setSelected] = useState<any>(null);
+  const [fetchedDetail, setFetchedDetail] = useState<any>(null);
   const [resolutionNote, setResolutionNote] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const permissions = apiSession?.user?.permissions || [];
@@ -78,6 +84,34 @@ export function ErrorLogs({ apiSession }: any) {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  // The detail row usually comes straight from the already-loaded page, but
+  // a direct/bookmarked link can name a log that isn't on the current page
+  // — fetch it directly in that case.
+  const selected = selectedId
+    ? rows.find((row: any) => row.id === selectedId) || fetchedDetail
+    : null;
+
+  useEffect(() => {
+    setFetchedDetail(null);
+    if (!selectedId || rows.some((row: any) => row.id === selectedId)) return;
+    let cancelled = false;
+    fetchErrorLog(selectedId, apiSession)
+      .then((row: any) => {
+        if (!cancelled) setFetchedDetail(row);
+      })
+      .catch(() => {
+        if (!cancelled) router.replace("/error_logs");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  useEffect(() => {
+    setResolutionNote(selected?.resolution_note || "");
+  }, [selected]);
+
   function applySearch() {
     setPage(1);
 
@@ -93,7 +127,7 @@ export function ErrorLogs({ apiSession }: any) {
       resolutionNote,
     );
 
-    setSelected(updated);
+    setFetchedDetail(updated);
 
     setResolutionNote(updated.resolution_note || "");
 
@@ -109,7 +143,7 @@ export function ErrorLogs({ apiSession }: any) {
 
     await remove(selected);
 
-    setSelected(null);
+    router.push("/error_logs");
 
     setRefreshKey((value) => value + 1);
   }
@@ -142,7 +176,7 @@ export function ErrorLogs({ apiSession }: any) {
                 Last seen {displayDateTime(selected.last_seen_at)}
               </p>
             </div>
-            <ActionButton onClick={() => setSelected(null)}>
+            <ActionButton onClick={() => router.push("/error_logs")}>
               Back to Error Logs
             </ActionButton>
           </div>
@@ -378,10 +412,7 @@ export function ErrorLogs({ apiSession }: any) {
               {rows.map((row) => (
                 <tr
                   key={row.id}
-                  onClick={() => {
-                    setSelected(row);
-                    setResolutionNote(row.resolution_note || "");
-                  }}
+                  onClick={() => router.push(`/error_logs/${row.id}`)}
                   className="cursor-pointer transition hover:bg-slate-50"
                 >
                   <td className="px-4 py-4">

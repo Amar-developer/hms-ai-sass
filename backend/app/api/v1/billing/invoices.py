@@ -20,6 +20,7 @@ from app.modules.billing.schemas import (
     InvoiceItemSupplierOptionRead,
     InvoiceItemSupplierUpdate,
     InvoiceItemRead,
+    InvoiceOfferApply,
     InvoiceRead,
     PaymentRead,
     PendingConsultationInvoiceRead,
@@ -44,8 +45,13 @@ from app.modules.billing.services.ledger import (
     ensure_invoice_membership_benefit_ledger,
     ensure_invoice_submit_ledger,
     read_invoice_detail_full,
+    record_billing_ledger,
 )
 from app.modules.billing.services.membership import apply_membership_benefit_to_invoice
+from app.modules.billing.services.offers import (
+    apply_offer_to_invoice,
+    remove_offer_from_invoice,
+)
 from app.modules.billing.services.source_invoices import (
     create_invoice_from_consultation_source,
     create_invoice_from_lab_order_source,
@@ -893,5 +899,56 @@ def apply_invoice_membership_benefit(
         invoice_id=invoice_id,
         current_user=current_user,
         ensure_invoice_membership_benefit_ledger=ensure_invoice_membership_benefit_ledger,
+        read_invoice_detail=read_invoice_detail_full,
+    )
+
+
+@router.post(
+    "/invoices/{invoice_id}/offer/apply",
+    response_model=InvoiceDetailRead,
+    summary="Apply a promotional offer to an invoice",
+)
+def apply_invoice_offer(
+    invoice_id: str,
+    payload: InvoiceOfferApply | None = None,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(permissions.BILLING_MANAGE, permissions.INVOICES_EDIT)
+    ),
+) -> InvoiceDetailRead:
+    """Offers are opt-in. With no body the best eligible offer is applied;
+    otherwise the named offer or the entered code is used."""
+    return apply_offer_to_invoice(
+        session,
+        tenant_id=tenant_id,
+        invoice_id=invoice_id,
+        current_user=current_user,
+        discount_offer_id=payload.discount_offer_id if payload else None,
+        code=payload.code if payload else None,
+        record_billing_ledger=record_billing_ledger,
+        read_invoice_detail=read_invoice_detail_full,
+    )
+
+
+@router.post(
+    "/invoices/{invoice_id}/offer/remove",
+    response_model=InvoiceDetailRead,
+    summary="Remove the applied offer from an invoice",
+)
+def remove_invoice_offer(
+    invoice_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(permissions.BILLING_MANAGE, permissions.INVOICES_EDIT)
+    ),
+) -> InvoiceDetailRead:
+    return remove_offer_from_invoice(
+        session,
+        tenant_id=tenant_id,
+        invoice_id=invoice_id,
+        current_user=current_user,
+        record_billing_ledger=record_billing_ledger,
         read_invoice_detail=read_invoice_detail_full,
     )

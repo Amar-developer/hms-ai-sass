@@ -15,6 +15,10 @@ export async function fetchErrorLogs(
 
 
 
+export async function fetchErrorLog(id: string, apiSession: any) {
+  return apiFetch(`/error-logs/${id}`, apiSession);
+}
+
 export async function updateErrorLog(
   id:string,
   payload:any,

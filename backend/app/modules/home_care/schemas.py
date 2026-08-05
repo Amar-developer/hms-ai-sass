@@ -7,6 +7,7 @@ from app.core.validation import BranchId, PatientId, UserId
 
 HomeCareBookingType = Literal["home_care", "home_visit"]
 HomeCareRecurrence = Literal["daily", "one_week", "monthly", "custom"]
+HomeCareVisitDayMode = Literal["all", "alternate", "weekdays"]
 HomeCareBookingStatus = Literal[
     "requested",
     "scheduled",
@@ -131,6 +132,8 @@ class HomeCareBookingCreate(BaseModel):
     staff_type: str | None = Field(default=None, max_length=80)
     booking_type: HomeCareBookingType
     recurrence: HomeCareRecurrence
+    visit_day_mode: HomeCareVisitDayMode = "all"
+    visit_weekdays: list[int] = Field(default_factory=list)
     start_date: date
     end_date: date
     status: HomeCareBookingStatus = "requested"
@@ -154,6 +157,10 @@ class HomeCareBookingCreate(BaseModel):
             raise ValueError("End date is required")
         if self.end_date < self.start_date:
             raise ValueError("End date must be on or after start date")
+        if self.visit_day_mode == "weekdays" and not self.visit_weekdays:
+            raise ValueError("Select at least one visit weekday")
+        if any(day < 0 or day > 6 for day in self.visit_weekdays):
+            raise ValueError("Visit weekdays must be between 0 (Mon) and 6 (Sun)")
         if not self.location or not self.location.strip():
             raise ValueError("Location is required")
         if not self.services:
@@ -180,6 +187,8 @@ class HomeCareBookingUpdate(BaseModel):
     staff_type: str | None = Field(default=None, max_length=80)
     booking_type: HomeCareBookingType | None = None
     recurrence: HomeCareRecurrence | None = None
+    visit_day_mode: HomeCareVisitDayMode | None = None
+    visit_weekdays: list[int] | None = None
     start_date: date | None = None
     end_date: date | None = None
     status: HomeCareBookingStatus | None = None
@@ -207,6 +216,9 @@ class HomeCareBookingRead(BaseModel):
     booking_type: str = "home_care"
     booking_number: str
     recurrence: str
+    visit_day_mode: str = "all"
+    visit_weekdays: list[int] = Field(default_factory=list)
+    planned_visit_count: int = 0
     start_date: date
     end_date: date | None
     status: str

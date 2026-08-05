@@ -11,24 +11,23 @@ type UsePatientSubscriptionsDataParams = {
   apiSession: ApiSession | null | undefined;
   branchId?: string;
   setSelectedPlan: (updater: (current: string) => string) => void;
-  setDetailPlanId: (updater: (current: string) => string) => void;
 };
 
 /**
  * Owns the patient-subscriptions workspace's tenant-scoped data: plans,
  * enrollments, and the lab-test/medicine/department catalogs used to build
- * membership benefits. After each load, reconciles the selected plan and
- * open plan-detail id against the freshly-fetched plan rows so a stale
- * selection never lingers past a refresh. (Selected-patient reconciliation
- * lives in the component, since it depends on `patients` from the sibling
+ * membership benefits. After each load, reconciles the selected plan
+ * against the freshly-fetched plan rows so a stale selection never lingers
+ * past a refresh. (Selected-patient reconciliation lives in the component,
+ * since it depends on `patients` from the sibling
  * `usePatientReferencesQuery` hook, which itself depends on `enrollments`
- * returned here.)
+ * returned here. The open plan-detail/edit id is derived from the URL by
+ * the component, not tracked here.)
  */
 export function usePatientSubscriptionsData({
   apiSession,
   branchId,
   setSelectedPlan,
-  setDetailPlanId,
 }: UsePatientSubscriptionsDataParams) {
   const queryClient = useQueryClient();
   const [plans, setPlans] = useState<any[]>([]);
@@ -37,7 +36,12 @@ export function usePatientSubscriptionsData({
   const [medicines, setMedicines] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [loadError, setLoadError] = useState("");
-  const [loading, setLoading] = useState(false);
+  // Starts true (not false): on a fresh mount there's a render where the
+  // load effect hasn't run yet, so plans is still []. If loading defaulted
+  // to false, that render would look identical to "load finished, found
+  // nothing" to any effect gating on it (e.g. a stale-id redirect guard),
+  // causing a false bounce before the real fetch even starts.
+  const [loading, setLoading] = useState(true);
 
   async function load() {
     if (!apiSession) return;
@@ -64,9 +68,6 @@ export function usePatientSubscriptionsData({
             (dept: any) => dept?.is_active !== false,
           ),
         ),
-      );
-      setDetailPlanId((current) =>
-        planRows.some((row: any) => row.id === current) ? current : "",
       );
       setSelectedPlan((current) =>
         planRows.some((row: any) => row.id === current)

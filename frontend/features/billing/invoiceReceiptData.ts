@@ -2,6 +2,7 @@ import { apiFetch, type ApiSession, uploadAssetUrl } from "@/lib/api";
 import type { QueryClient } from "@tanstack/react-query";
 import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
 import { invoiceItemPriceBreakdown } from "./helpers";
+import { patientDisplayMobile } from "@/features/patients/helpers";
 import type { InvoiceProps } from "./types";
 import {
   fetchResolvedSetting,
@@ -73,8 +74,14 @@ export function toInvoiceProps(
     invoiceDate: invoiceDate(invoice),
     customer: {
       name: patient?.full_name || patient?.name || "Patient",
-      phone: patient?.mobile || "",
-      whatsapp: patient?.alternate_mobile || "",
+      // Show a reachable number even when the patient has no primary on
+      // file, and don't print the same number twice.
+      phone: patientDisplayMobile(patient),
+      whatsapp:
+        patient?.alternate_mobile &&
+        patient.alternate_mobile !== patientDisplayMobile(patient)
+          ? patient.alternate_mobile
+          : "",
       address: patient?.address || "",
       patientId: patient?.patient_number || "",
     },

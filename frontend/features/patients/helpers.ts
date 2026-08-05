@@ -76,8 +76,15 @@ export function patientDisplayNumber(patient: any) {
   return patient?.patient_number || patient?.patientNumber || patient?.id || "";
 }
 
+/**
+ * The one number to show for a patient: primary, else alternate, else
+ * guardian. `contact_mobile` is the server's already-resolved answer (see
+ * backend app/modules/patients/contact.py); the rest is a fallback for
+ * payloads that predate it.
+ */
 export function patientDisplayMobile(patient: any) {
   return (
+    patient?.contact_mobile ||
     patient?.mobile ||
     patient?.alternate_mobile ||
     patient?.guardian_mobile ||
