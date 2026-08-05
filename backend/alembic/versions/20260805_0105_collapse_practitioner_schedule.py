@@ -7,10 +7,9 @@ override/extra row (`schedule_date`/`date_mode`). This migration replaces
 that with a single `mode` (daily / mon_saturday / custom) + `weekdays_json`
 pair per row, so one schedule really is one row.
 
-Room fields (`room_name`, `room_number`) are dropped with no replacement —
-confirmed with the product owner that room tracking on a schedule has no
-current business requirement; `PractitionerRoomAssignment` remains its own
-separate, untouched feature.
+`room_number` is dropped with no replacement — confirmed with the product
+owner that room tracking on a schedule has no current business requirement;
+`PractitionerRoomAssignment` remains its own separate, untouched feature.
 
 Date-specific overrides (`schedule_date`/`date_mode`) are a real, working
 feature being intentionally removed per product direction ("separate module
@@ -64,7 +63,6 @@ def upgrade() -> None:
             sa.Column("start_time", sa.Time(), nullable=False),
             sa.Column("end_time", sa.Time(), nullable=False),
             sa.Column("slot_minutes", sa.Integer(), nullable=False),
-            sa.Column("room_name", sa.String(length=120), nullable=True),
             sa.Column("room_number", sa.String(length=10), nullable=True),
             sa.Column("is_active", sa.Boolean(), nullable=False),
             sa.Column("created_at", sa.DateTime(), nullable=False),
@@ -78,7 +76,7 @@ def upgrade() -> None:
             """
             SELECT id, tenant_id, practitioner_id, branch_id, department_id,
                    schedule_date, date_mode, start_time, end_time, slot_minutes,
-                   room_name, room_number, is_active, created_at, updated_at
+                   room_number, is_active, created_at, updated_at
             FROM practitionerschedule
             WHERE schedule_date IS NOT NULL
             """
@@ -91,11 +89,11 @@ def upgrade() -> None:
                 INSERT INTO practitioner_schedule_date_override_archive
                     (id, tenant_id, practitioner_id, branch_id, department_id,
                      schedule_date, date_mode, start_time, end_time, slot_minutes,
-                     room_name, room_number, is_active, created_at, updated_at)
+                     room_number, is_active, created_at, updated_at)
                 VALUES
                     (:id, :tenant_id, :practitioner_id, :branch_id, :department_id,
                      :schedule_date, :date_mode, :start_time, :end_time, :slot_minutes,
-                     :room_name, :room_number, :is_active, :created_at, :updated_at)
+                     :room_number, :is_active, :created_at, :updated_at)
                 """
             ),
             dict(row._mapping),
@@ -178,7 +176,6 @@ def upgrade() -> None:
         "weekday",
         "schedule_date",
         "date_mode",
-        "room_name",
         "room_number",
         "schedule_group_id",
     ):
@@ -231,11 +228,6 @@ def downgrade() -> None:
         op.add_column(
             "practitionerschedule",
             sa.Column("date_mode", sa.String(length=20), nullable=True),
-        )
-    if "room_name" not in columns:
-        op.add_column(
-            "practitionerschedule",
-            sa.Column("room_name", sa.String(length=120), nullable=True),
         )
     if "room_number" not in columns:
         op.add_column(
