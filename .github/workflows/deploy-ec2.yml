@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         env:
           MEDIZINHUB_BACKUP_PASSPHRASE: ${{ secrets.PRODUCTION_BACKUP_PASSPHRASE }}
           MEDIZINHUB_BACKUP_DIR: ${{ secrets.PRODUCTION_BACKUP_DIR }}
