@@ -19,6 +19,7 @@ type FilterSectionProps = {
   query?: string;
   setQuery?: (value: string) => void;
   showSearch?: boolean;
+  searchPlaceholder?: string;
   filters: FilterConfig[];
   filterValues: Record<string, string>;
   onFilterChange?: (key: string, value: string) => void;
@@ -34,6 +35,7 @@ export function FilterSection({
   filters,
   className = "lg:grid-cols-4 xl:grid-cols-5",
   showSearch = true,
+  searchPlaceholder,
   filterValues,
   onFilterChange,
   children,
@@ -56,7 +58,7 @@ export function FilterSection({
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
               setQuery?.(e.target.value)
             }
-            placeholder={`Search ${title?.toLowerCase() ?? ""}`}
+            placeholder={searchPlaceholder ?? `Search ${title?.toLowerCase() ?? ""}`}
           />
         </FormField>
       )}
