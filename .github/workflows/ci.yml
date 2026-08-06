@@ -222,7 +222,13 @@ jobs:
         run: |
           docker compose -f docker-compose.yml config --quiet
           docker compose -f docker-compose.local.yml config --quiet
-          docker compose -f docker-compose.staging.yml config --quiet
+          docker compose --env-file .env.staging.example -f docker-compose.staging.yml config --quiet
+
+      # Compose config validation does not contact the registry. Pull the
+      # externally hosted runtime image here so removed or mistyped tags fail
+      # in CI before the deploy job reaches the EC2 host.
+      - name: Verify external runtime images
+        run: docker compose --env-file .env.staging.example -f docker-compose.staging.yml pull pgbouncer
 
       - name: Build production images
         run: docker compose -f docker-compose.yml build backend frontend
@@ -293,12 +299,16 @@ jobs:
             # build as docker-compose.yml (Dockerfile, not Dockerfile.dev) —
             # only .env.staging differs (test DB, demo creds off). See
             # docker-compose.staging.yml / .env.staging.example.
-            docker compose -f docker-compose.staging.yml build --pull
-            docker compose -f docker-compose.staging.yml up -d --remove-orphans
+            docker compose --env-file .env.staging -f docker-compose.staging.yml build --pull
+            if ! docker compose --env-file .env.staging -f docker-compose.staging.yml up -d --remove-orphans --wait --wait-timeout 180; then
+              docker compose --env-file .env.staging -f docker-compose.staging.yml ps
+              docker compose --env-file .env.staging -f docker-compose.staging.yml logs postgres pgbouncer backend --tail=200
+              exit 1
+            fi
 
             # Check disk after deploy
             docker system df
-            docker compose -f docker-compose.staging.yml ps
+            docker compose --env-file .env.staging -f docker-compose.staging.yml ps
 
             # Health checks (host port 8081 — 8080 is taken by another
             # project on this EC2 box; see docker-compose.staging.yml)
@@ -307,9 +317,22 @@ jobs:
                 break
               fi
               if [ "$i" -eq 30 ]; then
-                docker compose -f docker-compose.staging.yml logs backend --tail=200
+                docker compose --env-file .env.staging -f docker-compose.staging.yml logs backend --tail=200
                 exit 1
               fi
               sleep 5
             done
             curl -f http://127.0.0.1:8081/api/v1/health
+            python3 backend/scripts/verify_deployment.py \
+              --api-origin http://127.0.0.1:8081 \
+              --frontend-origin http://127.0.0.1:3001 \
+              --expected-version "${MEDIZINHUB_APP_VERSION}" \
+              --expected-commit "${MEDIZINHUB_BUILD_COMMIT}" \
+              --expected-environment staging
+            python3 backend/scripts/load_test_api.py \
+              --base-url http://127.0.0.1:8081 \
+              --path /api/v1/health \
+              --requests 30 \
+              --concurrency 5 \
+              --max-p95-ms 1000 \
+              --max-error-rate 0

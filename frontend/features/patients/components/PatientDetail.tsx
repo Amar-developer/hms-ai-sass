@@ -1,7 +1,5 @@
 import { ApiSession, uploadAssetUrl } from "@/lib/api";
-import { clinicalRecordsWithUniqueItems, displayPatientGender, fmtDate, uniqueClinicalRecords } from "../helpers";
-import { DataTable } from "@/features/reports/components/DataTable";
-import { Column } from "@/features/reports/types";
+import { clinicalRecordsWithUniqueItems, displayPatientGender, fmtDate, patientDisplayMobile, uniqueClinicalRecords } from "../helpers";
 import { MembershipEnrollForm } from "../forms/PatientForms";
 import { CompactMetric } from "./CompactMetric";
 import {
@@ -21,6 +19,9 @@ import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
+import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 export function PatientDetail({
   apiSession,
@@ -312,7 +313,8 @@ export function PatientDetail({
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="relative space-y-5">
+      {loading && <OverlayLoader />}
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div className="flex items-start gap-4">
@@ -360,7 +362,8 @@ export function PatientDetail({
                 </Badge>
               </div>
               <p className="table-data mt-1 text-slate-500">
-                {patient.patient_number} · {patient.mobile || "No mobile"}
+                {patient.patient_number} ·{" "}
+                {patientDisplayMobile(patient) || "No mobile"}
               </p>
             </div>
           </div>

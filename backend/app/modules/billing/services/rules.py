@@ -151,6 +151,21 @@ def find_tax_rule(
     return matching_rules[0]
 
 
+def offer_discount_amount(offer: DiscountOffer, subtotal: Decimal) -> Decimal:
+    """What an offer is worth against a subtotal, ignoring whether it is
+    currently *eligible*. Use this to value an offer already attached to an
+    invoice — a campaign ending must not retroactively erase a discount that
+    was granted while it ran."""
+    discount = (
+        money_value(offer.value)
+        if offer.discount_type == DiscountType.FIXED
+        else percentage_amount(subtotal, offer.value)
+    )
+    if offer.max_discount_amount is not None:
+        discount = min(discount, offer.max_discount_amount)
+    return max(min(money_value(discount), subtotal), ZERO)
+
+
 def _offer_discount_value(offer: DiscountOffer, subtotal: Decimal) -> Decimal:
     now = datetime.now(timezone.utc)
     valid_from = (
@@ -169,14 +184,7 @@ def _offer_discount_value(offer: DiscountOffer, subtotal: Decimal) -> Decimal:
         return ZERO
     if subtotal < offer.minimum_bill_amount:
         return ZERO
-    discount = (
-        money_value(offer.value)
-        if offer.discount_type == DiscountType.FIXED
-        else percentage_amount(subtotal, offer.value)
-    )
-    if offer.max_discount_amount is not None:
-        discount = min(discount, offer.max_discount_amount)
-    return max(min(money_value(discount), subtotal), ZERO)
+    return offer_discount_amount(offer, subtotal)
 
 
 def calculate_offer_discount(
@@ -188,30 +196,71 @@ def calculate_offer_discount(
     subtotal: Decimal | int,
     discount_offer_id: str | None,
 ) -> tuple[Decimal, DiscountOffer | None]:
+    """Value a *chosen* offer against a subtotal.
+
+    Offers are never applied on the clinic's behalf. Without an explicit
+    ``discount_offer_id`` this returns no discount, even when an eligible
+    offer exists — staff apply an offer deliberately from the invoice screen
+    (see ``find_best_eligible_offer``), so the billed amount never drops
+    without someone deciding it should.
+    """
+    subtotal = money_value(subtotal)
+    if subtotal <= 0 or not discount_offer_id:
+        return ZERO, None
+    offer = BillingReferenceRepository(session).get_discount_offer(discount_offer_id)
+    if (
+        not offer
+        or offer.tenant_id != tenant_id
+        or not offer.is_active
+        or not _service_matches(offer.service_scope, service_scope)
+        or (offer.branch_id and offer.branch_id != branch_id)
+    ):
+        return ZERO, None
+    discount = _offer_discount_value(offer, subtotal)
+    return (discount, offer) if discount > 0 else (ZERO, None)
+
+
+def list_eligible_offers(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str,
+    service_scope: str,
+    subtotal: Decimal | int,
+) -> list[tuple[Decimal, DiscountOffer]]:
+    """Every active offer that would produce a discount, best value first."""
     subtotal = money_value(subtotal)
     if subtotal <= 0:
-        return ZERO, None
-    repository = BillingReferenceRepository(session)
-    if discount_offer_id:
-        offer = repository.get_discount_offer(discount_offer_id)
-        if (
-            not offer
-            or offer.tenant_id != tenant_id
-            or not offer.is_active
-            or not _service_matches(offer.service_scope, service_scope)
-            or (offer.branch_id and offer.branch_id != branch_id)
-        ):
-            return ZERO, None
-        discount = _offer_discount_value(offer, subtotal)
-        return (discount, offer) if discount > 0 else (ZERO, None)
-    best_offer = None
-    best_discount = ZERO
-    for offer in repository.list_active_discount_offers(tenant_id=tenant_id):
+        return []
+    eligible: list[tuple[Decimal, DiscountOffer]] = []
+    for offer in BillingReferenceRepository(session).list_active_discount_offers(
+        tenant_id=tenant_id
+    ):
         if not _service_matches(offer.service_scope, service_scope):
             continue
         if offer.branch_id and offer.branch_id != branch_id:
             continue
         discount = _offer_discount_value(offer, subtotal)
-        if discount > best_discount:
-            best_discount, best_offer = discount, offer
-    return (best_discount, best_offer) if best_offer else (ZERO, None)
+        if discount > 0:
+            eligible.append((discount, offer))
+    eligible.sort(key=lambda pair: (pair[0], pair[1].created_at), reverse=True)
+    return eligible
+
+
+def find_best_eligible_offer(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str,
+    service_scope: str,
+    subtotal: Decimal | int,
+) -> tuple[Decimal, DiscountOffer | None]:
+    """The highest-value offer staff could apply, for suggestion only."""
+    eligible = list_eligible_offers(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        service_scope=service_scope,
+        subtotal=subtotal,
+    )
+    return eligible[0] if eligible else (ZERO, None)

@@ -50,7 +50,9 @@ def doctor_settlement_summary(
     )
     doctor_share_paid_basis = ZERO
     for invoice, _appointment in rows:
-        if invoice.total_amount:
+        if invoice.total_amount <= 0 and invoice.membership_discount_amount > 0:
+            doctor_share_paid_basis += money_value(invoice.doctor_share_amount)
+        elif invoice.total_amount:
             doctor_share_paid_basis += money_value(
                 invoice.doctor_share_amount * invoice.paid_amount / invoice.total_amount
             )

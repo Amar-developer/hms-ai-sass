@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
+from app.modules.integrations.whatsapp_field_catalog import flow_field_keys
+
 
 WhatsAppFlowKey = Literal[
     "appointment_booked_patient",
@@ -65,6 +67,66 @@ class WhatsAppFlowSettings(BaseModel):
     appointment_reminder_patient: bool = False
 
 
+class WhatsAppCustomTemplateSettings(BaseModel):
+    id: str = Field(pattern=r"^custom_[a-z0-9_]{1,80}$")
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=300)
+    audience: Literal["patient", "doctor", "user"] = "patient"
+    enabled: bool = False
+    # Which real application event this template is sent on. Reuses the same
+    # trigger points the built-in flows already fire from — a custom
+    # template does not invent a new event, it replaces how an existing one
+    # is composed (its identifier and, uniquely to custom templates, which
+    # fields fill each {{n}} placeholder and in what order).
+    trigger_key: WhatsAppFlowKey
+    identifiers: dict[WhatsAppLanguage, str] = Field(default_factory=dict)
+    # Ordered list of field keys (from FLOW_FIELD_CATALOG[trigger_key]) that
+    # fill {{1}}, {{2}}, ... in order. The length of this list IS the
+    # template's parameter count — there is no separate count to keep in
+    # sync, which is what caused the "Template params does not match the
+    # campaign" mismatches for the built-in flows before this existed.
+    parameters: list[str] = Field(default_factory=list, max_length=10)
+
+    @field_validator("id", "name", "description", mode="before")
+    @classmethod
+    def normalize_text(cls, value):
+        return str(value or "").strip()
+
+    @field_validator("identifiers", mode="before")
+    @classmethod
+    def normalize_identifiers(cls, value):
+        return {
+            str(language): str(identifier or "").strip()
+            for language, identifier in (value or {}).items()
+            if str(identifier or "").strip()
+        }
+
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def normalize_parameters(cls, value):
+        return [
+            str(item or "").strip() for item in (value or []) if str(item or "").strip()
+        ]
+
+    @model_validator(mode="after")
+    def validate_parameters_match_trigger(self):
+        valid_keys = flow_field_keys(self.trigger_key)
+        invalid = [field for field in self.parameters if field not in valid_keys]
+        if invalid:
+            raise ValueError(
+                f"Unknown template field(s) for {self.trigger_key}: {', '.join(invalid)}"
+            )
+        if self.enabled and not self.parameters:
+            raise ValueError(
+                f"Select at least one template field for {self.name or self.id}"
+            )
+        if self.enabled and not self.identifiers:
+            raise ValueError(
+                f"Add at least one approved identifier for {self.name or self.id}"
+            )
+        return self
+
+
 class WhatsAppIntegrationUpdate(BaseModel):
     enabled: bool = False
     api_url: HttpUrl | None = None
@@ -86,6 +148,60 @@ class WhatsAppIntegrationUpdate(BaseModel):
         default_factory=dict
     )
     flows: WhatsAppFlowSettings = Field(default_factory=WhatsAppFlowSettings)
+    custom_templates: list[WhatsAppCustomTemplateSettings] = Field(
+        default_factory=list, max_length=50
+    )
+    # Ordered field keys (from FLOW_FIELD_CATALOG[flow_key]) that fill
+    # {{1}}, {{2}}, ... for each BUILT-IN flow's own identifier — the same
+    # "pick which field goes where" mechanism custom templates use, applied
+    # in place to the built-in flows instead of requiring a separate
+    # override entry. A flow absent from this dict falls back to the
+    # catalog's default order (handled at read time in `_read`, and at
+    # send time by `default_field_order`), so existing tenants that never
+    # touch this keep sending exactly what they send today.
+    template_field_mappings: dict[WhatsAppFlowKey, list[str]] = Field(
+        default_factory=dict
+    )
+
+    @field_validator("template_field_mappings", mode="before")
+    @classmethod
+    def normalize_template_field_mappings(cls, value):
+        return {
+            str(flow_key): [
+                str(item or "").strip()
+                for item in (fields or [])
+                if str(item or "").strip()
+            ]
+            for flow_key, fields in (value or {}).items()
+        }
+
+    @model_validator(mode="after")
+    def validate_template_field_mappings(self):
+        for flow_key, fields in self.template_field_mappings.items():
+            valid_keys = flow_field_keys(flow_key)
+            invalid = [field for field in fields if field not in valid_keys]
+            if invalid:
+                raise ValueError(
+                    f"Unknown template field(s) for {flow_key}: {', '.join(invalid)}"
+                )
+            if getattr(self.flows, flow_key, False) and not fields:
+                raise ValueError(f"Select at least one template field for {flow_key}")
+        return self
+
+    @field_validator("custom_templates")
+    @classmethod
+    def unique_custom_templates(cls, value: list[WhatsAppCustomTemplateSettings]):
+        if len({template.id for template in value}) != len(value):
+            raise ValueError("Custom template identifiers must be unique")
+        enabled_triggers = [
+            template.trigger_key for template in value if template.enabled
+        ]
+        if len(set(enabled_triggers)) != len(enabled_triggers):
+            raise ValueError(
+                "Only one enabled custom template is allowed per trigger event"
+                " — disable the other one first"
+            )
+        return value
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -192,6 +308,16 @@ class WhatsAppReadinessRead(BaseModel):
     checks: list[WhatsAppReadinessCheck]
 
 
+class WhatsAppFieldOption(BaseModel):
+    key: str
+    label: str
+
+
+class WhatsAppFieldCatalogRead(BaseModel):
+    trigger_key: str
+    fields: list[WhatsAppFieldOption]
+
+
 class WhatsAppIntegrationRead(BaseModel):
     enabled: bool
     api_url: str
@@ -210,6 +336,12 @@ class WhatsAppIntegrationRead(BaseModel):
     templates: WhatsAppTemplateSettings
     localized_templates: dict[WhatsAppLanguage, WhatsAppTemplateSettings]
     flows: WhatsAppFlowSettings
+    custom_templates: list[WhatsAppCustomTemplateSettings] = Field(default_factory=list)
+    # Always fully populated (falls back to the catalog default order for any
+    # flow the tenant hasn't customized), so the frontend never needs its own
+    # copy of what a flow's default field order is.
+    template_field_mappings: dict[str, list[str]] = Field(default_factory=dict)
+    field_catalog: list[WhatsAppFieldCatalogRead] = Field(default_factory=list)
     usage: WhatsAppUsageRead | None = None
     health: WhatsAppHealthRead | None = None
     readiness: WhatsAppReadinessRead | None = None
@@ -219,7 +351,13 @@ class WhatsAppIntegrationRead(BaseModel):
 class WhatsAppTestRequest(BaseModel):
     mobile: str = Field(min_length=8, max_length=30)
     recipient_name: str = Field(min_length=1, max_length=160)
-    flow_key: WhatsAppFlowKey
+    # Exactly one of these identifies what's being tested: a built-in flow
+    # (fixed parameter shape, validated below) or an admin-defined custom
+    # template (parameter count comes from the template's own `parameters`
+    # list, validated against the loaded config in the service layer since
+    # this schema has no DB/tenant-config access).
+    flow_key: WhatsAppFlowKey | None = None
+    custom_template_id: str | None = Field(default=None, max_length=120)
     language: WhatsAppLanguage | None = None
     template_parameters: list[str] = Field(min_length=1, max_length=10)
     media_url: HttpUrl | None = None
@@ -229,6 +367,12 @@ class WhatsAppTestRequest(BaseModel):
     @classmethod
     def normalize_required_text(cls, value) -> str:
         return str(value or "").strip()
+
+    @field_validator("custom_template_id", mode="before")
+    @classmethod
+    def normalize_custom_template_id(cls, value):
+        normalized = str(value or "").strip()
+        return normalized or None
 
     @field_validator("template_parameters", mode="before")
     @classmethod
@@ -242,28 +386,22 @@ class WhatsAppTestRequest(BaseModel):
         return normalized or None
 
     @model_validator(mode="after")
-    def validate_parameter_count(self):
-        expected_counts = {
-            "appointment_booked_patient": 3,
-            "appointment_booked_doctor": 6,
-            "invoice_paid_patient": 4,
-            "payment_pending_patient": 4,
-            "appointment_cancelled_patient": 4,
-            "appointment_cancelled_doctor": 4,
-            "invoice_refunded_patient": 3,
-            "lab_report_ready_patient": 3,
-            "prescription_ready_patient": 3,
-            "follow_up_advice_patient": 2,
-            "appointment_reminder_patient": 3,
-        }
-        expected = expected_counts[self.flow_key]
-        if len(self.template_parameters) != expected:
-            raise ValueError(
-                f"{self.flow_key} requires exactly {expected} template parameters"
-            )
+    def validate_flow_selection(self):
+        if bool(self.flow_key) == bool(self.custom_template_id):
+            raise ValueError("Provide exactly one of flow_key or custom_template_id")
         if any(not value for value in self.template_parameters):
             raise ValueError("Template parameters cannot be blank")
-        if self.flow_key == "invoice_paid_patient" and not self.media_url:
+        # Parameter count for BOTH paths now depends on tenant-configured,
+        # admin-editable field mappings (built-in flows via
+        # `template_field_mappings`, custom templates via their own
+        # `parameters` list) rather than a fixed shape — validated against
+        # the loaded config in the service layer, which has DB access and
+        # this schema does not.
+        if (
+            self.flow_key == "invoice_paid_patient"
+            and self.custom_template_id is None
+            and not self.media_url
+        ):
             raise ValueError(
                 "A public invoice PDF URL is required for an invoice template test"
             )

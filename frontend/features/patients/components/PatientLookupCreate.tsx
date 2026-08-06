@@ -16,6 +16,7 @@ import {
   patientFormPayload,
 } from "../helpers";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function patientLookupLabel(patient: any) {
   if (!patient) return "";
@@ -73,7 +74,11 @@ function NewPatientForm({
           defaultBranchId={defaultBranchId}
         />
         <div className="flex flex-wrap gap-2 md:col-span-3">
-          <Button disabled={busy}>{busy ? "Saving..." : submitLabel}</Button>
+          <Button disabled={busy}>
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : submitLabel}
+            </ButtonLoader>
+          </Button>
           <button
             type="button"
             onClick={onCancel}

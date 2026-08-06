@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, File, Response, UploadFile, status
+from io import BytesIO
+
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission
@@ -6,6 +9,8 @@ from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
+from app.modules.files.models import FileDocument
+from app.modules.files.schemas import FileDocumentRead
 from app.modules.lab.models import (
     LabOrder,
     LabOrderStatus,
@@ -37,7 +42,17 @@ from app.modules.lab.services.order_queries import (
     get_lab_order_detail,
     list_lab_orders_records,
 )
+from app.modules.lab.services.file_service import (
+    list_lab_order_files,
+    prepare_lab_order_file_download,
+    upload_lab_order_files,
+)
 from app.modules.lab.services.report_service import render_lab_report_pdf
+from app.modules.lab.services.delivery_service import queue_lab_report_delivery
+from app.modules.notifications.schemas import (
+    DocumentDeliveryRead,
+    DocumentDeliveryRequest,
+)
 from app.modules.lab.services.result_service import add_lab_result_record
 from app.modules.lab.services.sample_service import collect_lab_sample_record
 from app.modules.lab.schemas import (
@@ -62,6 +77,32 @@ from app.core.access_control import scoped_branch_id
 from app.modules.subscriptions.service import enforce_module_enabled
 
 router = APIRouter(prefix="/lab")
+
+
+@router.post(
+    "/orders/{order_id}/send-report",
+    response_model=DocumentDeliveryRead,
+    summary="Queue an exact lab report artifact for WhatsApp or email delivery",
+)
+def send_lab_report(
+    order_id: str,
+    payload: DocumentDeliveryRequest,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_RESULTS_MANAGE,
+        )
+    ),
+):
+    return queue_lab_report_delivery(
+        session,
+        tenant_id=tenant_id,
+        order_id=order_id,
+        payload=payload,
+        actor=current_user,
+    )
 
 
 @router.get(
@@ -383,7 +424,7 @@ def list_lab_orders(
     current_user: User = Depends(
         require_any_permission(permissions.LAB_MANAGE, permissions.LAB_READ)
     ),
-) -> list[LabOrder]:
+) -> list[LabOrderRead]:
     branch_id = scoped_branch_id(current_user, branch_id)
     return list_lab_orders_records(
         session,
@@ -405,6 +446,91 @@ def get_lab_order(
 ) -> LabOrderDetailRead:
     return get_lab_order_detail(
         session, tenant_id=tenant_id, order_id=order_id, current_user=current_user
+    )
+
+
+@router.get("/orders/{order_id}/files", response_model=list[FileDocumentRead])
+def list_lab_order_attachments(
+    order_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_READ)
+    ),
+) -> list[FileDocument]:
+    return list_lab_order_files(
+        session,
+        tenant_id=tenant_id,
+        order_id=order_id,
+        current_user=current_user,
+    )
+
+
+@router.post(
+    "/orders/{order_id}/files",
+    response_model=list[FileDocumentRead],
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_lab_order_attachments(
+    order_id: str,
+    files: list[UploadFile] = File(..., min_length=1),
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_EDIT,
+            permissions.LAB_RESULTS_MANAGE,
+        )
+    ),
+) -> list[FileDocument]:
+    return await upload_lab_order_files(
+        session,
+        tenant_id=tenant_id,
+        order_id=order_id,
+        files=files,
+        current_user=current_user,
+    )
+
+
+@router.get("/orders/{order_id}/files/{file_id}/download")
+def download_lab_order_attachment(
+    order_id: str,
+    file_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.LAB_RESULTS_MANAGE,
+        )
+    ),
+) -> Response:
+    row, content = prepare_lab_order_file_download(
+        session,
+        tenant_id=tenant_id,
+        order_id=order_id,
+        file_id=file_id,
+        current_user=current_user,
+    )
+    if isinstance(content, bytes):
+        safe_name = (
+            (row.file_name or "lab-report")
+            .replace('"', "")
+            .replace("\r", "")
+            .replace("\n", "")
+        )
+        return StreamingResponse(
+            BytesIO(content),
+            media_type=row.content_type or "application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+        )
+    return FileResponse(
+        path=str(content),
+        media_type=row.content_type or "application/octet-stream",
+        filename=row.file_name or content.name,
+        content_disposition_type="attachment",
     )
 
 

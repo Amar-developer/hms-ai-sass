@@ -2,6 +2,7 @@
 
 import { Button, Card } from "@/app/components/common/ui";
 import { PermissionCheckboxes } from "./PermissionCheckboxes";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function RolePermissions({
   role,
@@ -58,7 +59,9 @@ export function RolePermissions({
         />
         <div className="flex flex-wrap gap-2">
           <Button disabled={busy}>
-            {busy ? "Saving..." : "Save Permissions"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : "Save Permissions"}
+            </ButtonLoader>
           </Button>
           <button
             type="button"

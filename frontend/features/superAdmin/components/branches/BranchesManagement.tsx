@@ -5,10 +5,14 @@ import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
 import { formatDate } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { TenantPicker } from "../shared/TenantPicker";
 import { Pagination } from "@/app/components/common/Pagination";
 import { FormField } from "@/app/components/FormElements";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { RowActions } from "@/features/admin/components/RowActions";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 export function BranchesManagement({
   tenants,
@@ -21,6 +25,7 @@ export function BranchesManagement({
   setSection,
   setConfirmAction,
   onRefresh,
+  busy,
 }: any) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -47,12 +52,130 @@ export function BranchesManagement({
     setPage(1);
   }, [query, branches.length]);
 
+  const branchColumns: Column<any>[] = [
+    {
+      key: "name",
+      header: "Branch",
+      width:'250px',
+      render: (branch: any) => {
+        const locked =
+          branch.is_template_locked || branch.source_template_branch_id;
+
+        return (
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <b className="text-xs lg:text-sm">{branch.name}</b>
+
+              <CopyIdButton
+                value={branch.id}
+                label="Branch ID"
+                allowed={canCopyIds}
+              />
+
+              {branch.is_global_template && <Badge tone="blue">Global</Badge>}
+
+              {locked && <Badge tone="purple">Locked</Badge>}
+            </div>
+          </div>
+        );
+      },
+    },
+
+    {
+      key: "code",
+      header: "Code",
+      width:'150px',
+      render: (branch: any) => (
+        <span className="text-xs lg:text-sm">{branch.code}</span>
+      ),
+    },
+    {
+      key: "is_active",
+      header: "Status",
+      width:'180px',
+      className:'text-center',
+      render: (branch: any) => (
+        <Badge
+          tone={branch.is_active ? "green" : "red"}
+          className="rounded-full py-1 px-1 text-xs lg:text-sm"
+        >
+          {branch.is_active ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+
+    {
+      key: "updated_at",
+      header: "Modified",
+      width:'180px',
+      render: (branch: any) => (
+        <span className="text-xs lg:text-sm">
+          {formatDate(branch.updated_at || branch.created_at)}
+        </span>
+      ),
+    },
+
+    {
+      key: "actions",
+      header: "Actions",
+      disableRowClick: true,
+      render: (branch: any) => {
+        const locked =
+          branch.is_template_locked || branch.source_template_branch_id;
+
+        const actions = [
+          {
+            label: "Edit",
+            hidden: locked,
+            onClick: () => {
+              setSelectedBranchId(branch.id);
+              setSection("branchEdit");
+            },
+          },
+
+          {
+            label: "Assign",
+            onClick: () => {
+              setSelectedBranchId(branch.id);
+              setSection("branchAssign");
+            },
+          },
+
+          {
+            label: branch.is_active ? "Inactive" : "Active",
+            hidden: locked,
+            onClick: () =>
+              setConfirmAction({
+                entity: "branch",
+                kind: "status",
+                branch,
+              }),
+          },
+
+          {
+            label: "Delete",
+            danger: true,
+            hidden: locked,
+            onClick: () =>
+              setConfirmAction({
+                entity: "branch",
+                kind: "delete",
+                branch,
+              }),
+          },
+        ];
+
+        return <RowActions actions={actions} className="right-5 -bottom-7" />;
+      },
+    },
+  ];
+
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">Branches</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h3 className="card-title font-bold">Branches</h3>
+          <p className="card-desc text-slate-500">
             {selected?.is_primary
               ? "Primary tenant branches are reusable templates. Assign them to clinics to avoid duplicate setup."
               : "Manage tenant branches used by appointments, users, billing, lab, pharmacy, and reports."}
@@ -80,114 +203,21 @@ export function BranchesManagement({
           setSelectedId={setSelectedId}
         />
       </div>
-      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-        <div className="hidden grid-cols-[1.1fr_.8fr_1.3fr_.5fr_.8fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
-          <span>Branch</span>
-          <span>Code</span>
-          <span>Location</span>
-          <span>Status</span>
-          <span>Modified</span>
-          <span>Actions</span>
+        <div className="mt-4 rounded-2xl border border-slate-200">
+          {busy && rows.length === 0 ? (
+            <TableSkeleton />
+          ) : (
+            <DataTable
+              columns={branchColumns}
+              data={rows}
+              emptyMessage="No branches match your search."
+              onRowClick={(branch) => {
+                setSelectedBranchId(branch.id);
+                setSection("branchEdit");
+              }}
+            />
+          )}
         </div>
-        <div className="divide-y divide-slate-200">
-          {rows.length === 0 && <Empty text="No branches match your search." />}
-          {rows.map((branch: any) => {
-            const locked =
-              branch.is_template_locked || branch.source_template_branch_id;
-            return (
-              <div
-                key={branch.id}
-                className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_.7fr_1.3fr_.7fr_.8fr_1.2fr]
-                lg:grid-cols-[1.1fr_.8fr_1.2fr_.5fr_.8fr_1.2fr] md:items-center"
-              >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <b className="text-xs lg:text-sm">{branch.name}</b>
-                    <CopyIdButton
-                      value={branch.id}
-                      label="Branch ID"
-                      allowed={canCopyIds}
-                    />
-                    {branch.is_global_template && (
-                      <Badge tone="blue">Global</Badge>
-                    )}
-                    {locked && <Badge tone="purple">Locked</Badge>}
-                  </div>
-                </div>
-                <span className="text-xs lg:text-sm">{branch.code}</span>
-                <span className="text-xs lg:text-sm text-slate-500">
-                  {[branch.address, branch.area, branch.city, branch.state]
-                    .filter(Boolean)
-                    .join(", ") || "-"}
-                </span>
-                <Badge
-                  tone={branch.is_active ? "green" : "red"}
-                  className="rounded-full py-1 px-1 text-xs lg:text-sm"
-                >
-                  {branch.is_active ? "Active" : "Inactive"}
-                </Badge>
-                <span className="text-xs lg:text-sm">
-                  {formatDate(branch.updated_at || branch.created_at)}
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {!locked && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedBranchId(branch.id);
-                        setSection("branchEdit");
-                      }}
-                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-                    >
-                      Edit
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedBranchId(branch.id);
-                      setSection("branchAssign");
-                    }}
-                    className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-                  >
-                    Assign
-                  </button>
-                  {!locked && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setConfirmAction({
-                          entity: "branch",
-                          kind: "status",
-                          branch,
-                        })
-                      }
-                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-                    >
-                      {branch.is_active ? "Inactive" : "Active"}
-                    </button>
-                  )}
-                  {!locked && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setConfirmAction({
-                          entity: "branch",
-                          kind: "delete",
-                          branch,
-                        })
-                      }
-                      className="rounded-xl border px-3 py-2 text-xs font-bold text-red-600"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
       <Pagination
         page={safePage}
         totalPages={totalPages}

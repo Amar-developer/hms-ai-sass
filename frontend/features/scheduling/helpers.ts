@@ -23,127 +23,63 @@ export function formatDisplayRange(start: any, end: any) {
   return `${formatDisplayTime(start)} - ${formatDisplayTime(end)}`;
 }
 
-export function selectedSchedulePayloads(
-  fd: FormData,
-  allBranchIds: string[] = [],
-) {
-  const weekdays = fd
-    .getAll("weekdays")
-    .map((value) => Number(value))
-    .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6);
-  const fallbackWeekday = fd.get("weekday");
-  const selectedWeekdays = weekdays.length
-    ? weekdays
-    : [Number(fallbackWeekday ?? 0)];
-  const rangeCount = Number(fd.get("rangeCount") || 1);
-  const ranges = Array.from(
-    { length: Math.max(1, rangeCount) },
-    (_, index) => ({
-      start_time: fd.get(`startTime_${index}`) || fd.get("startTime"),
-      end_time: fd.get(`endTime_${index}`) || fd.get("endTime"),
-      is_active: fd.get(`isActive_${index}`) !== "false",
-    }),
-  ).filter((range) => range.start_time && range.end_time);
-  const rawRoomNumber = String(fd.get("roomNumber") || "").replace(/\D/g, "");
-  const roomNumber = rawRoomNumber
-    ? rawRoomNumber.padStart(3, "0").slice(0, 3)
-    : null;
-  const branchValue = String(fd.get("branchId") || "");
-  const branchIds =
-    branchValue === ALL_BRANCHES ? allBranchIds.filter(Boolean) : [branchValue];
-  const departmentId = String(fd.get("departmentId") || "") || null;
-  return branchIds.flatMap((branch_id) =>
-    selectedWeekdays.flatMap((weekday) =>
-      ranges.map((range) => ({
-        branch_id,
-        department_id: departmentId,
-        weekday,
-        start_time: range.start_time,
-        end_time: range.end_time,
-        is_active: range.is_active,
-        slot_minutes: Number(fd.get("slotMinutes") || 15),
-        room_number: roomNumber,
-      })),
-    ),
-  );
+const WEEKDAY_SHORT_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+export function formatWeekdaysLabel(mode: string, weekdays: number[] = []) {
+  if (mode === "daily") return "Daily";
+  if (mode === "mon_saturday") return "Mon - Saturday";
+  return [...weekdays]
+    .sort((a, b) => a - b)
+    .map((day) => WEEKDAY_SHORT_LABELS[day] ?? "")
+    .filter(Boolean)
+    .join(", ") || "-";
 }
 
-export function scheduleGroupKey(row: any) {
-  return [
-    row.practitioner_id,
-    row.branch_id,
-    row.department_id || "",
-    row.room_number || "",
-    row.slot_minutes,
-    row.is_active === false ? "inactive" : "active",
-  ].join("|");
+// WeekdaySelector's WeekdayMode ("mon-saturday") vs. the backend's
+// ScheduleMode ("mon_saturday") — the only place these two naming
+// conventions need to be reconciled.
+function toBackendMode(weekdayMode: string): "daily" | "mon_saturday" | "custom" {
+  if (weekdayMode === "mon-saturday") return "mon_saturday";
+  if (weekdayMode === "daily") return "daily";
+  return "custom";
 }
 
-export function groupSchedules(rows: any[]) {
-  const groups = new Map<string, any>();
-  for (const row of rows) {
-    const key = scheduleGroupKey(row);
-    const existing = groups.get(key);
-    if (existing) {
-      existing.schedules.push(row);
-      existing.updated_at = [
-        existing.updated_at,
-        row.updated_at,
-        row.created_at,
-      ]
-        .filter(Boolean)
-        .sort()
-        .at(-1);
-      existing.is_active = existing.schedules.some(
-        (item: any) => item.is_active,
-      );
-    } else {
-      groups.set(key, {
-        ...row,
-        id: key,
-        schedules: [row],
-        group_key: key,
-        is_active: row.is_active,
-      });
-    }
-  }
-  return Array.from(groups.values()).map((group: any) => ({
-    ...group,
-    schedules: [...group.schedules].sort(
-      (a: any, b: any) =>
-        a.weekday - b.weekday ||
-        String(a.start_time).localeCompare(String(b.start_time)),
-    ),
-  }));
+export function toWeekdayMode(backendMode: string | undefined): "" | "daily" | "mon-saturday" | "custom" {
+  if (backendMode === "mon_saturday") return "mon-saturday";
+  if (backendMode === "daily") return "daily";
+  if (backendMode === "custom") return "custom";
+  return "";
 }
 
+// One schedule is one row now: a row's `weekdays` covers every day it
+// applies to, so this only fans out per branch (for "all branches") and per
+// time range (a schedule can still have a morning + evening session).
 export function selectedSchedulePayloadsFromRHF(
   data: ScheduleFormValues,
-  doctorBranchIds: string[]
+  doctorBranchIds: string[],
 ) {
   const payloads: any[] = [];
+  const mode = toBackendMode(data.weekdayMode);
+  const weekdays = mode === "custom" ? data.weekdays.map(Number) : [];
 
   data.ranges.forEach((range) => {
-    data.weekdays.forEach((weekday) => {
-      const payload: any = {
-        weekday: Number(weekday),
-        start_time: range.start,
-        end_time: range.end,
-        is_active: range.isActive,
-        slot_minutes: Number(data.slotMinutes),
-        department_id: data.departmentId,
-        // FIX: Send room_number as STRING or null
-        room_number: data.roomNumber ? String(data.roomNumber) : null,
-      };
+    const payload: any = {
+      mode,
+      weekdays,
+      start_time: range.start,
+      end_time: range.end,
+      is_active: range.isActive,
+      slot_minutes: Number(data.slotMinutes),
+      department_id: data.departmentId,
+    };
 
-      if (data.branchId === ALL_BRANCHES) {
-        doctorBranchIds.forEach((branchId) => {
-          payloads.push({ ...payload, branch_id: branchId });
-        });
-      } else {
-        payloads.push({ ...payload, branch_id: data.branchId });
-      }
-    });
+    if (data.branchId === ALL_BRANCHES) {
+      doctorBranchIds.forEach((branchId) => {
+        payloads.push({ ...payload, branch_id: branchId });
+      });
+    } else {
+      payloads.push({ ...payload, branch_id: data.branchId });
+    }
   });
 
   return payloads;

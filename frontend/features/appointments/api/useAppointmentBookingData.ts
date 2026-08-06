@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch, type ApiSession } from "@/lib/api";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { activeTenantOptions, displayDate } from "@/utils/helper";
 
 interface UseAppointmentBookingDataArgs {
@@ -38,11 +39,13 @@ export function useAppointmentBookingData({
   const [doctorId, setDoctorId] = useState("");
   const [platformTenants, setPlatformTenants] = useState<any[]>([]);
   const [platformRows, setPlatformRows] = useState<any[]>([]);
+  const [platformLoading, setPlatformLoading] = useState(false);
 
   useEffect(() => {
     let alive = true;
     async function loadPlatformGrid() {
       if (!apiSession || !isSuperAdmin) return;
+      setPlatformLoading(true);
       try {
         const params = new URLSearchParams({ limit: "500" });
         if (query) params.set("q", query);
@@ -77,6 +80,8 @@ export function useAppointmentBookingData({
       } catch (err: any) {
         if (alive)
           setMessage(err.message || "Could not load all-tenant appointments.");
+      } finally {
+        if (alive) setPlatformLoading(false);
       }
     }
     loadPlatformGrid();
@@ -152,8 +157,9 @@ export function useAppointmentBookingData({
           department_id: departmentId,
         });
         const rows = await fetchDoctors(`/practitioners?${params.toString()}`);
-        const availabilityRows = await Promise.all(
-          rows.map(async (row: any) => {
+        const availabilityRows = await mapWithConcurrency(
+          rows,
+          async (row: any) => {
             try {
               const calendarParams = new URLSearchParams({
                 branch_id: branchId,
@@ -173,7 +179,8 @@ export function useAppointmentBookingData({
             } catch {
               return null;
             }
-          }),
+          },
+          4,
         );
         const availableRows = availabilityRows.filter(Boolean);
         if (!alive) return;
@@ -219,5 +226,6 @@ export function useAppointmentBookingData({
     setDoctorId,
     platformTenants,
     platformRows,
+    platformLoading,
   };
 }

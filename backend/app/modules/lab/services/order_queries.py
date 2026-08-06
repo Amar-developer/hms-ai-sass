@@ -1,14 +1,17 @@
 from sqlmodel import Session
 
 from app.core.access_control import require_user_branch_access
+from app.modules.billing.services.source_references import (
+    active_lab_invoice_reference_map,
+)
 from app.modules.identity.models import User
-from app.modules.lab.models import LabOrder, LabOrderStatus
+from app.modules.lab.models import LabOrderStatus
 from app.modules.lab.repositories import LabOrderRepository
-from app.modules.lab.schemas import LabOrderDetailRead
+from app.modules.lab.schemas import LabOrderDetailRead, LabOrderRead
 from app.modules.lab.services.detail_builder import read_order_detail
-from app.modules.lab.services.pricing import reprice_zero_order_items
 from app.modules.lab.services.validation import get_order_or_404
 from app.modules.subscriptions.service import enforce_module_enabled
+from app.modules.patients.services.references import patient_reference_map
 
 
 def list_lab_orders_records(
@@ -18,7 +21,7 @@ def list_lab_orders_records(
     branch_id: str | None,
     patient_id: str | None,
     status_filter: LabOrderStatus | None,
-) -> list[LabOrder]:
+) -> list[LabOrderRead]:
     enforce_module_enabled(session, tenant_id, "lab")
     rows = LabOrderRepository(session).list_orders(
         tenant_id=tenant_id,
@@ -26,10 +29,26 @@ def list_lab_orders_records(
         patient_id=patient_id,
         status_filter=status_filter,
     )
+    patients = patient_reference_map(
+        session,
+        tenant_id=tenant_id,
+        patient_ids={order.patient_id for order in rows},
+    )
+    invoice_references = active_lab_invoice_reference_map(
+        session,
+        tenant_id=tenant_id,
+        lab_order_ids={order.id for order in rows},
+    )
+    result: list[LabOrderRead] = []
     for order in rows:
-        if int(order.amount or 0) <= 0:
-            reprice_zero_order_items(session, order)
-    return rows
+        read = LabOrderRead.model_validate(order, from_attributes=True)
+        patient = patients.get(order.patient_id)
+        if patient:
+            read.patient_name = patient.name
+            read.patient_number = patient.number
+        read.billing_invoice_id = invoice_references.get(order.id)
+        result.append(read)
+    return result
 
 
 def get_lab_order_detail(

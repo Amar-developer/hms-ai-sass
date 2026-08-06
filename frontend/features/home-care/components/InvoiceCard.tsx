@@ -8,6 +8,7 @@ import { humanizeOptionLabel } from "@/lib/options";
 import { displayDate, money, patientName } from "@/utils/helper";
 import { bookingTotal } from "../helpers";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function InvoiceCard({
   booking,
@@ -52,7 +53,8 @@ export function InvoiceCard({
           />
         </div>
         <p className="mt-1 text-slate-500">
-          {patientName(patientMap.get(booking.patient_id))} ·{" "}
+          {booking.patient_name ||
+            patientName(patientMap.get(booking.patient_id))} ·{" "}
           {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
         </p>
         <p className="text-xs text-slate-500">
@@ -122,7 +124,9 @@ export function InvoiceCard({
             the tenant admin must approve it before it is applied.
           </p>
           <Button type="button" disabled={busy} onClick={onGenerate}>
-            {busy ? "Generating..." : "Generate Invoice"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Generating..." : "Generate Invoice"}
+            </ButtonLoader>
           </Button>
         </div>
       )}

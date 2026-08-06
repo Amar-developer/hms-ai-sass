@@ -28,14 +28,26 @@ step() {
   echo "==> $1"
 }
 
-step "1/5 Backend lint (ruff)"
+step "1/6 Release configuration and recovery-script validation"
+git -C "${ROOT_DIR}" diff --check
+node "${ROOT_DIR}/scripts/version.mjs" check
+bash -n "${ROOT_DIR}/scripts/backup_postgres.sh"
+bash -n "${ROOT_DIR}/scripts/verify_postgres_restore.sh"
+docker compose --env-file "${ROOT_DIR}/.env.production.example" \
+  -f "${ROOT_DIR}/docker-compose.yml" config --quiet
+docker compose --env-file "${ROOT_DIR}/.env.staging.example" \
+  -f "${ROOT_DIR}/docker-compose.staging.yml" config --quiet
+docker compose --env-file "${ROOT_DIR}/.env.example" \
+  -f "${ROOT_DIR}/docker-compose.local.yml" config --quiet
+
+step "2/6 Backend lint (ruff)"
 "${ROOT_DIR}/backend/.venv/bin/ruff" check \
   "${ROOT_DIR}/backend/app" "${ROOT_DIR}/backend/tests" "${ROOT_DIR}/backend/e2e"
 
-step "2/5 Backend unit tests (pytest)"
+step "3/6 Backend unit tests (pytest)"
 "${ROOT_DIR}/backend/.venv/bin/pytest" "${ROOT_DIR}/backend/tests" -q
 
-step "3/5 Frontend unit tests + typecheck + build"
+step "4/6 Frontend unit tests + typecheck + build"
 (cd "${ROOT_DIR}/frontend" && npm test && npm run typecheck && npm run build)
 
 if [[ "${FAST}" -eq 1 ]]; then
@@ -44,10 +56,10 @@ if [[ "${FAST}" -eq 1 ]]; then
   exit 0
 fi
 
-step "4/5 Backend E2E (live Postgres-backed API suite)"
+step "5/6 Backend E2E (live Postgres-backed API suite)"
 bash "${ROOT_DIR}/backend/scripts/run_backend_e2e.sh"
 
-step "5/5 Frontend E2E (Playwright, cross-browser, @critical) — same job as CI"
+step "6/6 Frontend E2E (Playwright, cross-browser, @critical) — same job as CI"
 (cd "${ROOT_DIR}/frontend" && npm run test:e2e:cross-browser)
 
 echo ""

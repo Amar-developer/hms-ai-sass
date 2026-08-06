@@ -76,7 +76,7 @@ def xls_document(title: str, period: str, sections: list[str]) -> bytes:
       <body>
         <h1 style="font-family:Roboto,Arial,sans-serif;font-size:22px;font-weight:bold;color:#0f172a;margin:0 0 6px;">{escape(title)}</h1>
         <p style="font-family:Roboto,Arial,sans-serif;font-size:13px;color:#475569;margin:0 0 18px;">{escape(period)}</p>
-        {''.join(sections)}
+        {"".join(sections)}
       </body>
     </html>
     """

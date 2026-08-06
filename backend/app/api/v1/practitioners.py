@@ -13,7 +13,6 @@ from app.modules.identity.models import User
 from app.modules.practitioners.models import (
     PractitionerLeave,
     PractitionerRoomAssignment,
-    PractitionerSchedule,
 )
 from app.modules.practitioners.schemas import (
     PractitionerAvailabilityRead,
@@ -121,7 +120,7 @@ def update_practitioner_schedule(
             permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_EDIT
         )
     ),
-) -> PractitionerSchedule:
+) -> PractitionerScheduleRead:
     return practitioner_service.update_schedule(
         session, tenant_id=tenant_id, schedule_id=schedule_id, payload=payload
     )
@@ -217,7 +216,7 @@ def create_practitioner_schedule(
             permissions.SCHEDULING_CREATE,
         )
     ),
-) -> PractitionerSchedule:
+) -> PractitionerScheduleRead:
     return practitioner_service.create_schedule(
         session,
         tenant_id=tenant_id,

@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { canUseTenantAdminSection } from "../permissions";
 import { parseBankDetails,parseNumberingRules } from "../constants";
+import {
+  getTenantBranches,
+  getTenantDepartments,
+} from "@/features/tenants/api/tenantReferenceQueries";
 
 export function useTenantAdminData(apiSession: any, clinic: any) {
+  const queryClient = useQueryClient();
   const [roles, setRoles] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
@@ -90,11 +96,12 @@ export function useTenantAdminData(apiSession: any, clinic: any) {
       ] = await Promise.all([
         safeFetch("/identity/roles", canRoles),
         safeFetch("/identity/users", canUsers),
-        safeFetch(
-          `/tenants/${apiSession.tenantId}/departments`,
-          canDepartments,
-        ),
-        safeFetch(`/tenants/${apiSession.tenantId}/branches`, canBranches),
+        canDepartments
+          ? getTenantDepartments(queryClient, scoped).catch(() => [])
+          : Promise.resolve([]),
+        canBranches
+          ? getTenantBranches(queryClient, scoped).catch(() => [])
+          : Promise.resolve([]),
         safeFetch("/pharmacy/suppliers?include_inactive=true", canSuppliers),
         safeFetch("/billing/tax-rules", canTax),
         safeFetch("/billing/discount-offers", canOffers),

@@ -11,6 +11,17 @@ const OPERATIONAL_INVOICE_LINKS = [
   "appointment_id",
 ] as const;
 
+export const invoiceSourceOptions = [
+  { key: "lab_scan", label: "Lab & Service" },
+  { key: "pharmacy", label: "Pharmacy" },
+  { key: "physiotherapy", label: "Physiotherapy" },
+  { key: "home_care", label: "Home Care / Visit" },
+  { key: "ip_billing", label: "IP Billing" },
+  { key: "consultation", label: "Consultation" },
+  { key: "membership", label: "Membership" },
+  { key: "direct", label: "Direct" },
+] as const;
+
 export function isMembershipPlanInvoice(invoice: any) {
   const hasMembershipPurchaseReference = Boolean(
     invoice?.patient_subscription_enrollment_id ||
@@ -34,14 +45,14 @@ export function invoiceSourceKey(invoice: any) {
 export function invoiceSource(invoice: any) {
   const sources: Record<
     string,
-    { label: string; tone: "slate" | "blue" | "amber" | "purple" }
+    { label: string; tone: "slate" | "blue" | "amber" | "purple" |"orange" | "skyblue"|"green" }
   > = {
     lab_scan: { label: "Lab & Service", tone: "blue" },
     pharmacy: { label: "Pharmacy", tone: "amber" },
     physiotherapy: { label: "Physiotherapy", tone: "purple" },
-    home_care: { label: "Home Care / Visit", tone: "blue" },
-    ip_billing: { label: "IP Billing", tone: "blue" },
-    consultation: { label: "Consultation", tone: "slate" },
+    home_care: { label: "Home Care / Visit", tone: "orange" },
+    ip_billing: { label: "IP Billing", tone: "skyblue" },
+    consultation: { label: "Consultation", tone: "green" },
     membership: { label: "Membership", tone: "purple" },
     direct: { label: "Direct", tone: "amber" },
   };

@@ -1,12 +1,15 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
+from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
-from app.modules.patients.models import Patient, PatientAlert
+from app.modules.patients.models import Gender, Patient, PatientAlert, PatientStatus
 from app.modules.patients.schemas import (
     PatientAlertCreate,
     PatientAlertRead,
@@ -91,6 +94,38 @@ def search_patients(
 
 
 @router.get(
+    "/page",
+    response_model=Page[PatientSearchResult],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
+def search_patient_page(
+    tenant_id: str = Depends(require_tenant_id),
+    q: str | None = Query(default=None, max_length=120),
+    branch_id: str | None = Query(default=None),
+    active_only: bool = Query(default=False),
+    patient_status: PatientStatus | None = Query(default=None, alias="status"),
+    gender: Gender | None = Query(default=None),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=10, ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> Page[PatientSearchResult]:
+    return PatientService(session).search_patient_page(
+        tenant_id=tenant_id,
+        q=q,
+        branch_id=branch_id,
+        active_only=active_only,
+        status=patient_status,
+        gender=gender,
+        from_date=from_date,
+        to_date=to_date,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get(
     "/references",
     response_model=list[PatientSearchResult],
     dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
@@ -113,9 +148,17 @@ def patient_references(
 )
 def patient_count(
     tenant_id: str = Depends(require_tenant_id),
+    from_date: date | None = None,
+    to_date: date | None = None,
     session: Session = Depends(get_session),
 ) -> dict[str, int]:
-    return {"total": PatientService(session).patient_count(tenant_id=tenant_id)}
+    return {
+        "total": PatientService(session).patient_count(
+            tenant_id=tenant_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+    }
 
 
 @router.get(

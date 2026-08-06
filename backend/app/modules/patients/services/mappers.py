@@ -23,6 +23,7 @@ def patient_search_result(
         patient_number=patient.patient_number,
         full_name=patient.full_name,
         mobile=patient.mobile,
+        alternate_mobile=patient.alternate_mobile,
         guardian_name=patient.guardian_name,
         guardian_mobile=patient.guardian_mobile,
         area=patient.area,

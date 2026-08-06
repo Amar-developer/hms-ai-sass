@@ -4,6 +4,11 @@ from sqlmodel import Session
 from app.core.auth import user_permission_keys, user_role_keys
 from app.modules.identity import permissions
 from app.modules.identity.models import Role, User
+from app.modules.identity.services.privileged_policy import (
+    PRIVILEGED_USER_TYPES,
+    active_support_permissions,
+    is_primary_tenant_user,
+)
 from app.modules.tenants.models import Tenant
 
 
@@ -27,6 +32,22 @@ def assert_tenant_permission(
     if current_user.is_super_admin:
         return
     if current_user.tenant_id != tenant_id:
+        actor_permissions = set(user_permission_keys(session, current_user))
+        requested = set(permission_keys)
+        platform_access = is_primary_tenant_user(session, current_user) and bool(
+            actor_permissions.intersection(requested).intersection(
+                {key for key in requested if key.startswith("platform.")}
+            )
+        )
+        support_access = bool(
+            active_support_permissions(
+                session,
+                user=current_user,
+                tenant_id=tenant_id,
+            ).intersection(requested)
+        )
+        if platform_access or support_access:
+            return
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access denied"
         )
@@ -53,10 +74,10 @@ def assert_can_target_user_for_management(
     new_role_keys: list[str] | None = None,
 ) -> None:
     """Restrict tenant-admin account management to tenant admins or super admins."""
-    if target_user.is_super_admin:
+    if target_user.is_super_admin or target_user.user_type in PRIVILEGED_USER_TYPES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=("Super admin accounts can be managed only from Platform Admins"),
+            detail="Privileged accounts can be managed only by a Root Super Admin",
         )
     if current_user.is_super_admin or has_tenant_admin_access(session, current_user):
         return

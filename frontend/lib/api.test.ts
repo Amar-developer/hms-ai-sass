@@ -5,11 +5,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   LIVE_DATA_CHANGED_EVENT,
   LIVE_DATA_CHANGED_STORAGE_KEY,
+  RequestTimeoutError,
   apiFetch,
   apiUpload,
+  fetchWithTimeout,
   uploadAssetUrl,
   type ApiSession,
 } from "./api";
+import { mapWithConcurrency } from "./concurrency";
 
 const session: ApiSession = {
   tenantId: "tenant-one",
@@ -25,8 +28,49 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   localStorage.clear();
+});
+
+describe("request timeouts", () => {
+  it("aborts a request that exceeds its deadline", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      }),
+    );
+
+    const request = fetchWithTimeout("/slow", {}, 50);
+    const assertion = expect(request).rejects.toBeInstanceOf(RequestTimeoutError);
+    await vi.advanceTimersByTimeAsync(50);
+    await assertion;
+  });
+});
+
+describe("bounded API fan-out", () => {
+  it("never runs more than the requested number of record tasks", async () => {
+    let active = 0;
+    let peak = 0;
+    const rows = await mapWithConcurrency(
+      Array.from({ length: 20 }, (_, index) => index),
+      async (index) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => globalThis.setTimeout(resolve, 1));
+        active -= 1;
+        return index * 2;
+      },
+      3,
+    );
+
+    expect(peak).toBe(3);
+    expect(rows).toHaveLength(20);
+    expect(rows[19]).toBe(38);
+  });
 });
 
 describe("uploaded asset URL resolution", () => {

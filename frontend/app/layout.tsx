@@ -1,4 +1,5 @@
 import './globals.css';
+import { QueryProvider } from '@/features/shell/QueryProvider';
 
 export const metadata = {
   title: 'MedizinHub HMS',
@@ -16,7 +17,9 @@ export default function RootLayout({
   return (
     <html lang="en-GB">
       <body className="font-sans">
-        <div id="app-shell">{children}</div>
+        <QueryProvider>
+          <div id="app-shell">{children}</div>
+        </QueryProvider>
         <div id="prescription-print-root" />
       </body>
     </html>

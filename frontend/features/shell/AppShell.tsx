@@ -1,42 +1,65 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useRef,
+  useEffect,
+  type ReactNode,
+} from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
-import { Card, SearchableSelect } from "@/app/components/common/ui";
+import { SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
-import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
-import { TenantAdmin } from "@/features/admin/TenantAdmin";
 import { canUseTenantAdminSection } from "../admin/permissions";
 import { tenantAdminSections } from "../admin/constants";
-import { Billing } from "@/features/billing/Billing";
-import { Dashboard } from "@/features/dashboard/Dashboard";
-import { DoctorConsultation } from "@/features/consulation/DoctorConsultation";
-import { IPAdmission } from "@/features/ip/IPAdmission";
-import { HomeCare } from "@/features/home-care/HomeCare";
-import { Items } from "@/features/items/Items";
-import { Lab } from "@/features/lab/Lab";
-import { Patient } from "@/features/patients/Patient";
-import { Pharmacy } from "@/features/pharmacy/Pharmacy";
-import { Physiotherapy } from "@/features/physiotherapy/Physiotherapy";
+import { platformSectionsForUser } from "@/features/superAdmin/SuperAdminDashboard";
 import {
-  SuperAdminDashboard,
-  superAdminSections,
-} from "@/features/superAdmin/SuperAdminDashboard";
-import { Doctors } from "@/features/doctors/Doctors";
-import { TokenQueue } from "@/features/queue/TokenQueue";
-import { Reports } from "@/features/reports/Reports";
+  parseSuperAdminSegments,
+  superAdminPath,
+} from "@/features/superAdmin/routing";
 import { reportSections } from "@/features/reports/constants";
-import { Scheduling } from "@/features/scheduling/Scheduling";
-import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
 import { activeTenantOptions } from "@/utils/helper";
-import { ErrorLogs } from "@/features/error-logs/ErrorLogs";
+import { useNavigationSkeleton } from "@/app/components/common/loader/useNavigationSkeleton";
+import { ModuleSkeleton } from "@/app/components/common/loader/ModuleSkeleton";
+import { BreadcrumbBarSkeleton } from "@/app/components/common/loader/BreadcrumbBarSkeleton";
 
-export function AppShell(props: any) {
+type ShellChromeValue = {
+  navigatePage: (target: string | { id: string; section?: string }) => void;
+  activePage: string;
+  enabled: (id: string) => boolean;
+  nav: any;
+  liveSummary: any;
+  apiSession: any;
+  switchTenant: any;
+  tenantAdminSection: string;
+  setTenantAdminSection: (value: string) => void;
+  reportsSection: string;
+  setReportsSection: (value: string) => void;
+  superAdminSection: string;
+  setSuperAdminSection: (value: string) => void;
+};
+
+const ShellChromeContext = createContext<ShellChromeValue | null>(null);
+
+/** Everything module routes need beyond the workspace `ctx` data blob — chrome-owned navigation and sub-section state. */
+export function useShellChrome(): ShellChromeValue {
+  const value = useContext(ShellChromeContext);
+  if (!value) {
+    throw new Error("useShellChrome must be used within AppShell");
+  }
+  return value;
+}
+
+export function AppShell({
+  children,
+  ...props
+}: { children: ReactNode } & Record<string, any>) {
   const {
-    active,
     setActive,
     nav,
     enabled,
@@ -60,11 +83,20 @@ export function AppShell(props: any) {
     setShowPassword,
     handleLogout,
     switchTenant,
-    ctx,
     liveSummary,
+    isInitialLoading,
   } = props;
-
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const canAccessPlatformWorkspace = Boolean(
+    isSuperAdmin ||
+    apiSession?.user?.user_type === "platform_admin" ||
+    apiSession?.user?.user_type === "support_admin",
+  );
+  const canManagePlatformTenants = Boolean(
+    isSuperAdmin ||
+    apiSession?.user?.permissions?.includes("platform.tenants.manage"),
+  );
+  const visiblePlatformSections = platformSectionsForUser(apiSession?.user);
   const passwordChangeRequired = Boolean(
     apiSession?.user?.must_change_password,
   );
@@ -72,14 +104,43 @@ export function AppShell(props: any) {
     ([id]: any) => enabled(id) && !(isSuperAdmin && id === "admin"),
   );
   const canAccessErrorLogs = enabled("error_logs");
-  const activePage =
-    active === "error_logs" && canAccessErrorLogs
-      ? active
-      : visibleNav.some(([id]: any) => id === active)
-        ? active
-        : isSuperAdmin
+  const router = useRouter();
+  const pathname = usePathname();
+  const [pendingPage, setPendingPage] = useState("");
+
+  // Sidebar navigation uses router.push() on click rather than <Link>, so it
+  // gets none of Next.js's automatic hover/viewport prefetching — every
+  // click was a cold fetch, which is why the URL and page appeared to hang
+  // on the old route until the new one finished loading. Warm the cache for
+  // every reachable module route up front so clicks resolve instantly.
+  useEffect(() => {
+    for (const [id] of visibleNav) {
+      router.prefetch(`/${id}`);
+    }
+    if (canAccessErrorLogs) {
+      router.prefetch("/error_logs");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleNav.map(([id]: any) => id).join(","), canAccessErrorLogs]);
+  const routeSegment =
+    pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
+  const resolvedActivePage =
+    routeSegment === "error_logs" && canAccessErrorLogs
+      ? routeSegment
+      : visibleNav.some(([id]: any) => id === routeSegment)
+        ? routeSegment
+        : canAccessPlatformWorkspace
           ? "superadmin"
           : visibleNav[0]?.[0] || "dashboard";
+  const activePage = pendingPage || resolvedActivePage;
+  // pendingPage is set the instant a nav click fires and cleared once the
+  // pathname actually lands (see the effect below) — that window is exactly
+  // "a route change or module switch is in flight", independent of the
+  // sidebar, which keeps rendering the live nav state throughout. Next's
+  // own loading.tsx Suspense fallback only fires for server data fetches,
+  // so client-rendered modules swap with no transition state at all unless
+  // we drive the header + content skeletons off this signal ourselves.
+  const showNavigationSkeleton = useNavigationSkeleton(Boolean(pendingPage));
   const primaryRole = apiSession?.user?.roles?.[0] || role;
   const roleLabel =
     demoUsers.find((u: any) => u[0] === primaryRole)?.[1] ||
@@ -117,7 +178,7 @@ export function AppShell(props: any) {
     .filter(Boolean);
   const displayClinicName = clinic.name || "Hospital / Clinic";
   const visibleTenantOptions = activeTenantOptions(tenants);
-  const tenantOptions = isSuperAdmin
+  const tenantOptions = canManagePlatformTenants
     ? visibleTenantOptions.length
       ? visibleTenantOptions.map((tenant: any) => ({
           value: tenant.id,
@@ -130,9 +191,49 @@ export function AppShell(props: any) {
           },
         ]
     : clinics;
-  const [superAdminSection, setSuperAdminSection] = useState("overview");
+  const superAdminSectionParents: Record<string, string> = {
+    tenantEdit: "tenants",
+    createTenant: "tenants",
+    roleCreate: "roles",
+    roleEdit: "roles",
+    rolePermissions: "roles",
+    roleAssign: "roles",
+    userCreate: "users",
+    userEdit: "users",
+    departmentCreate: "departments",
+    departmentEdit: "departments",
+    departmentAssign: "departments",
+    branchCreate: "branches",
+    branchEdit: "branches",
+    branchAssign: "branches",
+  };
+  const isVisibleSuperAdminSection = (sectionId: string) => {
+    const parentSection = superAdminSectionParents[sectionId] || sectionId;
+    return visiblePlatformSections.some(([id]: any) => id === parentSection);
+  };
+  // Platform sections are real nested routes (/superadmin/roles,
+  // /superadmin/roles/{id}/edit, ...), so the active section is derived from
+  // the URL instead of tracked separately.
+  const superAdminSection = pathname.startsWith("/superadmin")
+    ? parseSuperAdminSegments(pathname.split("/").slice(2)).section
+    : "overview";
+  function setSuperAdminSection(value: string) {
+    router.push(superAdminPath(value));
+  }
+  const activeSuperAdminSection = isVisibleSuperAdminSection(superAdminSection)
+    ? superAdminSection
+    : visiblePlatformSections[0]?.[0] || superAdminSection;
   const [superAdminSettingsOpen, setSuperAdminSettingsOpen] = useState(true);
-  const [tenantAdminSection, setTenantAdminSection] = useState("users");
+  // Tenant Admin sections are real nested routes (/admin/users, /admin/roles,
+  // ...) now, so the current section is derived from the URL instead of
+  // tracked as independent state — that's what keeps the breadcrumb and
+  // sidebar highlight correct on back/forward and direct navigation too.
+  const tenantAdminSection = pathname.startsWith("/admin/")
+    ? pathname.split("/")[2] || "users"
+    : "users";
+  function setTenantAdminSection(value: string) {
+    router.push(`/admin/${value}`);
+  }
   const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(false);
   const visibleTenantAdminSections = tenantAdminSections.filter(
     ([sectionId]: any) =>
@@ -144,11 +245,18 @@ export function AppShell(props: any) {
   )
     ? tenantAdminSection
     : visibleTenantAdminSections[0]?.[0] || tenantAdminSection;
-  const [pageHistory, setPageHistory] = useState<string[]>([activePage]);
-  const [historyIndex, setHistoryIndex] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(true);
-  const [reportsSection, setReportsSection] = useState("metrix");
+  // Report tabs are real nested routes (/reports/metrix, /reports/lab, ...),
+  // so the active tab is derived from the URL rather than tracked separately
+  // — that keeps the breadcrumb and sidebar highlight correct on
+  // back/forward and on direct navigation.
+  const reportsSection = pathname.startsWith("/reports/")
+    ? pathname.split("/")[2] || "metrix"
+    : "metrix";
+  function setReportsSection(value: string) {
+    router.push(`/reports/${value}`);
+  }
   const [sideBarOpen, setSidebarOpen] = useState(true);
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -162,8 +270,11 @@ export function AppShell(props: any) {
   const activeSectionLabel =
     activePage === "superadmin"
       ? String(
-          superAdminSections.find(
-            ([id]: any) => id === superAdminSection,
+          visiblePlatformSections.find(
+            ([id]: any) =>
+              id ===
+              (superAdminSectionParents[activeSuperAdminSection] ||
+                activeSuperAdminSection),
           )?.[1] ?? "",
         )
       : activePage === "admin"
@@ -179,8 +290,6 @@ export function AppShell(props: any) {
             )
           : "";
 
-  const canGoBack = historyIndex > 0;
-  const canGoForward = historyIndex < pageHistory.length - 1;
   const searchItems = [
     ...visibleNav.map(([id, label]: any) => ({
       id: `module-${id}`,
@@ -221,12 +330,12 @@ export function AppShell(props: any) {
           action: () => navigatePage({ id: "reports", section: id }),
         }))
       : []),
-    ...(isSuperAdmin
-      ? superAdminSections.map(([id, label]: any) => ({
+    ...(canAccessPlatformWorkspace
+      ? visiblePlatformSections.map(([id, label]: any) => ({
           id: `superadmin-${id}`,
           label: `${label}`,
-          description: "Super Admin",
-          keywords: `platform super admin ${label}`,
+          description: "Platform Access",
+          keywords: `platform privileged support root ${label}`,
           action: () => navigatePage({ id: "superadmin", section: id }),
         }))
       : []),
@@ -238,39 +347,60 @@ export function AppShell(props: any) {
     "ip",
     "physiotherapy",
   ].includes(activePage);
-
   function navigatePage(target: string | { id: string; section?: string }) {
     const id = typeof target === "string" ? target : target.id;
     const section = typeof target === "string" ? undefined : target.section;
+
     if (!id) return;
+
     if (id === "admin" && section) {
       setTenantAdminSettingsOpen(true);
       setTenantAdminSection(section);
+      return;
     }
+
     if (id === "reports" && section) {
       setReportsOpen(true);
       setReportsSection(section);
+      return;
     }
+
     if (id === "superadmin" && section) {
       setSuperAdminSettingsOpen(true);
-      setSuperAdminSection(section);
+
+      if (isVisibleSuperAdminSection(section)) {
+        setSuperAdminSection(section);
+        return;
+      }
     }
+
     if (id === activePage) return;
+
+    setPendingPage(id);
     setActive(id);
-    setPageHistory((prev) => {
-      const next = [...prev.slice(0, historyIndex + 1), id];
-      setHistoryIndex(next.length - 1);
-      return next;
-    });
+    router.push(
+      id === "admin"
+        ? `/admin/${tenantAdminSection}`
+        : id === "reports"
+          ? `/reports/${reportsSection}`
+          : id === "superadmin"
+            ? superAdminPath(superAdminSection)
+            : `/${id}`,
+    );
   }
 
-  function goHistory(direction: -1 | 1) {
-    const nextIndex = historyIndex + direction;
-    const nextPage = pageHistory[nextIndex];
-    if (nextPage === undefined) return;
-    setHistoryIndex(nextIndex);
-    setActive(nextPage);
-  }
+  // Permission/entitlement gating can make the pathname's module unavailable
+  // (e.g. after a role/tenant switch) — redirect to the computed fallback
+  // rather than silently rendering a different module under a stale URL.
+  useEffect(() => {
+    if (resolvedActivePage !== routeSegment) {
+      router.replace(`/${resolvedActivePage}`);
+    }
+  }, [resolvedActivePage, routeSegment, router]);
+
+  useEffect(() => {
+    setPendingPage("");
+  }, [pathname]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -305,105 +435,45 @@ export function AppShell(props: any) {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.addEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [profileOpen]);
 
-  function renderPage() {
-    switch (activePage) {
-      case "dashboard":
-        return (
-          <Dashboard
-            {...ctx}
-            liveSummary={liveSummary}
-            setActive={navigatePage}
-            nav={nav}
-            enabled={enabled}
-          />
-        );
-      case "superadmin":
-        return (
-          <SuperAdminDashboard
-            apiSession={apiSession}
-            switchTenant={switchTenant}
-            section={superAdminSection}
-            setSection={setSuperAdminSection}
-          />
-        );
-      case "appointments":
-        return <AppointmentCalendarBooking {...ctx} setActive={navigatePage} />;
-      case "queue":
-        return <TokenQueue {...ctx} setActive={navigatePage} />;
-      case "patients":
-        return <Patient {...ctx} setActive={navigatePage} />;
-      case "practitioners":
-        return <Doctors {...ctx} />;
-      case "scheduling":
-        return <Scheduling {...ctx} />;
-      case "items":
-        return <Items {...ctx} />;
-      case "ip":
-        return <IPAdmission {...ctx} />;
-      case "doctor":
-        return (
-          <DoctorConsultation
-            {...ctx}
-            view="dashboard"
-            setActive={navigatePage}
-          />
-        );
-      case "consultation":
-        return (
-          <DoctorConsultation
-            {...ctx}
-            view="workspace"
-            setActive={navigatePage}
-          />
-        );
-      case "lab":
-        return <Lab {...ctx} />;
-      case "pharmacy":
-        return <Pharmacy {...ctx} />;
-      case "physiotherapy":
-        return <Physiotherapy {...ctx} />;
-      case "home_care":
-        return <HomeCare {...ctx} setActive={navigatePage} />;
-      case "billing":
-        return <Billing {...ctx} />;
-      case "admin":
-        return (
-          <TenantAdmin
-            {...ctx}
-            section={activeTenantAdminSection}
-            setSection={setTenantAdminSection}
-          />
-        );
-      case "subscriptions":
-        return <PatientSubscriptions {...ctx} />;
-      case "reports":
-        return (
-          <Reports
-            {...ctx}
-            section={reportsSection}
-            setActive={navigatePage}
-          />
-        );
-      case "error_logs":
-        return <ErrorLogs apiSession={apiSession} />;
-      default:
-        return (
-          <Card>
-            <h3 className="text-lg font-bold">Module unavailable</h3>
-            <p className="mt-2 text-sm text-slate-500">
-              This module is not enabled for the current role or tenant.
-            </p>
-          </Card>
-        );
-    }
-  }
+  useEffect(() => {
+    const highTrafficRoutes = new Set([
+      "dashboard",
+      "appointments",
+      "patients",
+      "practitioners",
+      "queue",
+      "billing",
+    ]);
+    visibleNav.forEach(([id]: any) => {
+      if (highTrafficRoutes.has(id) && id !== activePage) {
+        router.prefetch(`/${id}`);
+      }
+    });
+  }, [activePage, router, visibleNav.map(([id]: any) => id).join("|")]);
+
+  const shellChromeValue: ShellChromeValue = {
+    navigatePage,
+    activePage,
+    enabled,
+    nav,
+    liveSummary,
+    apiSession,
+    switchTenant,
+    tenantAdminSection: activeTenantAdminSection,
+    setTenantAdminSection,
+    reportsSection,
+    setReportsSection,
+    superAdminSection: activeSuperAdminSection,
+    setSuperAdminSection,
+  };
 
   return (
     <div className="h-screen overflow-hidden bg-white text-slate-900">
+      {/* {isInitialLoading && <PageLoader label={"Loading"} />} */}
       {/* Sidebar */}
       {!isDesktop && (
         <div
@@ -424,6 +494,7 @@ export function AppShell(props: any) {
               activePage={activePage}
               navigatePage={navigatePage}
               isSuperAdmin={isSuperAdmin}
+              canAccessPlatformWorkspace={canAccessPlatformWorkspace}
               reportsOpen={reportsOpen}
               setReportsOpen={setReportsOpen}
               reportsSection={reportsSection}
@@ -434,7 +505,7 @@ export function AppShell(props: any) {
               setTenantAdminSection={setTenantAdminSection}
               superAdminSettingsOpen={superAdminSettingsOpen}
               setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
-              superAdminSection={superAdminSection}
+              superAdminSection={activeSuperAdminSection}
               setSuperAdminSection={setSuperAdminSection}
               visibleTenantAdminSections={visibleTenantAdminSections}
               enabled={enabled}
@@ -443,7 +514,7 @@ export function AppShell(props: any) {
               sideBarOpen={sideBarOpen}
               reportSections={reportSections}
               reportSection={reportsSection}
-              superAdminSections={superAdminSections}
+              superAdminSections={visiblePlatformSections}
               tabletCollapsed={tabletCollapsed}
               setTabletCollapsed={setTabletCollapsed}
             />
@@ -466,6 +537,7 @@ export function AppShell(props: any) {
                 activePage={activePage}
                 navigatePage={navigatePage}
                 isSuperAdmin={isSuperAdmin}
+                canAccessPlatformWorkspace={canAccessPlatformWorkspace}
                 reportsOpen={reportsOpen}
                 setReportsOpen={setReportsOpen}
                 reportsSection={reportsSection}
@@ -476,7 +548,7 @@ export function AppShell(props: any) {
                 setTenantAdminSection={setTenantAdminSection}
                 superAdminSettingsOpen={superAdminSettingsOpen}
                 setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
-                superAdminSection={superAdminSection}
+                superAdminSection={activeSuperAdminSection}
                 setSuperAdminSection={setSuperAdminSection}
                 visibleTenantAdminSections={visibleTenantAdminSections}
                 enabled={enabled}
@@ -485,7 +557,7 @@ export function AppShell(props: any) {
                 sideBarOpen={sideBarOpen}
                 reportSections={reportSections}
                 reportSection={reportsSection}
-                superAdminSections={superAdminSections}
+                superAdminSections={visiblePlatformSections}
                 tabletCollapsed={tabletCollapsed}
                 setTabletCollapsed={setTabletCollapsed}
               />
@@ -493,11 +565,13 @@ export function AppShell(props: any) {
           )}
           <div className="mt-4 rounded-lg bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             <b className="text-slate-900">
-              {isSuperAdmin ? "Primary Tenant" : clinic.type}
+              {canAccessPlatformWorkspace ? "Platform Access" : clinic.type}
             </b>
             <br />
-            {isSuperAdmin
-              ? "Global platform access"
+            {canAccessPlatformWorkspace
+              ? isSuperAdmin
+                ? "Root platform access"
+                : "Permission-scoped access"
               : clinic.multiBranch
                 ? "Multi-branch enabled"
                 : "Single branch mode"}
@@ -514,7 +588,7 @@ export function AppShell(props: any) {
   `}
         >
           <AppHeader
-            isSuperAdmin={isSuperAdmin}
+            isSuperAdmin={canManagePlatformTenants}
             apiSession={apiSession}
             tenantOptions={tenantOptions}
             switchTenant={switchTenant}
@@ -554,26 +628,27 @@ export function AppShell(props: any) {
             />
           )}
 
-          <div className="bg-white px-4 py-2 lg:px-6">
+          {showNavigationSkeleton ? (
+            <BreadcrumbBarSkeleton />
+          ) : (
+            <div className="bg-white px-4 py-2 lg:px-6">
             <div className="flex min-w-0 flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-3">
                 {/* Back / Forward group */}
                 <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
                   <button
                     type="button"
-                    onClick={() => goHistory(-1)}
-                    disabled={!canGoBack}
+                    onClick={() => router.back()}
                     title="Previous page"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
                   >
                     <ArrowLeft size={14} />
                   </button>
                   <button
                     type="button"
-                    onClick={() => goHistory(1)}
-                    disabled={!canGoForward}
+                    onClick={() => router.forward()}
                     title="Forward"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
                   >
                     <ArrowRight size={14} />
                   </button>
@@ -660,8 +735,21 @@ export function AppShell(props: any) {
               )}
             </div>
           </div>
+          )}
 
-          <section className="space-y-4 py-4 px-6">{renderPage()}</section>
+          <section
+            className=" py-4 px-6"
+            aria-busy={showNavigationSkeleton}
+            aria-live="polite"
+          >
+            <ShellChromeContext.Provider value={shellChromeValue}>
+              {showNavigationSkeleton ? (
+                <ModuleSkeleton label="Loading page" />
+              ) : (
+                children
+              )}
+            </ShellChromeContext.Provider>
+          </section>
         </main>
       </div>
     </div>

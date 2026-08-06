@@ -1,5 +1,8 @@
 PLATFORM_TENANTS_MANAGE = "platform.tenants.manage"
 PLATFORM_SUBSCRIPTIONS_MANAGE = "platform.subscriptions.manage"
+PLATFORM_REPORTS_READ = "platform.reports.read"
+PLATFORM_TEMPLATES_MANAGE = "platform.templates.manage"
+PLATFORM_SUPPORT_ACCESS = "platform.support.access"
 SUBSCRIPTIONS_REPORTS_READ = "subscriptions.reports.read"
 IDENTITY_USERS_MANAGE = "identity.users.manage"
 IDENTITY_USERS_CREATE = "identity.users.create"
@@ -158,6 +161,9 @@ DISCOUNTS_DELETE = "discounts.delete"
 PERMISSION_CATALOG = [
     PLATFORM_TENANTS_MANAGE,
     PLATFORM_SUBSCRIPTIONS_MANAGE,
+    PLATFORM_REPORTS_READ,
+    PLATFORM_TEMPLATES_MANAGE,
+    PLATFORM_SUPPORT_ACCESS,
     SUBSCRIPTIONS_REPORTS_READ,
     IDENTITY_USERS_MANAGE,
     IDENTITY_USERS_CREATE,
@@ -320,6 +326,9 @@ PERMISSION_CATALOG = [
 PERMISSION_MODULE_LABELS = {
     "platform.tenants": "Tenant Management",
     "platform.subscriptions": "Subscription Management",
+    "platform.reports": "Platform Reports",
+    "platform.templates": "Global Templates",
+    "platform.support": "Temporary Support Access",
     "subscriptions.reports": "Subscription Reports",
     "identity.users": "Users",
     "identity.roles": "Roles",

@@ -10,11 +10,19 @@ import { paymentMethodOptions } from "@/lib/options";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateAgeYears,
+  calculateDobFromAge,
   patientDateInputValue,
   patientField,
   todayInputValue,
 } from "../helpers";
-import { bloodGroups, genders, statusOptions } from "../constants";
+import {
+  bloodGroups,
+  genders,
+  language_options,
+  source_options,
+  statusOptions,
+  whatsup_options,
+} from "../constants";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PatientFormValues, patientSchema } from "../patient.schema";
@@ -26,11 +34,13 @@ export function PatientForm({
   branches,
   defaultBranchId,
   busy,
+  error,
   onSubmit,
   back,
 }: any) {
   const {
     register,
+    getValues,
     setValue,
     watch,
     handleSubmit,
@@ -94,6 +104,13 @@ export function PatientForm({
     },
   });
   const today = todayInputValue();
+  const updatingFromAge = useRef(false);
+  // Set right before the resync effect below calls reset(), so the DOB
+  // watch-effect further down knows the resulting dateOfBirth change came
+  // from server data, not the user — otherwise it would call setValue with
+  // shouldDirty:true as a side effect, permanently marking the form dirty
+  // and blocking every future corrective reset() for this patient.
+  const justResetRef = useRef(false);
 
   const branchOptions = useMemo(() => {
     const selectedBranchId = watch("branchId");
@@ -116,6 +133,7 @@ export function PatientForm({
     // reference), a dirty form must keep the user's unsaved input instead
     // of silently reverting to server data underneath them.
     if (isDirty) return;
+    justResetRef.current = true;
     reset({
       fullName: patientField(patient, "full_name", "fullName") || "",
       mobile: patientField(patient, "mobile") || "",
@@ -172,6 +190,28 @@ export function PatientForm({
     });
   }, [patient, defaultBranchId, reset]);
 
+  useEffect(() => {
+    const currentBranchId = getValues("branchId");
+    const currentBranchIsValid = branches.some(
+      (branch: any) => branch.id === currentBranchId,
+    );
+    if (currentBranchIsValid) return;
+
+    const nextBranchId = branches.some(
+      (branch: any) => branch.id === defaultBranchId,
+    )
+      ? defaultBranchId
+      : branches[0]?.id;
+    if (!nextBranchId) return;
+
+    // Branches load after the form can already be edited. Repair only the
+    // branch field so late API data never clears patient details already typed.
+    setValue("branchId", nextBranchId, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [branches, defaultBranchId, getValues, setValue]);
+
   const dateOfBirth = watch("dateOfBirth");
   const whatsappConsentStatus = watch("whatsappConsentStatus");
   const dateOfBirthRegistration = register("dateOfBirth");
@@ -187,8 +227,21 @@ export function PatientForm({
       skipFirstDobEffect.current = false;
       return;
     }
+
+    if (updatingFromAge.current) {
+      updatingFromAge.current = false;
+      return;
+    }
+
+    if (justResetRef.current) {
+      justResetRef.current = false;
+      return;
+    }
+
     if (!dateOfBirth) {
-      setValue("ageYears", "");
+      setValue("ageYears", "", {
+        shouldDirty: true,
+      });
       return;
     }
 
@@ -212,6 +265,9 @@ export function PatientForm({
           Back
         </button>
       </div>
+      {error && (
+        <p className="mt-3 text-sm font-bold text-red-500">{error}</p>
+      )}
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
@@ -294,10 +350,33 @@ export function PatientForm({
           <Input
             type="number"
             min="0"
-            max="130"
+            max="100"
             placeholder="Age"
-            {...register("ageYears")}
+            {...register("ageYears", {
+              onChange: (e) => {
+                const age = e.target.value;
+
+                if (!age) {
+                  setValue("dateOfBirth", "", {
+                    shouldDirty: true,
+                  });
+                  return;
+                }
+
+                const numericAge = Number(age);
+
+                if (numericAge >= 0 && numericAge <= 100) {
+                  updatingFromAge.current = true;
+
+                  setValue("dateOfBirth", calculateDobFromAge(numericAge), {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                }
+              },
+            })}
           />
+
           <FormError error={errors.ageYears?.message} />
         </FormField>
         <FormField label="Guardian Name">
@@ -324,7 +403,9 @@ export function PatientForm({
             })}
             placeholder="Enter shared family contact number"
           />
+
           <FormError error={errors.alternateMobile?.message} />
+
           <p className="mt-1 text-[11px] text-slate-500">
             A family member&apos;s existing mobile number can be used here.
           </p>
@@ -337,11 +418,7 @@ export function PatientForm({
           <SearchableSelect
             value={whatsappConsentStatus}
             searchable={false}
-            options={[
-              { value: "not_recorded", label: "Not recorded" },
-              { value: "opted_in", label: "Patient opted in" },
-              { value: "opted_out", label: "Patient opted out" },
-            ]}
+            options={whatsup_options}
             onChange={(value) => {
               setValue("whatsappConsentStatus", value as any, {
                 shouldDirty: true,
@@ -364,13 +441,7 @@ export function PatientForm({
             <SearchableSelect
               value={watch("whatsappConsentSource") || ""}
               searchable={false}
-              options={[
-                { value: "", label: "Select source" },
-                { value: "patient_verbal", label: "Patient verbal" },
-                { value: "patient_written", label: "Patient written" },
-                { value: "digital", label: "Digital consent" },
-                { value: "imported", label: "Imported record" },
-              ]}
+              options={source_options}
               onChange={(value) =>
                 setValue("whatsappConsentSource", value, {
                   shouldDirty: true,
@@ -385,10 +456,7 @@ export function PatientForm({
           <SearchableSelect
             value={watch("whatsappPreferredLanguage")}
             searchable={false}
-            options={[
-              { value: "en", label: "English (default)" },
-              { value: "ta", label: "Tamil" },
-            ]}
+            options={language_options}
             onChange={(value) =>
               setValue("whatsappPreferredLanguage", value as any, {
                 shouldDirty: true,
@@ -459,9 +527,7 @@ export function MembershipEnrollForm({
   const activePlans = membershipPlans.filter((plan: any) => plan.is_active);
   const [planId, setPlanId] = useState("");
   const [branchId, setBranchId] = useState(patient?.branch_id || "");
-  const [startsOn, setStartsOn] = useState(
-    new Date().toISOString().slice(0, 10),
-  );
+  const [startsOn, setStartsOn] = useState(todayInputValue());
   const [paidAmount, setPaidAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const selectedPlan = activePlans.find((plan: any) => plan.id === planId);
@@ -487,7 +553,7 @@ export function MembershipEnrollForm({
   function resetForm() {
     setPlanId("");
     setBranchId(patient?.branch_id || "");
-    setStartsOn(new Date().toISOString().slice(0, 10));
+    setStartsOn(todayInputValue());
     setPaidAmount("");
     setPaymentMethod("cash");
   }
@@ -536,6 +602,8 @@ export function MembershipEnrollForm({
         value={paidAmount}
         onChange={setPaidAmount}
         min={0}
+        disabled
+        hint="Fixed from the selected membership plan"
         placeholder="Auto-filled from plan"
       />
       <FormField label="Payment Method">

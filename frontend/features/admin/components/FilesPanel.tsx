@@ -1,9 +1,20 @@
 import { useState, useEffect } from "react";
-import { fileCategoryOptions,doctypeFetchPaths,fileCategoryRules } from "../constants";
+import {
+  fileCategoryOptions,
+  doctypeFetchPaths,
+  fileCategoryRules,
+} from "../constants";
 import { apiFetch, apiUpload, uploadAssetUrl } from "@/lib/api";
 import { FormField } from "@/app/components/FormElements";
-import { Card,Button,Input, SearchableSelect, Badge, ActionButton } from "@/app/components/common/ui";
-import { asOptionList,patientLabel } from "../helpers";
+import {
+  Card,
+  Button,
+  Input,
+  SearchableSelect,
+  Badge,
+  ActionButton,
+} from "@/app/components/common/ui";
+import { asOptionList, patientLabel } from "../helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { capitalizeFirst, displayDateTime } from "@/utils/helper";
 import { PatientSearchSelect } from "@/features/patients/components/PatientSearchSelect";
@@ -16,6 +27,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { RowActions } from "./RowActions";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { FilterSection } from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 export function FilesPanel({
   apiSession,
@@ -23,10 +40,13 @@ export function FilesPanel({
   setFiles,
   setMessage,
   branches,
-  patients,
   busy,
   setBusy,
 }: any) {
+  const { patients } = usePatientReferencesQuery(
+    apiSession,
+    files.map((file: any) => file.patient_id),
+  );
   const {
     register,
     handleSubmit,
@@ -59,6 +79,28 @@ export function FilesPanel({
   const [syncing, setSyncing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
   const rule = fileCategoryRules[category] || fileCategoryRules.general;
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({
+    category: "all",
+  });
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const categoryOptions = [
+    { value: "all", label: "All Categories" },
+    ...fileCategoryOptions,
+  ];
+
+  const filters = [
+    {
+      key: "category",
+      label: "Category",
+      options: categoryOptions,
+    },
+  ];
+
+  function onFilterChange(key: string, value: string) {
+    setFilterValues((prev) => ({ ...prev, [key]: value }));
+  }
 
   useEffect(() => {
     const nextSourceModule = rule.modules[0] || "";
@@ -128,23 +170,55 @@ export function FilesPanel({
     };
   }, [apiSession?.tenantId, doctype]);
 
-  const visible = files.filter((file: any) =>
-    [
-      file.file_name,
-      file.category,
-      file.source_module,
-      file.attached_to_doctype,
-      file.attached_to_name,
-      file.attached_to_field,
-      file.attached_to_label,
-      file.folder,
-      file.file_url,
-    ].some((value) =>
-      String(value || "")
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-    ),
-  );
+  const visible = files.filter((file: any) => {
+    const q = query.trim().toLowerCase();
+
+    // Search (file name + patient + other fields)
+    if (q) {
+      const fileName = String(file.file_name || "").toLowerCase();
+      const patient = patientLabel(patients, file.patient_id).toLowerCase();
+      const other = [
+        file.category,
+        file.source_module,
+        file.attached_to_doctype,
+        file.attached_to_name,
+        file.attached_to_field,
+        file.attached_to_label,
+        file.folder,
+        file.file_url,
+      ]
+        .map((v) => String(v || "").toLowerCase())
+        .join(" ");
+
+      if (!fileName.includes(q) && !patient.includes(q) && !other.includes(q)) {
+        return false;
+      }
+    }
+
+    // Category filter
+    if (filterValues.category !== "all") {
+      if (String(file.category) !== filterValues.category) return false;
+    }
+
+    // Date range (created_at)
+    if (dateFrom || dateTo) {
+      const created = file.created_at ? new Date(file.created_at) : null;
+      if (!created) return false;
+
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+        from.setHours(0, 0, 0, 0);
+        if (created < from) return false;
+      }
+      if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        if (created > to) return false;
+      }
+    }
+
+    return true;
+  });
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const pagedFiles = visible.slice(
@@ -154,12 +228,11 @@ export function FilesPanel({
 
   useEffect(() => {
     setPage(1);
-  }, [query]);
+  }, [query, filterValues, dateFrom, dateTo]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
-
   function resetUploadForm() {
     const generalRule = fileCategoryRules.general;
     setCategory("general");
@@ -287,6 +360,89 @@ export function FilesPanel({
     }
   }
 
+  const fileColumns: Column<any>[] = [
+    {
+      key: "file_name",
+      header: "File",
+      width: "200px",
+      render: (file: any) => (
+        <div className="max-w-[200px]">
+          <p className="font-bold truncate text-xs" title={file?.file_name}>
+            {capitalizeFirst(file.file_name)}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "category",
+      header: "Category",
+      width: "120px",
+      render: (file: any) => (
+        <Badge tone="blue" className="normal-badge">
+          {humanizeOptionLabel(file.category)}
+        </Badge>
+      ),
+    },
+    {
+      key: "attached_to_doctype",
+      header: "Attached To",
+      render: (file: any) => (
+        <div className="text-xs">{file.attached_to_doctype || "-"}</div>
+      ),
+    },
+    {
+      key: "patient_id",
+      header: "Patient",
+      render: (file: any) => (
+        <div className="text-xs">{patientLabel(patients, file.patient_id)}</div>
+      ),
+    },
+    {
+      key: "created_at",
+      header: "Created",
+      render: (file: any) => (
+        <div className="text-xs">
+          {file.created_at ? displayDateTime(file.created_at) : "-"}
+        </div>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      width:'100px',
+      disableRowClick: true,
+      render: (file: any) => {
+        const actions = [
+          {
+            label: "Open",
+            onClick: () =>
+              window.open(
+                uploadAssetUrl(file.file_url),
+                "_blank",
+                "noopener,noreferrer",
+              ),
+          },
+          {
+            label: "Delete",
+            danger: true,
+            disabled: busy,
+            onClick: () =>
+              setConfirmDelete({ kind: "delete", entity: "file", file }),
+          },
+        ];
+
+        return <RowActions actions={actions} className="right-5 -bottom-7" />;
+      },
+    },
+  ];
+  useEffect(() => {
+    setPage(1);
+  }, [query, filterValues, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+
   return (
     <div className="">
       <Card>
@@ -307,7 +463,9 @@ export function FilesPanel({
               onClick={syncUploadsFolder}
               disabled={syncing || !apiSession}
             >
-              {syncing ? "Syncing..." : "Sync Uploads Folder"}
+              <ButtonLoader loading={syncing}>
+                {syncing ? "Syncing..." : "Sync Uploads Folder"}
+              </ButtonLoader>
             </ActionButton>
           </div>
         </div>
@@ -339,7 +497,7 @@ export function FilesPanel({
           </FormField>
           <FormField label="Branch">
             <SearchableSelect
-              value={watch('branch_id')}
+              value={watch("branch_id")}
               onChange={(value) => {
                 setValue("branch_id", value);
               }}
@@ -356,7 +514,7 @@ export function FilesPanel({
             <PatientSearchSelect
               apiSession={apiSession}
               initialPatients={patients}
-              value={watch('patient_id')}
+              value={watch("patient_id")}
               onChange={(value) => {
                 setValue("patient_id", value);
               }}
@@ -366,7 +524,7 @@ export function FilesPanel({
           </FormField>
           <FormField label="Source Module">
             <SearchableSelect
-              value={watch('source_module')}
+              value={watch("source_module")}
               onChange={(value) => {
                 setValue("source_module", value);
               }}
@@ -377,7 +535,7 @@ export function FilesPanel({
           </FormField>
           <FormField label="Linked Doctype">
             <SearchableSelect
-              value={watch('attached_to_doctype')}
+              value={watch("attached_to_doctype")}
               onChange={(value) => {
                 setValue("attached_to_doctype", value);
                 setDoctype(value);
@@ -399,7 +557,7 @@ export function FilesPanel({
               />
             ) : (
               <SearchableSelect
-                value={watch('attached_to_name')}
+                value={watch("attached_to_name")}
                 onChange={(value) => {
                   setValue("attached_to_name", value);
                 }}
@@ -413,13 +571,15 @@ export function FilesPanel({
                 }
                 searchPlaceholder="Search records..."
                 allowCustom
-                emptyText={recordsLoading ? "Loading..." : "No matching records."}
+                emptyText={
+                  recordsLoading ? "Loading..." : "No matching records."
+                }
               />
             )}
           </FormField>
           <FormField label="Linked Field">
             <SearchableSelect
-              value={watch('attached_to_field')}
+              value={watch("attached_to_field")}
               onChange={(value) => {
                 setValue("attached_to_field", value);
               }}
@@ -430,7 +590,7 @@ export function FilesPanel({
           </FormField>
           <FormField label="Label">
             <SearchableSelect
-              value={watch('attached_to_label')}
+              value={watch("attached_to_label")}
               onChange={(value) => {
                 setValue("attached_to_label", value);
               }}
@@ -441,7 +601,7 @@ export function FilesPanel({
           </FormField>
           <FormField label="Folder">
             <SearchableSelect
-              value={watch('folder')}
+              value={watch("folder")}
               onChange={(value) => {
                 setValue("folder", value);
               }}
@@ -464,12 +624,14 @@ export function FilesPanel({
           </div>
           <div className="flex items-end">
             <Button disabled={busy} className="save-button">
-              {busy ? "Uploading..." : "Upload File"}
+              <ButtonLoader loading={busy}>
+                {busy ? "Uploading..." : "Upload File"}
+              </ButtonLoader>
             </Button>
           </div>
         </form>
       </Card>
-      <Card>
+      <Card className="mt-3">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
             <h4 className="card-title font-bold">File Registry</h4>
@@ -478,105 +640,45 @@ export function FilesPanel({
               when needed.
             </p>
           </div>
-          <FormField label="Search">
+        </div>
+
+        <FilterSection
+          title="Files"
+          query={query}
+          setQuery={setQuery}
+          filters={filters}
+          filterValues={filterValues}
+          onFilterChange={onFilterChange}
+          onReset={() => {
+            setDateFrom("");
+            setDateTo("");
+          }}
+        >
+          <FormField label="From">
             <Input
-              value={query}
-              onChange={(e: any) => setQuery(e.target.value)}
-              placeholder="Search files"
+              type="date"
+              value={dateFrom}
+              onChange={(e: any) => setDateFrom(e.target.value)}
             />
           </FormField>
+          <FormField label="To">
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e: any) => setDateTo(e.target.value)}
+            />
+          </FormField>
+        </FilterSection>
+
+        <div className="mt-4">
+          <DataTable
+            columns={fileColumns}
+            data={pagedFiles}
+            emptyMessage="No files found."
+            paginate={false}
+          />
         </div>
-        <div className="mt-4 overflow-auto rounded-2xl border border-slate-200">
-          <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3 w-[100px]">File</th>
-                <th>Category</th>
-                <th>Attached To</th>
-                <th>Patient</th>
-                <th>Created</th>
-                <th className="pr-4">Open</th>
-                <th className="pr-4">Delete</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {visible.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-4 text-slate-500">
-                    No files found.
-                  </td>
-                </tr>
-              )}
-              {pagedFiles.map((file: any) => (
-                <tr key={file.id} className="align-top">
-                  <td className="px-2 py-2">
-                    <div className="max-w-[200px]">
-                      <p
-                        className="font-bold truncate text-xs"
-                        title={file?.file_name}
-                      >
-                        {capitalizeFirst(file.file_name)}
-                      </p>
-                    </div>
-                    {/* <div className="max-w-[200px]">
-                      <p
-                        className="truncate text-xs text-slate-500"
-                        title={file.file_url}
-                      >
-                        {file.file_url}
-                      </p>
-                    </div> */}
-                  </td>
-                  <td>
-                    <Badge
-                      tone="blue"
-                      className="rounded-full px-2 py-2 text-xs w-[50%]"
-                    >
-                      {humanizeOptionLabel(file.category)}
-                    </Badge>
-                  </td>
-                  <td className="flex justify-start items-start">
-                    <div className="text-xs  mt-2">
-                      {file.attached_to_doctype || "-"}
-                    </div>
-                  </td>
-                  <td className="text-xs">
-                    <div className="text-xs mt-2">
-                      {patientLabel(patients, file.patient_id)}
-                    </div>
-                  </td>
-                  <td className="text-xs">
-                    <div className="text-xs mt-2">
-                      {file.created_at ? displayDateTime(file.created_at) : "-"}
-                    </div>
-                  </td>
-                  <td className="pr-4 flex items-center">
-                    <a
-                      href={uploadAssetUrl(file.file_url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-semibold text-xs text-blue-700 underline"
-                    >
-                      Open
-                    </a>
-                  </td>
-                  <td className="pr-4 ">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setConfirmDelete({ kind: "delete", entity: "file", file })
-                      }
-                      disabled={busy}
-                      className="font-semibold text-xs  mt-2 text-red-600 underline disabled:text-slate-300"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+
         <Pagination
           page={safePage}
           totalPages={totalPages}

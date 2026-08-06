@@ -5,7 +5,13 @@ def settlement_paid_basis(invoice: Invoice) -> int:
     total = int(invoice.total_amount or 0)
     paid = int(invoice.paid_amount or 0)
     doctor_share = int(invoice.doctor_share_amount or 0)
-    if not total or not paid or not doctor_share:
+    if not doctor_share:
+        return 0
+    if total <= 0 and int(invoice.membership_discount_amount or 0) > 0:
+        # Membership pays the patient's bill down to zero, but the contractual
+        # doctor cost is still incurred and must remain visible/payable.
+        return doctor_share
+    if not total or not paid:
         return 0
     return min(round((doctor_share * paid) / total), paid)
 
@@ -109,14 +115,40 @@ def allocate_values(
     return allocations
 
 
+_REFUNDED_STATUSES = (InvoiceStatus.REFUNDED, InvoiceStatus.PARTIALLY_REFUNDED)
+
+
 def is_paid_invoice(invoice: Invoice) -> bool:
     total = int(invoice.total_amount or 0)
     balance = int(invoice.balance_amount or 0)
     settled_zero_invoice = (
         total == 0 and balance <= 0 and int(invoice.discount_amount or 0) > 0
     )
+    # A refund never closes total_amount back down, so balance_amount stays
+    # positive for the refunded portion even though nothing further is
+    # expected from the patient. Once any refund has been issued the invoice
+    # is settled — closed by refund rather than by collection — so it must
+    # still be counted (at its net paid_amount) instead of vanishing from
+    # revenue/profit reporting entirely.
+    refunded_but_settled = (
+        invoice.status in _REFUNDED_STATUSES and int(invoice.paid_amount or 0) > 0
+    )
     return (
         invoice.status == InvoiceStatus.PAID
         or (int(invoice.paid_amount or 0) > 0 and balance <= 0)
         or settled_zero_invoice
+        or refunded_but_settled
     )
+
+
+def invoice_due_balance(invoice: Invoice) -> int:
+    """Balance still collectible from the patient.
+
+    For REFUNDED/PARTIALLY_REFUNDED invoices, balance_amount is inflated by
+    the refunded amount (total_amount never shrinks on refund), so it does
+    not represent money still owed — the case is closed by refund, not by
+    further collection.
+    """
+    if invoice.status in _REFUNDED_STATUSES:
+        return 0
+    return int(invoice.balance_amount or 0)

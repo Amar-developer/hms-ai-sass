@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { sections, status_filters } from "./constants";
 import { canUseTenantAdminSection } from "./permissions";
 import { Card, StatusToast } from "@/app/components/common/ui";
@@ -37,7 +38,7 @@ import {
   TAX_RULE_COLUMNS,
   USER_COLUMNS,
 } from "@/utils/constants";
-import { useTenantAdminData } from "./api/useTenantAdminData";
+import { useAdminData } from "./AdminDataContext";
 import { useTenantAdminActions } from "./api/useTenantAdminActions";
 import { Role } from "./types";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
@@ -56,15 +57,11 @@ export function TenantAdmin({
   apiSession,
   clinic,
   branchId,
-  patients,
-  section: externalSection,
-  setSection: externalSetSection,
+  section,
+  view,
+  selectedId,
 }: any) {
-  const [localSection, setLocalSection] = useState("users");
-  const section = externalSection || localSection;
-  const setSection = externalSetSection || setLocalSection;
-  const [view, setView] = useState("list");
-  const [selectedId, setSelectedId] = useState("");
+  const router = useRouter();
   const [confirm, setConfirm] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
   const [reportBusy, setReportBusy] = useState("");
@@ -98,7 +95,7 @@ export function TenantAdmin({
     status: "all",
   });
 
-  const data = useTenantAdminData(apiSession, clinic);
+  const data = useAdminData();
   const whatsappModuleEnabled = Boolean(
     clinic?.modules?.includes("whatsapp"),
   );
@@ -114,22 +111,50 @@ export function TenantAdmin({
         permissionKeys.includes(`${prefix}.${action}`),
     );
 
-  function open(nextSection: string, nextView = "list") {
-    setSection(nextSection);
-    setView(nextView);
-    setSelectedId("");
+  function goTo(
+    nextSection: string,
+    nextView = "list",
+    nextId = "",
+    opts: { replace?: boolean } = {},
+  ) {
+    const path =
+      nextView === "create"
+        ? `/admin/${nextSection}/new`
+        : nextView === "edit"
+          ? `/admin/${nextSection}/${nextId}/edit`
+          : nextView === "view"
+            ? `/admin/${nextSection}/${nextId}`
+            : `/admin/${nextSection}`;
+    if (opts.replace) {
+      router.replace(path);
+    } else {
+      router.push(path);
+    }
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
     );
   }
 
+  function open(nextSection: string, nextView = "list") {
+    goTo(nextSection, nextView);
+  }
+
   function openRolePermissions(role: any) {
-    setSection("roles");
-    setView("edit");
-    setSelectedId(role.id);
-    requestAnimationFrame(() =>
-      window.scrollTo({ top: 0, behavior: "smooth" }),
-    );
+    goTo("roles", "edit", role.id);
+  }
+
+  function openCreate() {
+    goTo(section, "create");
+  }
+
+  function openEdit(id: string) {
+    goTo(section, "edit", id);
+  }
+
+  // Row click opens a read-only view of the record — only the Edit action
+  // in the row's Actions menu (openEdit, above) makes it editable.
+  function openDetail(id: string) {
+    goTo(section, "view", id);
   }
 
   const actions = useTenantAdminActions({
@@ -303,13 +328,34 @@ export function TenantAdmin({
   );
 
   useEffect(() => {
-    setView("list");
-    setSelectedId("");
+    // view/selectedId now come straight from the URL, so they're always
+    // correct on navigation — only transient, non-URL modal state needs
+    // resetting when the section changes.
     setConfirm(null);
     setPasswordUser(null);
   }, [section]);
   useEffect(() => {
-    if (view !== "edit") return;
+    // Wait for the admin data fetch to finish before concluding a row is
+    // missing — otherwise a direct/bookmarked visit to an edit URL bounces
+    // back to the list while data.departments (etc.) is still loading.
+    // Sections that manage their own record lookup (e.g. membership, via
+    // PatientSubscriptions) aren't covered here — they guard themselves.
+    const guardedSections = [
+      "users",
+      "roles",
+      "departments",
+      "branches",
+      "suppliers",
+      "tax",
+      "offers",
+    ];
+    if (
+      (view !== "edit" && view !== "view") ||
+      !selectedId ||
+      data.busy ||
+      !guardedSections.includes(section)
+    )
+      return;
     const selectedExists =
       (section === "users" && Boolean(selectedUser)) ||
       (section === "roles" && Boolean(selectedRole)) ||
@@ -319,12 +365,13 @@ export function TenantAdmin({
       (section === "tax" && Boolean(selectedTaxRule)) ||
       (section === "offers" && Boolean(selectedOffer));
     if (!selectedExists) {
-      setView("list");
-      setSelectedId("");
+      router.replace(`/admin/${section}`);
     }
   }, [
     section,
     view,
+    selectedId,
+    data.busy,
     selectedUser,
     selectedRole,
     selectedDepartment,
@@ -339,7 +386,7 @@ export function TenantAdmin({
       visibleSections.length &&
       !visibleSections.some(([sectionId]) => sectionId === section)
     ) {
-      open(visibleSections[0][0]);
+      goTo(visibleSections[0][0], "list", "", { replace: true });
     }
   }, [
     apiSession?.tenantId,
@@ -376,18 +423,16 @@ export function TenantAdmin({
           searchKeys={["name", "email", "mobile", "user_type", "roles", "id"]}
           createLabel="Create User"
           canCreate={hasAdminAction("identity.users", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={USER_COLUMNS}
+          filter_className="lg:grid-cols-5 xl:grid-cols-5"
           filters={[
             {
               key: "status",
               label: "Status",
-              options: [
-                { value: "all", label: "All Status" },
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-              ],
+              options: status_filters.options,
             },
             {
               key: "role",
@@ -428,10 +473,8 @@ export function TenantAdmin({
               canCopyIds={canCopyIds}
               canEdit={hasAdminAction("identity.users", "edit")}
               canDelete={hasAdminAction("identity.users", "delete")}
-              onEdit={() => {
-                setSelectedId(user.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(user.id)}
+              onRowClick={() => openDetail(user.id)}
               onStatus={() =>
                 setConfirm({ entity: "users", kind: "status", row: user })
               }
@@ -454,22 +497,26 @@ export function TenantAdmin({
           back={() => open("users")}
         />
       )}
-      {section === "users" && view === "edit" && selectedUser && (
-        <UserForm
-          title="Edit User"
-          user={selectedUser}
-          roles={data.roles}
-          branches={data.branches}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateUser(formData, selectedUser)
-          }
-          onRoleOpen={openRolePermissions}
-          apiSession={apiSession}
-          onResetPassword={setPasswordUser}
-          back={() => open("users")}
-        />
-      )}
+      {section === "users" &&
+        (view === "edit" || view === "view") &&
+        selectedUser && (
+          <UserForm
+            title={view === "view" ? "View User" : "Edit User"}
+            user={selectedUser}
+            roles={data.roles}
+            branches={data.branches}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateUser(formData, selectedUser)
+            }
+            onRoleOpen={openRolePermissions}
+            apiSession={apiSession}
+            onResetPassword={setPasswordUser}
+            back={() => open("users")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedUser.id)}
+          />
+        )}
       {section === "roles" && view === "list" && (
         <ListCard
           title="Roles"
@@ -477,8 +524,9 @@ export function TenantAdmin({
           searchKeys={["name", "key", "id"]}
           createLabel="Create Role"
           canCreate={hasAdminAction("identity.roles", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={ROLE_COLUMNS}
           filters={[status_filters]}
           filterValues={roleFilter}
@@ -495,10 +543,8 @@ export function TenantAdmin({
               canCopyIds={canCopyIds}
               canEdit={hasAdminAction("identity.roles", "edit")}
               canDelete={hasAdminAction("identity.roles", "delete")}
-              onEdit={() => {
-                setSelectedId(role.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(role.id)}
+              onRowClick={() => openDetail(role.id)}
               onStatus={() =>
                 setConfirm({ entity: "roles", kind: "status", row: role })
               }
@@ -518,19 +564,23 @@ export function TenantAdmin({
           back={() => open("roles")}
         />
       )}
-      {section === "roles" && view === "edit" && selectedRole && (
-        <RoleForm
-          key={selectedRole.id}
-          title="Edit Role"
-          role={selectedRole}
-          roles={data.roles}
-          permissions={data.permissions}
-          busy={data.busy}
-          onSubmit={(e: any) => actions.updateRole(e, selectedRole)}
-          onRoleChange={setSelectedId}
-          back={() => open("roles")}
-        />
-      )}
+      {section === "roles" &&
+        (view === "edit" || view === "view") &&
+        selectedRole && (
+          <RoleForm
+            key={selectedRole.id}
+            title={view === "view" ? "View Role" : "Edit Role"}
+            role={selectedRole}
+            roles={data.roles}
+            permissions={data.permissions}
+            busy={data.busy}
+            onSubmit={(e: any) => actions.updateRole(e, selectedRole)}
+            onRoleChange={openEdit}
+            back={() => open("roles")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedRole.id)}
+          />
+        )}
 
       {section === "departments" && view === "list" && (
         <ListCard
@@ -539,8 +589,9 @@ export function TenantAdmin({
           searchKeys={["name", "code", "branch_names", "description", "id"]}
           createLabel="Create  Department"
           canCreate={hasAdminAction("departments", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={DEPARTMENT_COLUMNS}
           filters={[
             status_filters,
@@ -570,10 +621,8 @@ export function TenantAdmin({
               canEdit={hasAdminAction("departments", "edit")}
               canDelete={hasAdminAction("departments", "delete")}
               branches={data.branches}
-              onEdit={() => {
-                setSelectedId(department.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(department.id)}
+              onRowClick={() => openDetail(department.id)}
               onStatus={() =>
                 setConfirm({
                   entity: "departments",
@@ -602,19 +651,23 @@ export function TenantAdmin({
           back={() => open("departments")}
         />
       )}
-      {section === "departments" && view === "edit" && selectedDepartment && (
-        <DepartmentForm
-          title="Edit Department"
-          department={selectedDepartment}
-          departments={data.departments}
-          branches={data.branches}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateDepartment(formData, selectedDepartment)
-          }
-          back={() => open("departments")}
-        />
-      )}
+      {section === "departments" &&
+        (view === "edit" || view === "view") &&
+        selectedDepartment && (
+          <DepartmentForm
+            title={view === "view" ? "View Department" : "Edit Department"}
+            department={selectedDepartment}
+            departments={data.departments}
+            branches={data.branches}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateDepartment(formData, selectedDepartment)
+            }
+            back={() => open("departments")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedDepartment.id)}
+          />
+        )}
 
       {section === "branches" && view === "list" && (
         <ListCard
@@ -623,8 +676,9 @@ export function TenantAdmin({
           searchKeys={["name", "code", "city", "state", "id"]}
           createLabel="Create Branch"
           canCreate={hasAdminAction("branches", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={BRANCH_COLUMNS}
           filters={[
             {
@@ -651,10 +705,8 @@ export function TenantAdmin({
               canCopyIds={canCopyIds}
               canEdit={hasAdminAction("branches", "edit")}
               canDelete={hasAdminAction("branches", "delete")}
-              onEdit={() => {
-                setSelectedId(branch.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(branch.id)}
+              onRowClick={() => openDetail(branch.id)}
               onStatus={() =>
                 setConfirm({ entity: "branches", kind: "status", row: branch })
               }
@@ -678,17 +730,21 @@ export function TenantAdmin({
           back={() => open("branches")}
         />
       )}
-      {section === "branches" && view === "edit" && selectedBranch && (
-        <BranchForm
-          title="Edit Branch"
-          branch={selectedBranch}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateBranch(formData, selectedBranch)
-          }
-          back={() => open("branches")}
-        />
-      )}
+      {section === "branches" &&
+        (view === "edit" || view === "view") &&
+        selectedBranch && (
+          <BranchForm
+            title={view === "view" ? "View Branch" : "Edit Branch"}
+            branch={selectedBranch}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateBranch(formData, selectedBranch)
+            }
+            back={() => open("branches")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedBranch.id)}
+          />
+        )}
 
       {section === "suppliers" && view === "list" && (
         <ListCard
@@ -697,8 +753,9 @@ export function TenantAdmin({
           searchKeys={["name", "gstin", "phone", "email", "address", "id"]}
           createLabel="Create Supplier"
           canCreate={hasAdminAction("suppliers", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={SUPPLIER_COLUMNS}
           filters={[
             {
@@ -724,10 +781,8 @@ export function TenantAdmin({
               supplier={supplier}
               canEdit={hasAdminAction("suppliers", "edit")}
               canDelete={hasAdminAction("suppliers", "delete")}
-              onEdit={() => {
-                setSelectedId(supplier.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(supplier.id)}
+              onRowClick={() => openDetail(supplier.id)}
               onStatus={() =>
                 setConfirm({
                   entity: "suppliers",
@@ -754,17 +809,21 @@ export function TenantAdmin({
           back={() => open("suppliers")}
         />
       )}
-      {section === "suppliers" && view === "edit" && selectedSupplier && (
-        <SupplierForm
-          title="Edit Supplier"
-          supplier={selectedSupplier}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateSupplier(formData, selectedSupplier)
-          }
-          back={() => open("suppliers")}
-        />
-      )}
+      {section === "suppliers" &&
+        (view === "edit" || view === "view") &&
+        selectedSupplier && (
+          <SupplierForm
+            title={view === "view" ? "View Supplier" : "Edit Supplier"}
+            supplier={selectedSupplier}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateSupplier(formData, selectedSupplier)
+            }
+            back={() => open("suppliers")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedSupplier.id)}
+          />
+        )}
 
       {section === "tax" && view === "list" && (
         <ListCard
@@ -773,8 +832,9 @@ export function TenantAdmin({
           searchKeys={["name", "tax_label", "service_scope", "id"]}
           createLabel="Create Tax Rule"
           canCreate={hasAdminAction("tax", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={TAX_RULE_COLUMNS}
           filters={[
             {
@@ -801,10 +861,8 @@ export function TenantAdmin({
               canEdit={hasAdminAction("tax", "edit")}
               canDelete={hasAdminAction("tax", "delete")}
               branches={data.branches}
-              onEdit={() => {
-                setSelectedId(rule.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(rule.id)}
+              onRowClick={() => openDetail(rule.id)}
               onStatus={() =>
                 setConfirm({ entity: "tax", kind: "status", row: rule })
               }
@@ -824,18 +882,22 @@ export function TenantAdmin({
           back={() => open("tax")}
         />
       )}
-      {section === "tax" && view === "edit" && selectedTaxRule && (
-        <TaxRuleForm
-          title="Edit Tax Rule"
-          rule={selectedTaxRule}
-          branches={data.branches}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateTaxRule(formData, selectedTaxRule)
-          }
-          back={() => open("tax")}
-        />
-      )}
+      {section === "tax" &&
+        (view === "edit" || view === "view") &&
+        selectedTaxRule && (
+          <TaxRuleForm
+            title={view === "view" ? "View Tax Rule" : "Edit Tax Rule"}
+            rule={selectedTaxRule}
+            branches={data.branches}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateTaxRule(formData, selectedTaxRule)
+            }
+            back={() => open("tax")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedTaxRule.id)}
+          />
+        )}
 
       {section === "offers" && view === "list" && (
         <ListCard
@@ -844,8 +906,9 @@ export function TenantAdmin({
           searchKeys={["name", "code", "service_scope", "discount_type", "id"]}
           createLabel="Create Offer"
           canCreate={hasAdminAction("discounts", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={DISCOUNT_OFFER_COLUMNS}
           filters={[
             {
@@ -872,10 +935,8 @@ export function TenantAdmin({
               canEdit={hasAdminAction("discounts", "edit")}
               canDelete={hasAdminAction("discounts", "delete")}
               branches={data.branches}
-              onEdit={() => {
-                setSelectedId(offer.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(offer.id)}
+              onRowClick={() => openDetail(offer.id)}
               onStatus={() =>
                 setConfirm({ entity: "offers", kind: "status", row: offer })
               }
@@ -895,25 +956,30 @@ export function TenantAdmin({
           back={() => open("offers")}
         />
       )}
-      {section === "offers" && view === "edit" && selectedOffer && (
-        <DiscountOfferForm
-          title="Edit Discount Offer"
-          offer={selectedOffer}
-          branches={data.branches}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateDiscountOffer(formData, selectedOffer)
-          }
-          back={() => open("offers")}
-        />
-      )}
+      {section === "offers" &&
+        (view === "edit" || view === "view") &&
+        selectedOffer && (
+          <DiscountOfferForm
+            title={view === "view" ? "View Discount Offer" : "Edit Discount Offer"}
+            offer={selectedOffer}
+            branches={data.branches}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateDiscountOffer(formData, selectedOffer)
+            }
+            back={() => open("offers")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedOffer.id)}
+          />
+        )}
 
       {section === "membership" && (
         <PatientSubscriptions
           apiSession={apiSession}
           branchId={branchId}
           branches={data.branches}
-          patients={patients}
+          view={view}
+          selectedId={selectedId}
         />
       )}
 
@@ -924,7 +990,6 @@ export function TenantAdmin({
           setFiles={data.setFiles}
           setMessage={data.setMessage}
           branches={data.branches}
-          patients={patients}
           busy={data.busy}
           setBusy={data.setBusy}
         />

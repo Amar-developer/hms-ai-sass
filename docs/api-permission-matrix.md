@@ -134,6 +134,7 @@ Error Logs is intentionally hidden from the sidebar. Users with `error_logs.read
 | `GET` | `/api/v1/subscription-plans/reports/revenue` | `reports.read` |
 | `GET` | `/api/v1/subscription-plans/reports/revenue?export=csv|xls|pdf` | `reports.read` |
 | `GET` | `/api/v1/subscription-plans/platform/revenue-summary` | `platform.subscriptions.manage` |
+| `GET` | `/api/v1/platform/observability/metrics` | Super admin only; process, database-pool, and delivery-queue operational metrics |
 
 ## Identity and RBAC
 
@@ -142,6 +143,13 @@ Error Logs is intentionally hidden from the sidebar. Users with `error_logs.read
 | `GET` | `/api/v1/identity/super-admins` | Active super admin only |
 | `POST` | `/api/v1/identity/super-admins` | Active super admin only; current-password reauthentication required |
 | `POST` | `/api/v1/identity/super-admins/{user_id}/status` | Active super admin only; current-password reauthentication required; cannot deactivate self or last active super admin |
+| `GET` | `/api/v1/identity/privileged-access/options` | Authenticated privileged platform user |
+| `GET` | `/api/v1/identity/privileged-accounts` | Active root super admin only |
+| `POST` | `/api/v1/identity/privileged-accounts` | Active root super admin only; current-password reauthentication required |
+| `PATCH` | `/api/v1/identity/privileged-accounts/{user_id}` | Active root super admin only; current-password reauthentication required |
+| `GET` | `/api/v1/identity/support-access-grants` | Root super admin lists all grants; support admin lists own grants |
+| `POST` | `/api/v1/identity/support-access-grants` | Active root super admin only; current-password reauthentication required; max 8 hours |
+| `POST` | `/api/v1/identity/support-access-grants/{grant_id}/revoke` | Active root super admin only; current-password reauthentication required |
 | `POST` | `/api/v1/identity/roles` | `identity.roles.manage` |
 | `GET` | `/api/v1/identity/roles` | `identity.roles.manage` |
 | `PATCH` | `/api/v1/identity/roles/{role_id}` | `identity.roles.manage` |
@@ -174,6 +182,7 @@ Secondary tenant admins keep the existing tenant-scoped screens and APIs. They c
 | `POST` | `/api/v1/patients` | `patients.write` | Creates patient audit |
 | `POST` | `/api/v1/patients/duplicates` | `patients.read` | Detects likely duplicate patient before registration |
 | `GET` | `/api/v1/patients` | `patients.read` | Search/list |
+| `GET` | `/api/v1/patients/page` | `patients.read` | Paginated patient registry search |
 | `GET` | `/api/v1/patients/references` | `patients.read` | Resolves only patient IDs referenced by the current page |
 | `GET` | `/api/v1/patients/count` | `patients.read` | Tenant patient count for dashboard summaries |
 | `GET` | `/api/v1/patients/{patient_id}` | `patients.read` | Patient detail |
@@ -206,23 +215,23 @@ Patient subscription APIs enforce the `patient_subscriptions` module entitlement
 
 | Method | Endpoint | Permission | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/practitioners` | `practitioners.manage` | Create master and mappings |
-| `GET` | `/api/v1/practitioners` | `appointments.manage` | Read doctors for booking screen |
-| `GET` | `/api/v1/practitioners/{practitioner_id}` | `practitioners.manage` | Admin detail |
-| `PATCH` | `/api/v1/practitioners/{practitioner_id}` | `practitioners.manage` | Admin update |
-| `DELETE` | `/api/v1/practitioners/{practitioner_id}` | `practitioners.manage` | Soft delete by deactivating practitioner |
-| `GET` | `/api/v1/practitioners/schedules` | `practitioners.manage` | Tenant-wide schedule management list |
-| `PATCH` | `/api/v1/practitioners/schedules/{schedule_id}` | `practitioners.manage` | Update weekly schedule |
-| `DELETE` | `/api/v1/practitioners/schedules/{schedule_id}` | `practitioners.manage` | Soft delete by deactivating schedule |
-| `POST` | `/api/v1/practitioners/{practitioner_id}/schedules` | `practitioners.manage` | Create weekly schedule |
-| `GET` | `/api/v1/practitioners/{practitioner_id}/schedules` | `practitioners.manage` | Admin schedule list |
-| `POST` | `/api/v1/practitioners/{practitioner_id}/leaves` | `practitioners.manage` | Create leave block |
-| `GET` | `/api/v1/practitioners/{practitioner_id}/leaves` | `practitioners.manage` | Admin leave list |
-| `POST` | `/api/v1/practitioners/{practitioner_id}/room-assignments` | `practitioners.manage` | Create room assignment |
-| `GET` | `/api/v1/practitioners/{practitioner_id}/room-assignments` | `practitioners.manage` | Admin room assignment list |
-| `GET` | `/api/v1/practitioners/{practitioner_id}/eligibility` | `appointments.manage` | Booking-time branch/department check |
-| `GET` | `/api/v1/practitioners/{practitioner_id}/availability` | `appointments.manage` | Single time availability check |
-| `GET` | `/api/v1/practitioners/{practitioner_id}/calendar` | `appointments.manage` | Generated available/booked/leave/unavailable slots |
+| `POST` | `/api/v1/practitioners` | `practitioners.manage` or `practitioners.create` | Create master and mappings |
+| `GET` | `/api/v1/practitioners` | Any of `practitioners.manage`, `practitioners.read`, `appointments.manage`, `appointments.create`, `appointments.read`, `scheduling.manage`, `scheduling.create`, `scheduling.read`, `scheduling.edit`, `physiotherapy.read`, `physiotherapy.edit` | Read doctors for booking screen |
+| `GET` | `/api/v1/practitioners/{practitioner_id}` | `practitioners.manage` or `practitioners.read` | Admin detail |
+| `PATCH` | `/api/v1/practitioners/{practitioner_id}` | `practitioners.manage` or `practitioners.edit` | Admin update |
+| `DELETE` | `/api/v1/practitioners/{practitioner_id}` | `practitioners.manage` or `practitioners.delete` | Soft delete by deactivating practitioner |
+| `GET` | `/api/v1/practitioners/schedules` | `scheduling.manage` or `scheduling.read` | Tenant-wide schedule management list |
+| `PATCH` | `/api/v1/practitioners/schedules/{schedule_id}` | `scheduling.manage` or `scheduling.edit` | Update weekly schedule |
+| `DELETE` | `/api/v1/practitioners/schedules/{schedule_id}` | `scheduling.manage` or `scheduling.delete` | Soft delete by deactivating schedule |
+| `POST` | `/api/v1/practitioners/{practitioner_id}/schedules` | `scheduling.manage` or `scheduling.create` | Create weekly schedule |
+| `GET` | `/api/v1/practitioners/{practitioner_id}/schedules` | `scheduling.manage` or `scheduling.read` | Admin schedule list |
+| `POST` | `/api/v1/practitioners/{practitioner_id}/leaves` | `practitioners.manage` or `scheduling.create` | Create leave block |
+| `GET` | `/api/v1/practitioners/{practitioner_id}/leaves` | `practitioners.manage` or `scheduling.read` | Admin leave list |
+| `POST` | `/api/v1/practitioners/{practitioner_id}/room-assignments` | `practitioners.manage` or `scheduling.create` | Create room assignment |
+| `GET` | `/api/v1/practitioners/{practitioner_id}/room-assignments` | `practitioners.manage` or `scheduling.read` | Admin room assignment list |
+| `GET` | `/api/v1/practitioners/{practitioner_id}/eligibility` | Any of `appointments.manage`, `appointments.create`, `appointments.read`, `practitioners.manage`, `practitioners.read` | Booking-time branch/department check |
+| `GET` | `/api/v1/practitioners/{practitioner_id}/availability` | Any of `appointments.manage`, `appointments.create`, `appointments.read`, `practitioners.manage`, `practitioners.read` | Single time availability check |
+| `GET` | `/api/v1/practitioners/{practitioner_id}/calendar` | Any of `appointments.manage`, `appointments.create`, `appointments.read`, `practitioners.manage`, `practitioners.read` | Generated available/booked/leave/unavailable slots |
 
 For `user_type=doctor`, `GET /api/v1/practitioners` is restricted to the practitioner's own linked active profile so doctor dashboards cannot populate dropdowns with other doctors from the same specialty.
 
@@ -231,9 +240,11 @@ For `user_type=doctor`, `GET /api/v1/practitioners` is restricted to the practit
 | Method | Endpoint | Permission | Notes |
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/appointments` | `appointments.manage` | Creates appointment, token queue entry, notification trigger; prevents duplicate active patient/doctor/slot bookings |
-| `GET` | `/api/v1/appointments` | `appointments.manage` | List appointments |
-| `GET` | `/api/v1/appointments/{appointment_id}` | `appointments.manage` | Appointment detail |
+| `GET` | `/api/v1/appointments` | `appointments.manage` or `appointments.read` | List appointments |
+| `GET` | `/api/v1/appointments/page` | `appointments.manage` or `appointments.read` | Paginated appointment list |
+| `GET` | `/api/v1/appointments/{appointment_id}` | `appointments.manage` or `appointments.read` | Appointment detail |
 | `POST` | `/api/v1/appointments/{appointment_id}/follow-up` | `appointments.manage` | Books follow-up using source appointment context |
+| `PATCH` | `/api/v1/appointments/{appointment_id}/reschedule` | `appointments.manage` or `appointments.edit` | Reschedules an eligible, unfinished appointment to a different available date/slot |
 | `GET` | `/api/v1/appointments/platform/all` | `platform.tenants.manage` | Cross-tenant platform appointment search |
 | `GET` | `/api/v1/queue` | `queue.manage` | Queue list |
 | `GET` | `/api/v1/queue/display` | `queue.manage` | Queue display rows for reception/called-token screens with language-aware call text |
@@ -302,11 +313,11 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 
 | Method | Endpoint | Permission |
 | --- | --- | --- |
-| `POST` | `/api/v1/billing/doctor-fee-rules` | `billing.manage` |
-| `GET` | `/api/v1/billing/doctor-fee-rules` | `billing.manage` |
-| `POST` | `/api/v1/billing/tax-rules` | `billing.manage` |
-| `GET` | `/api/v1/billing/tax-rules` | `billing.manage` |
-| `PATCH` | `/api/v1/billing/tax-rules/{rule_id}` | `billing.manage` |
+| `POST` | `/api/v1/billing/doctor-fee-rules` | Any of `billing.manage`, `practitioners.manage`, `practitioners.create`, `practitioners.edit` |
+| `GET` | `/api/v1/billing/doctor-fee-rules` | Any of `billing.manage`, `practitioners.manage`, `practitioners.read`, `practitioners.edit`, `physiotherapy.read`, `physiotherapy.edit` |
+| `POST` | `/api/v1/billing/tax-rules` | Any of `tax.manage`, `tax.create`, `billing.manage` |
+| `GET` | `/api/v1/billing/tax-rules` | Any of `tax.manage`, `tax.read`, `billing.manage` |
+| `PATCH` | `/api/v1/billing/tax-rules/{rule_id}` | Any of `tax.manage`, `tax.edit`, `billing.manage` |
 | `POST` | `/api/v1/billing/discount-offers` | `billing.manage` |
 | `GET` | `/api/v1/billing/discount-offers` | `billing.manage` |
 | `PATCH` | `/api/v1/billing/discount-offers/{offer_id}` | `billing.manage` |
@@ -315,9 +326,21 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/invoices/from-consultation` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/from-lab-order` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/from-pharmacy-issue` | `billing.manage` |
-| `GET` | `/api/v1/billing/invoices` | `billing.manage` |
-| `GET` | `/api/v1/billing/invoices/{invoice_id}` | `billing.manage` |
+| `GET` | `/api/v1/billing/pending-consultation-invoices/page` | Any of `billing.manage`, `billing.create`, `invoices.create`; authoritative signed consultations without a consultation-fee invoice |
+| `GET` | `/api/v1/billing/invoices` | Any of `billing.manage`, `billing.read`, `invoices.read`, `patient_subscriptions.read`, `patient_subscriptions.manage`, `patient_subscriptions.create` |
+| `GET` | `/api/v1/billing/invoices/page` | Any of `billing.manage`, `billing.read`, `invoices.read`, `patient_subscriptions.read`, `patient_subscriptions.manage`, `patient_subscriptions.create` |
+| `GET` | `/api/v1/billing/invoices/report-details` | Any of `billing.manage`, `billing.read`, `invoices.read`; bounded report enrichment for up to 50 invoices |
+| `GET` | `/api/v1/billing/invoices/{invoice_id}` | Any of `billing.manage`, `billing.read`, `invoices.read` |
+| `GET` | `/api/v1/billing/invoices/{invoice_id}/document` | `billing.manage`, `billing.read`, or `invoices.read` |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/document/finalize` | `billing.manage` or `invoices.edit` |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/document/regenerate` | `billing.manage` or `invoices.edit`; reason and expected version supported |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/send` | `billing.manage` or `invoices.edit`; reuses the finalized artifact |
+| `GET` | `/api/v1/billing/invoices/{invoice_id}/deliveries` | Any of `billing.manage`, `billing.read`, `invoices.read` |
+| `GET` | `/api/v1/billing/invoices/{invoice_id}/delivery` | `billing.manage`, `billing.read`, or `invoices.read` |
+| `GET` | `/api/v1/billing/invoices/{invoice_id}/deliveries` | `billing.manage`, `billing.read`, or `invoices.read` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/membership-benefit/apply` | `billing.manage` |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/offer/apply` | `billing.manage` or `invoices.edit`; offers are never applied automatically |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/offer/remove` | `billing.manage` or `invoices.edit`; blocked once a payment is recorded |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/payments` | `payments.manage` |
 | `POST` | `/api/v1/billing/payments/{payment_id}/refund` | `payments.manage` |
@@ -327,7 +350,7 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/adjustment-requests/{request_id}/execute` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/cancel` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/amend` | `billing.manage` |
-| `GET` | `/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier-options` | `billing.manage` |
+| `GET` | `/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier-options` | Any of `billing.manage`, `billing.read`, `invoices.read` |
 | `PATCH` | `/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier` | `billing.manage` |
 | `GET` | `/api/v1/billing/doctor-settlements/summary` | `settlements.read` |
 | `POST` | `/api/v1/billing/doctor-settlements/finalize` | `billing.manage` |
@@ -348,6 +371,7 @@ Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, pa
 | `POST` | `/api/v1/reports/monthly-email/send` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-email/jobs` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-email/jobs/{job_id}/download` | Any of `reports.read`, `settings.manage`, `billing.manage` |
+| `POST` | `/api/v1/reports/monthly-email/jobs/{job_id}/resend` | Any of `reports.read`, `settings.manage`, `billing.manage`; reuses permanent artifacts |
 | `POST` | `/api/v1/reports/profit-email/send` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-snapshots` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-snapshots/{snapshot_id}` | Any of `reports.read`, `settings.manage`, `billing.manage` |
@@ -359,49 +383,53 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 
 | Method | Endpoint | Permission |
 | --- | --- | --- |
-| `POST` | `/api/v1/lab/catalog/tests` | `lab.manage` |
-| `GET` | `/api/v1/lab/catalog/tests` | `lab.manage` |
-| `PATCH` | `/api/v1/lab/catalog/tests/{test_id}` | `lab.manage` |
-| `DELETE` | `/api/v1/lab/catalog/tests/{test_id}` | `lab.manage` |
-| `POST` | `/api/v1/lab/catalog/packages` | `lab.manage` |
-| `GET` | `/api/v1/lab/catalog/packages` | `lab.manage` |
-| `PATCH` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` |
-| `DELETE` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` |
-| `GET` | `/api/v1/lab/catalog/available-tests` | `lab.manage` |
-| `GET` | `/api/v1/lab/catalog/popular-tests` | `lab.manage` |
+| `POST` | `/api/v1/lab/catalog/tests` | Any of `lab.manage`, `lab.create`, `patient_subscriptions.manage`, `settings.manage` |
+| `GET` | `/api/v1/lab/catalog/tests` | Any of `lab.manage`, `lab.read`, `patient_subscriptions.manage`, `patient_subscriptions.read`, `settings.manage` |
+| `PATCH` | `/api/v1/lab/catalog/tests/{test_id}` | `lab.manage` or `lab.edit` |
+| `DELETE` | `/api/v1/lab/catalog/tests/{test_id}` | `lab.manage` or `lab.delete` |
+| `POST` | `/api/v1/lab/catalog/packages` | `lab.manage` or `lab.create` |
+| `GET` | `/api/v1/lab/catalog/packages` | `lab.manage` or `lab.read` |
+| `PATCH` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` or `lab.edit` |
+| `DELETE` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` or `lab.delete` |
+| `GET` | `/api/v1/lab/catalog/available-tests` | Any of `consultations.read`, `consultations.write`, `consultations.sign`, `lab.manage`, `lab.read`, `patient_subscriptions.read`, `settings.manage` |
+| `GET` | `/api/v1/lab/catalog/popular-tests` | Any of `consultations.read`, `consultations.write`, `consultations.sign`, `lab.manage`, `lab.read`, `patient_subscriptions.read`, `settings.manage` |
 | `GET` | `/api/v1/lab/consultation-referrals` | Any of `lab.manage`, `lab.read`, `lab.create`, `lab.edit` |
-| `POST` | `/api/v1/lab/result-templates` | `lab.manage` |
-| `GET` | `/api/v1/lab/result-templates` | `lab.manage` |
-| `POST` | `/api/v1/lab/orders` | `lab.manage` |
-| `POST` | `/api/v1/lab/orders/from-consultation/{consultation_id}` | `lab.manage` |
-| `GET` | `/api/v1/lab/orders` | `lab.manage` |
-| `GET` | `/api/v1/lab/orders/{order_id}` | `lab.manage` |
-| `PATCH` | `/api/v1/lab/orders/{order_id}/status` | `lab.manage` |
-| `POST` | `/api/v1/lab/orders/{order_id}/samples` | `lab.manage` |
-| `POST` | `/api/v1/lab/orders/{order_id}/results` | `lab.manage` |
-| `GET` | `/api/v1/lab/orders/{order_id}/report.pdf` | `lab.manage` |
-| `POST` | `/api/v1/pharmacy/medicines` | `pharmacy.manage` |
-| `GET` | `/api/v1/pharmacy/medicines` | `pharmacy.manage` |
-| `PATCH` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` |
-| `DELETE` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` |
-| `GET` | `/api/v1/pharmacy/catalog/available-medicines` | `pharmacy.manage` |
-| `GET` | `/api/v1/pharmacy/catalog/popular-medicines` | `pharmacy.manage` |
-| `POST` | `/api/v1/pharmacy/suppliers` | `pharmacy.manage` |
-| `GET` | `/api/v1/pharmacy/suppliers` | `pharmacy.manage` |
-| `PATCH` | `/api/v1/pharmacy/suppliers/{supplier_id}` | `pharmacy.manage` |
-| `DELETE` | `/api/v1/pharmacy/suppliers/{supplier_id}` | `pharmacy.manage` |
-| `POST` | `/api/v1/pharmacy/purchases` | `pharmacy.manage` |
-| `POST` | `/api/v1/pharmacy/returns` | `pharmacy.manage` |
-| `GET` | `/api/v1/pharmacy/batches` | `pharmacy.manage` |
-| `POST` | `/api/v1/pharmacy/issues` | `pharmacy.manage` |
-| `POST` | `/api/v1/pharmacy/issues/from-consultation/{consultation_id}` | `pharmacy.manage` |
-| `GET` | `/api/v1/pharmacy/issues` | `pharmacy.manage` |
-| `GET` | `/api/v1/pharmacy/issues/{issue_id}` | `pharmacy.manage` |
-| `PATCH` | `/api/v1/pharmacy/issues/{issue_id}/status` | `pharmacy.manage` |
-| `PATCH` | `/api/v1/pharmacy/issues/{issue_id}/amount` | `pharmacy.manage` |
-| `POST` | `/api/v1/pharmacy/issues/{issue_id}/billing-link` | `pharmacy.manage` |
-| `GET` | `/api/v1/pharmacy/stock-ledger` | `pharmacy.manage` |
-| `GET` | `/api/v1/pharmacy/low-stock` | `pharmacy.manage` |
+| `POST` | `/api/v1/lab/result-templates` | `lab.manage` or `lab.results.manage` |
+| `GET` | `/api/v1/lab/result-templates` | Any of `lab.manage`, `lab.read`, `lab.results.manage` |
+| `POST` | `/api/v1/lab/orders` | `lab.manage` or `lab.create` |
+| `POST` | `/api/v1/lab/orders/from-consultation/{consultation_id}` | `lab.manage` or `lab.create` |
+| `GET` | `/api/v1/lab/orders` | `lab.manage` or `lab.read` |
+| `GET` | `/api/v1/lab/orders/{order_id}` | `lab.manage` or `lab.read` |
+| `GET` | `/api/v1/lab/orders/{order_id}/files` | Any of `lab.manage`, `lab.read` |
+| `POST` | `/api/v1/lab/orders/{order_id}/files` | Any of `lab.manage`, `lab.edit`, `lab.results.manage` |
+| `GET` | `/api/v1/lab/orders/{order_id}/files/{file_id}/download` | Any of `lab.manage`, `lab.read`, `lab.results.manage` |
+| `PATCH` | `/api/v1/lab/orders/{order_id}/status` | `lab.manage` or `lab.edit` |
+| `POST` | `/api/v1/lab/orders/{order_id}/samples` | `lab.manage` or `lab.edit` |
+| `POST` | `/api/v1/lab/orders/{order_id}/results` | `lab.manage` or `lab.results.manage` |
+| `GET` | `/api/v1/lab/orders/{order_id}/report.pdf` | `lab.manage` or `lab.read` |
+| `POST` | `/api/v1/lab/orders/{order_id}/send-report` | Any of `lab.manage`, `lab.results.manage`; sends an exact stored artifact |
+| `POST` | `/api/v1/pharmacy/medicines` | Any of `pharmacy.manage`, `pharmacy.create`, `patient_subscriptions.manage`, `settings.manage` |
+| `GET` | `/api/v1/pharmacy/medicines` | Any of `pharmacy.manage`, `pharmacy.read`, `patient_subscriptions.manage`, `patient_subscriptions.read`, `settings.manage` |
+| `PATCH` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` or `pharmacy.edit` |
+| `DELETE` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` or `pharmacy.delete` |
+| `GET` | `/api/v1/pharmacy/catalog/available-medicines` | Any of `consultations.read`, `consultations.write`, `consultations.sign`, `pharmacy.manage`, `pharmacy.read`, `patient_subscriptions.read`, `settings.manage` |
+| `GET` | `/api/v1/pharmacy/catalog/popular-medicines` | Any of `consultations.read`, `consultations.write`, `consultations.sign`, `pharmacy.manage`, `pharmacy.read`, `patient_subscriptions.read`, `settings.manage` |
+| `POST` | `/api/v1/pharmacy/suppliers` | Any of `suppliers.manage`, `suppliers.create`, `pharmacy.manage`, `settings.manage` |
+| `GET` | `/api/v1/pharmacy/suppliers` | Any of `suppliers.manage`, `suppliers.read`, `pharmacy.manage`, `billing.manage`, `lab.manage`, `lab.read`, `service_items.manage`, `service_items.read`, `settings.manage` |
+| `PATCH` | `/api/v1/pharmacy/suppliers/{supplier_id}` | Any of `suppliers.manage`, `suppliers.edit`, `pharmacy.manage`, `settings.manage` |
+| `DELETE` | `/api/v1/pharmacy/suppliers/{supplier_id}` | Any of `suppliers.manage`, `suppliers.delete`, `pharmacy.manage`, `settings.manage` |
+| `POST` | `/api/v1/pharmacy/purchases` | `pharmacy.manage` or `pharmacy.create` |
+| `POST` | `/api/v1/pharmacy/returns` | `pharmacy.manage` or `pharmacy.create` |
+| `GET` | `/api/v1/pharmacy/batches` | `pharmacy.manage` or `pharmacy.read` |
+| `POST` | `/api/v1/pharmacy/issues` | `pharmacy.manage` or `pharmacy.create` |
+| `POST` | `/api/v1/pharmacy/issues/from-consultation/{consultation_id}` | `pharmacy.manage` or `pharmacy.create` |
+| `GET` | `/api/v1/pharmacy/issues` | `pharmacy.manage` or `pharmacy.read` |
+| `GET` | `/api/v1/pharmacy/issues/{issue_id}` | `pharmacy.manage` or `pharmacy.read` |
+| `PATCH` | `/api/v1/pharmacy/issues/{issue_id}/status` | `pharmacy.manage` or `pharmacy.dispense` |
+| `PATCH` | `/api/v1/pharmacy/issues/{issue_id}/amount` | `pharmacy.manage` or `pharmacy.edit` |
+| `POST` | `/api/v1/pharmacy/issues/{issue_id}/billing-link` | `pharmacy.manage` or `pharmacy.edit` |
+| `GET` | `/api/v1/pharmacy/stock-ledger` | `pharmacy.manage` or `pharmacy.read` |
+| `GET` | `/api/v1/pharmacy/low-stock` | `pharmacy.manage` or `pharmacy.read` |
 
 Lab APIs enforce module entitlement and branch scope for catalog, packages, templates, direct orders, consultation-derived records, sample collection, result release, report PDF access, and status updates. Result release queues lab-ready notifications when communication provider settings and subscription entitlements allow them. Pharmacy APIs enforce pharmacy entitlement and branch scope for medicine catalog, suppliers, purchase entry with purchase date, PO number, supplier discount, line discount, CGST, SGST, batches, expired stock returns, stock ledger, low-stock alerts, prescription/direct/external issues, dispense stock reduction, substitutes, billing linkage, listing, detail, and status updates.
 
@@ -449,23 +477,37 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | --- | --- | --- |
 | `POST` | `/api/v1/files` | Authenticated tenant user |
 | `GET` | `/api/v1/files` | Authenticated tenant user |
+| `GET` | `/api/v1/files/page` | Authenticated tenant user |
+| `GET` | `/api/v1/files/storage-metrics` | `files.manage` or `billing.manage` |
 | `GET` | `/api/v1/files/{file_id}/download` | Authenticated tenant user |
+| `GET` | `/api/v1/files/{file_id}/renditions` | `files.manage`, `files.read`, `lab.read`, or `invoices.read` |
+| `GET` | `/api/v1/files/{file_id}/optimization-status` | `files.manage`, `files.read`, `lab.read`, or `invoices.read` |
+| `POST` | `/api/v1/files/{file_id}/optimize` | `files.manage`, `files.edit`, `lab.manage`, or `lab.results.manage` |
 | `PATCH` | `/api/v1/files/{file_id}` | Authenticated tenant user |
 | `DELETE` | `/api/v1/files/{file_id}` | Authenticated tenant user |
 | `POST` | `/api/v1/files/sync-uploads` | Authenticated tenant user |
 | `GET` | `/api/v1/files/invoice-logo` | `invoices.read`, `settings.manage`, `settings.read`, `files.manage`, or `files.read` |
-| `PUT` | `/api/v1/settings` | `settings.manage` |
-| `GET` | `/api/v1/settings` | `settings.manage` |
-| `GET` | `/api/v1/settings/resolve` | `settings.manage` |
-| `GET` | `/api/v1/settings/bundle` | `settings.manage` |
+| `PUT` | `/api/v1/settings` | Any of `settings.manage`, `settings.create`, `settings.edit` |
+| `GET` | `/api/v1/settings` | `settings.manage` or `settings.read` |
+| `GET` | `/api/v1/settings/resolve` | Any of `settings.manage`, `settings.read`, `billing.manage`, `invoices.read`, `payments.manage` |
+| `GET` | `/api/v1/settings/bundle` | `settings.manage` or `settings.read` |
 | `POST` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications/in-app` | Authenticated tenant user; current user's inbox only |
 | `PATCH` | `/api/v1/notifications/in-app/{notification_id}` | Authenticated tenant user; current user's notification only |
 | `POST` | `/api/v1/notifications/in-app/read-all` | Authenticated tenant user; current user's inbox only |
 | `POST` | `/api/v1/notifications/in-app/announcements` | Tenant Admin for own tenant; Super Admin may publish platform-wide |
+| `GET` | `/api/v1/communications/public/invoice-receipts/{invoice_id}.pdf` | Public with short-lived signed query parameters |
+| `GET` | `/api/v1/communications/public/document-artifacts/{file_id}` | Public only with tenant-, artifact-, and expiry-bound signature |
+| `GET` | `/api/v1/communications/whatsapp/settings` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
+| `PUT` | `/api/v1/communications/whatsapp/settings` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/whatsapp/test` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/whatsapp/queue` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/whatsapp/queue/{event_id}/retry` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/whatsapp/queue/{event_id}/cancel` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
 | `POST` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events` | `audit.read` |
+| `GET` | `/api/v1/audit-events/page` | `audit.read` |
 | `GET` | `/api/v1/audit-events/{event_id}` | `audit.read` |
 | `GET` | `/api/v1/activity/mention-users` | Authenticated tenant user; active users in current tenant only |
 | `GET` | `/api/v1/activity/{resource_type}/{resource_id}` | Authenticated tenant user |

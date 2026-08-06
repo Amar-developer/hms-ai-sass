@@ -53,6 +53,9 @@ interface UseAppointmentBookingActionsArgs {
     | "fitness_certificate"
     | "emergency";
   appointmentDate: string;
+  acquisitionSource: string;
+  referrerPatientId: string;
+  referrerName: string;
   isBillable: boolean;
   customFee: string;
   billingNote: string;
@@ -88,6 +91,9 @@ export function useAppointmentBookingActions({
   setSelectedPatient,
   appointmentType,
   appointmentDate,
+  acquisitionSource,
+  referrerPatientId,
+  referrerName,
   isBillable,
   customFee,
   billingNote,
@@ -227,6 +233,10 @@ export function useAppointmentBookingActions({
       );
       return;
     }
+    if (acquisitionSource === "referral" && !referrerName.trim()) {
+      setMessage("Enter or select a referrer name.");
+      return;
+    }
     bookingInFlightRef.current = true;
     setBusy(true);
     setMessage("");
@@ -242,6 +252,10 @@ export function useAppointmentBookingActions({
             appointment_type: appointmentType,
             appointment_date: appointmentDate,
             appointment_time: null,
+            acquisition_source: acquisitionSource,
+            referrer_patient_id: referrerPatientId || null,
+            referrer_name:
+              acquisitionSource === "referral" ? referrerName.trim() : null,
             reason:
               appointmentType === "follow_up" ||
               appointmentType === "doctor_review"
@@ -294,6 +308,11 @@ export function useAppointmentBookingActions({
           doctorId: doctor?.id,
           doctor: doctor?.name,
           appointmentDate,
+          acquisitionSource,
+          referrerPatientId:
+            acquisitionSource === "referral" ? referrerPatientId : "",
+          referrerName:
+            acquisitionSource === "referral" ? referrerName.trim() : "",
           time: appointmentType === "emergency" ? "Emergency" : appointmentDate,
           status: "scheduled",
           queueStatus: "waiting",

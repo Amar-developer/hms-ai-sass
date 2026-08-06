@@ -28,14 +28,19 @@ jobs:
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          MEDIZINHUB_BACKUP_PASSPHRASE: ${{ secrets.PRODUCTION_BACKUP_PASSPHRASE }}
+          MEDIZINHUB_BACKUP_DIR: ${{ secrets.PRODUCTION_BACKUP_DIR }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_SSH_PORT }}
+          envs: MEDIZINHUB_BACKUP_PASSPHRASE,MEDIZINHUB_BACKUP_DIR
           script_stop: true
           script: |
             cd "${{ secrets.EC2_APP_DIR }}"
+            PREVIOUS_COMMIT="$(git rev-parse HEAD)"
 
             # Reset any local changes on server before pulling
             git checkout -- .
@@ -53,6 +58,18 @@ jobs:
             export MEDIZINHUB_BUILD_COMMIT="$(git rev-parse --short=12 HEAD)"
             export MEDIZINHUB_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+            # Every production release starts with an encrypted, verified
+            # database recovery point outside the application checkout.
+            if [ -z "${MEDIZINHUB_BACKUP_DIR:-}" ]; then
+              echo "PRODUCTION_BACKUP_DIR is required"
+              exit 1
+            fi
+            bash scripts/backup_postgres.sh \
+              --compose-file docker-compose.yml \
+              --env-file .env \
+              --output-dir "${MEDIZINHUB_BACKUP_DIR}" \
+              --application-commit "${PREVIOUS_COMMIT}"
+
             # Check disk before deploy
             docker system df
 
@@ -63,7 +80,13 @@ jobs:
 
             # Build and deploy using production compose
             docker compose -f docker-compose.yml build --pull
-            docker compose -f docker-compose.yml up -d --remove-orphans
+            docker compose -f docker-compose.yml run --rm --no-deps backend \
+              python scripts/verify_production_environment.py
+            if ! docker compose -f docker-compose.yml up -d --remove-orphans --wait --wait-timeout 180; then
+              docker compose -f docker-compose.yml ps
+              docker compose -f docker-compose.yml logs postgres pgbouncer backend --tail=200
+              exit 1
+            fi
 
             # Check disk after deploy
             docker system df
@@ -81,3 +104,10 @@ jobs:
               sleep 5
             done
             curl -f http://127.0.0.1:8080/api/v1/health
+            curl -f http://127.0.0.1:8080/api/v1/readiness
+            python3 backend/scripts/verify_deployment.py \
+              --api-origin http://127.0.0.1:8080 \
+              --frontend-origin http://127.0.0.1:3000 \
+              --expected-version "${MEDIZINHUB_APP_VERSION}" \
+              --expected-commit "${MEDIZINHUB_BUILD_COMMIT}" \
+              --expected-environment production

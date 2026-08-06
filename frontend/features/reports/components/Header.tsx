@@ -1,16 +1,22 @@
 import React from "react";
 import {
   Card,
-  Badge,
   Field,
   Input,
-  RefreshButton,
   SearchableSelect,
 } from "@/app/components/common/ui";
-import { Download, Mail } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Mail,
+  RefreshCw,
+} from "lucide-react";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 type HeaderProps = {
-  apiSession: any;
+  section: string;
   onRefresh?: () => void | Promise<unknown>;
 
   exportCsv: () => void;
@@ -72,7 +78,7 @@ type HeaderProps = {
 };
 
 const Header = ({
-  apiSession,
+  section,
   onRefresh,
   exportCsv,
   exportExcel,
@@ -110,6 +116,67 @@ const Header = ({
   suppliers,
   setPeriod,
 }: HeaderProps) => {
+  const [actionsOpen, setActionsOpen] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const actionsRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    function closeActions(event: MouseEvent) {
+      if (
+        actionsRef.current &&
+        !actionsRef.current.contains(event.target as Node)
+      ) {
+        setActionsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeActions);
+    return () => document.removeEventListener("mousedown", closeActions);
+  }, []);
+  async function refreshReport() {
+    if (!onRefresh || refreshing) return;
+    setActionsOpen(false);
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+  function runAction(action: () => void) {
+    setActionsOpen(false);
+    action();
+  }
+  const reportCopy: Record<string, { title: string; description: string }> = {
+    invoice: {
+      title: "Invoice Profit Report",
+      description:
+        "Filtered paid invoice value, collections, costs, discounts, and realized profit.",
+    },
+    lab: {
+      title: "Lab / Service Report",
+      description:
+        "Filtered lab and service revenue, supplier settlement, discounts, and profit.",
+    },
+    appointments: {
+      title: "Consultation Profit Report",
+      description:
+        "Filtered consultation revenue, doctor cost, discounts, and profit.",
+    },
+    pharmacy: {
+      title: "Pharmacy Profit Report",
+      description:
+        "Filtered pharmacy revenue, purchase cost, discounts, and profit.",
+    },
+    home_care: {
+      title: "Home Care / Visit Profit Report",
+      description:
+        "Filtered home-care and home-visit revenue, settlement, and profit.",
+    },
+  };
+  const activeReport = reportCopy[section] || {
+    title: "Healthcare Gross Profit Report",
+    description:
+      "Filtered revenue, settlement, discounts, and profit across healthcare services.",
+  };
   const emailSectionGroups = [
     {
       title: "Financial views",
@@ -155,62 +222,85 @@ const Header = ({
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
         <div>
-          <h3 className="card-title font-bold">
-            Healthcare Gross Profit Report
-          </h3>
+          <h3 className="card-title font-bold">{activeReport.title}</h3>
           <p className="card-desc text-slate-500">
-            Consultation revenue, doctor settlement, clinic fee, gross profit,
-            final profit, and paid-basis settlement.
+            {activeReport.description}
           </p>
         </div>
-        <Badge tone="blue" className="normal-badge w-[20%]">
-          {apiSession?.user?.is_super_admin ? "Super Admin" : "Tenant Admin"}
-        </Badge>
-      </div>
-      <div className="mt-4 flex flex-wrap  gap-2">
-        {onRefresh ? (
-          <RefreshButton
-            onRefresh={onRefresh}
-            label="Refresh"
-            className="rounded-2xl text-sm py-3 h-12"
-          />
-        ) : null}
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="inline-flex items-center gap-2 close-button font-bold"
-        >
-          <Download size={15} />
-          CSV
-        </button>
-        <button
-          type="button"
-          onClick={exportExcel}
-          className="close-button font-bold"
-        >
-          Excel
-        </button>
-        <button
-          type="button"
-          onClick={exportPdf}
-          className="close-button font-bold"
-        >
-          PDF
-        </button>
-        {canSendEmail && (
+        <div ref={actionsRef} className="relative w-full sm:w-52">
           <button
             type="button"
-            onClick={() => {
-              setSendPanelOpen((open) => !open);
-              setSendMessage("");
-              setSendError("");
-            }}
-            className="inline-flex items-center gap-2 close-button font-bold disabled:text-slate-400  "
+            onClick={() => setActionsOpen((open) => !open)}
+            aria-haspopup="menu"
+            aria-expanded={actionsOpen}
+            className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
           >
-            <Mail size={15} />
-            Send
+            Report Actions
+            <ChevronDown
+              size={16}
+              className={actionsOpen ? "rotate-180" : ""}
+            />
           </button>
-        )}
+          {actionsOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 z-40 mt-2 w-full overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
+            >
+              {onRefresh && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={refreshing}
+                  onClick={refreshReport}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold hover:bg-slate-50 disabled:text-slate-400"
+                >
+                  <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
+                  {refreshing ? "Refreshing..." : "Refresh"}
+                </button>
+              )}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => runAction(exportCsv)}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold hover:bg-slate-50"
+              >
+                <Download size={15} /> CSV
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => runAction(exportExcel)}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold hover:bg-slate-50"
+              >
+                <FileSpreadsheet size={15} /> Excel
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => runAction(exportPdf)}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold hover:bg-slate-50"
+              >
+                <FileText size={15} /> PDF
+              </button>
+              {canSendEmail && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() =>
+                    runAction(() => {
+                      setSendPanelOpen((open) => !open);
+                      setSendMessage("");
+                      setSendError("");
+                    })
+                  }
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold hover:bg-slate-50"
+                >
+                  <Mail size={15} /> Send
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       {canSendEmail && sendPanelOpen && (
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -308,7 +398,9 @@ const Header = ({
               className="inline-flex items-center gap-2 py-2 px-2 lg:px-4 lg:py-3 rounded-lg bg-slate-900 font-bold text-white disabled:bg-slate-300"
             >
               <Mail size={15} />
-              {sendBusy ? "Sending..." : "Send Excel"}
+              <ButtonLoader loading={sendBusy}>
+                {sendBusy ? "Sending..." : "Send Excel"}
+              </ButtonLoader>
             </button>
             <button
               type="button"
@@ -342,6 +434,9 @@ const Header = ({
               { value: "daily", label: "Daily" },
               { value: "weekly", label: "Weekly" },
               { value: "monthly", label: "Monthly" },
+              { value: "quarterly", label: "Quarterly" },
+              { value: "half_yearly", label: "Half-Yearly" },
+              { value: "yearly", label: "Yearly" },
               { value: "custom", label: "Custom" },
             ]}
             placeholder="Select period"
@@ -394,7 +489,10 @@ const Header = ({
               { value: "overall", label: "Overall" },
               { value: "consultation", label: "Consultation" },
               { value: "lab", label: "Lab" },
+              { value: "service", label: "Service" },
               { value: "pharmacy", label: "Pharmacy" },
+              { value: "home_visit", label: "Home Visit" },
+              { value: "home_care", label: "Home Care" },
             ]}
             placeholder="Select type"
             searchable={false}

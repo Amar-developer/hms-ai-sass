@@ -1,51 +1,61 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { humanizeOptionLabel } from "@/lib/options";
 import { today } from "@/utils/helper";
 import { emptyLine, homeCareHourPrices } from "./constants";
-import {
-  isBookingLocked,
-  mergeServices,
-  patientCode,
-  serviceRowsFromResponse,
-  userName,
-} from "./helpers";
+import { isBookingLocked, patientCode, userName } from "./helpers";
 import { BookingsList } from "./components/BookingList";
 import { InvoiceCard } from "./components/InvoiceCard";
 import { BookingForm } from "@/features/home-care/forms/HomeCareForms";
-import { BookingFormValues } from "@/features/home-care/homecare.schema";
 import { patientName } from "@/utils/helper";
 import { StatusToast } from "@/app/components/common/ui";
 import { BookingDetail } from "./components/BookingDetail";
 import { pageSize } from "@/utils/constants";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import {
+  useHomeCareActions,
+  useHomeCareBookingDetail,
+  useHomeCareData,
+} from "./api";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
 
 export function HomeCare({
   apiSession,
   branchId,
-  patients = [],
   loadLiveData,
   setActive,
+  view = "list",
+  selectedId = "",
 }: any) {
+  const router = useRouter();
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
-  const [view, setView] = useState<View>("list");
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [services, setServices] = useState<any[]>([]);
-  const [staff, setStaff] = useState<any[]>([]);
-  const [selectedId, setSelectedId] = useState("");
-  const [editing, setEditing] = useState<any>(null);
-  const [invoiceDetail, setInvoiceDetail] = useState<any>(null);
+  // const [view, setView] = useState<View>("list");
+  const {
+    services,
+    bookings,
+    staff,
+    loading,
+    dataError,
+    serviceLoadError,
+    load,
+  } = useHomeCareData({ apiSession, branchId });
+  // const [selectedId, setSelectedId] = useState("");
+  // const [editing, setEditing] = useState<any>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [serviceLoadError, setServiceLoadError] = useState("");
   const [busy, setBusy] = useState("");
-  const [filters, setFilters] = useState({ query: "", status: "all" });
+  const [filters, setFilters] = useState({
+    query: "",
+    status: "all",
+    fromDate: "",
+    toDate: "",
+  });
   const [page, setPage] = useState(1);
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
   const [confirmAction, setConfirmAction] = useState<any>(null);
@@ -82,9 +92,9 @@ export function HomeCare({
     notes: "",
   }));
 
-  const patientMap = useMemo(
-    () => new Map(patients.map((patient: any) => [patient.id, patient])),
-    [patients],
+  const { patients, patientMap } = usePatientReferencesQuery(
+    apiSession,
+    bookings.map((booking: any) => booking.patient_id),
   );
   const staffMap = useMemo(
     () => new Map(staff.map((user: any) => [user.id, user])),
@@ -100,6 +110,21 @@ export function HomeCare({
     [services],
   );
   const selected = bookings.find((row) => row.id === selectedId);
+  const editing = view === "edit" ? selected : null;
+
+  // Bounce back to the list if a direct/bookmarked view/edit/invoice link
+  // no longer resolves to a real booking, but only once loading finished.
+  useEffect(() => {
+    if (
+      (view !== "view" && view !== "edit" && view !== "invoice") ||
+      !selectedId ||
+      loading ||
+      selected
+    )
+      return;
+    router.replace("/home_care");
+  }, [view, selectedId, loading, selected, router]);
+
   const filteredBookings = useMemo(
     () =>
       bookings.filter((booking: any) => {
@@ -107,6 +132,8 @@ export function HomeCare({
         const assigned: any = staffMap.get(booking.assigned_staff_user_id);
         const haystack = [
           booking.booking_number,
+          booking.patient_name,
+          booking.patient_number,
           patientName(patient),
           patientCode(patient),
           patient?.mobile,
@@ -131,6 +158,22 @@ export function HomeCare({
         if (query && !haystack.includes(query)) return false;
         if (filters.status !== "all" && booking.status !== filters.status)
           return false;
+        const from = filters.fromDate
+          ? new Date(filters.fromDate).getTime()
+          : null;
+        const to = filters.toDate
+          ? new Date(`${filters.toDate}T23:59:59`).getTime()
+          : null;
+        const bookingStart = booking.start_date
+          ? new Date(booking.start_date).getTime()
+          : null;
+        const bookingEnd = booking.end_date
+          ? new Date(booking.end_date).getTime()
+          : bookingStart;
+        if (from !== null && bookingEnd !== null && bookingEnd < from)
+          return false;
+        if (to !== null && bookingStart !== null && bookingStart > to)
+          return false;
         return true;
       }),
     [bookings, filters, patientMap, staffMap],
@@ -142,26 +185,52 @@ export function HomeCare({
     safePage * pageSize,
   );
 
+  const { invoiceDetail, setInvoiceDetail } = useHomeCareBookingDetail({
+    apiSession,
+    bookingId: selected?.id,
+  });
+
+  const {
+    createPatient,
+    handleSaveBooking,
+    saveVisitLog,
+    deleteVisitLog,
+    cancelBooking,
+    updateBookingStatus,
+    generateInvoice,
+  } = useHomeCareActions({
+    apiSession,
+    branchId,
+    loadLiveData,
+    selected,
+    editing,
+    lineItems,
+    visitForm,
+    setVisitForm,
+    setBusy,
+    setError,
+    setMessage,
+    navigateToView: (id: string) => router.push(`/home_care/${id}`),
+    setInvoiceDetail,
+    load,
+  });
+
   useEffect(() => {
-    load();
-  }, [apiSession?.tenantId, branchId]);
-  useEffect(() => {
+    if (view !== "list") return;
     const target = readNotificationTarget("home_care_booking");
     if (!target || !bookings.some((row: any) => row.id === target.resourceId))
       return;
-    setSelectedId(target.resourceId);
-    setView("view");
-  }, [apiSession?.tenantId, bookings.length]);
+    router.push(`/home_care/${target.resourceId}`);
+  }, [apiSession?.tenantId, bookings.length, view, router]);
   useEffect(() => {
     setPage(1);
-  }, [filters.query, filters.status]);
+  }, [filters.query, filters.status, filters.fromDate, filters.toDate]);
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
   useEffect(() => {
-    if (selected?.id) loadInvoice(selected.id);
-    else setInvoiceDetail(null);
-  }, [selected?.id]);
+    if (dataError) setError(dataError);
+  }, [dataError]);
   useEffect(() => {
     if (!selected?.id) return;
     const firstService = selected.services?.[0];
@@ -218,182 +287,19 @@ export function HomeCare({
     });
   }
 
-  async function createPatient(data: any) {
-    if (!apiSession) return null;
-    setBusy("patient");
-    setError("");
-    setMessage("");
-    try {
-      const saved = await apiFetch("/patients", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: data.branchId || branchId,
-          full_name: data.fullName,
-          date_of_birth: data.dateOfBirth || null,
-          gender: data.gender || "unknown",
-          age_years: data.ageYears ? Number(data.ageYears) : null,
-          mobile: data.mobile || null,
-          alternate_mobile: data.alternateMobile || null,
-          email: data.email || null,
-          guardian_name: data.guardianName || null,
-          guardian_mobile: data.guardianMobile || null,
-          area: data.area || null,
-          address: data.address || null,
-          blood_group: data.bloodGroup || null,
-        }),
-      });
-      const patient = {
-        ...saved,
-        full_name: saved.full_name || data.fullName,
-        mobile: saved.mobile || data.mobile,
-      };
-      await loadLiveData?.(apiSession);
-      setMessage("Patient created and selected.");
-      return patient;
-    } catch (err: any) {
-      setError(err.message || "Unable to create patient.");
-      return null;
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function load() {
-    if (!apiSession) return;
-    setError("");
-    setServiceLoadError("");
-    try {
-      const serviceRows = mergeServices(
-        await apiFetch("/home-care/services", apiSession)
-          .then(serviceRowsFromResponse)
-          .catch((err: any) => {
-            setServiceLoadError(err.message || "Unable to load services.");
-            return [];
-          }),
-      );
-      setServices(serviceRows);
-      const [bookingRows, staffRows] = await Promise.all([
-        apiFetch(`/home-care/bookings?branch_id=${branchId}`, apiSession).catch(
-          (err: any) => {
-            setError(err.message || "Unable to load home care bookings.");
-            return [];
-          },
-        ),
-        apiFetch("/identity/users", apiSession).catch(() => []),
-      ]);
-      setBookings(bookingRows);
-      setStaff(staffRows.filter((user: any) => user.is_active !== false));
-    } catch (err: any) {
-      setError(err.message || "Unable to load home care bookings.");
-    }
-  }
-
-  async function loadInvoice(bookingId: string) {
-    if (!apiSession) return;
-    setInvoiceDetail(null);
-    try {
-      setInvoiceDetail(
-        await apiFetch(`/home-care/bookings/${bookingId}/invoice`, apiSession),
-      );
-    } catch {}
-  }
-
-  async function handleSaveBooking(data: BookingFormValues) {
-    if (!apiSession) return false;
-    const serviceRows = lineItems.filter(
-      (row) => row.service_id || row.description,
-    );
-    if (serviceRows.length === 0) {
-      setError("At least one service is required.");
-      return false;
-    }
-    if (data.status !== "requested") {
-      setError(
-        "Create bookings as Requested, then assign staff before changing status.",
-      );
-      return false;
-    }
-    if (
-      data.booking_type === "home_visit" &&
-      serviceRows.some((row) => !row.service_id)
-    ) {
-      setError("Select a configured home visit service for every visit line.");
-      return false;
-    }
-    if (
-      data.booking_type === "home_care" &&
-      serviceRows.some(
-        (row) => !row.service_id && !String(row.description || "").trim(),
-      )
-    ) {
-      setError("Enter a service name for every manual home care line.");
-      return false;
-    }
-    setBusy("save");
-    setMessage("");
-    setError("");
-    const isHomeVisit = data.booking_type === "home_visit";
-    try {
-      const saved = await apiFetch(
-        editing ? `/home-care/bookings/${editing.id}` : "/home-care/bookings",
-        apiSession,
-        {
-          method: editing ? "PATCH" : "POST",
-          body: JSON.stringify({
-            branch_id: branchId,
-            patient_id: data.patient_id,
-            booking_type: data.booking_type,
-            location: data.location || null,
-            recurrence: data.recurrence,
-            start_date: data.start_date || today(),
-            end_date: data.end_date || null,
-            status: data.status,
-            notes: data.notes || null,
-            services: serviceRows.map((row) => ({
-              service_id: isHomeVisit ? row.service_id || null : null,
-              service_category: isHomeVisit
-                ? "home_visit_service"
-                : "home_care_service",
-              description: row.description || null,
-              quantity: Number(row.quantity || 1),
-              unit_amount: Number(row.unit_amount || 0),
-            })),
-          }),
-        },
-      );
-      await load();
-      if (loadLiveData) await loadLiveData(apiSession);
-      setSelectedId(saved.id);
-      setMessage(
-        editing ? "Home care booking updated." : "Home care booking created.",
-      );
-      setEditing(null);
-      setView("view");
-      return true;
-    } catch (err: any) {
-      setError(err.message || "Unable to save home care booking.");
-      return false;
-    } finally {
-      setBusy("");
-    }
-  }
-
   function openCreate() {
     resetForm();
-    setSelectedId("");
-    setView("create");
+    router.push("/home_care/new");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function openView(booking: any) {
-    setSelectedId(booking.id);
-    setView("view");
+    router.push(`/home_care/${booking.id}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function openInvoice(booking: any) {
-    setSelectedId(booking.id);
-    setView("invoice");
+    router.push(`/home_care/${booking.id}/invoice`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -405,178 +311,36 @@ export function HomeCare({
     if (setActive) setActive("billing");
   }
 
-  async function saveVisitLog(e: any) {
-    e.preventDefault();
-    if (!apiSession || !selected) return;
-    const selectedIsHomeVisit =
-      (selected.services || []).some(
-        (row: any) => row.service_category === "home_visit_service",
-      ) ||
-      (selected.visit_logs || []).some(
-        (row: any) => row.service_category === "home_visit_service",
-      );
-    setMessage("");
-    setError("");
-    if (!visitForm.visit_date) {
-      setError("Service date is required.");
-      return;
-    }
-    if (!visitForm.staff_type) {
-      setError("Staff type is required.");
-      return;
-    }
-    if (!visitForm.assigned_staff_user_id) {
-      setError("Select which staff member went for the visit.");
-      return;
-    }
-    if (!visitForm.status) {
-      setError("Status is required.");
-      return;
-    }
-    if (selectedIsHomeVisit && !visitForm.service_id) {
-      setError("Select a visit service.");
-      return;
-    }
-    if (!selectedIsHomeVisit && !String(visitForm.description || "").trim()) {
-      setError("Enter the service name.");
-      return;
-    }
-    if (!selectedIsHomeVisit && !Number(visitForm.quantity)) {
-      setError("Hours is required.");
-      return;
-    }
-    if (
-      visitForm.unit_amount === "" ||
-      visitForm.unit_amount === null ||
-      visitForm.unit_amount === undefined
-    ) {
-      setError("Price is required.");
-      return;
-    }
-    setBusy("visit-log");
-    try {
-      await apiFetch(`/home-care/bookings/${selected.id}/visits`, apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          visit_date: visitForm.visit_date || today(),
-          assigned_staff_user_id: visitForm.assigned_staff_user_id || null,
-          assigned_staff_name: visitForm.assigned_staff_name || null,
-          staff_type: visitForm.staff_type || null,
-          service_id: visitForm.service_id || null,
-          service_category: selectedIsHomeVisit
-            ? "home_visit_service"
-            : "home_care_service",
-          description: visitForm.description || null,
-          quantity: Number(visitForm.quantity || 1),
-          unit_amount: Number(visitForm.unit_amount || 0),
-          status: visitForm.status || "completed",
-          notes: visitForm.notes || null,
-        }),
-      });
-      await load();
-      setMessage("Actual service log saved.");
-      setVisitForm((prev: any) => ({
-        ...prev,
-        visit_date: selected.start_date || today(),
-        notes: "",
-      }));
-    } catch (err: any) {
-      setError(err.message || "Unable to save actual service log.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function deleteVisitLog(visitId: string) {
-    if (!apiSession || !selected) return;
-    setBusy(`delete-visit-${visitId}`);
-    setMessage("");
-    setError("");
-    try {
-      await apiFetch(
-        `/home-care/bookings/${selected.id}/visits/${visitId}`,
-        apiSession,
-        { method: "DELETE" },
-      );
-      await load();
-      setMessage("Actual service log deleted.");
-    } catch (err: any) {
-      setError(err.message || "Unable to delete actual service log.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function cancelBooking() {
-    if (!apiSession || !selected) return;
-    if (
-      !confirm("Cancel this booking? This will stop further edits and billing.")
-    ) {
-      return;
-    }
-    setBusy("cancel-booking");
-    setMessage("");
-    setError("");
-    try {
-      const saved = await apiFetch(
-        `/home-care/bookings/${selected.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ status: "cancelled" }),
-        },
-      );
-      await load();
-      setSelectedId(saved.id);
-      setMessage("Home care booking cancelled.");
-    } catch (err: any) {
-      setError(err.message || "Unable to cancel home care booking.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function updateBookingStatus(status: string) {
-    if (!apiSession || !selected || status === selected.status) return;
-    setBusy("booking-status");
-    setMessage("");
-    setError("");
-    try {
-      const saved = await apiFetch(
-        `/home-care/bookings/${selected.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ status }),
-        },
-      );
-      await load();
-      if (loadLiveData) await loadLiveData(apiSession);
-      setSelectedId(saved.id);
-      setMessage(
-        `Booking status changed to ${humanizeOptionLabel(saved.status)}.`,
-      );
-    } catch (err: any) {
-      setError(err.message || "Unable to update booking status.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   function startEdit(booking: any) {
     if (isBookingLocked(booking)) {
-      setSelectedId(booking.id);
-      setView("view");
+      router.push(`/home_care/${booking.id}`);
       setError(
         `This booking is ${humanizeOptionLabel(booking.status)} and can no longer be edited.`,
       );
       return;
     }
-    setEditing(booking);
-    setSelectedId(booking.id);
+    router.push(`/home_care/${booking.id}/edit`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Populate the edit-form line items once per target booking, not on
+  // every render — startEdit no longer does this directly since it (and
+  // direct/bookmarked links) only navigate; this reacts to the URL. `editing`
+  // is derived from an async-loaded list, so on a fresh mount (direct link)
+  // it can still be undefined the first time this runs; the ref lets the
+  // effect retry once the data actually arrives instead of only firing on
+  // `view`/`selectedId`.
+  const populatedEditBookingIdRef = useRef("");
+  useEffect(() => {
+    if (view !== "edit" || !selectedId) {
+      populatedEditBookingIdRef.current = "";
+      return;
+    }
+    if (!editing || populatedEditBookingIdRef.current === selectedId) return;
+    populatedEditBookingIdRef.current = selectedId;
     setLineItems(
-      booking.services?.length
-        ? booking.services.map((row: any) => ({
+      editing.services?.length
+        ? editing.services.map((row: any) => ({
             service_id: row.service_id || "",
             description: row.description || "",
             quantity: String(Math.max(1, Number(row.quantity || 1))),
@@ -584,45 +348,14 @@ export function HomeCare({
           }))
         : [{ ...emptyLine }],
     );
-    setView("edit");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+  }, [view, selectedId, editing]);
 
   function resetForm() {
-    setEditing(null);
     setLineItems([{ ...emptyLine }]);
   }
 
   function backToList() {
-    setEditing(null);
-    setView("list");
-  }
-
-  async function generateInvoice() {
-    if (!apiSession || !selected) return;
-    setBusy("invoice");
-    setMessage("");
-    setError("");
-    try {
-      const detail = await apiFetch(
-        `/home-care/bookings/${selected.id}/invoice`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            created_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      setInvoiceDetail(detail);
-      await load();
-      if (loadLiveData) await loadLiveData(apiSession);
-      setMessage("Home care invoice generated.");
-    } catch (err: any) {
-      setError(err.message || "Unable to generate invoice.");
-    } finally {
-      setBusy("");
-    }
+    router.push("/home_care");
   }
 
   const isFormView = view === "create" || view === "edit";
@@ -647,6 +380,7 @@ export function HomeCare({
           setFilters={setFilters}
           patientMap={patientMap}
           staffMap={staffMap}
+          loading={loading}
           onRefresh={load}
           onCreate={openCreate}
           onView={openView}
@@ -693,7 +427,11 @@ export function HomeCare({
           invoiceDetail={invoiceDetail}
           onBack={backToList}
           onEdit={() => selected && startEdit(selected)}
-          onCancel={cancelBooking}
+          onCancel={() =>
+            setConfirmAction({
+              type: "cancel-booking",
+            })
+          }
           onStatusChange={updateBookingStatus}
           onInvoice={() => selected && openInvoice(selected)}
           canManage={canManageBooking}
@@ -725,11 +463,39 @@ export function HomeCare({
 
       {confirmAction && (
         <ConfirmModal
-          action={confirmAction}
-          busy={busy === `delete-visit-${confirmAction.row.id}`}
+          action={{
+            title:
+              confirmAction.type === "cancel-booking"
+                ? "Cancel Booking"
+                : "Delete Visit",
+            description:
+              confirmAction.type === "cancel-booking"
+                ? "Are you sure you want to cancel this booking? This action cannot be undone."
+                : "Are you sure you want to delete this visit log?",
+            confirmLabel:
+              confirmAction.type === "cancel-booking"
+                ? "Cancel Booking"
+                : "Delete",
+            confirmTone:
+              confirmAction.type === "cancel-booking" ? "danger" : "danger",
+            kind:
+              confirmAction.type === "cancel-booking"
+              ? "cancel Booking"
+              : "delete log"
+          }}
+          busy={
+            confirmAction.type === "cancel-booking"
+              ? busy === "cancel-booking"
+              : busy === `delete-visit-${confirmAction.row.id}`
+          }
           onCancel={() => setConfirmAction(null)}
           onConfirm={async () => {
-            await deleteVisitLog(confirmAction.row.id);
+            if (confirmAction.type === "cancel-booking") {
+              await cancelBooking();
+            } else {
+              await deleteVisitLog(confirmAction.row.id);
+            }
+
             setConfirmAction(null);
           }}
         />

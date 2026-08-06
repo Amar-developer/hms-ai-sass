@@ -8,7 +8,15 @@ import { useEffect } from "react";
 import { SupplierFormValues, supplierSchema } from "../settings.schema";
 import { statusOptions } from "../options";
 
-export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
+export function SupplierForm({
+  title,
+  supplier,
+  busy,
+  onSubmit,
+  back,
+  readOnly = false,
+  onEdit,
+}: any) {
   const {
     register,
     handleSubmit,
@@ -47,11 +55,14 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
           "Suppliers can be used by medicines, lab tests, Service, and physiotherapy equipment."
         }
         back={back}
+        readOnly={readOnly}
+        onEdit={onEdit}
       />
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
+        <fieldset disabled={readOnly} className="contents">
         <FormField label="Supplier Name" required>
           <Input {...register("name")} placeholder="Enter supplier name" />
           {errors.name && (
@@ -106,11 +117,15 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
             )}
           </FormField>
         </div>
-        <Actions
-          busy={busy}
-          back={back}
-          label={supplier ? "Save Supplier" : "Create Supplier"}
-        />
+        </fieldset>
+
+        {!readOnly && (
+          <Actions
+            busy={busy}
+            back={back}
+            label={supplier ? "Save Supplier" : "Create Supplier"}
+          />
+        )}
       </form>
     </Card>
   );

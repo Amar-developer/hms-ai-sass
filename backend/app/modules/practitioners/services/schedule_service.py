@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 
 from fastapi import HTTPException, status
 from sqlmodel import Session
@@ -13,6 +13,12 @@ from app.modules.practitioners.repositories import (
     PractitionerLeaveRepository,
     PractitionerRoomAssignmentRepository,
     PractitionerScheduleRepository,
+)
+from app.modules.practitioners.schedule_days import (
+    dump_weekdays,
+    mode_value,
+    parse_weekdays,
+    resolve_weekdays,
 )
 from app.modules.practitioners.schemas import (
     PractitionerLeaveCreate,
@@ -33,6 +39,37 @@ from app.modules.practitioners.services.validation import (
     validate_links,
     validate_time_window,
 )
+
+
+def _times_overlap(start_a: time, end_a: time, start_b: time, end_b: time) -> bool:
+    """True when two time windows intersect. Back-to-back windows (one ends
+    exactly when the next begins) do not count as overlapping, so a doctor
+    can run consecutive sessions."""
+    return start_a < end_b and start_b < end_a
+
+
+_DUPLICATE_SCHEDULE_DETAIL = (
+    "This doctor already has an overlapping schedule for this department "
+    "on one or more of the selected weekdays"
+)
+
+
+def _conflicts_with_existing(
+    *,
+    weekdays: set[int],
+    start_time: time,
+    end_time: time,
+    exclude_schedule_id: str | None,
+    existing: list[PractitionerSchedule],
+) -> bool:
+    for row in existing:
+        if row.id == exclude_schedule_id:
+            continue
+        if not weekdays & set(parse_weekdays(row.weekdays_json)):
+            continue
+        if _times_overlap(start_time, end_time, row.start_time, row.end_time):
+            return True
+    return False
 
 
 def list_all_schedules(
@@ -63,7 +100,7 @@ def update_schedule(
     tenant_id: str,
     schedule_id: str,
     payload: PractitionerScheduleUpdate,
-) -> PractitionerSchedule:
+) -> PractitionerScheduleRead:
     schedule = get_schedule_or_404(session, tenant_id, schedule_id)
     updates = payload.model_dump(exclude_unset=True, exclude={"actor_user_id"})
     practitioner_id = updates.get("practitioner_id", schedule.practitioner_id)
@@ -90,8 +127,34 @@ def update_schedule(
     start_time = updates.get("start_time", schedule.start_time)
     end_time = updates.get("end_time", schedule.end_time)
     validate_time_window(start_time, end_time)
+    mode = mode_value(updates.pop("mode", schedule.mode))
+    weekdays = updates.pop("weekdays", None)
+    resolved_weekdays = (
+        resolve_weekdays(mode, weekdays)
+        if weekdays is not None or "mode" in payload.model_fields_set
+        else parse_weekdays(schedule.weekdays_json)
+    )
+    if department_id and _conflicts_with_existing(
+        weekdays=set(resolved_weekdays),
+        start_time=start_time,
+        end_time=end_time,
+        exclude_schedule_id=schedule.id,
+        existing=PractitionerScheduleRepository(
+            session
+        ).active_for_practitioner_department(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            department_id=department_id,
+        ),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_DUPLICATE_SCHEDULE_DETAIL,
+        )
     for key, value in updates.items():
         setattr(schedule, key, value)
+    schedule.mode = mode
+    schedule.weekdays_json = dump_weekdays(resolved_weekdays)
     schedule.updated_at = datetime.now(timezone.utc)
     PractitionerScheduleRepository(session).add(schedule)
     session.commit()
@@ -106,7 +169,7 @@ def update_schedule(
         resource_id=schedule.id,
         purpose="practitioner_setup",
     )
-    return schedule
+    return enrich_schedules(session, [schedule])[0]
 
 
 def delete_schedule(
@@ -137,7 +200,7 @@ def create_schedule(
     tenant_id: str,
     practitioner_id: str,
     payload: PractitionerScheduleCreate,
-) -> PractitionerSchedule:
+) -> PractitionerScheduleRead:
     get_practitioner_or_404(session, tenant_id, practitioner_id)
     validate_links(
         session,
@@ -157,8 +220,32 @@ def create_schedule(
             detail="Practitioner is not assigned to this branch and department",
         )
     validate_time_window(payload.start_time, payload.end_time)
+    resolved_weekdays = resolve_weekdays(payload.mode, payload.weekdays)
+    if payload.department_id and _conflicts_with_existing(
+        weekdays=set(resolved_weekdays),
+        start_time=payload.start_time,
+        end_time=payload.end_time,
+        exclude_schedule_id=None,
+        existing=PractitionerScheduleRepository(
+            session
+        ).active_for_practitioner_department(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            department_id=payload.department_id,
+        ),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_DUPLICATE_SCHEDULE_DETAIL,
+        )
     schedule = PractitionerSchedule.model_validate(
-        payload, update={"tenant_id": tenant_id, "practitioner_id": practitioner_id}
+        payload,
+        update={
+            "tenant_id": tenant_id,
+            "practitioner_id": practitioner_id,
+            "mode": mode_value(payload.mode),
+            "weekdays_json": dump_weekdays(resolved_weekdays),
+        },
     )
     PractitionerScheduleRepository(session).add(schedule)
     session.commit()
@@ -173,7 +260,7 @@ def create_schedule(
         resource_id=schedule.id,
         purpose="practitioner_setup",
     )
-    return schedule
+    return enrich_schedules(session, [schedule])[0]
 
 
 def list_practitioner_schedules(

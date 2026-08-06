@@ -25,12 +25,14 @@ from app.modules.identity.services.read_models import (  # noqa: F401
     permission_read,
     role_read,
     user_read,
+    user_reads,
 )
 from app.modules.identity.services.role_permissions import (  # noqa: F401
     ensure_permission,
     ensure_role_permissions,
     get_tenant_role_or_404,
     get_tenant_user_or_404,
+    invalidate_role_users,
     replace_role_permissions,
     replace_user_roles,
     resolve_role_for_user_assignment,

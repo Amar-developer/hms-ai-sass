@@ -50,6 +50,8 @@ export const emptyForm = {
   booking_type: "home_care",
   staff_type: "nurse",
   recurrence: "daily",
+  visit_day_mode: "all",
+  visit_weekdays: [] as number[],
   start_date: today(),
   end_date: today(),
   status: "requested",
@@ -74,6 +76,7 @@ export const visitLogStatuses = [
 export const homeCareHourPrices: Record<string, string> = {
   "2": "500",
   "4": "800",
+  "6": "900",
   "8": "1000",
   "10": "1100",
   "12": "1200",

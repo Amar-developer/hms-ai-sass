@@ -20,6 +20,7 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
 import { RowActions } from "./RowActions";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function SettingsPanel(props: any) {
   const {
@@ -313,7 +314,9 @@ export function SettingsPanel(props: any) {
           disabled={busy}
           className="mt-4 px-2 py-2 rounded-lg text-xs lg:text-sm"
         >
-          Save Settings
+          <ButtonLoader loading={busy}>
+            {busy ? "Saving..." : "Save Settings"}
+          </ButtonLoader>
         </Button>
         <div className="mt-5 grid gap-2 md:grid-cols-2">
           {settings.slice(0, 10).map((setting: any) => (
@@ -394,7 +397,9 @@ export function SettingsPanel(props: any) {
             disabled={busy}
             className="px-4 py-2 text-xs lg:px-5 lg:py-2.5 lg:text-sm"
           >
-            {busy ? "Saving..." : "Save Accounts"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : "Save Accounts"}
+            </ButtonLoader>
           </Button>
         </div>
       </Card>
@@ -482,7 +487,9 @@ export function SettingsPanel(props: any) {
             disabled={reportBusy === "save"}
             className="save-button"
           >
-            {reportBusy === "save" ? "Saving..." : "Save Report Settings"}
+            <ButtonLoader loading={reportBusy === "save"}>
+              {reportBusy === "save" ? "Saving..." : "Save Report Settings"}
+            </ButtonLoader>
           </Button>
           <button
             type="button"
@@ -490,7 +497,9 @@ export function SettingsPanel(props: any) {
             disabled={reportBusy === "send"}
             className="close-button font-bold text-slate-700 disabled:text-slate-300"
           >
-            {reportBusy === "send" ? "Queueing..." : "Send Last Month Now"}
+            <ButtonLoader loading={reportBusy === "send"}>
+              {reportBusy === "send" ? "Queueing..." : "Send Last Month Now"}
+            </ButtonLoader>
           </button>
         </div>
         <div className="mt-5 overflow-auto rounded-lg border border-slate-200">

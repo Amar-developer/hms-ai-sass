@@ -1,7 +1,8 @@
 from datetime import date, datetime, time
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from app.core.acquisition import AcquisitionSource
 from app.core.validation import (
     AppointmentId,
     BranchId,
@@ -22,6 +23,9 @@ class AppointmentCreate(BaseModel):
     appointment_type: AppointmentType = AppointmentType.OP
     appointment_date: date
     appointment_time: time | None = None
+    acquisition_source: AcquisitionSource = AcquisitionSource.DIRECT
+    referrer_patient_id: PatientId | None = None
+    referrer_name: str | None = Field(default=None, max_length=180)
     reason: str | None = Field(default=None, max_length=500)
     visit_purpose: str | None = Field(default=None, max_length=120)
     source_appointment_id: AppointmentId | None = None
@@ -33,6 +37,13 @@ class AppointmentCreate(BaseModel):
     intake_complaints: str | None = Field(default=None, max_length=2000)
     created_by_user_id: UserId | None = None
 
+    @model_validator(mode="after")
+    def validate_referrer(self) -> "AppointmentCreate":
+        if self.acquisition_source == AcquisitionSource.REFERRAL:
+            if not self.referrer_name or not self.referrer_name.strip():
+                raise ValueError("Referrer name is required")
+        return self
+
 
 class FollowUpAppointmentCreate(BaseModel):
     appointment_date: date
@@ -41,6 +52,17 @@ class FollowUpAppointmentCreate(BaseModel):
     is_billable: bool = True
     billing_note: str | None = Field(default=None, max_length=500)
     created_by_user_id: UserId | None = None
+
+
+class AppointmentReschedule(BaseModel):
+    appointment_date: date
+    appointment_time: time | None = None
+
+    @model_validator(mode="after")
+    def validate_date(self) -> "AppointmentReschedule":
+        if self.appointment_date < date.today():
+            raise ValueError("Appointment date cannot be in the past")
+        return self
 
 
 class AppointmentRead(BaseModel):
@@ -54,6 +76,9 @@ class AppointmentRead(BaseModel):
     status: AppointmentStatus
     appointment_date: date
     appointment_time: time | None
+    acquisition_source: str
+    referrer_patient_id: str | None
+    referrer_name: str | None
     reason: str | None
     visit_purpose: str | None
     source_appointment_id: str | None
@@ -91,6 +116,9 @@ class AppointmentGridRead(BaseModel):
     visit_purpose: str | None
     reason: str | None = None
     source_appointment_id: str | None = None
+    acquisition_source: str
+    referrer_patient_id: str | None = None
+    referrer_name: str | None = None
     is_billable: bool
     custom_fee_amount: int | None = None
     billing_note: str | None = None

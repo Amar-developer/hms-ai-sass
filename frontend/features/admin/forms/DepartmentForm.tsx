@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Actions } from "../components/Actions";
 import { Header } from "../components/Header";
@@ -7,6 +8,7 @@ import { FormField } from "@/app/components/FormElements";
 import { DepartmentFormValues, departmentSchema } from "../settings.schema";
 import { basicMedicalDepartmentSuggestions } from "@/lib/options";
 import { isLocked } from "../helpers";
+import { TenantPicker } from "@/features/superAdmin/components/shared/TenantPicker";
 
 
 
@@ -18,12 +20,18 @@ export function DepartmentForm({
   busy,
   onSubmit,
   back,
+  tenants,
+  selectedId,
+  setSelectedId,
+  readOnly = false,
+  onEdit,
 }: any) {
   const {
     register,
     handleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors },
   } = useForm<DepartmentFormValues>({
     resolver: zodResolver(departmentSchema),
@@ -38,6 +46,21 @@ export function DepartmentForm({
       isActive: String(department?.is_active ?? true),
     },
   });
+
+  // `department` can arrive asynchronously after this form has already
+  // mounted (e.g. a direct URL to an edit link, before the list loads), so
+  // react-hook-form's initial defaultValues alone would leave every field
+  // blank. Reset once the real record shows up.
+  useEffect(() => {
+    if (!department?.id) return;
+    reset({
+      name: department?.name || "",
+      branchId: department?.branch_id || "",
+      description: department?.description || "",
+      isActive: String(department?.is_active ?? true),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [department?.id]);
 
   const departmentName = watch("name");
   const selectedBranchId = watch("branchId");
@@ -90,6 +113,8 @@ export function DepartmentForm({
           "Medical departments are used for doctors, schedules, appointments, and patient routing."
         }
         back={back}
+        readOnly={readOnly}
+        onEdit={onEdit}
       />
 
       <form
@@ -97,6 +122,15 @@ export function DepartmentForm({
         autoComplete="off"
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
+        <fieldset disabled={readOnly} className="contents">
+        {tenants && !department && (
+          <TenantPicker
+            tenants={tenants}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
+          />
+        )}
+
         <Field label="Name" required>
           <SuggestionInput
             value={watch("name")}
@@ -194,14 +228,20 @@ export function DepartmentForm({
           </FormField>
         </div>
 
-        <Actions
-          busy={busy}
-          back={back}
-          disabled={isLocked(department) || scopeConflict}
-          label={
-            department ? "Save Medical Department" : "Create Medical Department"
-          }
-        />
+        </fieldset>
+
+        {!readOnly && (
+          <Actions
+            busy={busy}
+            back={back}
+            disabled={isLocked(department) || scopeConflict}
+            label={
+              department
+                ? "Save Medical Department"
+                : "Create Medical Department"
+            }
+          />
+        )}
       </form>
     </Card>
   );

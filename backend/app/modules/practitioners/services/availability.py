@@ -176,11 +176,11 @@ def check_practitioner_availability(
             False, "Practitioner is not assigned to this branch and department"
         )
 
-    schedules = PractitionerScheduleRepository(session).active_for_weekday(
+    schedules = PractitionerScheduleRepository(session).active_for_date(
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
         branch_id=branch_id,
-        weekday=appointment_date.weekday(),
+        appointment_date=appointment_date,
     )
     matching_schedules = [
         schedule
@@ -245,7 +245,7 @@ def check_practitioner_availability(
         appointment_date=appointment_date,
         appointment_time=appointment_time,
     )
-    room_name = room_assignment.room_name if room_assignment else schedule.room_name
+    room_name = room_assignment.room_name if room_assignment else None
     return PractitionerAvailability(True, schedule_id=schedule.id, room_name=room_name)
 
 
@@ -269,11 +269,11 @@ def check_practitioner_date_availability(
             False, "Practitioner is not assigned to this branch and department"
         )
 
-    schedules = PractitionerScheduleRepository(session).active_for_weekday(
+    schedules = PractitionerScheduleRepository(session).active_for_date(
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
         branch_id=branch_id,
-        weekday=appointment_date.weekday(),
+        appointment_date=appointment_date,
     )
     matching_schedules = [
         schedule
@@ -299,9 +299,7 @@ def check_practitioner_date_availability(
             )
 
     schedule = matching_schedules[0]
-    return PractitionerAvailability(
-        True, schedule_id=schedule.id, room_name=schedule.room_name
-    )
+    return PractitionerAvailability(True, schedule_id=schedule.id)
 
 
 def room_assignment_conflicts(
@@ -350,11 +348,11 @@ def generate_practitioner_calendar(
     days: list[PractitionerCalendarDay] = []
     current_date = start_date
     while current_date <= end_date:
-        schedules = PractitionerScheduleRepository(session).active_for_weekday(
+        schedules = PractitionerScheduleRepository(session).active_for_date(
             tenant_id=tenant_id,
             practitioner_id=practitioner_id,
             branch_id=branch_id,
-            weekday=current_date.weekday(),
+            appointment_date=current_date,
         )
         slots: list[PractitionerGeneratedSlot] = []
         for schedule in schedules:
@@ -396,7 +394,7 @@ def generate_practitioner_calendar(
                         available=availability.available,
                         reason=availability.reason,
                         schedule_id=availability.schedule_id or schedule.id,
-                        room_name=availability.room_name or schedule.room_name,
+                        room_name=availability.room_name,
                     )
                 )
                 slot_time = _add_minutes(current_date, slot_time, schedule.slot_minutes)

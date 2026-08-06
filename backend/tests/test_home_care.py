@@ -224,6 +224,8 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     )
     assert bookings.status_code == 200
     assert [row["id"] for row in bookings.json()] == [booking_body["id"]]
+    assert bookings.json()[0]["patient_name"] == "Home Care Patient"
+    assert bookings.json()[0]["patient_number"] == "HC-PT-001"
     assert len(bookings.json()[0]["visit_logs"]) == 2
 
     offer = client.post(
@@ -319,3 +321,93 @@ def test_home_care_service_soft_delete_hides_from_list(client, test_engine):
     assert deleted.status_code == 200
     assert deleted.json()["is_active"] is False
     assert all(row["id"] != service["id"] for row in listed.json())
+
+
+def test_planned_visit_dates_expand_only_the_selected_days():
+    from datetime import date
+
+    from app.modules.home_care.visit_days import (
+        planned_visit_count,
+        planned_visit_dates,
+    )
+
+    start = date(2026, 8, 1)
+    end = date(2026, 8, 15)
+
+    # Default: every day in the range.
+    assert planned_visit_count(start_date=start, end_date=end) == 15
+
+    # Tue(1), Thu(3), Sat(5) only.
+    selected = planned_visit_dates(
+        start_date=start,
+        end_date=end,
+        visit_day_mode="weekdays",
+        visit_weekdays=[1, 3, 5],
+    )
+    assert selected == [
+        date(2026, 8, 1),
+        date(2026, 8, 4),
+        date(2026, 8, 6),
+        date(2026, 8, 8),
+        date(2026, 8, 11),
+        date(2026, 8, 13),
+        date(2026, 8, 15),
+    ]
+
+    # Alternate days step by two.
+    assert planned_visit_dates(
+        start_date=start,
+        end_date=date(2026, 8, 7),
+        visit_day_mode="alternate",
+    ) == [
+        date(2026, 8, 1),
+        date(2026, 8, 3),
+        date(2026, 8, 5),
+        date(2026, 8, 7),
+    ]
+
+    # An empty weekday list must not silently plan zero visits.
+    assert (
+        planned_visit_count(
+            start_date=start,
+            end_date=date(2026, 8, 3),
+            visit_day_mode="weekdays",
+            visit_weekdays=[],
+        )
+        == 3
+    )
+
+    # An inverted range plans nothing.
+    assert planned_visit_dates(start_date=end, end_date=start) == []
+
+
+def test_booking_reports_planned_visit_count_for_selected_weekdays(client, test_engine):
+    tenant_id, branch_id, patient_id = seed_home_care_tenant(test_engine)
+    headers = {"X-Tenant-ID": tenant_id}
+
+    created = client.post(
+        "/api/v1/home-care/bookings",
+        headers=headers,
+        json={
+            "branch_id": branch_id,
+            "patient_id": patient_id,
+            "booking_type": "home_care",
+            "recurrence": "custom",
+            "visit_day_mode": "weekdays",
+            "visit_weekdays": [1, 3, 5],
+            "start_date": "2026-08-01",
+            "end_date": "2026-08-15",
+            "status": "requested",
+            "location": "12 Anna Street",
+            "services": [
+                {"description": "Attendant care", "quantity": 2, "unit_amount": 500}
+            ],
+        },
+    )
+
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["visit_day_mode"] == "weekdays"
+    assert body["visit_weekdays"] == [1, 3, 5]
+    # Only Tue/Thu/Sat inside the fortnight, not all 15 days.
+    assert body["planned_visit_count"] == 7

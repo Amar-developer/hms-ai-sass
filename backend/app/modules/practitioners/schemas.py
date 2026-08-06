@@ -1,9 +1,10 @@
 from datetime import date, datetime, time
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.validation import BranchId, DepartmentId, UserId
 from app.modules.practitioners.models import PractitionerStatus, PractitionerType
+from app.modules.practitioners.schedule_days import ScheduleMode
 
 
 class PractitionerCreate(BaseModel):
@@ -65,28 +66,44 @@ class PractitionerEligibilityRead(BaseModel):
 class PractitionerScheduleCreate(BaseModel):
     branch_id: BranchId
     department_id: DepartmentId | None = None
-    weekday: int = Field(ge=0, le=6)
+    mode: ScheduleMode = ScheduleMode.CUSTOM
+    # Only consulted when mode == custom; daily/mon_saturday are always
+    # resolved server-side so a client can't send a mismatched combination.
+    weekdays: list[int] = Field(default_factory=list)
     start_time: time
     end_time: time
     slot_minutes: int = Field(default=15, ge=1, le=240)
-    room_name: str | None = Field(default=None, max_length=120)
-    room_number: str | None = Field(default=None, max_length=10)
     is_active: bool = True
     actor_user_id: UserId | None = None
+
+    @model_validator(mode="after")
+    def _check_weekdays(self) -> "PractitionerScheduleCreate":
+        if self.mode == ScheduleMode.CUSTOM and not self.weekdays:
+            raise ValueError("Select at least one weekday")
+        if any(day < 0 or day > 6 for day in self.weekdays):
+            raise ValueError("weekdays must be between 0 (Monday) and 6 (Sunday)")
+        return self
 
 
 class PractitionerScheduleUpdate(BaseModel):
     practitioner_id: str | None = None
     branch_id: BranchId | None = None
     department_id: DepartmentId | None = None
-    weekday: int | None = Field(default=None, ge=0, le=6)
+    mode: ScheduleMode | None = None
+    weekdays: list[int] | None = None
     start_time: time | None = None
     end_time: time | None = None
     slot_minutes: int | None = Field(default=None, ge=1, le=240)
-    room_name: str | None = Field(default=None, max_length=120)
-    room_number: str | None = Field(default=None, max_length=10)
     is_active: bool | None = None
     actor_user_id: UserId | None = None
+
+    @model_validator(mode="after")
+    def _check_weekdays(self) -> "PractitionerScheduleUpdate":
+        if self.mode == ScheduleMode.CUSTOM and not self.weekdays:
+            raise ValueError("Select at least one weekday")
+        if self.weekdays and any(day < 0 or day > 6 for day in self.weekdays):
+            raise ValueError("weekdays must be between 0 (Monday) and 6 (Sunday)")
+        return self
 
 
 class PractitionerScheduleRead(BaseModel):
@@ -98,12 +115,11 @@ class PractitionerScheduleRead(BaseModel):
     branch_name: str | None = None
     department_id: str | None
     department_name: str | None = None
-    weekday: int
+    mode: ScheduleMode
+    weekdays: list[int] = Field(default_factory=list)
     start_time: time
     end_time: time
     slot_minutes: int
-    room_name: str | None
-    room_number: str | None
     is_active: bool
     created_at: datetime
     updated_at: datetime

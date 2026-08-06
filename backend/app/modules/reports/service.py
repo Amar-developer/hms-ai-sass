@@ -20,6 +20,7 @@ from app.modules.reports.services.job_service import (  # noqa: F401
     list_monthly_report_jobs,
     process_report_job,
     queue_monthly_report,
+    resend_monthly_report_job,
 )
 from app.modules.reports.services.monthly_revenue import (  # noqa: F401
     build_monthly_revenue_report,
@@ -68,6 +69,7 @@ __all__ = [
     "read_config",
     "read_job",
     "read_snapshot",
+    "resend_monthly_report_job",
     "report_period_key",
     "save_monthly_report_config",
     "send_profit_report",

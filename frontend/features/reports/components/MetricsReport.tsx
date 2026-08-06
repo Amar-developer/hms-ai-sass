@@ -63,7 +63,7 @@ function DashboardCards({
 }: {
   view: DashboardView;
   money: (value: number) => string;
-  percent: (value: number, total: number) => string;
+  percent: (value: number, total: number, fallbackTotal?: number) => string;
 }) {
   const {
     totals,
@@ -78,174 +78,164 @@ function DashboardCards({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Metric
-          icon={IndianRupee}
-          label="Gross Revenue"
-          value={money(totals.grossRevenue)}
-          hint={`${totals.invoices || 0} invoices`}
-          trend={changeLine(totals.grossRevenue, previousTotals.grossRevenue)}
-        />
+      <section className="space-y-3">
+        <h4 className="text-xs font-black uppercase tracking-wide text-slate-500">
+          Revenue
+        </h4>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Metric
+            icon={IndianRupee}
+            label="Gross Revenue"
+            value={money(totals.grossRevenue)}
+            hint={`${totals.invoices || 0} invoices`}
+            trend={changeLine(totals.grossRevenue, previousTotals.grossRevenue)}
+          />
+          <Metric
+            icon={ReceiptIndianRupee}
+            label="Paid Revenue"
+            value={money(totals.paidRevenue)}
+            hint={`Due ${money(totals.balance)}`}
+            trend={changeLine(totals.paidRevenue, previousTotals.paidRevenue)}
+          />
+          <Metric
+            icon={ReceiptIndianRupee}
+            label="Consultation Revenue"
+            value={money(totals.consultationRevenue)}
+            hint="Paid consultation invoices"
+            trend={changeLine(
+              totals.consultationRevenue,
+              previousTotals.consultationRevenue,
+            )}
+          />
+          <Metric
+            icon={ReceiptIndianRupee}
+            label="Lab Revenue"
+            value={money(totals.labRevenue)}
+            hint="Paid lab invoices"
+            trend={changeLine(totals.labRevenue, previousTotals.labRevenue)}
+          />
+          <Metric
+            icon={ReceiptIndianRupee}
+            label="Service Revenue"
+            value={money(totals.serviceRevenue)}
+            hint="Paid Service category items"
+            trend={changeLine(
+              totals.serviceRevenue,
+              previousTotals.serviceRevenue,
+            )}
+          />
+          <Metric
+            icon={ReceiptIndianRupee}
+            label="Pharmacy Revenue"
+            value={money(totals.pharmacyRevenue)}
+            hint="Paid pharmacy invoices"
+            trend={changeLine(
+              totals.pharmacyRevenue,
+              previousTotals.pharmacyRevenue,
+            )}
+          />
+          <Metric
+            icon={Home}
+            label="Home Care Revenue"
+            value={money(totals.homeCareRevenue)}
+            hint="Paid home care invoices"
+            trend={changeLine(
+              totals.homeCareRevenue,
+              previousTotals.homeCareRevenue,
+            )}
+          />
+          <Metric
+            icon={Stethoscope}
+            label="Home Visit Revenue"
+            value={money(totals.homeVisitRevenue)}
+            hint="Paid home visit invoices"
+            trend={changeLine(
+              totals.homeVisitRevenue,
+              previousTotals.homeVisitRevenue,
+            )}
+          />
+        </div>
+      </section>
 
-        <Metric
-          icon={ReceiptIndianRupee}
-          label="Paid Revenue"
-          value={money(totals.paidRevenue)}
-          hint={`Due ${money(totals.balance)}`}
-          trend={changeLine(totals.paidRevenue, previousTotals.paidRevenue)}
-        />
+      <section className="space-y-3">
+        <h4 className="text-xs font-black uppercase tracking-wide text-slate-500">
+          Settlement &amp; Profit
+        </h4>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          <Metric
+            icon={Stethoscope}
+            label="Doctor Fee"
+            value={money(totals.doctorFee)}
+            hint={`Other settlement ${money(totals.settlement)}`}
+            trend={changeLine(totals.doctorFee, previousTotals.doctorFee)}
+          />
+          <Metric
+            icon={ReceiptIndianRupee}
+            label="Lab Settlement"
+            value={money(labSettlementSummary.purchaseCost)}
+            hint={`Lab profit ${money(labSettlementSummary.profit)}`}
+          />
+          <Metric
+            icon={Activity}
+            label="Final Profit"
+            value={money(finalProfit)}
+            hint={`${percent(finalProfit, totals.paidRevenue - totals.paidTax, totals.grossRevenue)} of paid/service value · Gross ${money(grossProfit)} (${percent(grossProfit, Math.max(totals.grossRevenue - totals.membershipDiscount - totals.tax, 0), totals.grossRevenue)})`}
+            trend={changeLine(finalProfit, previousFinalProfit)}
+          />
+        </div>
+      </section>
 
-        <Metric
-          icon={Stethoscope}
-          label="Doctor Fee"
-          value={money(totals.doctorFee)}
-          hint={`Settlement ${money(totals.settlement)}`}
-          trend={changeLine(totals.doctorFee, previousTotals.doctorFee)}
-        />
-
-        <Metric
-          icon={Activity}
-          label="Final Profit"
-          value={money(finalProfit)}
-          hint={`${percent(finalProfit, totals.paidRevenue - totals.paidTax)} of paid excl. GST · Gross ${money(grossProfit)} (${percent(grossProfit, Math.max(totals.grossRevenue - totals.membershipDiscount - totals.tax, 0))})`}
-          trend={changeLine(finalProfit, previousFinalProfit)}
-        />
-      </div>
-
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Metric
-          icon={ReceiptIndianRupee}
-          label="Consultation Revenue"
-          value={money(totals.consultationRevenue)}
-          hint="Paid consultation invoices"
-          trend={changeLine(
-            totals.consultationRevenue,
-            previousTotals.consultationRevenue,
-          )}
-        />
-
-        <Metric
-          icon={ReceiptIndianRupee}
-          label="Lab Revenue"
-          value={money(totals.labRevenue)}
-          hint="Paid lab invoices"
-          trend={changeLine(totals.labRevenue, previousTotals.labRevenue)}
-        />
-
-        <Metric
-          icon={ReceiptIndianRupee}
-          label="Pharmacy Revenue"
-          value={money(totals.pharmacyRevenue)}
-          hint="Paid pharmacy invoices"
-          trend={changeLine(
-            totals.pharmacyRevenue,
-            previousTotals.pharmacyRevenue,
-          )}
-        />
-
-        <Metric
-          icon={Home}
-          label="Home Care Revenue"
-          value={money(totals.homeCareRevenue)}
-          hint="Paid home care invoices"
-          trend={changeLine(
-            totals.homeCareRevenue,
-            previousTotals.homeCareRevenue,
-          )}
-        />
-      </div>
-
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Metric
-          icon={Stethoscope}
-          label="Home Visit Revenue"
-          value={money(totals.homeVisitRevenue)}
-          hint="Paid home visit invoices"
-          trend={changeLine(
-            totals.homeVisitRevenue,
-            previousTotals.homeVisitRevenue,
-          )}
-        />
-
-        <Metric
-          icon={Users}
-          label="Membership Enrollments"
-          value={totals.membershipEnrollCount || 0}
-          hint={`Purchase ${money(totals.membershipEnrollAmount)}`}
-          trend={changeLine(
-            totals.membershipEnrollCount,
-            previousTotals.membershipEnrollCount,
-          )}
-        />
-
-        <Metric
-          icon={ReceiptIndianRupee}
-          label="Membership Claimed"
-          value={money(totals.membershipDiscount)}
-          hint={
-            topMembershipClaim
-              ? `${topMembershipClaim.label} ${money(topMembershipClaim.claimedAmount)}`
-              : "No membership benefit claimed"
-          }
-          trend={changeLine(
-            totals.membershipDiscount,
-            previousTotals.membershipDiscount,
-          )}
-        />
-
-        <Metric
-          icon={ReceiptIndianRupee}
-          label="Lab Settlement"
-          value={money(labSettlementSummary.purchaseCost)}
-          hint={`Lab profit ${money(labSettlementSummary.profit)}`}
-        />
-      </div>
-
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Metric
-          icon={ReceiptIndianRupee}
-          label="Total Billing Discounts"
-          value={money(totals.billingDiscount)}
-          hint="Approved + offers + membership"
-          trend={changeLine(
-            totals.billingDiscount,
-            previousTotals.billingDiscount,
-          )}
-        />
-
-        <Metric
-          icon={ReceiptIndianRupee}
-          label="Admin Approved Discounts"
-          value={money(totals.approvedDiscount)}
-          hint="Executed discount requests only"
-          trend={changeLine(
-            totals.approvedDiscount,
-            previousTotals.approvedDiscount,
-          )}
-        />
-
-        <Metric
-          icon={ReceiptIndianRupee}
-          label="Offer Discounts"
-          value={money(totals.offerDiscount)}
-          hint="Promotional invoice offers only"
-          trend={changeLine(
-            totals.offerDiscount,
-            previousTotals.offerDiscount,
-          )}
-        />
-
-        <Metric
-          icon={ReceiptIndianRupee}
-          label="Membership Discounts"
-          value={money(totals.membershipDiscount)}
-          hint="Membership benefit usage only"
-          trend={changeLine(
-            totals.membershipDiscount,
-            previousTotals.membershipDiscount,
-          )}
-        />
-      </div>
+      <section className="space-y-3">
+        <h4 className="text-xs font-black uppercase tracking-wide text-slate-500">
+          Discounts &amp; Membership
+        </h4>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Metric
+            icon={ReceiptIndianRupee}
+            label="Total Billing Discounts"
+            value={money(totals.billingDiscount)}
+            hint="Approved + offers + membership"
+            trend={changeLine(
+              totals.billingDiscount,
+              previousTotals.billingDiscount,
+            )}
+          />
+          <Metric
+            icon={ReceiptIndianRupee}
+            label="Admin Approved Discounts"
+            value={money(totals.approvedDiscount)}
+            hint="Executed discount requests only"
+            trend={changeLine(
+              totals.approvedDiscount,
+              previousTotals.approvedDiscount,
+            )}
+          />
+          <Metric
+            icon={Users}
+            label="Membership Enrollments"
+            value={totals.membershipEnrollCount || 0}
+            hint={`Purchase ${money(totals.membershipEnrollAmount)}`}
+            trend={changeLine(
+              totals.membershipEnrollCount,
+              previousTotals.membershipEnrollCount,
+            )}
+          />
+          <Metric
+            icon={ReceiptIndianRupee}
+            label="Membership Claimed"
+            value={money(totals.membershipDiscount)}
+            hint={
+              topMembershipClaim
+                ? `${topMembershipClaim.label} ${money(topMembershipClaim.claimedAmount)}`
+                : "No membership benefit claimed"
+            }
+            trend={changeLine(
+              totals.membershipDiscount,
+              previousTotals.membershipDiscount,
+            )}
+          />
+        </div>
+      </section>
 
       <div className="rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">

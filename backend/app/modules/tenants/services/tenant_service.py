@@ -1,6 +1,7 @@
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session
 
+from app.core import auth_cache
 from app.core.uploads import UPLOADS_DIR, save_upload
 from app.modules.audit.models import AuditEvent
 from app.modules.audit.repositories import AuditEventRepository
@@ -150,6 +151,8 @@ def update_tenant(
     )
     session.commit()
     session.refresh(tenant)
+    if "status" in updates:
+        auth_cache.invalidate_tenant(tenant.id)
     return tenant
 
 
@@ -241,6 +244,7 @@ def delete_tenant(
         )
     )
     session.commit()
+    auth_cache.invalidate_tenant(tenant.id)
     return {
         "deleted": False,
         "deactivated": True,

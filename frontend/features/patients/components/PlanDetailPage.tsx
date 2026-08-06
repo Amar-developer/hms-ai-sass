@@ -1,10 +1,9 @@
-import { Card, Badge } from "@/app/components/common/ui";
+import { Card, Badge, Button } from "@/app/components/common/ui";
 import { money } from "@/utils/helper";
 import { pharmacyBenefitLabel } from "../helpers";
 import { BenefitList } from "./BenefitList";
 import { PharmacySlabList } from "./PharmacySlabList";
-// import { PlanActionButton } from "@/app/components/patient/Shared";
-
+import { PlanMetric } from "./PlanMetric";
 
 export function PlanDetailPage({
   plan,
@@ -14,6 +13,8 @@ export function PlanDetailPage({
   onBack,
   onEdit,
   onToggle,
+  toggleBusy = false,
+  canEditPlans = false,
   activeEnrollmentCount = 0,
 }: any) {
   const consultDeptIds = plan.free_consultation_department_ids || [];
@@ -60,15 +61,28 @@ export function PlanDetailPage({
               </p>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {/* <PlanActionButton onClick={onEdit}>Edit</PlanActionButton>
-            <PlanActionButton
-              onClick={onToggle}
-              tone={plan.is_active ? "amber" : "green"}
-            >
-              {plan.is_active ? "Pause" : "Activate"}
-            </PlanActionButton> */}
-          </div>
+          {canEditPlans && (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={onEdit}
+                className="rounded-lg px-4 py-2 text-xs"
+              >
+                Edit
+              </Button>
+              <button
+                type="button"
+                disabled={toggleBusy}
+                onClick={onToggle}
+                className={`rounded-lg border px-4 py-2 text-xs font-bold disabled:opacity-50 ${
+                  plan.is_active
+                    ? "border-amber-200 text-amber-700 hover:bg-amber-50"
+                    : "border-green-200 text-green-700 hover:bg-green-50"
+                }`}
+              >
+                {plan.is_active ? "Pause" : "Activate"}
+              </button>
+            </div>
+          )}
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <PlanMetric label="Price" value={money(plan.price_amount)} />

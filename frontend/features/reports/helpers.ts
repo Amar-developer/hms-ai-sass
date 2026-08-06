@@ -61,6 +61,23 @@ export function currentRange(period: string) {
     end.setDate(start.getDate() + 6);
     return [toInputDate(start), toInputDate(end)];
   }
+  if (period === "quarterly") {
+    const quarterStartMonth = Math.floor(start.getMonth() / 3) * 3;
+    start.setMonth(quarterStartMonth, 1);
+    end.setMonth(quarterStartMonth + 3, 0);
+    return [toInputDate(start), toInputDate(end)];
+  }
+  if (period === "half_yearly") {
+    const halfStartMonth = start.getMonth() < 6 ? 0 : 6;
+    start.setMonth(halfStartMonth, 1);
+    end.setMonth(halfStartMonth + 6, 0);
+    return [toInputDate(start), toInputDate(end)];
+  }
+  if (period === "yearly") {
+    start.setMonth(0, 1);
+    end.setMonth(12, 0);
+    return [toInputDate(start), toInputDate(end)];
+  }
   start.setDate(1);
   end.setMonth(end.getMonth() + 1, 0);
   return [toInputDate(start), toInputDate(end)];
@@ -74,16 +91,19 @@ export function toInputDate(date: Date) {
   ].join("-");
 }
 
-export function percent(value: number, total: number) {
-  if (!total) return "0%";
-  return `${Math.round((value / total) * 100)}%`;
+export function percent(value: number, total: number, fallbackTotal = 0) {
+  const basis = total || fallbackTotal;
+  if (!basis) return "0%";
+  return `${Math.round((value / basis) * 100)}%`;
 }
 
 export function settlementPaidBasis(invoice: any) {
   const total = numberValue(invoice.total_amount);
   const paid = numberValue(invoice.paid_amount);
   const doctorShare = numberValue(invoice.doctor_share_amount);
-  if (!total || !paid || !doctorShare) return 0;
+  if (!doctorShare) return 0;
+  if (total <= 0 && membershipBenefitUsage(invoice) > 0) return doctorShare;
+  if (!total || !paid) return 0;
   return Math.min(Math.round((doctorShare * paid) / total), paid);
 }
 

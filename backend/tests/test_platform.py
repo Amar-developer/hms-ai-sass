@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.core.config import Settings
+from app.main import create_app
+from scripts.verify_production_environment import production_environment_issues
 
 
 def test_health_contract(unauthenticated_client: TestClient):
@@ -12,7 +14,7 @@ def test_health_contract(unauthenticated_client: TestClient):
     body = response.json()
     assert body["status"] == "ok"
     assert body["service"] == "MedizinHub HMS API"
-    assert body["version"] == "0.1.0"
+    assert body["version"] == Settings().app_version
     assert body["build_commit"] == "unknown"
     assert body["built_at"] is None
     assert body["environment"] == "local"
@@ -33,11 +35,116 @@ def test_readiness_contract_starts_without_external_dependencies(client: TestCli
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ready"
-    assert body["dependencies"] == {
-        "database": "not_configured",
-        "redis": "not_configured",
-        "object_storage": "not_configured",
+    assert body["dependencies"]["database"] == "configured"
+    assert body["dependencies"]["database_pool"].startswith("checked_out=")
+    assert body["dependencies"]["redis"] == "not_configured"
+    assert body["dependencies"]["object_storage"] == "local_configured"
+    assert body["dependencies"]["permanent_invoice_delivery"] == "enabled"
+
+
+def test_platform_observability_metrics_are_private_and_include_queue_health(
+    client: TestClient, unauthenticated_client: TestClient
+):
+    denied = unauthenticated_client.get("/api/v1/platform/observability/metrics")
+    assert denied.status_code == 401
+
+    response = client.get("/api/v1/platform/observability/metrics")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["runtime"]["scope"] == "current_api_process"
+    assert "checked_out" in body["database_pool"]
+    assert body["queues"]["notification_events"]["depth"] == 0
+    assert body["queues"]["document_deliveries"]["oldest_age_seconds"] is None
+    assert body["capacity"]["api_workers"] == 2
+    assert body["capacity"]["request_limit_per_container"] == 160
+    assert body["capacity"]["database_connections_per_container"] == 60
+
+
+def test_production_storage_configuration_is_environment_safe():
+    settings = Settings(
+        environment="production",
+        file_storage_backend="s3",
+        aws_s3_bucket="medizinhub-prod-documents",
+        aws_s3_region="ap-south-1",
+        enable_docs=False,
+        auto_create_tables=False,
+    )
+    assert settings.aws_s3_bucket == "medizinhub-prod-documents"
+    assert settings.secure_cookie_enabled is True
+
+    with pytest.raises(ValidationError, match="secure authentication cookies"):
+        Settings(
+            environment="production",
+            file_storage_backend="s3",
+            aws_s3_bucket="medizinhub-prod-documents",
+            secure_cookie=False,
+        )
+
+    with pytest.raises(ValidationError, match="production must use"):
+        Settings(environment="production", file_storage_backend="local")
+    with pytest.raises(ValidationError, match="cannot use a local"):
+        Settings(
+            environment="production",
+            file_storage_backend="s3",
+            aws_s3_bucket="medizinhub-dev-documents",
+        )
+    with pytest.raises(ValidationError, match="cannot use a production bucket"):
+        Settings(
+            environment="staging",
+            file_storage_backend="s3",
+            aws_s3_bucket="medizinhub-prod-documents",
+        )
+    with pytest.raises(ValidationError, match="relative server-controlled"):
+        Settings(aws_s3_prefix="../unsafe")
+
+
+def test_s3_application_does_not_mount_local_upload_directory(monkeypatch):
+    settings = Settings(
+        environment="staging",
+        file_storage_backend="s3",
+        aws_s3_bucket="medizinhub-stage-documents",
+    )
+    monkeypatch.setattr("app.main.get_settings", lambda: settings)
+
+    application = create_app()
+
+    assert all(
+        getattr(route, "path", None) != "/uploads" for route in application.routes
+    )
+
+
+def test_production_environment_gate_rejects_unsafe_runtime_values():
+    settings = Settings(
+        environment="production",
+        file_storage_backend="s3",
+        aws_s3_bucket="medizinhub-prod-documents",
+        secure_cookie=True,
+        enable_docs=False,
+        auto_create_tables=False,
+        database_url="postgresql+psycopg://app:secret@pooler/prod",
+        redis_url="redis://redis:6379/0",
+        cors_origins=["https://app.medizinhub.com"],
+        credential_encryption_key="a-production-specific-key-over-32-characters",
+        build_commit="abc123def456",
+        build_time="2026-08-03T10:00:00Z",
+    )
+    safe_environment = {
+        "MEDIZINHUB_MIGRATION_DATABASE_URL": (
+            "postgresql+psycopg://app:secret@postgres/prod"
+        ),
+        "MEDIZINHUB_BOOTSTRAP_TOKEN": "configured-secret",
+        "MEDIZINHUB_FORWARDED_ALLOW_IPS": "127.0.0.1",
     }
+    assert production_environment_issues(settings, safe_environment) == []
+
+    unsafe_environment = {
+        **safe_environment,
+        "MEDIZINHUB_BOOTSTRAP_TOKEN": "",
+        "MEDIZINHUB_FORWARDED_ALLOW_IPS": "*",
+    }
+    issues = production_environment_issues(settings, unsafe_environment)
+    assert "MEDIZINHUB_BOOTSTRAP_TOKEN must be configured" in issues
+    assert "MEDIZINHUB_FORWARDED_ALLOW_IPS cannot be '*' in production" in issues
 
 
 def test_tenant_context_echo_header(client: TestClient):

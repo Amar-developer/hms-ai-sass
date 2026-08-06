@@ -5,12 +5,14 @@ from sqlmodel import Session
 
 from app.core.auth import require_any_permission, require_super_admin
 from app.core.database import get_session
+from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.appointments.schemas import (
     AppointmentBookingRead,
     AppointmentCreate,
     AppointmentGridRead,
     AppointmentRead,
+    AppointmentReschedule,
     FollowUpAppointmentCreate,
 )
 from app.modules.appointments.models import Appointment
@@ -90,6 +92,30 @@ def book_follow_up_appointment(
     )
 
 
+@router.patch(
+    "/{appointment_id}/reschedule",
+    response_model=AppointmentBookingRead,
+)
+def reschedule_appointment(
+    appointment_id: str,
+    payload: AppointmentReschedule,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_EDIT,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> AppointmentBookingRead:
+    return AppointmentBookingService(session).reschedule_appointment(
+        tenant_id=tenant_id,
+        appointment_id=appointment_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
 @router.get(
     "",
     response_model=list[AppointmentGridRead],
@@ -127,6 +153,48 @@ def list_appointments(
         appointment_date=appointment_date,
         q=q,
         skip=skip,
+        limit=limit,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/page",
+    response_model=Page[AppointmentGridRead],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.APPOINTMENTS_MANAGE,
+                permissions.APPOINTMENTS_READ,
+            )
+        )
+    ],
+)
+def list_appointment_page(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    department_id: str | None = None,
+    practitioner_id: str | None = None,
+    appointment_date: date | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=100),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_READ,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> Page[AppointmentGridRead]:
+    return AppointmentQueryService(session).list_appointment_page(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        department_id=department_id,
+        practitioner_id=practitioner_id,
+        appointment_date=appointment_date,
+        q=q,
+        skip=offset,
         limit=limit,
         actor=current_user,
     )

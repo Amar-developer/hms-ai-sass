@@ -1,4 +1,5 @@
 import { reportClientError } from "./clientLogging";
+import { limitApiRequest } from "./concurrency";
 
 export const API_BASE = (
   process.env.NEXT_PUBLIC_MEDIZINHUB_API_URL || "http://127.0.0.1:8000/api/v1"
@@ -17,13 +18,61 @@ export function uploadAssetUrl(value: string | null | undefined): string {
 export type ApiSession = {
   tenantId: string;
   email: string;
-  user: any;
+  basePermissions?: string[];
+  user: {
+    id?: string;
+    tenant_id?: string | null;
+    tenant_name?: string | null;
+    branch_id?: string | null;
+    email?: string;
+    is_super_admin?: boolean;
+    user_type?: string;
+    roles?: string[];
+    permissions?: string[];
+  };
 };
 
 export const AUTH_SESSION_EXPIRED_EVENT = "medizinhub.auth.sessionExpired";
 export const LIVE_DATA_CHANGED_EVENT = "medizinhub.liveData.changed";
 export const LIVE_DATA_CHANGED_STORAGE_KEY =
   "medizinhub.liveData.changed.revision";
+
+export const DEFAULT_API_TIMEOUT_MS = 20_000;
+export const UPLOAD_API_TIMEOUT_MS = 60_000;
+
+export class RequestTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`The server did not respond within ${Math.round(timeoutMs / 1000)} seconds.`);
+    this.name = "RequestTimeoutError";
+  }
+}
+
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = DEFAULT_API_TIMEOUT_MS,
+) {
+  const controller = new AbortController();
+  const upstreamSignal = init.signal;
+  let timedOut = false;
+  const abortFromUpstream = () => controller.abort(upstreamSignal?.reason);
+  if (upstreamSignal?.aborted) abortFromUpstream();
+  else upstreamSignal?.addEventListener("abort", abortFromUpstream, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (timedOut) throw new RequestTimeoutError(timeoutMs);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    upstreamSignal?.removeEventListener("abort", abortFromUpstream);
+  }
+}
 
 const IDEMPOTENT_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const IDEMPOTENCY_KEY_TTL_MS = 2 * 60 * 1000;
@@ -41,6 +90,10 @@ export type ApiErrorLike = Error & {
   detail?: string;
   requestId?: string | null;
   permissionDenied?: boolean;
+};
+
+type ApiFetchOptions = RequestInit & {
+  suppressErrorReportStatuses?: number[];
 };
 
 const GENERIC_FORBIDDEN =
@@ -165,6 +218,31 @@ function requestBodySignature(body: BodyInit | null | undefined) {
   return String(body);
 }
 
+function retryDelayMs(response: Response) {
+  const retryAfter = Number(response.headers.get("retry-after") || 0);
+  const base =
+    Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000;
+  return base + Math.floor(Math.random() * 500);
+}
+
+function waitForRetry(delayMs: number, signal?: AbortSignal | null) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException("Request cancelled", "AbortError"));
+      return;
+    }
+    const onAbort = () => {
+      globalThis.clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException("Request cancelled", "AbortError"));
+    };
+    const timer = globalThis.setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 function idempotencyKeyFor(
   path: string,
   session: ApiSession,
@@ -214,30 +292,44 @@ async function readErrorDetail(res: Response) {
   return detail;
 }
 
-export async function apiFetch(
+export async function apiFetch<T = any>(
   path: string,
   session: ApiSession,
-  options: RequestInit = {},
-) {
+  options: ApiFetchOptions = {},
+): Promise<T> {
+  const { suppressErrorReportStatuses = [], ...fetchOptions } = options;
   let res: Response;
-  const method = String(options.method || "GET").toUpperCase();
-  const idempotencyKey = idempotencyKeyFor(path, session, options);
+  const method = String(fetchOptions.method || "GET").toUpperCase();
+  const idempotencyKey = idempotencyKeyFor(path, session, fetchOptions);
   const correlationId = requestId();
   try {
-    res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      cache: options.cache ?? "no-store",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Tenant-ID": session.tenantId,
-        "X-Request-ID": correlationId,
-        ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
-        ...(options.headers || {}),
-      },
-    });
+    const attempts = method === "GET" || method === "HEAD" ? 2 : 1;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      res = await limitApiRequest(
+        () =>
+          fetchWithTimeout(`${API_BASE}${path}`, {
+            ...fetchOptions,
+            cache: fetchOptions.cache ?? "no-store",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Tenant-ID": session.tenantId,
+              "X-Request-ID": correlationId,
+              ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
+              ...(fetchOptions.headers || {}),
+            },
+          }),
+        fetchOptions.signal,
+      );
+      if (res.status !== 503 || attempt === attempts) break;
+      await waitForRetry(retryDelayMs(res), fetchOptions.signal);
+    }
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    if (
+      error instanceof RequestTimeoutError ||
+      (error instanceof DOMException && error.name === "AbortError")
+    )
+      throw error;
     reportClientError(
       new Error(`Backend connection failed for ${path}`),
       {
@@ -254,22 +346,27 @@ export async function apiFetch(
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    reportApiFailure(
-      path,
-      res.status,
-      detail,
-      res.headers.get("x-request-id"),
-      method,
-      session,
-    );
+    if (
+      res.status !== 503 &&
+      !suppressErrorReportStatuses.includes(res.status)
+    ) {
+      reportApiFailure(
+        path,
+        res.status,
+        detail,
+        res.headers.get("x-request-id"),
+        method,
+        session,
+      );
+    }
     throw apiError(path, detail, res);
   }
   if (IDEMPOTENT_METHODS.has(method)) {
     notifyLiveDataChanged(path, session, method);
   }
   if (res.status === 204 || res.headers.get("content-length") === "0")
-    return null;
-  return res.json();
+    return null as T;
+  return res.json() as Promise<T>;
 }
 
 export async function apiBlob(
@@ -280,18 +377,26 @@ export async function apiBlob(
   let res: Response;
   const correlationId = requestId();
   try {
-    res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      cache: options.cache ?? "no-store",
-      credentials: "include",
-      headers: {
-        "X-Tenant-ID": session.tenantId,
-        "X-Request-ID": correlationId,
-        ...(options.headers || {}),
-      },
-    });
+    res = await limitApiRequest(
+      () =>
+        fetchWithTimeout(`${API_BASE}${path}`, {
+          ...options,
+          cache: options.cache ?? "no-store",
+          credentials: "include",
+          headers: {
+            "X-Tenant-ID": session.tenantId,
+            "X-Request-ID": correlationId,
+            ...(options.headers || {}),
+          },
+        }),
+      options.signal,
+    );
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    if (
+      error instanceof RequestTimeoutError ||
+      (error instanceof DOMException && error.name === "AbortError")
+    )
+      throw error;
     reportClientError(
       new Error(`Backend blob request failed for ${path}`),
       {
@@ -332,17 +437,24 @@ export async function apiUpload(
   let res: Response;
   const correlationId = requestId();
   try {
-    res = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      cache: "no-store",
-      credentials: "include",
-      headers: {
-        "X-Tenant-ID": session.tenantId,
-        "X-Request-ID": correlationId,
-      },
-      body: formData,
-    });
-  } catch {
+    res = await limitApiRequest(() =>
+      fetchWithTimeout(
+        `${API_BASE}${path}`,
+        {
+          method: "POST",
+          cache: "no-store",
+          credentials: "include",
+          headers: {
+            "X-Tenant-ID": session.tenantId,
+            "X-Request-ID": correlationId,
+          },
+          body: formData,
+        },
+        UPLOAD_API_TIMEOUT_MS,
+      ),
+    );
+  } catch (error) {
+    if (error instanceof RequestTimeoutError) throw error;
     reportClientError(
       new Error(`Backend upload failed for ${path}`),
       {

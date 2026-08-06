@@ -1,30 +1,28 @@
 import React from "react";
 import { Card,Badge } from "@/app/components/common/ui";
-import { DataTable } from "./DataTable";
 import {
   approvedDiscountUsage,
-  billingDiscountUsage,
   offerDiscountUsage,
   recognizedInvoiceTax,
   reportedInvoiceTotal,
 } from "../financials";
 import { Pagination } from "@/app/components/common/Pagination";
 import { InvoiceProps } from "../types";
+import { DataTable } from "@/app/components/common/DataTable";
 
 
 
 const InvoiceReport = ({
   filteredInvoices,
   invoicePageRows,
-  appointmentById,
   patientById,
+  invoiceDoctorStaffName,
   invoiceSettlementAmount,
   invoiceDoctorFeeAmount,
   invoicePaymentMode,
   invoiceGrossProfit,
   invoiceGrossProfitPercent,
   numberValue,
-  doctorById,
   rowDate,
   invoiceTypeLabel,
   invoiceType,
@@ -36,12 +34,54 @@ const InvoiceReport = ({
   totalInvoicePages,
   setInvoicePage,
   onOpenInvoices,
+  loading,
 
 }: InvoiceProps) => {
+  const moneyOrDash = (value: any) => {
+    const amount = Number(value || 0);
+    return !Number.isFinite(amount) || amount === 0 ? "-" : money(amount);
+  };
+  const profitPercentOrDash = (row: any) =>
+    Number(invoiceGrossProfit(row) || 0) === 0
+      ? "-"
+      : invoiceGrossProfitPercent(row);
+  const filteredTotals = filteredInvoices.reduce(
+    (totals: any, row: any) => {
+      totals.total += reportedInvoiceTotal(row);
+      totals.paid += numberValue(row.paid_amount);
+      totals.due += numberValue(row.balance_amount);
+      totals.adminDiscount += approvedDiscountUsage(row);
+      totals.offerDiscount += offerDiscountUsage(row);
+      totals.membershipBenefit += numberValue(
+        row.membership_discount_amount,
+      );
+      totals.doctorCost += invoiceDoctorFeeAmount(row);
+      totals.paidGst += recognizedInvoiceTax(row);
+      totals.settlement += invoiceSettlementAmount(row);
+      totals.profit += invoiceGrossProfit(row);
+      return totals;
+    },
+    {
+      total: 0,
+      paid: 0,
+      due: 0,
+      adminDiscount: 0,
+      offerDiscount: 0,
+      membershipBenefit: 0,
+      doctorCost: 0,
+      paidGst: 0,
+      settlement: 0,
+      profit: 0,
+    },
+  );
+  const filteredProfitBasis = filteredTotals.paid - filteredTotals.paidGst;
+  const filteredProfitMargin = filteredProfitBasis
+    ? `${Math.round((filteredTotals.profit / filteredProfitBasis) * 100)}%`
+    : "-";
   const invoiceColumns = [
   {
     key: "invoice_number",
-    header: "Invoice",
+    header: "Invoice No.",
     width:'160px',
     className:'text-center',
     render: (row: any) => (
@@ -52,14 +92,14 @@ const InvoiceReport = ({
   },
   {
     key:"invoice_date",
-    header:'Date',
+    header:'Invoice Date',
     width:'100px',
     render: (row:any)=> rowDate(row),
     className:'text-center',
   },
   {
     key: "type",
-    header: "Type",
+    header: "Invoice Type",
     width:'120px',
     className:'text-center',
     render: (row: any) => invoiceTypeLabel(invoiceType(row)),
@@ -84,23 +124,16 @@ const InvoiceReport = ({
   },
   {
     key: "doctor",
-    header: "Doctor",
+    header: "Doctor / Staff",
     width:'140px',
     render: (row: any) => {
-      const appointment = appointmentById.get(row.appointment_id);
-
-      return (
-        appointment?.doctor ||
-        doctorById.get(
-          appointment?.doctorId || appointment?.practitioner_id,
-        ) ||
-        "-"
-      );
+      const value = invoiceDoctorStaffName(row);
+      return value && value !== "Unassigned" ? value : "-";
     },
   },
   {
     key: "status",
-    header: "Status",
+    header: "Payment Status",
     width:'90px',
     render: (row: any) => (
       <Badge
@@ -121,109 +154,136 @@ const InvoiceReport = ({
     key: "total_amount",
     header: "Total",
     width:'90px',
-    render: (row: any) => money(reportedInvoiceTotal(row)),
+    render: (row: any) => moneyOrDash(reportedInvoiceTotal(row)),
   },
   {
     key: "paid_amount",
     header: "Paid",
     width:'90px',
-    render: (row: any) => money(numberValue(row.paid_amount)),
+    render: (row: any) => moneyOrDash(numberValue(row.paid_amount)),
   },
   {
     key: "balance_amount",
-    header: "Balance",
+    header: "Amount Due",
     width:'90px',
-    render: (row: any) => money(row.balance_amount),
+    render: (row: any) => moneyOrDash(row.balance_amount),
   },
   {
     key: "approved_discount_amount",
-    header: "Approved %",
+    header: "Admin Discount",
     width:'125px',
-    render: (row: any) => money(approvedDiscountUsage(row)),
+    render: (row: any) => moneyOrDash(approvedDiscountUsage(row)),
   },
   {
     key: "offer_discount_amount",
-    header: "Offer %",
+    header: "Offer Discount",
     width:'105px',
-    render: (row: any) => money(offerDiscountUsage(row)),
+    render: (row: any) => moneyOrDash(offerDiscountUsage(row)),
   },
   {
     key: "membership_discount_amount",
-    header: "Membership",
+    header: "Membership Benefit",
     width:'100px',
     render: (row: any) =>
-      money(row.membership_discount_amount),
-  },
-  {
-    key: "billing_discount_amount",
-    header: "Total %",
-    width:'105px',
-    render: (row: any) => money(billingDiscountUsage(row)),
+      moneyOrDash(row.membership_discount_amount),
   },
   {
     key: "payment_mode",
-    header: "M.O.P",
+    header: "Payment Method",
     width: "120px",
     render: (row: any) => invoicePaymentMode(row),
   },
   {
     key: "doctor_fee",
-    header: "Doctor Fee",
+    header: "Doctor Cost",
     width:'120px',
-    render: (row: any) => money(invoiceDoctorFeeAmount(row)),
+    render: (row: any) => moneyOrDash(invoiceDoctorFeeAmount(row)),
   },
   {
     key: "tax_amount",
-    header: "GST",
+    header: "Paid GST",
     width: "110px",
-    render: (row: any) => money(recognizedInvoiceTax(row)),
+    render: (row: any) => moneyOrDash(recognizedInvoiceTax(row)),
   },
   {
     key: "settlement",
     header: "Settlement",
-    width:'100px',
+    width:'120px',
     render: (row: any) =>
-      money(invoiceSettlementAmount(row)),
+      moneyOrDash(invoiceSettlementAmount(row)),
   },
 
   {
     key: "clinic_profit",
-    header: "Profit",
+    header: "Realized Profit",
     width:'90px',
     render: (row: any) => {
       return (
         <span className="font-bold ">
-          {money(invoiceGrossProfit(row))}
+          {moneyOrDash(invoiceGrossProfit(row))}
         </span>
       );
     },
   },
   {
     key: "clinic_profit_percentage",
-    header: "Profit %",
+    header: "Profit Margin",
     width: "100px",
-    render: (row: any) => invoiceGrossProfitPercent(row),
+    render: (row: any) => profitPercentOrDash(row),
   },
 ];
-console.log(invoicePageRows,'invoicePageRows')
   return (
     <Card>
       <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
         <div>
           <h3 className="card-title font-bold">Invoice Profit Details</h3>
           <p className="card-desc text-slate-500">
-            Only paid invoices are shown in profit details.
+            Paid invoice rows and totals update from the current filters.
           </p>
         </div>
         <Badge tone="green" className="normal-badge">{filteredInvoices.length} paid invoices</Badge>
       </div>
-      <div className="mt-4 overflow-auto rounded-lg border">
+      <div className="mt-4 overflow-auto scrollbar-hidden rounded-lg border">
         <DataTable
           className="w-full min-w-[1120px] text-left text-sm"
           columns={invoiceColumns}
           data={invoicePageRows}
           onRowClick={(row: any) => onOpenInvoices(row.id)}
           emptyMessage="No paid invoices match this filter."
+          loading={loading}
+          footer={
+            <tr className="font-bold text-slate-900">
+              <td colSpan={6} className="px-4 py-4 text-right">
+                Filtered Totals ({filteredInvoices.length})
+              </td>
+              <td className="px-4 py-4">{moneyOrDash(filteredTotals.total)}</td>
+              <td className="px-4 py-4">{moneyOrDash(filteredTotals.paid)}</td>
+              <td className="px-4 py-4">{moneyOrDash(filteredTotals.due)}</td>
+              <td className="px-4 py-4">
+                {moneyOrDash(filteredTotals.adminDiscount)}
+              </td>
+              <td className="px-4 py-4">
+                {moneyOrDash(filteredTotals.offerDiscount)}
+              </td>
+              <td className="px-4 py-4">
+                {moneyOrDash(filteredTotals.membershipBenefit)}
+              </td>
+              <td className="px-4 py-4">-</td>
+              <td className="px-4 py-4">
+                {moneyOrDash(filteredTotals.doctorCost)}
+              </td>
+              <td className="px-4 py-4">
+                {moneyOrDash(filteredTotals.paidGst)}
+              </td>
+              <td className="px-4 py-4">
+                {moneyOrDash(filteredTotals.settlement)}
+              </td>
+              <td className="px-4 py-4">
+                {moneyOrDash(filteredTotals.profit)}
+              </td>
+              <td className="px-4 py-4">{filteredProfitMargin}</td>
+            </tr>
+          }
         />
       </div>
       <Pagination

@@ -10,6 +10,7 @@ import { FormField } from "@/app/components/FormElements";
 import { PharmacySlabEditor } from "./PharmacySlabEditor";
 import { BenefitPicker } from "./BenefitPicker";
 import { FormError } from "@/app/components/common/FormError";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function PlanForm({
   title,
@@ -40,6 +41,7 @@ export function PlanForm({
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<PlanFormValues, PlanFormInput, any>({
     resolver: zodResolver(planSchema),
@@ -62,7 +64,22 @@ export function PlanForm({
     value: d.id,
     label: d.name,
   }));
+  // `plan` (like `pharmacySlabs`) can arrive asynchronously after this form
+  // has already mounted with react-hook-form's initial defaultValues, so the
+  // simple fields need an explicit reset once the real data shows up.
   useEffect(() => {
+    if (!plan?.id) return;
+    reset({
+      name: plan?.name ?? "",
+      code: plan?.code ?? "",
+      priceAmount: plan?.price_amount ?? 0,
+      durationDays: plan?.duration_days ?? 0,
+      activationAfterDays: plan?.activation_after_days ?? 0,
+      freeConsultations: plan?.free_consultations ?? 0,
+      labDiscount: plan?.lab_discount_percentage ?? 0,
+      pharmacyDiscount: plan?.pharmacy_discount_percentage ?? 0,
+      minDiscountAmount: plan?.min_discount_amount ?? 0,
+    });
     setPharmacySlabs(
       normalizePharmacySlabs(plan?.pharmacy_discount_slabs || []),
     );
@@ -311,7 +328,11 @@ export function PlanForm({
           />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-4">
-          <Button disabled={busy}>{busy ? "Saving..." : submitLabel}</Button>
+          <Button disabled={busy}>
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : submitLabel}
+            </ButtonLoader>
+          </Button>
           <button
             type="button"
             onClick={back}

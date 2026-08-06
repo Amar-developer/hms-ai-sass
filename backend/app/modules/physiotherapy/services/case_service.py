@@ -20,8 +20,10 @@ from app.modules.physiotherapy.repositories import (
 )
 from app.modules.physiotherapy.schemas import (
     PhysiotherapyCaseCreate,
+    PhysiotherapyCaseRead,
     PhysiotherapyCaseUpdate,
 )
+from app.modules.patients.services.references import patient_reference_map
 from app.modules.physiotherapy.services.case_lookup import PhysiotherapyCaseLookup
 from app.modules.settings.numbering import next_document_number
 from app.modules.subscriptions.service import enforce_module_enabled
@@ -46,15 +48,29 @@ class PhysiotherapyCaseService:
         patient_id: str | None,
         care_context: str | None,
         actor: User,
-    ) -> list[PhysiotherapyCase]:
+    ) -> list[PhysiotherapyCaseRead]:
         enforce_module_enabled(self.session, tenant_id, "physiotherapy")
         branch_scope = scoped_branch_id(actor, branch_id)
-        return self.cases.list_for_tenant(
+        rows = self.cases.list_for_tenant(
             tenant_id=tenant_id,
             branch_id=branch_scope,
             patient_id=patient_id,
             care_context=care_context,
         )
+        patients = patient_reference_map(
+            self.session,
+            tenant_id=tenant_id,
+            patient_ids={row.patient_id for row in rows},
+        )
+        result: list[PhysiotherapyCaseRead] = []
+        for row in rows:
+            read = PhysiotherapyCaseRead.model_validate(row, from_attributes=True)
+            patient = patients.get(row.patient_id)
+            if patient:
+                read.patient_name = patient.name
+                read.patient_number = patient.number
+            result.append(read)
+        return result
 
     def create_case(
         self, *, tenant_id: str, payload: PhysiotherapyCaseCreate, actor: User

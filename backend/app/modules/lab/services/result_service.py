@@ -61,8 +61,9 @@ def add_lab_result_record(
         item.updated_at = now
         session.add(item)
     session.add(result)
+    report_document = None
     if payload.report_url:
-        record_file_document(
+        report_document = record_file_document(
             session,
             tenant_id=tenant_id,
             branch_id=order.branch_id,
@@ -105,6 +106,10 @@ def add_lab_result_record(
             resource_id=order.id,
             dedupe_key=f"whatsapp:lab:{order.id}:result-ready",
             queued_by_user_id=current_user.id,
+            artifact_file_id=report_document.id if report_document else None,
+            artifact_version=(
+                report_document.document_version if report_document else None
+            ),
         )
         if not template_event and not whatsapp_template_integration_enabled(
             session, tenant_id

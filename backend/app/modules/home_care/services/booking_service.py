@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import date
 
 from fastapi import HTTPException, status
@@ -10,8 +11,13 @@ from app.core.access_control import (
 )
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.home_care.constants import LOCKED_BOOKING_STATUSES
-from app.modules.home_care.models import HomeCareBooking
+from app.modules.home_care.models import (
+    HomeCareBooking,
+    HomeCareBookingItem,
+    HomeCareVisitLog,
+)
 from app.modules.home_care.repositories import HomeCareBookingRepository
+from app.modules.home_care.visit_days import dump_weekdays
 from app.modules.home_care.schemas import (
     HomeCareBookingCreate,
     HomeCareBookingRead,
@@ -24,6 +30,7 @@ from app.modules.identity.models import User
 from app.modules.settings.numbering import next_document_number
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
+from app.modules.patients.services.references import patient_reference_map
 
 
 class HomeCareBookingLifecycleService:
@@ -51,7 +58,33 @@ class HomeCareBookingLifecycleService:
             patient_id=patient_id,
             status_filter=status_filter,
         )
-        return [self.booking_support.read_booking(row) for row in rows]
+        patients = patient_reference_map(
+            self.session,
+            tenant_id=tenant_id,
+            patient_ids={row.patient_id for row in rows},
+        )
+        booking_ids = {row.id for row in rows}
+        items_by_booking: dict[str, list[HomeCareBookingItem]] = defaultdict(list)
+        for item in self.booking_support.items.list_for_bookings(
+            tenant_id=tenant_id,
+            booking_ids=booking_ids,
+        ):
+            items_by_booking[item.booking_id].append(item)
+        visits_by_booking: dict[str, list[HomeCareVisitLog]] = defaultdict(list)
+        for visit in self.booking_support.visits.list_for_bookings(
+            tenant_id=tenant_id,
+            booking_ids=booking_ids,
+        ):
+            visits_by_booking[visit.booking_id].append(visit)
+        return [
+            self.booking_support.read_booking(
+                row,
+                patients.get(row.patient_id),
+                items=items_by_booking.get(row.id, []),
+                visit_logs=visits_by_booking.get(row.id, []),
+            )
+            for row in rows
+        ]
 
     def create_booking(
         self, *, tenant_id: str, payload: HomeCareBookingCreate, actor: User
@@ -78,6 +111,8 @@ class HomeCareBookingLifecycleService:
                 "start_date": payload.start_date or date.today(),
                 "booking_type": payload.booking_type.lower(),
                 "recurrence": payload.recurrence.lower(),
+                "visit_day_mode": (payload.visit_day_mode or "all").lower(),
+                "visit_weekdays_json": dump_weekdays(payload.visit_weekdays),
                 "status": payload.status.lower(),
                 "created_by_user_id": actor.id,
                 "updated_by_user_id": actor.id,
@@ -117,6 +152,11 @@ class HomeCareBookingLifecycleService:
             )
         self.booking_support.validate_patient_and_staff(tenant_id, payload)
         data = payload.model_dump(exclude_unset=True, exclude={"services"})
+        # The API takes weekdays as a list but the column stores JSON, so
+        # translate before the generic setattr loop (which would otherwise
+        # set a phantom attribute that never persists).
+        if "visit_weekdays" in data:
+            data["visit_weekdays_json"] = dump_weekdays(data.pop("visit_weekdays"))
         before = {key: getattr(booking, key) for key in data}
         for key, value in data.items():
             setattr(

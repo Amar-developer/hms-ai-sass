@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   CalendarDays,
@@ -13,12 +13,8 @@ import { isMembershipPlanInvoice } from "@/features/billing/helpers";
 import {
   topRows,
   dateKey,
-  invoiceAmount,
   invoiceBalance,
   invoiceMembershipBenefit,
-  invoiceApprovedDiscount,
-  invoiceBillingDiscount,
-  invoiceOfferDiscount,
   isCompletedAppointment,
   monthKey,
   normalized,
@@ -27,23 +23,21 @@ import {
 import { Insight } from "./components/Insight";
 import { QuickAccess } from "./components/QuickAccess";
 import { NotificationWidget } from "./components/NotificationWidget";
-import { apiFetch } from "@/lib/api";
+import { Skeleton } from "@/app/components/common/loader/Skeleton";
+import { useDashboardData } from "./api";
+import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
 
 export function Dashboard({
   scopedAppointments,
-  patients,
   liveSummary,
   liveInvoices = [],
   allowedDepartments = [],
-  livePractitioners = [],
   setActive,
   enabled,
   apiSession,
   branchId,
 }: any) {
-  const [monthlyCollections, setMonthlyCollections] = useState<any>(null);
-  const [allDueReport, setAllDueReport] = useState<any>(null);
-  const [monthlyDueReport, setMonthlyDueReport] = useState<any>(null);
+  const { livePractitioners } = usePractitionersQuery(apiSession);
   const now = new Date();
   const today = [
     now.getFullYear(),
@@ -58,37 +52,6 @@ export function Dashboard({
     0,
   );
   const monthEnd = `${currentMonth}-${String(monthEndDate.getDate()).padStart(2, "0")}`;
-  const monthlyParams = new URLSearchParams({
-    from_date: monthStart,
-    to_date: monthEnd,
-  });
-  if (branchId) monthlyParams.set("branch_id", branchId);
-  const branchQuery = branchId
-    ? `?branch_id=${encodeURIComponent(branchId)}`
-    : "";
-  useEffect(() => {
-    if (!apiSession) return;
-    let active = true;
-    Promise.all([
-      apiFetch(`/billing/reports/collections?${monthlyParams}`, apiSession).catch(
-        () => null,
-      ),
-      apiFetch(`/billing/reports/due-collection${branchQuery}`, apiSession).catch(
-        () => null,
-      ),
-      apiFetch(`/billing/reports/due-collection?${monthlyParams}`, apiSession).catch(
-        () => null,
-      ),
-    ]).then(([collections, allDue, monthlyDue]) => {
-      if (!active) return;
-      setMonthlyCollections(collections);
-      setAllDueReport(allDue);
-      setMonthlyDueReport(monthlyDue);
-    });
-    return () => {
-      active = false;
-    };
-  }, [apiSession?.tenantId, branchId, monthStart, monthEnd]);
   const todayAppointments = scopedAppointments.filter(
     (row: any) =>
       dateKey(row.appointmentDate || row.appointment_date) === today,
@@ -103,32 +66,57 @@ export function Dashboard({
     return monthKey(sourceDate) === currentMonth;
   });
   const activeMonthlyInvoices = monthlyInvoices.filter(
-    (row: any) =>
-      normalized(row.status) !== "cancelled",
+    (row: any) => !["cancelled", "refunded"].includes(normalized(row.status)),
   );
-  const monthlyRevenue = activeMonthlyInvoices.reduce(
-    (sum: number, row: any) => sum + Number(row.total_amount || 0),
-    0,
+  const todayInvoices = liveInvoices.filter((row: any) => {
+    const sourceDate =
+      row.created_at || row.invoice_date || row.updated_at || row.paid_at;
+    return dateKey(sourceDate) === today;
+  });
+  const activeTodayInvoices = todayInvoices.filter(
+    (row: any) => !["cancelled", "refunded"].includes(normalized(row.status)),
   );
   const fallbackMonthlyDue = activeMonthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceBalance(row),
     0,
   );
-  const fallbackAllDue = liveInvoices
-    .filter(
-      (row: any) =>
-        !["cancelled", "refunded"].includes(normalized(row.status)),
-    )
-    .reduce((sum: number, row: any) => sum + invoiceBalance(row), 0);
+  const { data: dashboardData, loading } = useDashboardData({
+    apiSession,
+    branchId,
+    today,
+    monthStart,
+    monthEnd,
+  });
   const monthlyDue = Number(
-    monthlyDueReport?.total_due_amount ?? fallbackMonthlyDue,
+    dashboardData?.monthlyDue?.total_due_amount ?? fallbackMonthlyDue,
   );
-  const allDue = Number(allDueReport?.total_due_amount ?? fallbackAllDue);
-  const carriedDue = Math.max(allDue - monthlyDue, 0);
+  const todayDue = Number(
+    dashboardData?.todayDue?.total_due_amount ??
+      activeTodayInvoices.reduce(
+        (sum: number, row: any) => sum + invoiceBalance(row),
+        0,
+      ),
+  );
+  const monthlyDueInvoiceCount = Number(
+    dashboardData?.monthlyDue?.invoice_count ??
+      activeMonthlyInvoices.filter((row: any) => invoiceBalance(row) > 0)
+        .length,
+  );
+  const todayDueInvoiceCount = Number(
+    dashboardData?.todayDue?.invoice_count ??
+      activeTodayInvoices.filter((row: any) => invoiceBalance(row) > 0).length,
+  );
   const monthlyPaid = Number(
-    monthlyCollections?.net_collected_amount ??
+    dashboardData?.collections?.net_collected_amount ??
       activeMonthlyInvoices.reduce(
-        (sum: number, row: any) => sum + invoiceAmount(row),
+        (sum: number, row: any) => sum + Number(row.paid_amount || 0),
+        0,
+      ),
+  );
+  const todayPaid = Number(
+    dashboardData?.todayPaid?.net_collected_amount ??
+      activeTodayInvoices.reduce(
+        (sum: number, row: any) => sum + Number(row.paid_amount || 0),
         0,
       ),
   );
@@ -137,18 +125,6 @@ export function Dashboard({
   );
   const membershipSavings = activeMonthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceMembershipBenefit(row),
-    0,
-  );
-  const offerSavings = activeMonthlyInvoices.reduce(
-    (sum: number, row: any) => sum + invoiceOfferDiscount(row),
-    0,
-  );
-  const approvedSavings = activeMonthlyInvoices.reduce(
-    (sum: number, row: any) => sum + invoiceApprovedDiscount(row),
-    0,
-  );
-  const billingDiscounts = activeMonthlyInvoices.reduce(
-    (sum: number, row: any) => sum + invoiceBillingDiscount(row),
     0,
   );
   const departmentById = new Map(
@@ -188,87 +164,108 @@ export function Dashboard({
       ].includes(status)
     );
   });
+
   const cards = [
     {
-      title: "Today Appointments",
+      title: "Booked Today",
       value: todayAppointments.length,
       detail: `${completedToday.length} completed today`,
       icon: CalendarDays,
       target: "appointments",
     },
     {
-      title: "Patients Count",
-      value: liveSummary?.patients ?? patients.length,
-      detail: `${patients.length} loaded records`,
+      title: "Patients Created Today",
+      value: dashboardData?.patientCount?.total ?? 0,
+      detail: "New patient registrations today",
       icon: Users,
       target: "patients",
     },
-    // {
-    //   title: "Active Queue",
-    //   value: activeQueue.length,
-    //   detail: `${liveSummary?.queue ?? activeQueue.length} total queue entries`,
-    //   icon: Clock,
-    //   target: "queue",
-    // },
+    {
+      title: "Total Patients",
+      value: liveSummary?.patients ?? 0,
+      detail: "Tenant-wide total",
+      icon: Users,
+      target: "patients",
+    },
     {
       title: "Monthly Revenue",
-      value: rupees(monthlyRevenue),
-      detail: `Net collections ${rupees(monthlyPaid)}`,
+      value: rupees(monthlyPaid),
+      detail: "Paid collections only",
       icon: IndianRupee,
       target: "billing",
     },
     {
-      title: "Monthly Due",
-      value: rupees(monthlyDue),
-      detail: `Carried ${rupees(carriedDue)} · Total ${rupees(allDue)}`,
-      icon: ReceiptIndianRupee,
+      title: "Today Revenue",
+      value: rupees(todayPaid),
+      detail: "Paid collections today",
+      icon: IndianRupee,
       target: "billing",
+      loading,
     },
     {
-      title: "Billing Discounts",
-      value: rupees(billingDiscounts),
-      detail: `Approved ${rupees(approvedSavings)} · Offers ${rupees(offerSavings)} · Membership ${rupees(membershipSavings)}`,
+      title: "Monthly Due",
+      value: rupees(monthlyDue),
+      detail: `${monthlyDueInvoiceCount} invoices with balance`,
       icon: ReceiptIndianRupee,
-      target: "reports",
+      target: "billing",
+      loading,
     },
-    // {
-    //   title: "Membership Usage",
-    //   value: rupees(membershipSavings),
-    //   detail: `${membershipPurchaseInvoices.length} plan purchases · offers ${rupees(offerSavings)}`,
-    //   icon: ReceiptIndianRupee,
-    //   target: "patients",
-    // },
+    {
+      title: "Today Due",
+      value: rupees(todayDue),
+      detail: `${todayDueInvoiceCount} invoices with balance today`,
+      icon: ReceiptIndianRupee,
+      target: "billing",
+      loading,
+    },
   ];
 
   return (
     <div className="space-y-6">
       <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-4">
-        {cards.map(({ title, value, detail, icon: Icon, target }: any) => (
-          <button
-            key={title}
-            type="button"
-            onClick={() => setActive?.(target)}
-            className="rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-          >
-            <div className="flex items-center mb-3 h-10">
-              <Icon className="text-slate-500 mr-2" />
-              <p className="md:text-[10px] lg:text-sm text-slate-500 font-bold  ">
-                {title}
-              </p>
-            </div>
-            <p className="mt-1 text-xl lg:text-2xl font-bold">{value}</p>
-            <p className="mt-2 text-[10px] font-semibold text-slate-500 h-5">
-              {detail}
-            </p>
-          </button>
-        ))}
+        {cards.map(
+          ({
+            title,
+            value,
+            detail,
+            icon: Icon,
+            target,
+            loading: cardLoading,
+          }: any) => (
+            <button
+              key={title}
+              type="button"
+              onClick={() => setActive?.(target)}
+              className="rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+            >
+              <div className="flex items-center mb-3 h-10">
+                <Icon className="text-slate-500 mr-2" />
+                <p className="md:text-[10px] lg:text-sm text-slate-500 font-bold  ">
+                  {title}
+                </p>
+              </div>
+              {cardLoading ? (
+                <Skeleton className="mt-1 h-7 w-24" />
+              ) : (
+                <p className="mt-1 text-xl lg:text-2xl font-bold">{value}</p>
+              )}
+              {cardLoading ? (
+                <Skeleton className="mt-2 h-4 w-32" />
+              ) : (
+                <p className="mt-2 text-[10px] font-semibold text-slate-500 h-5">
+                  {detail}
+                </p>
+              )}
+            </button>
+          ),
+        )}
       </div>
       <NotificationWidget apiSession={apiSession} setActive={setActive} />
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h3 className="card-title font-bold">Tenant Operations Analysis</h3>
-            <p className="table-data text-slate-500">
+            <p className="card-desc text-slate-500">
               Today workload, collections, queue pressure, and module usage.
             </p>
           </div>
@@ -280,7 +277,10 @@ export function Dashboard({
           <Insight label="Booked Today" value={todayAppointments.length} />
           <Insight label="Completed Today" value={completedToday.length} />
           <Insight label="Waiting Queue" value={activeQueue.length} />
-          <Insight label="Invoices This Month" value={monthlyInvoices.length} />
+          <Insight
+            label="Invoices This Month"
+            value={activeMonthlyInvoices.length}
+          />
           <Insight
             label="Membership Savings"
             value={rupees(membershipSavings)}

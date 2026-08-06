@@ -86,6 +86,8 @@ class PatientSubscriptionEnrollmentRead(BaseModel):
     tenant_id: str
     branch_id: str
     patient_id: str
+    patient_name: str | None = None
+    patient_number: str | None = None
     plan_id: str
     starts_on: date
     activated_on: date | None = None

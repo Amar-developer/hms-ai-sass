@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
 from sqlmodel import Field, SQLModel
@@ -101,6 +101,12 @@ class LabOrder(SQLModel, table=True):
         default=None, index=True, foreign_key="consultation.id"
     )
     lab_order_number: str | None = Field(default=None, index=True, max_length=60)
+    order_date: date = Field(default_factory=date.today, index=True)
+    acquisition_source: str = Field(default="direct", index=True, max_length=40)
+    referrer_patient_id: str | None = Field(
+        default=None, index=True, foreign_key="patient.id"
+    )
+    referrer_name: str | None = Field(default=None, max_length=180)
     source: LabOrderSource = Field(default=LabOrderSource.CONSULTATION, index=True)
     status: LabOrderStatus = Field(default=LabOrderStatus.ORDERED, index=True)
     priority: LabOrderPriority = Field(default=LabOrderPriority.ROUTINE, index=True)

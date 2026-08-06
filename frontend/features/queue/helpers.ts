@@ -67,3 +67,10 @@ export function sortByQueuePosition(rows: any[]) {
     });
   });
 }
+
+
+export const isStatus = (
+  appointment: any,
+  status: string
+) =>
+  appointment.status?.toLowerCase() === status.toLowerCase();

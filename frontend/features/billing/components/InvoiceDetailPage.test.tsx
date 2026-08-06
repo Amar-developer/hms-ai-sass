@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { InvoiceDetailPage } from "./InvoiceDetailPage";
@@ -71,6 +71,140 @@ describe("invoice payment summary", () => {
     expect(screen.queryByText("Membership discount")).toBeNull();
     expect(screen.queryByText("Total membership benefit")).toBeNull();
     expect(screen.queryByText("Regular chargeable items")).toBeNull();
+  });
+
+  it("offers an Apply button instead of applying an eligible offer itself", () => {
+    const applyOffer = vi.fn();
+    render(
+      <InvoiceDetailPage
+        detail={{
+          invoice: {
+            id: "invoice-offer",
+            invoice_number: "MHB-INV-OFFER",
+            status: "issued",
+            consultation_id: "consultation-1",
+            subtotal_amount: 600,
+            taxable_amount: 600,
+            tax_amount: 0,
+            total_amount: 600,
+            paid_amount: 0,
+            balance_amount: 600,
+            discount_amount: 0,
+          },
+          items: [],
+          payments: [],
+          credit_notes: [],
+          ledger_entries: [],
+          adjustment_requests: [],
+          offer_benefit: {
+            is_applied: false,
+            can_apply: true,
+            eligible_count: 2,
+            offer_id: "offer-1",
+            offer_name: "Diwali Offer",
+            discount_amount: 120,
+          },
+        }}
+        patient={{}}
+        invoicePaymentOptions={[{ value: "cash", label: "Cash" }]}
+        defaultPaymentMethod="cash"
+        collectPayment={vi.fn()}
+        collectSplitPayment={vi.fn()}
+        sendInvoice={vi.fn()}
+        applyMembershipBenefit={vi.fn()}
+        applyOffer={applyOffer}
+        removeOffer={vi.fn()}
+        openReceipt={vi.fn()}
+        issueCreditNote={vi.fn()}
+        cancelInvoice={vi.fn()}
+        amendInvoice={vi.fn()}
+        requestAdjustment={vi.fn()}
+        approveAdjustment={vi.fn()}
+        rejectAdjustment={vi.fn()}
+        executeAdjustment={vi.fn()}
+        currentUser={{}}
+        userPermissions={["invoices.read"]}
+      />,
+    );
+
+    // The offer is only a suggestion until staff act on it: the invoice still
+    // bills the full ₹600 and the summary shows no offer deduction.
+    expect(screen.getByText("Offer & Discount")).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Diwali Offer available · saves ₹120 \(best of 2 eligible offers\)/,
+      ),
+    ).toBeTruthy();
+
+    const apply = screen.getByRole("button", { name: /Apply ₹120/ });
+    fireEvent.click(apply);
+    expect(applyOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "invoice-offer" }),
+      "offer-1",
+    );
+  });
+
+  it("lets staff remove an applied offer before payment", () => {
+    const removeOffer = vi.fn();
+    render(
+      <InvoiceDetailPage
+        detail={{
+          invoice: {
+            id: "invoice-applied-offer",
+            invoice_number: "MHB-INV-APPLIED",
+            status: "issued",
+            consultation_id: "consultation-2",
+            subtotal_amount: 600,
+            taxable_amount: 480,
+            tax_amount: 0,
+            total_amount: 480,
+            paid_amount: 0,
+            balance_amount: 480,
+            discount_amount: 120,
+            discount_offer_id: "offer-1",
+            offer_discount_amount: 120,
+            offer_discount_name: "Diwali Offer",
+          },
+          items: [],
+          payments: [],
+          credit_notes: [],
+          ledger_entries: [],
+          adjustment_requests: [],
+          offer_benefit: {
+            is_applied: true,
+            can_apply: false,
+            can_remove: true,
+            offer_id: "offer-1",
+            offer_name: "Diwali Offer",
+            discount_amount: 120,
+          },
+        }}
+        patient={{}}
+        invoicePaymentOptions={[{ value: "cash", label: "Cash" }]}
+        defaultPaymentMethod="cash"
+        collectPayment={vi.fn()}
+        collectSplitPayment={vi.fn()}
+        sendInvoice={vi.fn()}
+        applyMembershipBenefit={vi.fn()}
+        applyOffer={vi.fn()}
+        removeOffer={removeOffer}
+        openReceipt={vi.fn()}
+        issueCreditNote={vi.fn()}
+        cancelInvoice={vi.fn()}
+        amendInvoice={vi.fn()}
+        requestAdjustment={vi.fn()}
+        approveAdjustment={vi.fn()}
+        rejectAdjustment={vi.fn()}
+        executeAdjustment={vi.fn()}
+        currentUser={{}}
+        userPermissions={["invoices.read"]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(removeOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "invoice-applied-offer" }),
+    );
   });
 
   it("shows the actual payable amount as the last billing item column", () => {

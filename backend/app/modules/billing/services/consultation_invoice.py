@@ -10,6 +10,7 @@ from app.modules.billing.services.numbering import next_invoice_number
 from app.modules.billing.services.money import money_value, percentage_amount
 from app.modules.billing.services.line_discounts import sync_invoice_item_discounts
 from app.modules.billing.services.rules import (
+    FeeCalculation,
     calculate_offer_discount,
     calculate_fee_split,
     find_fee_rule,
@@ -23,6 +24,24 @@ from app.modules.patient_subscriptions.service import (
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
 from app.modules.tenants.repositories import DepartmentRepository
+
+
+def doctor_share_after_patient_benefits(
+    calculation: FeeCalculation | None,
+    *,
+    subtotal: Decimal,
+    taxable: Decimal,
+    total: Decimal,
+    membership_discount: Decimal,
+) -> Decimal:
+    if not subtotal or not calculation:
+        return Decimal("0")
+    if total <= 0 and membership_discount >= subtotal:
+        # A membership benefit changes what the patient owes, not what the
+        # clinic owes the doctor for delivering the consultation.
+        return money_value(calculation.doctor_share_amount)
+    share_basis = total if calculation.fee_rule.share_tax_with_doctor else taxable
+    return money_value(calculation.doctor_share_amount * share_basis / subtotal)
 
 
 def consultation_item_description(
@@ -165,14 +184,14 @@ def create_consultation_invoice(
     )
     tax_amount = percentage_amount(taxable, tax_rule.tax_percentage if tax_rule else 0)
     total = taxable + tax_amount
-    if subtotal and calculation:
-        share_basis = total if calculation.fee_rule.share_tax_with_doctor else taxable
-        doctor_share = money_value(
-            calculation.doctor_share_amount * share_basis / subtotal
-        )
-    else:
-        doctor_share = 0
-    clinic_share = total - doctor_share
+    doctor_share = doctor_share_after_patient_benefits(
+        calculation,
+        subtotal=subtotal,
+        taxable=taxable,
+        total=total,
+        membership_discount=membership_discount,
+    )
+    clinic_share = max(total - doctor_share, 0)
 
     invoice = Invoice(
         tenant_id=appointment.tenant_id,

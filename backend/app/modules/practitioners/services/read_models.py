@@ -5,6 +5,7 @@ from app.modules.practitioners.repositories import (
     PractitionerLinkRepository,
     PractitionerReferenceRepository,
 )
+from app.modules.practitioners.schedule_days import parse_weekdays
 from app.modules.practitioners.schemas import PractitionerRead, PractitionerScheduleRead
 
 
@@ -27,15 +28,28 @@ def practitioner_department_ids(
 
 
 def read_practitioner(session: Session, practitioner: Practitioner) -> PractitionerRead:
+    return practitioner_read_with_links(
+        practitioner,
+        branch_ids=practitioner_branch_ids(
+            session, practitioner.tenant_id, practitioner.id
+        ),
+        department_ids=practitioner_department_ids(
+            session, practitioner.tenant_id, practitioner.id
+        ),
+    )
+
+
+def practitioner_read_with_links(
+    practitioner: Practitioner,
+    *,
+    branch_ids: list[str],
+    department_ids: list[str],
+) -> PractitionerRead:
     data = PractitionerRead.model_validate(
         practitioner, from_attributes=True
     ).model_dump()
-    data["branch_ids"] = practitioner_branch_ids(
-        session, practitioner.tenant_id, practitioner.id
-    )
-    data["department_ids"] = practitioner_department_ids(
-        session, practitioner.tenant_id, practitioner.id
-    )
+    data["branch_ids"] = branch_ids
+    data["department_ids"] = department_ids
     return PractitionerRead(**data)
 
 
@@ -58,6 +72,7 @@ def enrich_schedules(
     rows: list[PractitionerScheduleRead] = []
     for schedule in schedules:
         read = PractitionerScheduleRead.model_validate(schedule, from_attributes=True)
+        read.weekdays = parse_weekdays(schedule.weekdays_json)
         read.practitioner_full_name = prac_names.get(schedule.practitioner_id)
         read.branch_name = branch_names.get(schedule.branch_id)
         read.department_name = dept_names.get(schedule.department_id)

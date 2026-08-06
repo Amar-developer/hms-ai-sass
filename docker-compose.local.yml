@@ -1,7 +1,15 @@
+name: medizinhub-hms
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: medizinhub-postgres
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
     env_file:
       - .env
     environment:
@@ -86,6 +94,7 @@ services:
     command: >
       bash -c "
       alembic -c alembic/alembic.ini upgrade head &&
+      python scripts/verify_runtime_readiness.py --ensure-pg-stat-statements &&
       uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
       "
     healthcheck:

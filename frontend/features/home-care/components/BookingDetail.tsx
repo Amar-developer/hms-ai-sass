@@ -1,4 +1,5 @@
 import { displayDate, money, patientName } from "@/utils/helper";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import {
   bookingTotal,
   isBookingLocked,
@@ -111,8 +112,11 @@ export function BookingDetail({
               />
             </div>
             <p className="text-xs text-slate-500">
-              {patientName(patient)} ·{" "}
-              {patientCode(patient) || patient?.mobile || ""}
+              {booking.patient_name || patientName(patient)} ·{" "}
+              {booking.patient_number ||
+                patientCode(patient) ||
+                patient?.mobile ||
+                ""}
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
@@ -139,7 +143,10 @@ export function BookingDetail({
           </div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3 md:max-w-2xl lg:max-w-4xl">
-          <Info title="Patient" value={patientName(patient)} />
+          <Info
+            title="Patient"
+            value={booking.patient_name || patientName(patient)}
+          />
           <Info
             title="Recurrence"
             value={humanizeOptionLabel(booking.recurrence || "daily")}
@@ -307,23 +314,27 @@ export function BookingDetail({
                 </FormField>
               )}
               {fixedServiceCategory === "home_care_service" ? (
-                <SelectField
-                  label="Hours"
-                  value={visitForm.quantity}
-                  onChange={(value: string) => setVisitField("quantity", value)}
-                  options={[
-                    ...(homeCareHourPrices[String(visitForm.quantity)]
-                      ? []
-                      : [
-                          {
-                            value: String(visitForm.quantity || ""),
-                            label: `${visitForm.quantity || 0} hours - custom`,
-                          },
-                        ]),
-                    ...homeCareHourOptions,
-                  ]}
-                  required
-                />
+                <FormField label="Hours">
+                  <SearchableSelect
+                    searchable={false}
+                    value={visitForm.quantity}
+                    onChange={(value: string) =>
+                      setVisitField("quantity", value)
+                    }
+                    options={[
+                      ...(homeCareHourPrices[String(visitForm.quantity)]
+                        ? []
+                        : [
+                            {
+                              value: String(visitForm.quantity || ""),
+                              label: `${visitForm.quantity || 0} hours - custom`,
+                            },
+                          ]),
+                      ...homeCareHourOptions,
+                    ]}
+                    required
+                  />
+                </FormField>
               ) : null}
               <NumberField
                 label={
@@ -352,7 +363,9 @@ export function BookingDetail({
               />
               <div className="flex items-end">
                 <Button disabled={busy === "visit-log"} className="save-button">
-                  {busy === "visit-log" ? "Saving..." : "Add Log"}
+                  <ButtonLoader loading={busy === "visit-log"}>
+                    {busy === "visit-log" ? "Saving..." : "Add Log"}
+                  </ButtonLoader>
                 </Button>
               </div>
             </form>
@@ -425,7 +438,7 @@ export function BookingDetail({
                               entity: "serviceLog",
                               row: {
                                 id: row.id,
-                                name: row.service_name || 'Log',
+                                name: row.service_name || "Log",
                               },
                             })
                           }
@@ -458,7 +471,9 @@ export function BookingDetail({
               disabled={locked || busy === "cancel-booking"}
               title={locked ? "Locked after billing/completion" : undefined}
             >
-              {busy === "cancel-booking" ? "Cancelling..." : "Cancel Booking"}
+              <ButtonLoader loading={busy === "cancel-booking"}>
+                {busy === "cancel-booking" ? "Cancelling..." : "Cancel Booking"}
+              </ButtonLoader>
             </ActionButton>
           )}
           {(invoiceDetail?.invoice ||

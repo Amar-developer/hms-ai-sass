@@ -6,16 +6,16 @@ import {
   Badge,
   Button,
   Card,
+  Input,
   RefreshButton,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiBlob, apiFetch, apiUpload, uploadAssetUrl } from "@/lib/api";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { displayDate, displayDateTime, formatPrice } from "@/utils/helper";
 import { pageSize } from "./constants";
 import {
-  activeLabInvoiceOrderIds,
   downloadBlob,
+  invoicedLabOrderIds,
   isCancelled,
   isReleased,
   splitList,
@@ -25,13 +25,23 @@ import { WorklistDetailModal } from "./components/WorklistDetailModal";
 import { Pagination } from "@/app/components/common/Pagination";
 import { LabOrderForm } from "@/features/lab/forms/LabForms";
 import { LabOrderFormValues } from "@/features/lab/lab.schema";
-import { DataTable } from "../reports/components/DataTable";
-import { Column } from "../reports/types";
+import type { LabOrderSummary } from "@/lib/contracts";
 import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "../admin/components/RowActions";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { FilterSection } from "@/app/components/common/FilterSection";
+import { FormField } from "@/app/components/FormElements";
+import {
+  useLabActions,
+  useLabAvailableTestSearch,
+  useLabWorkspaceData,
+} from "./api";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 const MAX_REPORT_DOCUMENTS = 5;
 
@@ -49,26 +59,32 @@ function pickReportFile(onPick: (file: File) => void) {
 export function Lab({
   apiSession,
   branchId,
-  patients,
   appointments,
   loadLiveData,
-  liveInvoices = [],
+  setActive,
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [ordersLoaded, setOrdersLoaded] = useState(false);
-  const [consultationReferrals, setConsultationReferrals] = useState<any[]>([]);
-  const [tests, setTests] = useState<any[]>([]);
-  const [packages, setPackages] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [templates, setTemplates] = useState<any[]>([]);
+  const {
+    orders,
+    ordersLoaded,
+    consultationReferrals,
+    tests,
+    packages,
+    suppliers,
+    templates,
+    reportDocuments,
+    setReportDocuments,
+    loadError,
+    load,
+  } = useLabWorkspaceData({ apiSession });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
-  const [availableTests, setAvailableTests] = useState<any[]>([]);
   const [testSearch, setTestSearch] = useState("");
   const [selectedAvailableTestId, setSelectedAvailableTestId] = useState("");
-  const [testLoading, setTestLoading] = useState(false);
+  const { availableTests, testLoading } = useLabAvailableTestSearch({
+    apiSession,
+    testSearch,
+  });
   const [orderTests, setOrderTests] = useState<any[]>([]);
   const [dismissedConsultations, setDismissedConsultations] = useState<
     string[]
@@ -82,14 +98,6 @@ export function Lab({
       return [];
     }
   });
-  const [testName, setTestName] = useState("Complete Blood Count");
-  const [testCode, setTestCode] = useState("CBC");
-  const [sampleType, setSampleType] = useState("Blood");
-  const [price, setPrice] = useState("350");
-  const [templateName, setTemplateName] = useState("Standard Result Template");
-  const [reportDocuments, setReportDocuments] = useState<Record<string, any[]>>(
-    {},
-  );
   const [replaceDocPicker, setReplaceDocPicker] = useState<{
     order: any;
     docs: any[];
@@ -97,10 +105,32 @@ export function Lab({
   const [localInvoicedOrderIds, setLocalInvoicedOrderIds] = useState<string[]>(
     [],
   );
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [localInvoiceIdsByOrder, setLocalInvoiceIdsByOrder] = useState<
+    Record<string, string>
+  >({});
+  const [selectedOrder, setSelectedOrder] = useState<LabOrderSummary | null>(
+    null,
+  );
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [consultDetail, setConsultDetail] = useState<any>(null);
+  const [removeDocPicker, setRemoveDocPicker] = useState<{
+    order: any;
+    docs: any[];
+  } | null>(null);
 
+  function handleRemoveDocument(order: any) {
+    const docs = reportDocuments[order.id] || [];
+    if (docs.length === 0) return;
+
+    if (docs.length === 1) {
+      // Single document → remove directly
+      removeReportDocument(order, docs[0]);
+      return;
+    }
+
+    // Multiple documents → show picker
+    setRemoveDocPicker({ order, docs });
+  }
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
     Boolean(
@@ -121,6 +151,14 @@ export function Lab({
 
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [page, setPage] = useState(1);
+  const [worklistQuery, setWorklistQuery] = useState("");
+  const [worklistFilters, setWorklistFilters] = useState<
+    Record<string, string>
+  >({ source: "all", status: "all" });
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [worklistFromDate, setWorklistFromDate] = useState("");
+  const [worklistToDate, setWorklistToDate] = useState("");
 
   const orderedConsultationIds = useMemo(
     () =>
@@ -161,47 +199,140 @@ export function Lab({
     ordersLoaded,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
+  const { patients, patientMap } = usePatientReferencesQuery(
+    apiSession,
+    orders.map((o: any) => o.patient_id),
+  );
+
+  const worklistSourceOptions = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((o: any) => {
+      const source = o.acquisition_source || o.source;
+      if (source) set.add(String(source));
+    });
+    return [
+      { value: "all", label: "All Sources" },
+      ...Array.from(set).map((source) => ({
+        value: source,
+        label: humanizeOptionLabel(source),
+      })),
+    ];
+  }, [orders]);
+
+  const worklistStatusOptions = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((o: any) => {
+      if (o.status) set.add(String(o.status));
+    });
+    return [
+      { value: "all", label: "All Status" },
+      ...Array.from(set).map((status) => ({
+        value: status,
+        label: humanizeOptionLabel(status),
+      })),
+    ];
+  }, [orders]);
+
+  const worklistFilterConfigs = [
+    // { key: "source", label: "Source", options: worklistSourceOptions },
+    // { key: "status", label: "Status", options: worklistStatusOptions },
+  ];
+
+  function onWorklistFilterChange(key: string, value: string) {
+    setWorklistFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const filteredOrders = useMemo(() => {
+    const q = worklistQuery.trim().toLowerCase();
+    const min = amountMin.trim() === "" ? null : Number(amountMin);
+    const max = amountMax.trim() === "" ? null : Number(amountMax);
+    const from = worklistFromDate ? new Date(worklistFromDate).getTime() : null;
+    const to = worklistToDate
+      ? new Date(`${worklistToDate}T23:59:59`).getTime()
+      : null;
+
+    return orders.filter((o: any) => {
+      if (q) {
+        const name = String(
+          o.patient_name || (patientMap.get(o.patient_id) as any)?.name || "",
+        ).toLowerCase();
+        if (!name.includes(q)) return false;
+      }
+
+      if (worklistFilters.source !== "all") {
+        const source = String(o.acquisition_source || o.source || "");
+        if (source !== worklistFilters.source) return false;
+      }
+
+      if (worklistFilters.status !== "all") {
+        if (String(o.status || "") !== worklistFilters.status) return false;
+      }
+
+      const amount = Number(o.amount);
+      if (min !== null && amount < min) return false;
+      if (max !== null && amount > max) return false;
+
+      const createdAt = o.created_at ? new Date(o.created_at).getTime() : null;
+      if (from !== null && (createdAt === null || createdAt < from))
+        return false;
+      if (to !== null && (createdAt === null || createdAt > to)) return false;
+
+      return true;
+    });
+  }, [
+    orders,
+    worklistQuery,
+    worklistFilters,
+    amountMin,
+    amountMax,
+    worklistFromDate,
+    worklistToDate,
+    patientMap,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  const labPageRows = orders.slice(
+  const labPageRows = filteredOrders.slice(
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
 
-  const patientMap = useMemo(
-    () => new Map(patients.map((p: any) => [p.id, p])),
-    [patients],
-  );
-
   const invoicedOrderIds = useMemo(
-    () =>
-      new Set([
-        ...activeLabInvoiceOrderIds(liveInvoices),
-        ...localInvoicedOrderIds,
-      ]),
-    [liveInvoices, localInvoicedOrderIds],
+    () => new Set([...invoicedLabOrderIds(orders), ...localInvoicedOrderIds]),
+    [orders, localInvoicedOrderIds],
   );
+  const invoiceIdsByOrder = useMemo(() => {
+    const rows: Record<string, string> = { ...localInvoiceIdsByOrder };
+    orders.forEach((order: any) => {
+      if (order?.id && order?.billing_invoice_id) {
+        rows[order.id] = order.billing_invoice_id;
+      }
+    });
+    return rows;
+  }, [orders, localInvoiceIdsByOrder]);
 
   useEffect(() => {
-    const serverOrderIds = new Set(
-      (liveInvoices || [])
-        .map((invoice: any) => invoice.lab_order_id)
-        .filter(Boolean),
-    );
+    const serverOrderIds = new Set(invoicedLabOrderIds(orders));
     if (!serverOrderIds.size) return;
     setLocalInvoicedOrderIds((ids) =>
       ids.filter((orderId) => !serverOrderIds.has(orderId)),
     );
-  }, [liveInvoices]);
-
-  // Load data
-  useEffect(() => {
-    load();
-  }, [apiSession?.tenantId]);
+  }, [orders]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    worklistQuery,
+    worklistFilters,
+    amountMin,
+    amountMax,
+    worklistFromDate,
+    worklistToDate,
+  ]);
 
   useEffect(() => {
     if (typeof window !== "undefined")
@@ -212,36 +343,8 @@ export function Lab({
   }, [dismissedConsultations]);
 
   useEffect(() => {
-    if (!apiSession?.tenantId) {
-      setAvailableTests([]);
-      return;
-    }
-    let alive = true;
-    const search = testSearch.trim();
-    const timer = window.setTimeout(
-      async () => {
-        setTestLoading(true);
-        try {
-          const params = new URLSearchParams();
-          if (search) params.set("search", search);
-          const rows = await apiFetch(
-            `/lab/catalog/available-tests${params.toString() ? `?${params}` : ""}`,
-            apiSession,
-          );
-          if (alive) setAvailableTests(Array.isArray(rows) ? rows : []);
-        } catch {
-          if (alive) setAvailableTests([]);
-        } finally {
-          if (alive) setTestLoading(false);
-        }
-      },
-      search ? 250 : 0,
-    );
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [apiSession, apiSession?.tenantId, testSearch]);
+    if (loadError) setMessage(loadError);
+  }, [loadError]);
 
   const localAvailableTests = useMemo(
     () => [
@@ -315,178 +418,39 @@ export function Lab({
       0,
   );
 
-  async function load() {
-    if (!apiSession) {
-      setOrders([]);
-      setConsultationReferrals([]);
-      return;
-    }
-    try {
-      const [
-        orderRows,
-        referralRows,
-        testRows,
-        packageRows,
-        templateRows,
-        supplierRows,
-        reportRows,
-      ] = await Promise.all([
-        apiFetch("/lab/orders", apiSession),
-        apiFetch("/lab/consultation-referrals", apiSession).catch(() => []),
-        apiFetch("/lab/catalog/tests", apiSession),
-        apiFetch("/lab/catalog/packages", apiSession),
-        apiFetch("/lab/result-templates", apiSession),
-        apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
-        apiFetch("/files?category=lab_report&limit=500", apiSession).catch(
-          () => [],
-        ),
-      ]);
-      setOrders(orderRows);
-      setConsultationReferrals(referralRows || []);
-      setTests(testRows);
-      setPackages(packageRows);
-      setTemplates(templateRows);
-      setSuppliers(supplierRows || []);
-      const documentsByOrder: Record<string, any[]> = {};
-      for (const file of reportRows || []) {
-        if (file.attached_to_doctype !== "LabOrder" || !file.attached_to_name)
-          continue;
-        (documentsByOrder[file.attached_to_name] ||= []).push(file);
-      }
-      setReportDocuments(documentsByOrder);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load lab workspace.");
-    } finally {
-      setOrdersLoaded(true);
-    }
-  }
-
-  async function createTest(e: any) {
-    e.preventDefault();
-    if (!apiSession) return;
-    setBusy("test");
-    setMessage("");
-    try {
-      await apiFetch("/lab/catalog/tests", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchId,
-          code: testCode,
-          name: testName,
-          sample_type: sampleType,
-          default_price: Number(price || 0),
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Lab test added to catalog.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create lab test.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function createPackage() {
-    if (!apiSession || selectedTestIds.length === 0) return;
-    setBusy("package");
-    setMessage("");
-    try {
-      await apiFetch("/lab/catalog/packages", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          code: `PKG-${Date.now().toString().slice(-4)}`,
-          name: `Package ${selectedTestIds.length} Tests`,
-          package_price: selectedTestIds.reduce(
-            (sum, id) =>
-              sum +
-              Number(tests.find((t: any) => t.id === id)?.default_price || 0),
-            0,
-          ),
-          test_ids: selectedTestIds,
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      setSelectedTestIds([]);
-      await load();
-      setMessage("Lab package created.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create package.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function createTemplate() {
-    if (!apiSession) return;
-    setBusy("template");
-    setMessage("");
-    try {
-      await apiFetch("/lab/result-templates", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          test_id: selectedTestIds[0] || null,
-          name: templateName,
-          content: { fields: ["Observed value", "Reference range", "Remarks"] },
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Result template created.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create result template.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function handleCreateOrder(data: LabOrderFormValues) {
-    if (!apiSession) return false;
-    setBusy("create");
-    setMessage("");
-    const selectedNames = orderTests.map((t: any) => t.name).filter(Boolean);
-    const localTestIds = orderTests
-      .filter((t: any) => t.id && t.item_type !== "lab_package")
-      .map((t: any) => t.id);
-    const packageIds = orderTests
-      .filter((t: any) => t.id && t.item_type === "lab_package")
-      .map((t: any) => t.id);
-    const testsText = selectedNames.filter(Boolean).join(", ");
-    if (!testsText) {
-      setMessage("Select at least one lab test.");
-      setBusy("");
-      return false;
-    }
-    try {
-      await apiFetch("/lab/orders", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchId,
-          patient_id: data.patient_id,
-          source: data.source,
-          tests: testsText,
-          test_ids: localTestIds,
-          package_ids: packageIds,
-          external_items: [],
-          external_referrer:
-            data.source === "external_referral" ? data.external_referrer : null,
-          amount: 0,
-          ordered_by_user_id: apiSession.user?.id,
-        }),
-      });
-      setOrderTests([]);
-      setSelectedAvailableTestId("");
-      setTestSearch("");
-      await load();
-      setMessage("Lab & Service order created.");
-      return true;
-    } catch (err: any) {
-      setMessage(err.message || "Could not create lab / service order.");
-      return false;
-    } finally {
-      setBusy("");
-    }
-  }
+  const {
+    handleCreateOrder,
+    createFromConsultation,
+    collectSample,
+    updateStatus,
+    addReportDocument,
+    replaceReportDocument,
+    releaseResult,
+    sendReport,
+    openReport,
+    generateInvoice,
+    loadConsultDetail,
+    removeReportDocument,
+  } = useLabActions({
+    apiSession,
+    branchId,
+    loadLiveData,
+    templates,
+    orderTests,
+    reportDocuments,
+    setReportDocuments,
+    setBusy,
+    setMessage,
+    setOrderTests,
+    setSelectedAvailableTestId,
+    setTestSearch,
+    setLocalInvoicedOrderIds,
+    setLocalInvoiceIdsByOrder,
+    setViewConsult,
+    setConsultDetail,
+    setLoadingDetail,
+    load,
+  });
 
   function addOrderTest() {
     const t = selectedAvailableTest;
@@ -515,147 +479,6 @@ export function Lab({
     );
   }
 
-  async function createFromConsultation(a: any) {
-    setBusy(a.consultationId);
-    setMessage("");
-    try {
-      await apiFetch(
-        `/lab/orders/from-consultation/${a.consultationId}`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            amount: 0,
-            priority: a.tokenType === "Emergency" ? "urgent" : "routine",
-            ordered_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      await load();
-      setMessage(
-        "Lab order created. Release the result before generating invoice.",
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not create referral order.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function collectSample(order: any) {
-    setBusy(order.id);
-    setMessage("");
-    try {
-      await apiFetch(`/lab/orders/${order.id}/samples`, apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          barcode: `${order.id}-S1`,
-          sample_type: "Blood",
-          collected_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Sample collected.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not collect sample.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function updateStatus(order: any, status: string) {
-    setBusy(order.id);
-    setMessage("");
-    try {
-      await apiFetch(`/lab/orders/${order.id}/status`, apiSession, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status,
-          actor_user_id: apiSession.user?.id,
-          reason:
-            status === "cancelled" ? "Cancelled from lab screen" : undefined,
-        }),
-      });
-      await load();
-    } catch (err: any) {
-      setMessage(err.message || "Could not update lab order.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function uploadOrderDocument(order: any, file: File) {
-    const upload = new FormData();
-    upload.append("file", file);
-    upload.append("branch_id", order.branch_id || branchId || "");
-    upload.append("patient_id", order.patient_id);
-    upload.append("category", "lab_report");
-    upload.append("source_module", "lab");
-    upload.append("attached_to_doctype", "LabOrder");
-    upload.append("attached_to_name", order.id);
-    upload.append("attached_to_field", "report_url");
-    upload.append("attached_to_label", "Lab Report");
-    return apiUpload("/files", apiSession, upload);
-  }
-
-  async function addReportDocument(order: any, file: File | null) {
-    if (!file || !apiSession) return;
-    if ((reportDocuments[order.id] || []).length >= MAX_REPORT_DOCUMENTS) {
-      setMessage(
-        `Maximum ${MAX_REPORT_DOCUMENTS} documents allowed per report.`,
-      );
-      return;
-    }
-    setBusy(`report-${order.id}`);
-    setMessage("");
-    try {
-      const document = await uploadOrderDocument(order, file);
-      setReportDocuments((current) => ({
-        ...current,
-        [order.id]: [...(current[order.id] || []), document],
-      }));
-      setMessage(`Report uploaded: ${document.file_name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not upload report.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function replaceReportDocument(
-    order: any,
-    oldDocument: any,
-    file: File | null,
-  ) {
-    if (!file || !apiSession) return;
-    setBusy(`report-${order.id}`);
-    setMessage("");
-    try {
-      const document = await uploadOrderDocument(order, file);
-      if (oldDocument?.id) {
-        try {
-          await apiFetch(`/files/${oldDocument.id}`, apiSession, {
-            method: "DELETE",
-          });
-        } catch (_) {
-          // Lab roles may not hold files.delete — the new document still
-          // becomes the active one even if the stale file can't be purged.
-        }
-      }
-      setReportDocuments((current) => ({
-        ...current,
-        [order.id]: (current[order.id] || []).map((doc: any) =>
-          doc.id === oldDocument?.id ? document : doc,
-        ),
-      }));
-      setMessage(`Report replaced: ${document.file_name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not replace report.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   function handleReuploadReport(order: any) {
     const docs = reportDocuments[order.id] || [];
     if (docs.length > 1) {
@@ -671,97 +494,12 @@ export function Lab({
     pickReportFile((file) => addReportDocument(order, file));
   }
 
-  async function releaseResult(order: any) {
-    setBusy(order.id);
-    setMessage("");
-    const reportDocument = (reportDocuments[order.id] || [])[0];
-    try {
-      await apiFetch(`/lab/orders/${order.id}/results`, apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          template_id: templates[0]?.id || null,
-          result_summary: "Result released from MedizinHub lab screen.",
-          abnormal_flag: false,
-          report_url: reportDocument?.file_url || null,
-          report_file_name: reportDocument?.file_name || null,
-          released_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage(
-        "Lab result released and notification queued when provider settings allow.",
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not release result.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function openReport(order: any) {
-    setBusy(order.id);
-    const docs = reportDocuments[order.id] || [];
-
-    try {
-      // Case 1: Single document → direct download
-      if (docs.length === 1) {
-        const doc = docs[0];
-        const blob = await apiBlob(`/files/${doc.id}/download`, apiSession);
-        downloadBlob(blob, doc.file_name || `lab-report-${order.id}`);
-        return;
-      }
-
-      // Case 2: Multiple documents → download as ZIP
-      if (docs.length > 1) {
-        const zipBlob = await apiBlob(
-          `/lab/orders/${order.id}/reports.zip`,
-          apiSession,
-        );
-        downloadBlob(zipBlob, `lab-reports-${order.id}.zip`);
-        return;
-      }
-
-      // Fallback: No documents → try backend-generated PDF
-      const blob = await apiBlob(
-        `/lab/orders/${order.id}/report.pdf`,
-        apiSession,
-      );
-      downloadBlob(blob, `lab-report-${order.id}.pdf`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not download report.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function generateInvoice(order: any) {
-    setBusy(`invoice-${order.id}`);
-    setMessage("");
-    try {
-      const detail = await apiFetch(
-        "/billing/invoices/from-lab-order",
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            lab_order_id: order.id,
-            created_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      setLocalInvoicedOrderIds((ids) =>
-        ids.includes(order.id) ? ids : [...ids, order.id],
-      );
-      await load();
-      await loadLiveData?.(apiSession);
-      setMessage(
-        `Lab invoice ${detail.invoice?.invoice_number || ""} generated.`,
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not generate lab invoice.");
-    } finally {
-      setBusy("");
-    }
+  function viewInvoice(order: any) {
+    const invoiceId = invoiceIdsByOrder[order.id];
+    if (!invoiceId || typeof window === "undefined") return;
+    window.sessionStorage.setItem("medizinhub.billingInvoiceId", invoiceId);
+    setSelectedOrder(null);
+    setActive?.("billing");
   }
 
   async function handleOrderAction(order: any, action: string) {
@@ -769,30 +507,12 @@ export function Lab({
     if (action === "sample") return collectSample(order);
     if (action === "release") return releaseResult(order);
     if (action === "invoice") return generateInvoice(order);
-    if (action === "pdf") return openReport(order);
+    if (action === "view-invoice") return viewInvoice(order);
+    if (action === "pdf") return openReport(order, downloadBlob);
+    if (action === "send-report") return sendReport(order);
     if (action === "cancel") return updateStatus(order, "cancelled");
   }
 
-  async function loadConsultDetail(a: any) {
-    setViewConsult(a);
-    if (a.referrals?.length) {
-      setConsultDetail({ referrals: a.referrals });
-      return;
-    }
-    setConsultDetail(null);
-    setLoadingDetail(true);
-    try {
-      const detail = await apiFetch(
-        `/consultations/${a.consultationId}`,
-        apiSession,
-      );
-      setConsultDetail(detail);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load consultation.");
-    } finally {
-      setLoadingDetail(false);
-    }
-  }
   const worklistColumns: Column<any>[] = [
     {
       key: "index",
@@ -821,14 +541,16 @@ export function Lab({
     {
       key: "patient",
       header: "Patient",
-      width: "130px",
+      width: "150px",
       render: (o) => {
         const p: any = patientMap.get(o.patient_id);
 
         return (
           <div className="flex items-center gap-2">
             <span>
-              {p?.name || publicDisplayValue(o.patient_id, "Patient")}
+              {o.patient_name ||
+                p?.name ||
+                publicDisplayValue(o.patient_id, "Patient")}
             </span>
             <CopyIdButton
               value={o.id}
@@ -846,7 +568,7 @@ export function Lab({
       width: "150px",
       render: (o) => (
         <Badge className="normal-badge w-[70%]">
-          {humanizeOptionLabel(o.source)}
+          {humanizeOptionLabel(o.acquisition_source || o.source)}
         </Badge>
       ),
     },
@@ -888,7 +610,7 @@ export function Lab({
     {
       key: "report",
       header: "Report",
-      className:'text-center',
+      className: "text-center",
       width: "170px",
       disableRowClick: true,
       render: (o) => {
@@ -902,7 +624,7 @@ export function Lab({
         return (
           <div className="relative group">
             <label
-              className={`flex cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold transition-colors ${
+              className={`relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border px-3 py-3 text-xs font-bold transition-colors ${
                 disabled || isBusy
                   ? "cursor-not-allowed bg-slate-50 text-slate-300"
                   : hasDocuments
@@ -920,27 +642,38 @@ export function Lab({
                   if (file) addReportDocument(o, file);
                 }}
               />
-              {isBusy
-                ? "Uploading..."
-                : hasDocuments
-                  ? `File Uploaded (${docs.length})`
-                  : "Upload Report"}
+
+              {isBusy ? (
+                <div className="flex w-full flex-col items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Uploading...
+                  </span>
+                  {/* Indeterminate progress bar */}
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                    <div className="h-full w-1/2 animate-[progress_1.2s_ease-in-out_infinite] rounded-full bg-blue-500" />
+                  </div>
+                </div>
+              ) : hasDocuments ? (
+                `File Uploaded (${docs.length})`
+              ) : (
+                "Upload Report"
+              )}
             </label>
 
             {/* Tooltip */}
-            {hasDocuments && (
-              <div className="absolute hidden group-hover:block bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs z-50 w-64 -top-2 left-1/2 -translate-x-1/2">
-                <div className="font-medium mb-2 text-slate-700">
+            {hasDocuments && !isBusy && (
+              <div className="absolute -top-2 left-1/2 z-50 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg group-hover:block">
+                <div className="mb-2 font-medium text-slate-700">
                   Uploaded Documents
                 </div>
-                <ul className="space-y-1 max-h-48 overflow-auto">
+                <ul className="max-h-48 space-y-1 overflow-auto">
                   {docs.map((doc: any, idx: number) => (
                     <li
                       key={`${doc.id}-${idx}`}
                       className="flex justify-between text-slate-600"
                     >
                       <span>Document {idx + 1}</span>
-                      <span className="text-right truncate max-w-[140px]">
+                      <span className="max-w-[140px] truncate text-right">
                         {doc.file_name}
                       </span>
                     </li>
@@ -952,11 +685,10 @@ export function Lab({
         );
       },
     },
-
     {
       key: "action",
       header: "Action",
-      className:'text-center',
+      className: "text-center",
       width: "140px",
       disableRowClick: true,
       render: (o) => {
@@ -966,7 +698,8 @@ export function Lab({
         const invoiced = invoicedOrderIds.has(o.id);
         const rowBusy = busy === o.id;
         const invoiceBusy = busy === `invoice-${o.id}`;
-        const actionsBusy = rowBusy || invoiceBusy;
+        const sendReportBusy = busy === `send-report-${o.id}`;
+        const actionsBusy = rowBusy || invoiceBusy || sendReportBusy;
 
         const canAddMore = docs.length < MAX_REPORT_DOCUMENTS;
 
@@ -975,10 +708,26 @@ export function Lab({
             <RowActions
               actions={[
                 {
-                  label: invoiceBusy ? "Generating..." : "Generate invoice",
-                  onClick: () => handleOrderAction(o, "invoice"),
+                  label: invoiced
+                    ? "View Invoice"
+                    : invoiceBusy
+                      ? "Generating..."
+                      : "Generate invoice",
+                  onClick: () =>
+                    handleOrderAction(o, invoiced ? "view-invoice" : "invoice"),
                   hidden: !canBillLabOrder,
-                  disabled: actionsBusy || cancelled || invoiced,
+                  disabled: actionsBusy || (!invoiced && cancelled),
+                },
+                {
+                  label: "Remove Document",
+                  onClick: () => handleRemoveDocument(o),
+                  disabled:
+                    actionsBusy ||
+                    released ||
+                    cancelled ||
+                    (reportDocuments[o.id] || []).length === 0,
+                  hidden: !canEditLabOrder,
+                  danger: true,
                 },
                 {
                   label: "Download Report",
@@ -986,15 +735,23 @@ export function Lab({
                   disabled: actionsBusy || cancelled,
                 },
                 {
+                  label: rowBusy ? "Releasing..." : "Release Result",
+                  onClick: () => handleOrderAction(o, "release"),
+                  hidden: released,
+                  disabled: actionsBusy || cancelled,
+                },
+                {
+                  label: sendReportBusy
+                    ? "Sending..."
+                    : "Send Report (WhatsApp)",
+                  onClick: () => handleOrderAction(o, "send-report"),
+                  disabled:
+                    actionsBusy || cancelled || docs.length === 0 || !released,
+                },
+                {
                   label: "Reupload Report",
                   onClick: () => handleReuploadReport(o),
                   disabled: actionsBusy || released || cancelled,
-                  hidden: !canEditLabOrder,
-                },
-                {
-                  label: canAddMore ? "Add Document" : "Max Documents Reached",
-                  onClick: () => handleAddDocument(o),
-                  disabled: actionsBusy || !canAddMore || released || cancelled,
                   hidden: !canEditLabOrder,
                 },
                 {
@@ -1022,12 +779,13 @@ export function Lab({
       </Card>
     );
   return (
-    <div className="space-y-6">
+    <div className="">
       {selectedOrder && (
         <WorklistDetailModal
           title="Lab Test List"
           id={selectedOrder.id}
           patient={
+            selectedOrder.patient_name ||
             (patientMap.get(selectedOrder.patient_id) as any)?.name ||
             publicDisplayValue(selectedOrder.patient_id, "Patient")
           }
@@ -1035,6 +793,13 @@ export function Lab({
           items={splitList(selectedOrder.tests)}
           onClose={() => setSelectedOrder(null)}
           apiSession={apiSession}
+          canGenerateInvoice={canBillLabOrder}
+          invoiceDisabled={isCancelled(selectedOrder)}
+          invoiceBusy={busy === `invoice-${selectedOrder.id}`}
+          invoiceGenerated={invoicedOrderIds.has(selectedOrder.id)}
+          packages={packages}
+          onGenerateInvoice={() => handleOrderAction(selectedOrder, "invoice")}
+          onViewInvoice={() => handleOrderAction(selectedOrder, "view-invoice")}
         />
       )}
       {viewConsult && (
@@ -1099,7 +864,7 @@ export function Lab({
           />
         </Card>
       )}
-      <Card>
+      <Card className="mt-3">
         <h3 className="card-title font-bold">Consultation Referrals</h3>
         <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
           {(() => {
@@ -1185,25 +950,81 @@ export function Lab({
           })()}
         </div>
       </Card>
-      <Card>
+      <Card className="mt-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="card-title font-bold">Lab / Service Worklist</h3>
           <RefreshButton onRefresh={load} />
         </div>
-        <div className="mt-4">
-          <DataTable
-            columns={worklistColumns}
-            data={labPageRows}
-            emptyMessage="No lab orders yet."
-            onRowClick={setSelectedOrder}
-          />
+        <div className="">
+          <FilterSection
+            title="Patient"
+            query={worklistQuery}
+            className="lg:grid-cols-6 xl:grid-cols-6"
+            setQuery={setWorklistQuery}
+            filters={worklistFilterConfigs}
+            filterValues={worklistFilters}
+            onFilterChange={onWorklistFilterChange}
+            onReset={() => {
+              setAmountMin("");
+              setAmountMax("");
+              setWorklistFromDate("");
+              setWorklistToDate("");
+            }}
+          >
+            <FormField label="Price Min">
+              <Input
+                type="number"
+                value={amountMin}
+                onChange={(e: any) => setAmountMin(e.target.value)}
+                placeholder="Min amount"
+              />
+            </FormField>
+            <FormField label="Price Max">
+              <Input
+                type="number"
+                value={amountMax}
+                onChange={(e: any) => setAmountMax(e.target.value)}
+                placeholder="Max amount"
+              />
+            </FormField>
+            <FormField label="From">
+              <Input
+                type="date"
+                value={worklistFromDate}
+                onChange={(e: any) => setWorklistFromDate(e.target.value)}
+              />
+            </FormField>
+            <FormField label="To">
+              <Input
+                type="date"
+                value={worklistToDate}
+                onChange={(e: any) => setWorklistToDate(e.target.value)}
+              />
+            </FormField>
+          </FilterSection>
         </div>
-        <Pagination
-          page={safePage}
-          totalPages={totalPages}
-          total={orders.length}
-          onPage={setPage}
-        />
+        <div className="mt-4">
+          {!ordersLoaded ? (
+            <div className="overflow-auto rounded-lg border">
+              <TableSkeleton rows={8} />
+            </div>
+          ) : (
+            <DataTable
+              columns={worklistColumns}
+              data={labPageRows}
+              emptyMessage="No lab orders match your filters."
+              onRowClick={setSelectedOrder}
+            />
+          )}
+        </div>
+        {ordersLoaded && (
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            total={filteredOrders.length}
+            onPage={setPage}
+          />
+        )}
       </Card>
       {replaceDocPicker && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -1231,6 +1052,40 @@ export function Lab({
             <div className="flex justify-end mt-6">
               <Button
                 onClick={() => setReplaceDocPicker(null)}
+                variant="outline"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {removeDocPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-xl bg-white p-6">
+            <h3 className="mb-4 font-semibold">Choose document to remove</h3>
+            <div className="max-h-80 space-y-2 overflow-auto">
+              {removeDocPicker.docs.map((doc: any, idx: number) => (
+                <button
+                  key={`${doc.id}-${idx}`}
+                  type="button"
+                  onClick={() => {
+                    removeReportDocument(removeDocPicker.order, doc);
+                    setRemoveDocPicker(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left hover:bg-red-50"
+                >
+                  <span>Document {idx + 1}</span>
+                  <span className="truncate text-sm text-slate-500">
+                    {doc.file_name}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <Button
+                type="button"
+                onClick={() => setRemoveDocPicker(null)}
                 variant="outline"
               >
                 Cancel

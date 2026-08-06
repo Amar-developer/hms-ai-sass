@@ -7,7 +7,9 @@ import {
   EyeOff,
   Link2,
   MessageCircleMore,
+  Plus,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 
 import { FormField } from "@/app/components/FormElements";
@@ -22,6 +24,8 @@ import {
 import { Modal } from "@/app/components/common/Modal";
 import { apiFetch } from "@/lib/api";
 import { WhatsAppDeliveryQueue } from "./WhatsAppDeliveryQueue";
+import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 type WhatsAppFlowKey =
   | "appointment_booked_patient"
@@ -39,6 +43,20 @@ type WhatsAppFlowKey =
 type WhatsAppLanguage =
   | "en"
   | "ta";
+
+type WhatsAppCustomTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  audience: "patient" | "doctor" | "user";
+  enabled: boolean;
+  trigger_key: WhatsAppFlowKey;
+  identifiers: Partial<Record<WhatsAppLanguage, string>>;
+  // Ordered field keys (from fieldCatalog[trigger_key]) filling {{1}}, {{2}}...
+  parameters: string[];
+};
+
+type WhatsAppFieldOption = { key: string; label: string };
 
 const languageOptions: Array<{ value: WhatsAppLanguage; label: string }> = [
   { value: "en", label: "English" },
@@ -64,12 +82,22 @@ type WhatsAppSettingsDraft = {
     Record<WhatsAppLanguage, Record<WhatsAppFlowKey, string>>
   >;
   flows: Record<WhatsAppFlowKey, boolean>;
+  customTemplates: WhatsAppCustomTemplate[];
+  fieldCatalog: Partial<Record<WhatsAppFlowKey, WhatsAppFieldOption[]>>;
+  // Ordered field keys filling {{1}}, {{2}}... for each built-in flow's own
+  // identifier. Always fully populated by the backend (falls back to the
+  // catalog default order for anything the tenant hasn't customized).
+  templateFieldMappings: Partial<Record<WhatsAppFlowKey, string[]>>;
 };
 
 type WhatsAppTestDraft = {
   mobile: string;
   recipientName: string;
   flowKey: WhatsAppFlowKey;
+  // When set, this test targets a custom template (identified by id)
+  // instead of the built-in flow — flowKey still holds that template's
+  // trigger_key so existing display logic keyed on flowKey keeps working.
+  customTemplateId: string | null;
   language: WhatsAppLanguage;
   parameters: string[];
   mediaUrl: string;
@@ -191,78 +219,89 @@ const initialDraft: WhatsAppSettingsDraft = {
     follow_up_advice_patient: false,
     appointment_reminder_patient: false,
   },
+  customTemplates: [],
+  fieldCatalog: {},
+  templateFieldMappings: {},
 };
 
-const testSamples: Record<WhatsAppFlowKey, string[]> = {
-  appointment_booked_patient: ["Test Patient", "25 July 2026", "10:30 AM"],
-  appointment_booked_doctor: [
-    "Test Doctor",
-    "booked",
-    "appointment_test_001",
-    "25 July 2026",
-    "10:30 AM",
-    "https://app.example.com/appointments",
-  ],
-  invoice_paid_patient: [
-    "Test Patient",
-    "TEST-INV-001",
-    "Consultation",
-    "1000",
-  ],
-  payment_pending_patient: [
-    "Test Patient",
-    "TEST-INV-001",
-    "500",
-    "500",
-  ],
-  appointment_cancelled_patient: ["Test Patient", "25 July 2026", "10:30 AM", "Schedule change"],
-  appointment_cancelled_doctor: ["Test Doctor", "25 July 2026", "10:30 AM", "Schedule change"],
-  invoice_refunded_patient: ["Test Patient", "TEST-INV-001", "500"],
-  lab_report_ready_patient: ["Test Patient", "LAB-001", "Blood test"],
-  prescription_ready_patient: ["Test Patient", "25 July 2026", "Test Doctor"],
-  follow_up_advice_patient: ["Test Patient", "Return after seven days"],
-  appointment_reminder_patient: ["Test Patient", "25 July 2026", "10:30 AM"],
+// Sample placeholder text keyed by field KEY (not by flow), reused across
+// every flow/custom template that includes that field — one flat table
+// instead of a per-flow array, since which flow uses which fields is now
+// itself admin-configurable rather than fixed.
+const SAMPLE_VALUES_BY_FIELD: Record<string, string> = {
+  recipient_name: "Test Patient",
+  appointment_date: "25 July 2026",
+  appointment_time: "10:30 AM",
+  appointment_status: "booked",
+  appointment_id: "appointment_test_001",
+  appointment_view_url: "https://app.example.com/appointments",
+  invoice_number: "TEST-INV-001",
+  service_description: "Consultation",
+  total_amount: "1000",
+  paid_amount: "500",
+  balance_amount: "500",
+  refund_amount: "500",
+  report_name: "Blood test",
+  clinic_name: "MedizinHub Healthcare Service",
+  report_date: "25 July 2026",
+  consultation_date: "25 July 2026",
+  doctor_name: "Test Doctor",
+  follow_up_advice: "Return after seven days",
+  cancellation_reason: "Schedule change",
 };
 
-const parameterLabels: Record<WhatsAppFlowKey, string[]> = {
-  appointment_booked_patient: ["Recipient name", "Appointment date", "Appointment time"],
-  appointment_booked_doctor: [
-    "Doctor name",
-    "Appointment status",
-    "Appointment ID",
-    "Appointment date",
-    "Appointment time",
-    "Appointment view URL",
-  ],
-  invoice_paid_patient: ["Recipient name", "Invoice number", "Service", "Total amount"],
-  payment_pending_patient: ["Recipient name", "Invoice number", "Amount paid", "Balance amount"],
-  appointment_cancelled_patient: ["Recipient name", "Appointment date", "Appointment time", "Reason"],
-  appointment_cancelled_doctor: ["Doctor name", "Appointment date", "Appointment time", "Reason"],
-  invoice_refunded_patient: ["Recipient name", "Invoice number", "Refund amount"],
-  lab_report_ready_patient: ["Recipient name", "Lab order number", "Tests"],
-  prescription_ready_patient: ["Recipient name", "Consultation date", "Doctor name"],
-  follow_up_advice_patient: ["Recipient name", "Follow-up advice"],
-  appointment_reminder_patient: ["Recipient name", "Appointment date", "Appointment time"],
-};
-
-function createTestDraft(
+function buildTestDraft(
   flowKey: WhatsAppFlowKey,
-  language: WhatsAppLanguage = "en",
-  appointmentViewUrl: string = "",
+  fieldKeys: string[],
+  customTemplateId: string | null,
+  language: WhatsAppLanguage,
+  appointmentViewUrl: string,
 ): WhatsAppTestDraft {
-  const parameters = [...testSamples[flowKey]];
-  if (flowKey === "appointment_booked_doctor" && appointmentViewUrl.trim()) {
-    parameters[5] = appointmentViewUrl.trim();
-  }
+  const parameters = fieldKeys.map((fieldKey) =>
+    fieldKey === "appointment_view_url" && appointmentViewUrl.trim()
+      ? appointmentViewUrl.trim()
+      : SAMPLE_VALUES_BY_FIELD[fieldKey] || "",
+  );
+  const recipientIndex = fieldKeys.indexOf("recipient_name");
   return {
     mobile: "",
-    recipientName: parameters[0],
+    recipientName:
+      (recipientIndex >= 0 ? parameters[recipientIndex] : parameters[0]) ||
+      "Test Patient",
     flowKey,
+    customTemplateId,
     language,
     parameters,
     mediaUrl: "",
-    mediaFilename: "invoice.pdf",
+    mediaFilename:
+      flowKey === "lab_report_ready_patient" ? "lab-report.pdf" : "invoice.pdf",
   };
+}
+
+function createTestDraft(
+  flowKey: WhatsAppFlowKey,
+  fieldCatalog: Partial<Record<WhatsAppFlowKey, WhatsAppFieldOption[]>>,
+  templateFieldMappings: Partial<Record<WhatsAppFlowKey, string[]>>,
+  language: WhatsAppLanguage = "en",
+  appointmentViewUrl: string = "",
+): WhatsAppTestDraft {
+  const fieldKeys =
+    templateFieldMappings[flowKey] ||
+    (fieldCatalog[flowKey] || []).map((field) => field.key);
+  return buildTestDraft(flowKey, fieldKeys, null, language, appointmentViewUrl);
+}
+
+function createCustomTemplateTestDraft(
+  template: WhatsAppCustomTemplate,
+  language: WhatsAppLanguage = "en",
+): WhatsAppTestDraft {
+  return buildTestDraft(
+    template.trigger_key,
+    template.parameters,
+    template.id,
+    language,
+    "",
+  );
 }
 
 function Switch({
@@ -334,6 +373,21 @@ function readDraft(value: any): WhatsAppSettingsDraft {
       ...initialDraft.flows,
       ...(value?.flows || {}),
     },
+    customTemplates: Array.isArray(value?.custom_templates)
+      ? value.custom_templates
+      : [],
+    fieldCatalog: Array.isArray(value?.field_catalog)
+      ? Object.fromEntries(
+          value.field_catalog.map((entry: any) => [
+            entry.trigger_key,
+            Array.isArray(entry.fields) ? entry.fields : [],
+          ]),
+        )
+      : {},
+    templateFieldMappings:
+      value?.template_field_mappings && typeof value.template_field_mappings === "object"
+        ? value.template_field_mappings
+        : {},
   };
 }
 
@@ -347,6 +401,16 @@ export function WhatsAppIntegrationSettings({
   const [draft, setDraft] = useState<WhatsAppSettingsDraft>(initialDraft);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAllTemplates, setShowAllTemplates] = useState(false);
+  const [addTemplateOpen, setAddTemplateOpen] = useState(false);
+  const [newTemplate, setNewTemplate] = useState({
+    name: "",
+    description: "",
+    audience: "patient" as "patient" | "doctor" | "user",
+    triggerKey: "appointment_booked_patient" as WhatsAppFlowKey,
+    parameters: [] as string[],
+    englishIdentifier: "",
+    tamilIdentifier: "",
+  });
   const [activeTemplateLanguage, setActiveTemplateLanguage] =
     useState<WhatsAppLanguage>("en");
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -355,11 +419,12 @@ export function WhatsAppIntegrationSettings({
   const [health, setHealth] = useState<any>(null);
   const [readiness, setReadiness] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [testBusy, setTestBusy] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testMessage, setTestMessage] = useState("");
   const [testDraft, setTestDraft] = useState<WhatsAppTestDraft>(
-    createTestDraft("appointment_booked_patient"),
+    createTestDraft("appointment_booked_patient", {}, {}),
   );
   const [message, setMessage] = useState("");
   const effectiveTenantId = tenantId || apiSession?.tenantId || "";
@@ -373,6 +438,7 @@ export function WhatsAppIntegrationSettings({
       setUsage(null);
       setHealth(null);
       setReadiness(null);
+      setInitialLoading(false);
       return () => {
         active = false;
       };
@@ -397,7 +463,10 @@ export function WhatsAppIntegrationSettings({
           setMessage(error.message || "Could not load WhatsApp settings.");
       })
       .finally(() => {
-        if (active) setBusy(false);
+        if (active) {
+          setBusy(false);
+          setInitialLoading(false);
+        }
       });
     return () => {
       active = false;
@@ -429,6 +498,41 @@ export function WhatsAppIntegrationSettings({
         },
       };
     });
+
+  function toggleTemplateField(flowKey: WhatsAppFlowKey, fieldKey: string) {
+    setDraft((current) => {
+      const existing =
+        current.templateFieldMappings[flowKey] ||
+        (current.fieldCatalog[flowKey] || []).map((field) => field.key);
+      const parameters = existing.includes(fieldKey)
+        ? existing.filter((key) => key !== fieldKey)
+        : [...existing, fieldKey];
+      return {
+        ...current,
+        templateFieldMappings: {
+          ...current.templateFieldMappings,
+          [flowKey]: parameters,
+        },
+      };
+    });
+  }
+
+  function moveTemplateField(flowKey: WhatsAppFlowKey, index: number, direction: -1 | 1) {
+    setDraft((current) => {
+      const existing = current.templateFieldMappings[flowKey] || [];
+      const target = index + direction;
+      if (target < 0 || target >= existing.length) return current;
+      const parameters = [...existing];
+      [parameters[index], parameters[target]] = [parameters[target], parameters[index]];
+      return {
+        ...current,
+        templateFieldMappings: {
+          ...current.templateFieldMappings,
+          [flowKey]: parameters,
+        },
+      };
+    });
+  }
 
   const setFlow = (key: WhatsAppFlowKey, value: boolean) =>
     setDraft((current) => ({
@@ -495,6 +599,8 @@ export function WhatsAppIntegrationSettings({
             templates: draft.templates,
             localized_templates: draft.localizedTemplates,
             flows: draft.flows,
+            custom_templates: draft.customTemplates,
+            template_field_mappings: draft.templateFieldMappings,
           }),
         },
       );
@@ -518,8 +624,115 @@ export function WhatsAppIntegrationSettings({
       flow.audience === "doctor"
         ? draft.doctorNotificationsEnabled
         : draft.patientNotificationsEnabled;
-    return audienceEnabled && draft.flows[flow.key] && draft.templates[flow.key].trim();
+    return (
+      audienceEnabled &&
+      draft.flows[flow.key] &&
+      draft.templates[flow.key].trim() &&
+      // A custom template attached to this trigger takes over sending for
+      // it, so the built-in default is no longer what actually goes out.
+      !draft.customTemplates.some(
+        (template) => template.enabled && template.trigger_key === flow.key,
+      )
+    );
   });
+  const eligibleCustomTemplates = draft.customTemplates.filter(
+    (template) =>
+      template.enabled &&
+      template.parameters.length > 0 &&
+      Object.keys(template.identifiers).length > 0 &&
+      (template.audience === "doctor"
+        ? draft.doctorNotificationsEnabled
+        : template.audience === "patient"
+          ? draft.patientNotificationsEnabled
+          : true),
+  );
+  function openAddTemplate() {
+    setNewTemplate({
+      name: "",
+      description: "",
+      audience: "patient",
+      triggerKey: "appointment_booked_patient",
+      parameters: [],
+      englishIdentifier: "",
+      tamilIdentifier: "",
+    });
+    setAddTemplateOpen(true);
+  }
+
+  function toggleNewTemplateField(fieldKey: string) {
+    setNewTemplate((current) => ({
+      ...current,
+      parameters: current.parameters.includes(fieldKey)
+        ? current.parameters.filter((key) => key !== fieldKey)
+        : [...current.parameters, fieldKey],
+    }));
+  }
+
+  function moveNewTemplateField(index: number, direction: -1 | 1) {
+    setNewTemplate((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.parameters.length) return current;
+      const parameters = [...current.parameters];
+      [parameters[index], parameters[target]] = [parameters[target], parameters[index]];
+      return { ...current, parameters };
+    });
+  }
+
+  function addNotificationTemplate(event: React.FormEvent) {
+    event.preventDefault();
+    const name = newTemplate.name.trim();
+    const englishIdentifier = newTemplate.englishIdentifier.trim();
+    if (!name || !englishIdentifier || newTemplate.parameters.length === 0) return;
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 60) || "template";
+    const id = `custom_${slug}_${Date.now().toString(36)}`;
+    setDraft((current) => ({
+      ...current,
+      customTemplates: [
+        ...current.customTemplates,
+        {
+          id,
+          name,
+          description: newTemplate.description.trim(),
+          audience: newTemplate.audience,
+          enabled: true,
+          trigger_key: newTemplate.triggerKey,
+          parameters: newTemplate.parameters,
+          identifiers: {
+            en: englishIdentifier,
+            ...(newTemplate.tamilIdentifier.trim()
+              ? { ta: newTemplate.tamilIdentifier.trim() }
+              : {}),
+          },
+        },
+      ],
+    }));
+    setAddTemplateOpen(false);
+  }
+
+  function updateCustomTemplate(
+    templateId: string,
+    updates: Partial<WhatsAppCustomTemplate>,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      customTemplates: current.customTemplates.map((template) =>
+        template.id === templateId ? { ...template, ...updates } : template,
+      ),
+    }));
+  }
+
+  function removeCustomTemplate(templateId: string) {
+    setDraft((current) => ({
+      ...current,
+      customTemplates: current.customTemplates.filter(
+        (template) => template.id !== templateId,
+      ),
+    }));
+  }
   const activeTemplates =
     activeTemplateLanguage === draft.defaultLanguage
       ? draft.templates
@@ -541,30 +754,90 @@ export function WhatsAppIntegrationSettings({
             !activeTemplates[flow.key].trim()
           );
         }).length;
-  const testTemplateIdentifier =
-    testDraft.language === draft.defaultLanguage
+  const selectedCustomTemplate = testDraft.customTemplateId
+    ? draft.customTemplates.find(
+        (template) => template.id === testDraft.customTemplateId,
+      )
+    : undefined;
+  const testTemplateIdentifier = selectedCustomTemplate
+    ? selectedCustomTemplate.identifiers[testDraft.language] ||
+      selectedCustomTemplate.identifiers[draft.defaultLanguage] ||
+      Object.values(selectedCustomTemplate.identifiers)[0] ||
+      ""
+    : testDraft.language === draft.defaultLanguage
       ? draft.templates[testDraft.flowKey]
       : draft.localizedTemplates[testDraft.language]?.[testDraft.flowKey] ||
         draft.templates[testDraft.flowKey];
+  const testFieldKeys = selectedCustomTemplate
+    ? selectedCustomTemplate.parameters
+    : draft.templateFieldMappings[testDraft.flowKey] ||
+      (draft.fieldCatalog[testDraft.flowKey] || []).map((field) => field.key);
+  const testParameterLabels = testFieldKeys.map((fieldKey) => {
+    const field = (
+      draft.fieldCatalog[
+        selectedCustomTemplate ? selectedCustomTemplate.trigger_key : testDraft.flowKey
+      ] || []
+    ).find((option) => option.key === fieldKey);
+    return field?.label || fieldKey;
+  });
+  // Built-in flows conventionally put recipient name at {{1}}, but since
+  // field order is now admin-editable for both built-in flows and custom
+  // templates, locate it rather than assuming a fixed index.
+  const recipientNameParamIndex = testFieldKeys.indexOf("recipient_name");
 
   function openTestMessage() {
+    const firstCustomTemplate = eligibleCustomTemplates[0];
     const firstFlow = eligibleTestFlows[0]?.key;
-    if (!firstFlow) {
+    if (firstCustomTemplate) {
+      setTestDraft(
+        createCustomTemplateTestDraft(firstCustomTemplate, draft.defaultLanguage),
+      );
+    } else if (firstFlow) {
+      setTestDraft(
+        createTestDraft(
+          firstFlow,
+          draft.fieldCatalog,
+          draft.templateFieldMappings,
+          draft.defaultLanguage,
+          draft.appointmentViewUrl,
+        ),
+      );
+    } else {
       setMessage("Enable and save at least one notification template before testing.");
       return;
     }
-    setTestDraft(
-      createTestDraft(firstFlow, draft.defaultLanguage, draft.appointmentViewUrl),
-    );
     setTestMessage("");
     setTestOpen(true);
   }
 
   function selectTestFlow(flowKey: WhatsAppFlowKey) {
     setTestDraft((current) => ({
-      ...createTestDraft(flowKey, current.language, draft.appointmentViewUrl),
+      ...createTestDraft(
+        flowKey,
+        draft.fieldCatalog,
+        draft.templateFieldMappings,
+        current.language,
+        draft.appointmentViewUrl,
+      ),
       mobile: current.mobile,
     }));
+  }
+
+  function selectTestCustomTemplate(templateId: string) {
+    const template = draft.customTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+    setTestDraft((current) => ({
+      ...createCustomTemplateTestDraft(template, current.language),
+      mobile: current.mobile,
+    }));
+  }
+
+  function selectTestOption(value: string) {
+    if (value.startsWith("custom:")) {
+      selectTestCustomTemplate(value.slice("custom:".length));
+    } else {
+      selectTestFlow(value as WhatsAppFlowKey);
+    }
   }
 
   async function sendTestMessage(event: React.FormEvent) {
@@ -582,7 +855,8 @@ export function WhatsAppIntegrationSettings({
           body: JSON.stringify({
             mobile: testDraft.mobile.trim(),
             recipient_name: testDraft.recipientName.trim(),
-            flow_key: testDraft.flowKey,
+            flow_key: testDraft.customTemplateId ? null : testDraft.flowKey,
+            custom_template_id: testDraft.customTemplateId || null,
             language: testDraft.language,
             template_parameters: testDraft.parameters.map((value) => value.trim()),
             media_url: testDraft.mediaUrl.trim() || null,
@@ -635,7 +909,8 @@ export function WhatsAppIntegrationSettings({
 
   return (
     <>
-    <Card>
+    <Card className="relative px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
+      {initialLoading && <OverlayLoader />}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
         <div className="flex gap-3">
@@ -651,7 +926,7 @@ export function WhatsAppIntegrationSettings({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Badge tone={draft.enabled ? "green" : "slate"}>
+          <Badge tone={draft.enabled ? "green" : "slate"} className="normal-badge">
             {draft.enabled ? "Enabled" : "Disabled"}
           </Badge>
           <Switch
@@ -681,6 +956,7 @@ export function WhatsAppIntegrationSettings({
                     ? "amber"
                     : "red"
               }
+              className="normal-badge"
             >
               {readiness.status === "ready"
                 ? "Ready"
@@ -732,15 +1008,15 @@ export function WhatsAppIntegrationSettings({
         <div className="mt-4 rounded-xl border border-slate-200 p-4">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-              <h4 className="text-sm font-bold text-slate-800">
+              <h4 className="card-title font-bold text-slate-800">
                 Monthly notification usage
               </h4>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 card-desc text-slate-500">
                 {usage.plan_name} plan · resets at the start of each calendar
                 month.
               </p>
             </div>
-            <Badge tone={usage.limit_reached ? "red" : "blue"}>
+            <Badge tone={usage.limit_reached ? "red" : "blue"} className="normal-badge">
               {usage.used} / {usage.monthly_limit}
             </Badge>
           </div>
@@ -764,10 +1040,10 @@ export function WhatsAppIntegrationSettings({
         <div className="mt-4 rounded-xl border border-slate-200 p-4">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-              <h4 className="text-sm font-bold text-slate-800">
+              <h1 className="card-title font-bold text-slate-800">
                 Delivery health
-              </h4>
-              <p className="mt-1 text-xs text-slate-500">
+              </h1>
+              <p className="mt-1 card-desc text-slate-500">
                 Application queue and delivery activity during the last 24 hours.
               </p>
             </div>
@@ -779,6 +1055,7 @@ export function WhatsAppIntegrationSettings({
                     ? "amber"
                     : "green"
               }
+              className="normal-badge"
             >
               {String(health.status).replace(/^./, (value) => value.toUpperCase())}
             </Badge>
@@ -811,7 +1088,7 @@ export function WhatsAppIntegrationSettings({
       <div className="mt-5 rounded-xl border border-slate-200 p-4">
         <div className="mb-4 flex items-center gap-2">
           <Link2 className="h-4 w-4 text-slate-500" />
-          <h4 className="text-sm font-bold text-slate-800">API connection</h4>
+          <h4 className="card-title font-bold text-slate-800">API connection</h4>
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="md:col-span-2 xl:col-span-3">
@@ -931,10 +1208,10 @@ export function WhatsAppIntegrationSettings({
       </div>
 
       <div className="mt-4 rounded-xl border border-slate-200 p-4">
-        <h4 className="text-sm font-bold text-slate-800">
+        <h4 className="card-title font-bold text-slate-800">
           Recipient controls
         </h4>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 card-desc text-slate-500">
           A recipient switch disables every notification for that audience.
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -974,14 +1251,27 @@ export function WhatsAppIntegrationSettings({
       </div>
 
       <div className="mt-4 rounded-xl border border-slate-200 p-4">
-        <h4 className="text-sm font-bold text-slate-800">
-          Notification templates
-        </h4>
-        <p className="mt-1 text-xs text-slate-500">
-          Configure separate approved identifiers for English and Tamil. Patient
-          messages use the language selected in the patient record; a missing
-          Tamil identifier falls back to the tenant default.
-        </p>
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+          <div>
+            <h4 className="card-title font-bold text-slate-800">
+              Notification templates
+            </h4>
+            <p className="mt-1 card-desc text-slate-500">
+              Configure separate approved identifiers for English and Tamil.
+              Patient messages use the language selected in the patient record;
+              a missing Tamil identifier falls back to the tenant default.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openAddTemplate}
+            disabled={!draft.enabled}
+            className="close-button inline-flex shrink-0 items-center gap-2 font-bold disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            <Plus size={15} />
+            Add Notification Template
+          </button>
+        </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <FormField label="Tenant default language">
             <Select
@@ -1074,6 +1364,90 @@ export function WhatsAppIntegrationSettings({
                     />
                   </FormField>
                 </div>
+                {activeTemplateLanguage === draft.defaultLanguage && (
+                  <div className="mt-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
+                      Template values
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Click fields to add them, in the order your approved
+                      template expects {"{{1}}"}, {"{{2}}"}, ...
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(draft.fieldCatalog[flow.key] || []).map((field) => {
+                        const selected = (
+                          draft.templateFieldMappings[flow.key] || []
+                        ).includes(field.key);
+                        return (
+                          <button
+                            type="button"
+                            key={field.key}
+                            disabled={disabled || !draft.flows[flow.key]}
+                            onClick={() => toggleTemplateField(flow.key, field.key)}
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                              selected
+                                ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                            }`}
+                          >
+                            {field.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {(draft.templateFieldMappings[flow.key] || []).length > 0 && (
+                      <ul className="mt-2 space-y-1.5">
+                        {(draft.templateFieldMappings[flow.key] || []).map(
+                          (fieldKey, index, all) => {
+                            const field = (draft.fieldCatalog[flow.key] || []).find(
+                              (option) => option.key === fieldKey,
+                            );
+                            return (
+                              <li
+                                key={fieldKey}
+                                className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs"
+                              >
+                                <span>
+                                  <span className="font-bold text-slate-700">{`{{${index + 1}}}`}</span>{" "}
+                                  {field?.label || fieldKey}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={disabled || index === 0}
+                                    onClick={() => moveTemplateField(flow.key, index, -1)}
+                                    className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30"
+                                    aria-label="Move up"
+                                  >
+                                    ↑
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={disabled || index === all.length - 1}
+                                    onClick={() => moveTemplateField(flow.key, index, 1)}
+                                    className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30"
+                                    aria-label="Move down"
+                                  >
+                                    ↓
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={disabled}
+                                    onClick={() => toggleTemplateField(flow.key, fieldKey)}
+                                    className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
+                                    aria-label="Remove"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </span>
+                              </li>
+                            );
+                          },
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                )}
                 {flow.key === "appointment_reminder_patient" && (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     {[
@@ -1116,9 +1490,103 @@ export function WhatsAppIntegrationSettings({
               onClick={() => setShowAllTemplates((current) => !current)}
             >
               {showAllTemplates
-                ? "Show fewer templates"
-                : `Show ${flowOptions.length - 4} more templates`}
+                ? "Show fewer automatic templates"
+                : `Show ${flowOptions.length - 4} more automatic templates`}
             </button>
+          </div>
+        )}
+        {draft.customTemplates.length > 0 && (
+          <div className="mt-5 border-t border-slate-200 pt-5">
+            <h5 className="text-sm font-bold text-slate-800">
+              Custom notification templates
+            </h5>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              {draft.customTemplates.map((template) => {
+                const audienceEnabled =
+                  template.audience === "doctor"
+                    ? draft.doctorNotificationsEnabled
+                    : template.audience === "patient"
+                      ? draft.patientNotificationsEnabled
+                      : true;
+                const disabled = !draft.enabled || !audienceEnabled;
+                return (
+                  <div
+                    key={template.id}
+                    className="rounded-lg border border-slate-200 bg-white p-4"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">
+                          {template.name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {template.description || `Custom ${template.audience} template`}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-emerald-700">
+                          Sends on:{" "}
+                          {flowOptions.find((flow) => flow.key === template.trigger_key)
+                            ?.label || template.trigger_key}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {template.parameters.map((fieldKey, index) => {
+                            const field = (
+                              draft.fieldCatalog[template.trigger_key] || []
+                            ).find((option) => option.key === fieldKey);
+                            return (
+                              <span
+                                key={`${fieldKey}-${index}`}
+                                className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+                              >
+                                {`{{${index + 1}}} ${field?.label || fieldKey}`}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => removeCustomTemplate(template.id)}
+                          aria-label={`Remove ${template.name}`}
+                          className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                        <Switch
+                          label={template.name}
+                          checked={template.enabled}
+                          onChange={(enabled) =>
+                            updateCustomTemplate(template.id, { enabled })
+                          }
+                          disabled={disabled}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <FormField label="Template / Campaign Identifier">
+                        <Input
+                          value={template.identifiers[activeTemplateLanguage] || ""}
+                          onChange={(event: any) =>
+                            updateCustomTemplate(template.id, {
+                              identifiers: {
+                                ...template.identifiers,
+                                [activeTemplateLanguage]: event.target.value,
+                              },
+                            })
+                          }
+                          placeholder={
+                            activeTemplateLanguage === draft.defaultLanguage
+                              ? "Enter approved identifier"
+                              : "Optional — falls back to tenant default"
+                          }
+                          disabled={disabled || !template.enabled}
+                        />
+                      </FormField>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -1143,7 +1611,9 @@ export function WhatsAppIntegrationSettings({
             onClick={saveSettings}
             disabled={busy || !apiSession || !effectiveTenantId}
           >
-            {busy ? "Saving..." : "Save WhatsApp Settings"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : "Save WhatsApp Settings"}
+            </ButtonLoader>
           </Button>
         </div>
       </div>
@@ -1155,6 +1625,196 @@ export function WhatsAppIntegrationSettings({
         onMessage={setMessage}
       />
     )}
+    <Modal
+      open={addTemplateOpen}
+      onClose={() => setAddTemplateOpen(false)}
+      title="Add Notification Template"
+      description="Create a custom WhatsApp template manually. Enter the approved provider identifiers used for each language."
+      maxWidth="lg"
+    >
+      <form onSubmit={addNotificationTemplate} className="space-y-4">
+        <FormField label="Template name" required>
+          <Input
+            value={newTemplate.name}
+            onChange={(event: any) =>
+              setNewTemplate((current) => ({
+                ...current,
+                name: event.target.value,
+              }))
+            }
+            placeholder="Enter notification template name"
+            required
+          />
+        </FormField>
+        <FormField label="Description">
+          <Input
+            value={newTemplate.description}
+            onChange={(event: any) =>
+              setNewTemplate((current) => ({
+                ...current,
+                description: event.target.value,
+              }))
+            }
+            placeholder="When or why this template is used"
+          />
+        </FormField>
+        <FormField label="Recipient audience">
+          <Select
+            value={newTemplate.audience}
+            onChange={(event: any) =>
+              setNewTemplate((current) => ({
+                ...current,
+                audience: event.target.value as "patient" | "doctor" | "user",
+              }))
+            }
+          >
+            <option value="patient">Patient</option>
+            <option value="doctor">Doctor</option>
+            <option value="user">User</option>
+          </Select>
+        </FormField>
+        <FormField
+          label="Trigger event"
+          hint="Which real event sends this template. If another enabled custom template already uses this trigger, this one will replace it once enabled."
+        >
+          <Select
+            value={newTemplate.triggerKey}
+            onChange={(event: any) =>
+              setNewTemplate((current) => ({
+                ...current,
+                triggerKey: event.target.value as WhatsAppFlowKey,
+                parameters: [],
+              }))
+            }
+          >
+            {flowOptions.map((flow) => (
+              <option key={flow.key} value={flow.key}>
+                {flow.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
+            Template values
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Click fields to add them, in the order your approved template
+            expects {"{{1}}"}, {"{{2}}"}, ...
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(draft.fieldCatalog[newTemplate.triggerKey] || []).map((field) => (
+              <button
+                type="button"
+                key={field.key}
+                onClick={() => toggleNewTemplateField(field.key)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                  newTemplate.parameters.includes(field.key)
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {field.label}
+              </button>
+            ))}
+          </div>
+          {newTemplate.parameters.length > 0 && (
+            <ul className="mt-3 space-y-1.5">
+              {newTemplate.parameters.map((fieldKey, index) => {
+                const field = (
+                  draft.fieldCatalog[newTemplate.triggerKey] || []
+                ).find((option) => option.key === fieldKey);
+                return (
+                  <li
+                    key={fieldKey}
+                    className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs"
+                  >
+                    <span>
+                      <span className="font-bold text-slate-700">{`{{${index + 1}}}`}</span>{" "}
+                      {field?.label || fieldKey}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => moveNewTemplateField(index, -1)}
+                        className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30"
+                        aria-label="Move up"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === newTemplate.parameters.length - 1}
+                        onClick={() => moveNewTemplateField(index, 1)}
+                        className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30"
+                        aria-label="Move down"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleNewTemplateField(fieldKey)}
+                        className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                        aria-label="Remove"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FormField label="English identifier" required>
+            <Input
+              value={newTemplate.englishIdentifier}
+              onChange={(event: any) =>
+                setNewTemplate((current) => ({
+                  ...current,
+                  englishIdentifier: event.target.value,
+                }))
+              }
+              placeholder="Enter approved English identifier"
+              required
+            />
+          </FormField>
+          <FormField label="Tamil identifier">
+            <Input
+              value={newTemplate.tamilIdentifier}
+              onChange={(event: any) =>
+                setNewTemplate((current) => ({
+                  ...current,
+                  tamilIdentifier: event.target.value,
+                }))
+              }
+              placeholder="Optional Tamil identifier"
+            />
+          </FormField>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setAddTemplateOpen(false)}
+            className="close-button font-bold"
+          >
+            Cancel
+          </button>
+          <Button
+            type="submit"
+            disabled={
+              !newTemplate.name.trim() ||
+              !newTemplate.englishIdentifier.trim() ||
+              newTemplate.parameters.length === 0
+            }
+          >
+            Add Template
+          </Button>
+        </div>
+      </form>
+    </Modal>
     <Modal
       open={testOpen}
       onClose={() => !testBusy && setTestOpen(false)}
@@ -1186,7 +1846,7 @@ export function WhatsAppIntegrationSettings({
                   ...current,
                   recipientName: event.target.value,
                   parameters: current.parameters.map((value, index) =>
-                    index === 0 ? event.target.value : value,
+                    index === recipientNameParamIndex ? event.target.value : value,
                   ),
                 }))
               }
@@ -1196,11 +1856,20 @@ export function WhatsAppIntegrationSettings({
 
         <FormField label="Notification flow">
           <Select
-            value={testDraft.flowKey}
-            onChange={(event: any) => selectTestFlow(event.target.value as WhatsAppFlowKey)}
+            value={
+              testDraft.customTemplateId
+                ? `custom:${testDraft.customTemplateId}`
+                : testDraft.flowKey
+            }
+            onChange={(event: any) => selectTestOption(event.target.value)}
           >
             {eligibleTestFlows.map((flow) => (
               <option key={flow.key} value={flow.key}>{flow.label}</option>
+            ))}
+            {eligibleCustomTemplates.map((template) => (
+              <option key={template.id} value={`custom:${template.id}`}>
+                Custom: {template.name}
+              </option>
             ))}
           </Select>
         </FormField>
@@ -1232,13 +1901,13 @@ export function WhatsAppIntegrationSettings({
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             {testDraft.parameters.map((value, index) => (
               <FormField
-                key={`${testDraft.flowKey}-${index}`}
-                label={`{{${index + 1}}} ${parameterLabels[testDraft.flowKey][index]}`}
+                key={`${testDraft.customTemplateId || testDraft.flowKey}-${index}`}
+                label={`{{${index + 1}}} ${testParameterLabels[index] || ""}`}
               >
                 <Input
                   required
                   value={value}
-                  disabled={index === 0}
+                  disabled={index === recipientNameParamIndex}
                   onChange={(event: any) =>
                     setTestDraft((current) => ({
                       ...current,
@@ -1253,14 +1922,26 @@ export function WhatsAppIntegrationSettings({
           </div>
         </div>
 
-        {testDraft.flowKey === "invoice_paid_patient" && (
+        {(testDraft.flowKey === "invoice_paid_patient" ||
+          testDraft.flowKey === "lab_report_ready_patient") && (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <FormField label="Public invoice PDF URL">
+              <FormField
+                label={
+                  testDraft.flowKey === "invoice_paid_patient"
+                    ? "Public invoice PDF URL"
+                    : "Public document URL"
+                }
+                hint={
+                  testDraft.flowKey === "lab_report_ready_patient"
+                    ? "Required if your approved template has a document/media header (check the template type on your WhatsApp provider's dashboard) — a Document-type template without an attachment is rejected."
+                    : undefined
+                }
+              >
                 <Input
-                  required
+                  required={testDraft.flowKey === "invoice_paid_patient"}
                   type="url"
-                  placeholder="https://files.example.com/invoice.pdf"
+                  placeholder="https://files.example.com/document.pdf"
                   value={testDraft.mediaUrl}
                   onChange={(event: any) =>
                     setTestDraft((current) => ({ ...current, mediaUrl: event.target.value }))
@@ -1301,7 +1982,9 @@ export function WhatsAppIntegrationSettings({
             Cancel
           </button>
           <Button type="submit" disabled={testBusy}>
-            {testBusy ? "Sending..." : "Send Test Message"}
+            <ButtonLoader loading={testBusy}>
+              {testBusy ? "Sending..." : "Send Test Message"}
+            </ButtonLoader>
           </Button>
         </div>
       </form>

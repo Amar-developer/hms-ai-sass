@@ -1,6 +1,6 @@
+import { DataTable } from "@/app/components/common/DataTable";
 import { AppointmentReportsProps } from "../types";
 import CollapsibleReportSection from "./CollapsibleReportSection";
-import { DataTable } from "./DataTable";
 
 const AppointmentReports = ({
   doctorRows,
@@ -10,6 +10,8 @@ const AppointmentReports = ({
   percent,
   onOpenInvoices,
 }: AppointmentReportsProps) => {
+  const moneyOrDash = (value: any) =>
+    Number(value || 0) === 0 ? "-" : money(value);
   const columns = [
     {
       key: "doctor",
@@ -30,44 +32,61 @@ const AppointmentReports = ({
     {
       key: "grossRevenue",
       width: "90px",
-      header: "Revenue",
-      render: (row: any) => money(row.grossRevenue),
+      header: "Total",
+      render: (row: any) => moneyOrDash(row.grossRevenue),
     },
     {
       key: "paidRevenue",
       header: "Paid",
       width: "80px",
-      render: (row: any) => money(row.paidRevenue),
+      render: (row: any) => moneyOrDash(row.paidRevenue),
+    },
+    {
+      key: "balance",
+      header: "Amount Due",
+      width: "110px",
+      render: (row: any) => moneyOrDash(row.balance),
     },
     {
       key: "approvedDiscount",
-      header: "Approved %",
+      header: "Admin Discount",
       width: "130px",
-      render: (row: any) => money(row.approvedDiscount),
+      render: (row: any) => moneyOrDash(row.approvedDiscount),
     },
     {
       key: "offerDiscount",
-      header: "Offer %",
+      header: "Offer Discount",
       width: "100px",
-      render: (row: any) => money(row.offerDiscount),
+      render: (row: any) => moneyOrDash(row.offerDiscount),
     },
     {
-      key: "billingDiscount",
-      header: "Total %",
+      key: "membershipBenefit",
+      header: "Membership Benefit",
+      width: "140px",
+      render: (row: any) => moneyOrDash(row.membershipBenefit),
+    },
+    {
+      key: "paymentMode",
+      header: "Payment Method",
+      width: "130px",
+    },
+    {
+      key: "paidTax",
+      header: "Paid GST",
       width: "100px",
-      render: (row: any) => money(row.billingDiscount),
+      render: (row: any) => moneyOrDash(row.paidTax),
     },
     {
       key: "doctorFee",
       header: "Doctor Fee",
       width: "120px",
-      render: (row: any) => money(row.doctorFee),
+      render: (row: any) => moneyOrDash(row.doctorFee),
     },
     {
       key: "clinicFee",
       header: "Clinic Fee",
       width: "110px",
-      render: (row: any) => money(row.clinicFee),
+      render: (row: any) => moneyOrDash(row.clinicFee),
     },
 
     {
@@ -75,32 +94,35 @@ const AppointmentReports = ({
       header: "Final Profit",
       width: "130px",
       render: (row: any) => (
-        <span className="font-bold">{money(row.finalProfit)}</span>
+        <span className="font-bold">{moneyOrDash(row.finalProfit)}</span>
       ),
     },
     {
       key: "grossProfitPercentage",
-      header: "Gross Profit %",
+      header: "Profit Margin",
       width: "150px",
       render: (row: any) =>
-        percent(
-          row.finalProfit,
-          row.paidRevenue - row.paidTax,
-        ),
+        Number(row.finalProfit || 0) === 0
+          ? "-"
+          : percent(
+              row.finalProfit,
+              row.paidRevenue - row.paidTax,
+              row.grossRevenue,
+            ),
     },
   ];
   return (
     <div>
       <CollapsibleReportSection
         title="Doctor Fee & Profitability"
-        subtitle="Doctor fee and profit use only fully paid consultation invoices, so the doctor cost is deducted exactly once."
+        subtitle="Doctor fee is deducted once for settled consultations, including fully covered membership visits."
         badge={`${doctorRows.length} doctors`}
         isOpen={openSections.doctor}
         onToggle={() =>
           setOpenSections((state: any) => ({ ...state, doctor: !state.doctor }))
         }
       >
-        <div className="mt-4 overflow-auto rounded-2xl border">
+        <div className="mt-4 overflow-auto scrollbar-hidden rounded-2xl border">
           <DataTable
             columns={columns}
             data={doctorRows}

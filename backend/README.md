@@ -30,6 +30,7 @@ Alembic migrations live in `backend/alembic`.
 - FastAPI application factory.
 - Versioned API under `/api/v1`.
 - Health and readiness endpoints.
+- Super-admin operational metrics and a repeatable performance baseline runbook.
 - Tenant context middleware using `X-Tenant-ID`.
 - Module manifest endpoint for plug-and-play module visibility.
 - Tenant, branch, subscription plan, audit, patient, appointment, and queue APIs.

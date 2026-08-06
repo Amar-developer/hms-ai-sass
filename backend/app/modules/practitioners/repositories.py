@@ -12,6 +12,7 @@ from app.modules.practitioners.models import (
     PractitionerRoomAssignment,
     PractitionerSchedule,
 )
+from app.modules.practitioners.schedule_days import parse_weekdays
 from app.modules.tenants.models import Branch, Department
 
 
@@ -109,6 +110,50 @@ class PractitionerLinkRepository:
             ).all()
         ]
 
+    def active_branch_ids_by_practitioner(
+        self, *, tenant_id: str, practitioner_ids: set[str]
+    ) -> dict[str, list[str]]:
+        if not practitioner_ids:
+            return {}
+        result: dict[str, list[str]] = {}
+        rows = self.session.exec(
+            select(PractitionerBranch.practitioner_id, PractitionerBranch.branch_id)
+            .where(
+                PractitionerBranch.tenant_id == tenant_id,
+                PractitionerBranch.practitioner_id.in_(practitioner_ids),
+                PractitionerBranch.is_active == True,  # noqa: E712
+            )
+            .order_by(PractitionerBranch.practitioner_id, PractitionerBranch.branch_id)
+        ).all()
+        for practitioner_id, branch_id in rows:
+            result.setdefault(practitioner_id, []).append(branch_id)
+        return result
+
+    def active_department_ids_by_practitioner(
+        self, *, tenant_id: str, practitioner_ids: set[str]
+    ) -> dict[str, list[str]]:
+        if not practitioner_ids:
+            return {}
+        result: dict[str, list[str]] = {}
+        rows = self.session.exec(
+            select(
+                PractitionerDepartment.practitioner_id,
+                PractitionerDepartment.department_id,
+            )
+            .where(
+                PractitionerDepartment.tenant_id == tenant_id,
+                PractitionerDepartment.practitioner_id.in_(practitioner_ids),
+                PractitionerDepartment.is_active == True,  # noqa: E712
+            )
+            .order_by(
+                PractitionerDepartment.practitioner_id,
+                PractitionerDepartment.department_id,
+            )
+        ).all()
+        for practitioner_id, department_id in rows:
+            result.setdefault(practitioner_id, []).append(department_id)
+        return result
+
     def get_branch_link(
         self, *, tenant_id: str, practitioner_id: str, branch_id: str
     ) -> PractitionerBranch | None:
@@ -193,25 +238,49 @@ class PractitionerScheduleRepository:
             ).all()
         )
 
-    def active_for_weekday(
+    def active_for_practitioner_department(
         self,
         *,
         tenant_id: str,
         practitioner_id: str,
-        branch_id: str,
-        weekday: int,
+        department_id: str,
     ) -> list[PractitionerSchedule]:
+        """Active schedules for this practitioner/department, for the
+        overlap/duplicate check. The caller compares weekday sets and time
+        windows in Python since a schedule can cover an arbitrary subset of
+        weekdays."""
         return list(
             self.session.exec(
                 select(PractitionerSchedule).where(
                     PractitionerSchedule.tenant_id == tenant_id,
                     PractitionerSchedule.practitioner_id == practitioner_id,
-                    PractitionerSchedule.branch_id == branch_id,
-                    PractitionerSchedule.weekday == weekday,
+                    PractitionerSchedule.department_id == department_id,
                     PractitionerSchedule.is_active == True,  # noqa: E712
                 )
             ).all()
         )
+
+    def active_for_date(
+        self,
+        *,
+        tenant_id: str,
+        practitioner_id: str,
+        branch_id: str,
+        appointment_date: date,
+    ) -> list[PractitionerSchedule]:
+        """Active schedules covering this calendar date's weekday."""
+        target_weekday = appointment_date.weekday()
+        rows = self.session.exec(
+            select(PractitionerSchedule).where(
+                PractitionerSchedule.tenant_id == tenant_id,
+                PractitionerSchedule.practitioner_id == practitioner_id,
+                PractitionerSchedule.branch_id == branch_id,
+                PractitionerSchedule.is_active == True,  # noqa: E712
+            )
+        ).all()
+        return [
+            row for row in rows if target_weekday in parse_weekdays(row.weekdays_json)
+        ]
 
 
 class PractitionerReferenceRepository:

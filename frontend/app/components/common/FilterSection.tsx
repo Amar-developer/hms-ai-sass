@@ -1,6 +1,7 @@
 import { Input, SearchableSelect } from "./ui";
 import { FormField } from "../FormElements";
-
+import { Button } from "./ui";
+import React from "react";
 
 type FilterOption = {
   value: string;
@@ -14,12 +15,17 @@ type FilterConfig = {
 };
 
 type FilterSectionProps = {
-  title: string;
-  query: string;
-  setQuery: (value: string) => void;
+  title?: string;
+  query?: string;
+  setQuery?: (value: string) => void;
+  showSearch?: boolean;
+  searchPlaceholder?: string;
   filters: FilterConfig[];
   filterValues: Record<string, string>;
   onFilterChange?: (key: string, value: string) => void;
+  onReset?: () => void;
+  children?: React.ReactNode;
+  className?: string;
 };
 
 export function FilterSection({
@@ -27,22 +33,35 @@ export function FilterSection({
   query,
   setQuery,
   filters,
+  className = "lg:grid-cols-4 xl:grid-cols-5",
+  showSearch = true,
+  searchPlaceholder,
   filterValues,
   onFilterChange,
+  children,
+  onReset,
 }: FilterSectionProps) {
+  function handleReset() {
+    setQuery?.("");
+    filters.forEach((filter) => {
+      onFilterChange?.(filter.key, "all");
+    });
+    onReset?.();
+  }
   return (
-    <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+    <div className={`mt-4 grid gap-3 md:grid-cols-2 ${className}`}>
       {/* Search */}
-      <FormField label={title}>
-        <Input
-          value={query}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-            setQuery(e.target.value)
-          }
-          placeholder={`Search ${title.toLowerCase()}`}
-          className="search-filter"
-        />
-      </FormField>
+      {showSearch && (
+        <FormField label={title}>
+          <Input
+            value={query}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setQuery?.(e.target.value)
+            }
+            placeholder={searchPlaceholder ?? `Search ${title?.toLowerCase() ?? ""}`}
+          />
+        </FormField>
+      )}
 
       {/* Dynamic Filters */}
       {filters.map((filter) => (
@@ -50,9 +69,7 @@ export function FilterSection({
           <SearchableSelect
             name={filter.key}
             value={filterValues[filter.key] ?? "all"}
-            onChange={(value) =>
-              onFilterChange?.(filter.key, value)
-            }
+            onChange={(value) => onFilterChange?.(filter.key, value)}
             options={filter.options}
             searchable={false}
             placeholder={`Select ${filter.label}`}
@@ -60,6 +77,17 @@ export function FilterSection({
           />
         </FormField>
       ))}
+
+      {children}
+      <FormField label="" >
+        <Button
+          type="button"
+          onClick={handleReset}
+          className="px-4 py-2.5 mt-4 text-xs"
+        >
+          Reset
+        </Button>
+      </FormField>
     </div>
   );
 }

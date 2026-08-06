@@ -10,6 +10,7 @@ import {
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { apiFetch } from "@/lib/api";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import {
   catalogSubscriptionPlans,
   entitlementModules,
@@ -19,7 +20,6 @@ import {
   moduleKeysWithDependencies,
 } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "@/app/components/common/Empty";
 import { PlanDetailModal } from "./PlanDetailModal";
 import { SubscriptionAssignPlan } from "./SubscriptionAssignPlan";
 import { SubscriptionCreatePlan } from "./SubscriptionCreatePlan";
@@ -28,6 +28,9 @@ import { SubscriptionDetailModal } from "./SubscriptionDetailModal";
 import { SubscriptionEditPlan } from "./SubscriptionEditPlan";
 import { Info } from "@/app/components/common/Info";
 import { Pagination } from "@/app/components/common/Pagination";
+import { RowActions } from "@/features/admin/components/RowActions";
+import { Column } from "@/utils/types";
+import { DataTable } from "@/app/components/common/DataTable";
 
 export function SubscriptionManagement({
   apiSession,
@@ -94,19 +97,22 @@ export function SubscriptionManagement({
         ...apiSession,
         tenantId: selectedId || apiSession.tenantId,
       };
-      const subscriptionCalls = tenants.map((tenant: any) =>
-        apiFetch("/subscription-plans/tenant-subscriptions", {
-          ...apiSession,
-          tenantId: tenant.id,
-        })
-          .then((rows: any[]) =>
-            rows.map((row) => ({ ...row, tenant_name: tenant.name })),
-          )
-          .catch(() => []),
+      const subscriptionCalls = mapWithConcurrency(
+        tenants,
+        (tenant: any) =>
+          apiFetch("/subscription-plans/tenant-subscriptions", {
+            ...apiSession,
+            tenantId: tenant.id,
+          })
+            .then((rows: any[]) =>
+              rows.map((row) => ({ ...row, tenant_name: tenant.name })),
+            )
+            .catch(() => []),
+        4,
       );
       const calls: any[] = [
         apiFetch("/subscription-plans/platform/revenue-summary", apiSession),
-        Promise.all(subscriptionCalls),
+        subscriptionCalls,
       ];
       if (selectedId) {
         calls.push(apiFetch("/subscription-plans/usage", scoped));
@@ -409,15 +415,263 @@ export function SubscriptionManagement({
       />
     );
 
+  const subscriptionColumns: Column<any>[] = [
+    {
+      key: "tenant",
+      header: "Tenant",
+      width: "200px",
+      render: (subscription: any) => {
+        const tenant = tenantById.get(subscription.tenant_id) as any;
+
+        return (
+          <div className="min-w-0">
+            <b className="block truncate text-xs lg:text-sm">
+              {subscription.tenant_name || tenant?.name || "Tenant"}
+            </b>
+          </div>
+        );
+      },
+    },
+    {
+      key: "tenant-type",
+      header: "Type",
+      width: "180px",
+      render: (subscription: any) => {
+        const tenant = tenantById.get(subscription.tenant_id) as any;
+
+        return (
+          <div className="min-w-0">
+            <b className="block truncate text-xs lg:text-sm">
+              {formatTenantType(tenant?.tenant_type || "")}
+            </b>
+          </div>
+        );
+      },
+    },
+    {
+      key: "plan",
+      header: "Plan",
+      width: "180px",
+      render: (subscription: any) => {
+        const plan = planById.get(subscription.plan_id) as any;
+
+        return (
+          <div className="min-w-0">
+            <b className="block truncate text-xs lg:text-sm">
+              {plan?.name || "Custom plan"}
+            </b>
+          </div>
+        );
+      },
+    },
+
+    {
+      key: "status",
+      header: "Status",
+      className: "text-center",
+      width: "120px",
+      render: (subscription: any) => (
+        <Badge
+          tone={
+            subscription.status === "active"
+              ? "green"
+              : subscription.status === "scheduled"
+                ? "amber"
+                : subscription.status === "expired"
+                  ? "slate"
+                  : "red"
+          }
+          className="rounded-full px-1 py-1 text-xs lg:text-sm"
+        >
+          {subscription.status}
+        </Badge>
+      ),
+    },
+
+    {
+      key: "starts_on",
+      header: "Start",
+      width: "120px",
+      render: (subscription: any) => (
+        <span className="text-xs lg:text-sm">
+          {formatDate(subscription.starts_on)}
+        </span>
+      ),
+    },
+
+    {
+      key: "ends_on",
+      header: "End",
+      width: "120px",
+      render: (subscription: any) => (
+        <span className="text-xs lg:text-sm">
+          {formatDate(subscription.ends_on)}
+        </span>
+      ),
+    },
+
+    {
+      key: "billing_amount",
+      header: "Amount",
+      width: "120px",
+      render: (subscription: any) => (
+        <b className="text-xs lg:text-sm">₹{subscription.billing_amount}</b>
+      ),
+    },
+
+    {
+      key: "actions",
+      header: "Actions",
+      cellClassName: "text-center",
+      width: "90px",
+      disableRowClick: true,
+      render: (subscription: any) => {
+        const plan = planById.get(subscription.plan_id) as any;
+        const tenant = tenantById.get(subscription.tenant_id) as any;
+
+        const actions = [
+          {
+            label: "Details",
+            onClick: () =>
+              setDetailSubscription({
+                ...subscription,
+                plan,
+                tenant,
+              }),
+          },
+          {
+            label: "Upgrade",
+            onClick: () => {
+              setSelectedId(subscription.tenant_id);
+              openSubscriptionView("assign");
+            },
+          },
+          {
+            label: "Credits",
+            onClick: () => {
+              setSelectedId(subscription.tenant_id);
+              openSubscriptionView("credits");
+            },
+          },
+        ];
+
+        return (
+          <div
+            className="flex justify-end"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <RowActions actions={actions} className="right-8 -bottom-5" />
+          </div>
+        );
+      },
+    },
+  ];
+
+  const planColumns = [
+    {
+      key: "name",
+      header: "Plan",
+      width: "180px",
+      render: (plan: any) => (
+        <div className="min-w-0">
+          <b className="block truncate text-xs lg:text-sm">{plan.name}</b>
+        </div>
+      ),
+    },
+    {
+      key: "price_inr_monthly",
+      header: "Price",
+      width: "120px",
+      render: (plan: any) => (
+        <b className="text-xs lg:text-sm">₹{plan.price_inr_monthly}</b>
+      ),
+    },
+    {
+      key: "limits",
+      header: "Limits",
+      width: "200px",
+      render: (plan: any) => (
+        <span className="text-xs text-slate-600 lg:text-sm">
+          {limitLabel(plan.monthly_patient_limit)} patients ·{" "}
+          {limitLabel(plan.included_branches)} branches ·{" "}
+          {limitLabel(plan.monthly_whatsapp_message_limit)} messages
+        </span>
+      ),
+    },
+    {
+      key: "modules",
+      header: "Modules",
+      width: "150px",
+      className:'text-center',
+      render: (plan: any) => (
+        <Badge
+          tone="slate"
+          className="rounded-full px-1 py-1 text-xs lg:text-sm"
+        >
+          {(plan.enabled_modules || []).length}
+        </Badge>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      width: "150px",
+      className:'text-center',
+      render: (plan: any) => (
+        <Badge
+          tone={plan.is_active ? "green" : "slate"}
+          className="rounded-full px-1 py-1 text-xs lg:text-sm"
+        >
+          {plan.is_active ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      width: "120px",
+      className:'text-center',
+      disableRowClick: true,
+      render: (plan: any) => {
+        const actions = [
+          {
+            label: "Details",
+            onClick: () => setDetailPlan(plan),
+          },
+          {
+            label: "Edit",
+            onClick: () => {
+              setEditingPlan(plan);
+              openSubscriptionView("editPlan");
+            },
+          },
+          {
+            label: plan.is_active ? "Deactivate" : "Activate",
+            onClick: () => changePlanStatus(plan),
+          },
+        ];
+
+        return (
+          <div
+            className="flex justify-end"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <RowActions
+              actions={actions}
+              className="right-10 -bottom-5"
+            />
+          </div>
+        );
+      },
+    },
+  ];
   return (
     <div className="space-y-5">
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
-            <h3 className="text-base lg:text-lg font-bold">
-              Subscription Management
-            </h3>
-            <p className="text-xs lg:text-sm text-slate-500">
+            <p className="card-title font-bold">Subscription Management</p>
+            <p className="card-desc text-slate-500">
               Search tenant subscriptions, review SaaS revenue, and open focused
               pages for plan setup, upgrades, and credits.
             </p>
@@ -475,13 +729,13 @@ export function SubscriptionManagement({
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
-            <h4 className="text-base lg:text-lg font-bold">Subscriptions</h4>
-            <p className=" text-xs lg:text-sm text-slate-500">
+            <h4 className="card-title font-bold">Subscriptions</h4>
+            <p className=" card-desc text-slate-500">
               Compact tenant subscription list. Open details for IDs, notes, and
               module information.
             </p>
           </div>
-          <Badge tone="blue" className="px-2 py-2 rounded-lg md:w-[15%] lg:w-[10%] text-center">
+          <Badge tone="blue" className="normal-badge">
             {filtered.length} records
           </Badge>
         </div>
@@ -543,113 +797,16 @@ export function SubscriptionManagement({
             />
           </FormField>
         </div>
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-          <div className="min-w-[980px]">
-            <div className="grid grid-cols-[1fr_1fr_.6fr_.52fr_.52fr_.52fr_1.5fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
-              <span>Tenant</span>
-              <span>Plan</span>
-              <span>Status</span>
-              <span>Start</span>
-              <span>End</span>
-              <span>Amount</span>
-              <span className="text-right">Actions</span>
-            </div>
-            <div className="divide-y divide-slate-200">
-              {rows.length === 0 && (
-                <Empty
-                  text={
-                    loading
-                      ? "Loading subscriptions..."
-                      : "No subscriptions match your search."
-                  }
-                />
-              )}
-              {rows.map((subscription: any) => {
-                const plan = planById.get(subscription.plan_id) as any;
-                const tenant = tenantById.get(subscription.tenant_id) as any;
-                return (
-                  <div
-                    key={subscription.id}
-                    className="grid grid-cols-[.8fr_.8fr_.5fr_.52fr_.52fr_.42fr_1.15fr] gap-3 px-4 py-4 text-sm items-center"
-                  >
-                    <div className="min-w-0">
-                      <b className=" text-xs lg:text-sm block truncate">
-                        {subscription.tenant_name || tenant?.name || "Tenant"}
-                      </b>
-                      <span className="text-[10px] lg:text-xs text-slate-500">
-                        {formatTenantType(tenant?.tenant_type || "")}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <b className="text-xs lg:text-sm block truncate">
-                        {plan?.name || "Custom plan"}
-                      </b>
-                    </div>
-                    <div>
-                      <Badge
-                        tone={
-                          subscription.status === "active"
-                            ? "green"
-                            : subscription.status === "scheduled"
-                              ? "amber"
-                              : subscription.status === "expired"
-                                ? "slate"
-                                : "red"
-                        }
-                        className="rounded-full px-1 py-1 text-xs lg:text-sm"
-                      >
-                        {subscription.status}
-                      </Badge>
-                    </div>
-                    <span className="text-xs lg:text-sm">
-                      {formatDate(subscription.starts_on)}
-                    </span>
-                    <span className="text-xs lg:text-sm">
-                      {formatDate(subscription.ends_on)}
-                    </span>
-                    <b className="text-xs lg:text-sm">
-                      ₹{subscription.billing_amount}
-                    </b>
-                    <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDetailSubscription({
-                            ...subscription,
-                            plan,
-                            tenant,
-                          })
-                        }
-                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-                      >
-                        Details
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedId(subscription.tenant_id);
-                          openSubscriptionView("assign");
-                        }}
-                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-                      >
-                        Upgrade
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedId(subscription.tenant_id);
-                          openSubscriptionView("credits");
-                        }}
-                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-                      >
-                        Credits
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+        <div className="mt-4 rounded-2xl border border-slate-200">
+          <DataTable
+            columns={subscriptionColumns}
+            data={rows}
+            emptyMessage={
+              loading
+                ? "Loading subscriptions..."
+                : "No subscriptions match your search."
+            }
+          />
         </div>
         <Pagination
           page={safePage}
@@ -662,79 +819,26 @@ export function SubscriptionManagement({
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
-            <h4 className="text-base lg:text-lg font-bold">Plan Catalog</h4>
-            <p className="text-xs lg:text-sm text-slate-500">
+            <h4 className="card-title font-bold">Plan Catalog</h4>
+            <p className="card-desc text-slate-500">
               Reusable DB-backed SaaS plan catalog. Module lists and IDs live in
               details.
             </p>
           </div>
-          <Badge tone="blue" className="px-2 py-2 rounded-lg md:w-[15%] lg:w-[10%] text-center">{catalogPlans.length} plans</Badge>
+          <Badge
+            tone="blue"
+            className="px-2 py-2 rounded-lg md:w-[15%] lg:w-[10%] text-center"
+          >
+            {catalogPlans.length} plans
+          </Badge>
         </div>
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
           <div className="min-w-[900px]">
-            <div className="grid grid-cols-[1.35fr_.75fr_1fr_.75fr_.75fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
-              <span>Plan</span>
-              <span>Price</span>
-              <span>Limits</span>
-              <span>Modules</span>
-              <span>Status</span>
-              <span className="text-right">Actions</span>
-            </div>
-            <div className="divide-y divide-slate-200">
-              {catalogPlans.map((plan: any) => (
-                <div
-                  key={plan.id}
-                  className="grid grid-cols-[1.35fr_.75fr_1fr_.75fr_.75fr_1.2fr] gap-3 px-4 py-4 text-sm items-center"
-                >
-                  <div className="min-w-0">
-                    <b className="text-xs lg:text-sm block truncate">
-                      {plan.name}
-                    </b>
-                    <span className="text-[10px] text-xs text-slate-500">
-                      {plan.key}
-                    </span>
-                  </div>
-                  <b>₹{plan.price_inr_monthly}</b>
-                  <span className="text-slate-600 text-xs lg:text-sm">
-                    {limitLabel(plan.monthly_patient_limit)} patients ·{" "}
-                    {limitLabel(plan.included_branches)} branches ·{" "}
-                    {limitLabel(plan.monthly_whatsapp_message_limit)} messages
-                  </span>
-                  <Badge tone="slate" className="rounded-full text-xs lg:text-sm py-1 px-1">
-                    {(plan.enabled_modules || []).length}
-                  </Badge>
-                  <Badge tone={plan.is_active ? "green" : "slate"} className="rounded-full text-xs lg:text-sm py-1 px-1">
-                    {plan.is_active ? "Active" : "Inactive"}
-                  </Badge>
-                  <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => setDetailPlan(plan)}
-                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-                    >
-                      Details
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingPlan(plan);
-                        openSubscriptionView("editPlan");
-                      }}
-                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => changePlanStatus(plan)}
-                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-                    >
-                      {plan.is_active ? "Deactivate" : "Activate"}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <DataTable
+              columns={planColumns}
+              data={catalogPlans}
+              emptyMessage="No subscription plans found."
+            />
           </div>
         </div>
       </Card>

@@ -3,8 +3,8 @@ const A4_HEIGHT_MM = 297;
 const PAGE_MARGIN_MM = 6;
 const CONTENT_WIDTH_MM = A4_WIDTH_MM - PAGE_MARGIN_MM * 2;
 const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - PAGE_MARGIN_MM * 2;
-const CAPTURE_SCALE = 1.5;
-const JPEG_QUALITY = 0.88;
+const CAPTURE_SCALE = 1.25;
+const JPEG_QUALITY = 0.8;
 
 /**
  * Renders each `[data-invoice-page]` element inside `container` to a canvas and
@@ -81,7 +81,18 @@ export async function renderInvoicePdfBlob(
 ): Promise<Blob> {
   const pdf = await buildInvoicePdf(container);
   if (!pdf) throw new Error("Invoice PDF content could not be rendered.");
-  return pdf.output("blob");
+  const blob = pdf.output("blob");
+  const signature = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+  if (
+    signature.length !== 4 ||
+    signature[0] !== 0x25 ||
+    signature[1] !== 0x50 ||
+    signature[2] !== 0x44 ||
+    signature[3] !== 0x46
+  ) {
+    throw new Error("Generated invoice PDF failed validation.");
+  }
+  return blob;
 }
 
 export async function exportInvoicePdf(

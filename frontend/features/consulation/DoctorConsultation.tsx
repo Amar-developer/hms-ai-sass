@@ -17,11 +17,15 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { apiFetch } from "@/lib/api";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { calculateConsultationCharge, sortQueue } from "@/lib/hmsLogic";
 import { humanizeOptionLabel } from "@/lib/options";
-import { displayDate, displayDate as formatDisplayDate } from "@/utils/helper";
+import {
+  displayDate,
+  displayDate as formatDisplayDate,
+  localDateKey,
+  today,
+} from "@/utils/helper";
 import { ConsultationWorkspace } from "./components/ConsultationWorkspace";
 import { ScheduleList } from "./components/ScheduleList";
 import { DoctorMetric } from "./components/DoctorMetric";
@@ -37,6 +41,14 @@ import {
   statusKey,
 } from "./helpers";
 import { appendLine, splitRows } from "@/utils/helper";
+import {
+  useConsultationData,
+  useConsultationActions,
+  fetchConsultationDetail,
+  fetchPatientDetail,
+} from "./api";
+import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
+import { useAppointmentsQuery } from "@/features/appointments/api/useAppointmentsQuery";
 
 export function DoctorConsultation({
   clinic,
@@ -45,21 +57,29 @@ export function DoctorConsultation({
   departmentId,
   allowedDepartments = [],
   patients,
-  scopedAppointments,
-  appointments,
-  setAppointments,
-  apiSession,
-  loadLiveData,
-  livePractitioners = [],
   doctorScope = null,
   view = "dashboard",
   setActive,
+  apiSession,
 }: any) {
+  const { livePractitioners } = usePractitionersQuery(apiSession);
+  const {
+    appointments,
+    scopedAppointments,
+    refetch: refetchAppointments,
+    setLocal: setAppointments,
+  } = useAppointmentsQuery(apiSession, { clinicId: clinic?.id, branchId, patients });
   const isDoctorUser = Boolean(
     apiSession?.user?.user_type === "doctor" ||
     apiSession?.user?.roles?.includes("doctor"),
   );
-  const [scopedPractitioners, setScopedPractitioners] = useState<any[]>([]);
+  const { scopedPractitioners, templates, medicineCatalog, labCatalog } =
+    useConsultationData({
+      apiSession,
+      branchId,
+      departmentId,
+      doctorScopePractitionerId: doctorScope?.practitionerId,
+    });
   // Keep the working doctor selector scoped, but retain the tenant-wide list
   // for cross-department referrals.
   const practitionerSource = [...livePractitioners, ...scopedPractitioners];
@@ -140,8 +160,6 @@ export function DoctorConsultation({
     ...doctor,
     role: "Doctor",
   }));
-  const [medicineCatalog, setMedicineCatalog] = useState<any[]>([]);
-  const [labCatalog, setLabCatalog] = useState<any[]>([]);
   const scanCatalog: any[] = [];
   const [doctorId, setDoctorId] = useState(() =>
     typeof window === "undefined"
@@ -191,7 +209,6 @@ export function DoctorConsultation({
   const [selectedLabTestId, setSelectedLabTestId] = useState("");
   const [labPriority, setLabPriority] = useState("routine");
   const [labInstructions, setLabInstructions] = useState("");
-  const [templates, setTemplates] = useState<any[]>([]);
   const [addendumNote, setAddendumNote] = useState("");
   const [addendums, setAddendums] = useState<any[]>([]);
   const [medicineAmount, setMedicineAmount] = useState(250);
@@ -207,7 +224,7 @@ export function DoctorConsultation({
   const [consultationValidationAttempted, setConsultationValidationAttempted] =
     useState(false);
   const [selectedDate, setSelectedDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
+    today(),
   );
 
   useEffect(() => {
@@ -242,35 +259,19 @@ export function DoctorConsultation({
   >("booked");
   const [selectedPatientDetail, setSelectedPatientDetail] = useState<any>(null);
   useEffect(() => {
-    if (!apiSession?.tenantId) return;
-    if (doctorScope?.practitionerId) {
-      setScopedPractitioners([]);
-      return;
-    }
-    const params = new URLSearchParams();
-    if (branchId) params.set("branch_id", branchId);
-    if (departmentId) params.set("department_id", departmentId);
-    apiFetch(
-      `/practitioners${params.toString() ? `?${params}` : ""}`,
-      apiSession,
-    )
-      .then((rows: any) =>
-        setScopedPractitioners(Array.isArray(rows) ? rows : []),
-      )
-      .catch(() => setScopedPractitioners([]));
-  }, [
-    apiSession?.tenantId,
-    branchId,
-    departmentId,
-    doctorScope?.practitionerId,
-  ]);
-  useEffect(() => {
     const id = setInterval(() => setTick((v) => v + 1), 5000);
     return () => clearInterval(id);
   }, []);
   useEffect(() => {
     const scopedDoctorId = doctorScope?.practitionerId || "";
-    const selectedAppointment = scopedAppointments.find(
+    // Look up the explicitly-selected appointment in the full (unscoped)
+    // list, not `scopedAppointments` — a row opened from Appointments/Queue
+    // can belong to a branch other than the one currently active in the
+    // shell, and `scopedAppointments` filters those out. Falling back to
+    // `scopedAppointments` here would make this effect think the doctor/
+    // department don't fit and clear the selection, showing "No appointment
+    // selected" even though the appointment is valid.
+    const selectedAppointment = appointments.find(
       (appointment: any) => appointment.id === selectedAppointmentId,
     );
     const selectedAppointmentDoctorId =
@@ -293,11 +294,22 @@ export function DoctorConsultation({
         !selectedAppointmentDepartmentId ||
         selectedAppointmentDepartmentId === departmentId),
     );
+    // `doctorList` merges two independently-loading async sources
+    // (livePractitioners + scopedPractitioners) and is empty for a beat on
+    // every mount/refresh. Falling back to `doctorList[0]?.id` while it's
+    // still empty resets `doctorId` to "" before the real list arrives —
+    // and once it does, `doctorList.find(d => d.id === doctorId)` no longer
+    // matches (doctorId is now ""), so it locks onto an arbitrary "first"
+    // doctor instead of the one the session actually had selected. That
+    // shows as the queue flashing real cards then collapsing to "No waiting
+    // patients" once the wrong doctor gets picked. Only fall back to
+    // "first in list" once the list has actually loaded; otherwise leave
+    // `doctorId` untouched so the remembered selection survives the load.
     const nextDoctorId =
       scopedDoctorId ||
       (selectedAppointmentFits ? selectedAppointmentDoctorId : "") ||
       doctorList.find((doctor: any) => doctor.id === doctorId)?.id ||
-      doctorList[0]?.id ||
+      (doctorList.length ? doctorList[0]?.id : doctorId) ||
       "";
     if (nextDoctorId !== doctorId) {
       const keepSelection = Boolean(
@@ -322,6 +334,7 @@ export function DoctorConsultation({
     doctorList.length,
     selectedAppointmentId,
     scopedAppointments.length,
+    appointments.length,
   ]);
   const doctor: any = doctorList.find((p: any) => p.id === doctorId) ||
     doctorList[0] || { id: "", name: "No practitioner", specialty: "" };
@@ -331,8 +344,17 @@ export function DoctorConsultation({
     feeType,
     ipBaseAmount,
   );
+  // `scopedAppointments` is filtered to the shell's currently active branch,
+  // but the branch context can be stale/unset relative to where appointments
+  // actually live (e.g. right after login, or when it hasn't been synced
+  // from another module). Rather than silently rendering an empty queue when
+  // that happens, fall back to the full clinic-wide list — the same list the
+  // Appointments module itself displays without any branch filtering.
+  const queueBaseAppointments = scopedAppointments.length
+    ? scopedAppointments
+    : appointments;
   const doctorQueue = sortQueue(
-    scopedAppointments.filter((a: any) => {
+    queueBaseAppointments.filter((a: any) => {
       if (doctorScope?.practitionerId)
         return (
           a.doctorId === doctorScope.practitionerId ||
@@ -371,7 +393,13 @@ export function DoctorConsultation({
     });
   }
   const selected =
-    doctorQueue.find((a: any) => a.id === selectedAppointmentId) || current;
+    doctorQueue.find((a: any) => a.id === selectedAppointmentId) ||
+    // Same branch-scoping gap as above: an appointment opened from another
+    // module can be outside the current branch/doctor queue scope. Fall back
+    // to the full appointment list so its details still render instead of
+    // showing "No appointment selected".
+    appointments.find((a: any) => a.id === selectedAppointmentId) ||
+    current;
   useEffect(() => {
     setConsultationValidationAttempted(false);
     if (selected?.treatmentType) setTreatmentType(selected.treatmentType);
@@ -404,27 +432,17 @@ export function DoctorConsultation({
     setReferDoctorId("");
     setAdmissionNeeded(false);
   }, [selected?.id]);
-  async function resolveSelectedConsultationId() {
-    if (!apiSession || !selected?.id) return "";
-    if (selected.consultationId) return selected.consultationId;
-    const rows = await apiFetch(
-      `/consultations?appointment_id=${encodeURIComponent(selected.id)}`,
-      apiSession,
-    );
-    return rows?.[0]?.id || "";
-  }
-
   useEffect(() => {
     if (!selected?.id || !apiSession) return;
     let alive = true;
     async function loadConsultationData() {
       try {
-        const consultationId = await resolveSelectedConsultationId();
-        if (!consultationId) return;
-        const detail = await apiFetch(
-          `/consultations/${consultationId}`,
+        const detail = await fetchConsultationDetail(
           apiSession,
+          selected.id,
+          selected.consultationId,
         );
+        if (!detail) return;
         if (!alive) return;
         const c = detail.consultation;
         setAddendums(Array.isArray(detail.addendums) ? detail.addendums : []);
@@ -560,10 +578,7 @@ export function DoctorConsultation({
         return;
       }
       try {
-        const detail = await apiFetch(
-          `/patients/${selectedPatientId}`,
-          apiSession,
-        );
+        const detail = await fetchPatientDetail(apiSession, selectedPatientId);
         if (alive) setSelectedPatientDetail(detail);
       } catch {
         if (alive) setSelectedPatientDetail(null);
@@ -602,7 +617,7 @@ export function DoctorConsultation({
   const appointmentDays = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setDate(date.getDate() + index);
-    const iso = date.toISOString().slice(0, 10);
+    const iso = localDateKey(date);
     const count = doctorQueue.filter(
       (a: any) =>
         String(a.appointmentDate || a.appointment_date || "").slice(0, 10) ===
@@ -653,63 +668,11 @@ export function DoctorConsultation({
         .slice(0, 5)
     : [];
   useEffect(() => {
-    let alive = true;
-    async function loadTemplates() {
-      if (!apiSession) return;
-      try {
-        const rows = await apiFetch(
-          `/consultations/by-department/${encodeURIComponent(departmentId)}/clinical-templates`,
-          apiSession,
-        );
-        if (alive) setTemplates(rows);
-      } catch {
-        if (alive) setTemplates([]);
-      }
-    }
-    loadTemplates();
-    return () => {
-      alive = false;
-    };
-  }, [apiSession?.tenantId, departmentId]);
+    setSelectedMedicineId((value) => value || medicineCatalog[0]?.id || "");
+  }, [medicineCatalog]);
   useEffect(() => {
-    let alive = true;
-    async function loadCatalogs() {
-      if (!apiSession) return;
-      try {
-        const labParams = new URLSearchParams();
-        if (branchId) labParams.set("branch_id", branchId);
-        const [medicines, tests] = await Promise.all([
-          apiFetch("/pharmacy/catalog/available-medicines", apiSession).catch(
-            () => [],
-          ),
-          apiFetch(
-            `/lab/catalog/available-tests${labParams.toString() ? `?${labParams}` : ""}`,
-            apiSession,
-          ).catch(() => []),
-        ]);
-        if (alive) {
-          setMedicineCatalog(medicines);
-          setLabCatalog(tests);
-          setSelectedMedicineId((value) => value || medicines[0]?.id || "");
-          setSelectedLabTestId((value) => value || tests[0]?.id || "");
-        }
-      } catch {
-        if (alive) {
-          setMedicineCatalog([]);
-          setLabCatalog([]);
-        }
-      }
-    }
-    loadCatalogs();
-    return () => {
-      alive = false;
-    };
-  }, [apiSession?.tenantId, branchId]);
-  function updateAppt(id: string, patch: any) {
-    setAppointments(
-      appointments.map((a: any) => (a.id === id ? { ...a, ...patch } : a)),
-    );
-  }
+    setSelectedLabTestId((value) => value || labCatalog[0]?.id || "");
+  }, [labCatalog]);
 
   function labReferralSummary() {
     const labNames = structuredPayload()
@@ -910,35 +873,6 @@ export function DoctorConsultation({
       ...structured,
     };
   }
-  async function callPatient(a: any) {
-    if (isQueueActionLocked(a)) return;
-    if (apiSession && a.queueEntryId) {
-      setBusy(true);
-      setMessage("");
-      try {
-        await apiFetch(`/queue/${a.queueEntryId}/call`, apiSession, {
-          method: "POST",
-          body: JSON.stringify({ reason: "Called from doctor dashboard" }),
-        });
-        await loadLiveData(apiSession);
-        setSelectedAppointmentId(a.id);
-        setMessage("Token called in backend.");
-      } catch (err: any) {
-        setMessage(err.message || "Could not call patient.");
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    updateAppt(a.id, { queueStatus: "Called", status: "In Consultation" });
-    setSelectedAppointmentId(a.id);
-  }
-  function callNext() {
-    const next = nextEligibleAppointment(
-      statusKey(current?.queueStatus) === "called" ? current?.id : undefined,
-    );
-    if (next) callPatient(next);
-  }
   function openConsultation(id: string) {
     setSelectedAppointmentId(id);
     sessionStorage.setItem("medizinhub.consultationAppointmentId", id);
@@ -961,78 +895,6 @@ export function DoctorConsultation({
     sessionStorage.setItem("medizinhub.patientId", id);
     setActive?.("patients");
   }
-  function callNextInWorkspace() {
-    const next = nextEligibleAppointment(selected?.id);
-    if (!next) return;
-    callPatient(next);
-    openConsultation(next.id);
-  }
-  async function skipPatient() {
-    if (!selected) return;
-    if (isQueueActionLocked(selected)) return;
-    if (apiSession && selected.queueEntryId) {
-      setBusy(true);
-      setMessage("");
-      try {
-        await apiFetch(
-          `/queue/${selected.queueEntryId}/mark-not-available`,
-          apiSession,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              reason: "Patient not present from doctor dashboard",
-            }),
-          },
-        );
-        await loadLiveData(apiSession);
-        const next = nextEligibleAppointment(selected.id);
-        if (next) setSelectedAppointmentId(next.id);
-        setMessage("Patient marked not available.");
-      } catch (err: any) {
-        setMessage(err.message || "Could not update token.");
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    updateAppt(selected.id, {
-      status: "Patient Not Available",
-      queueStatus: "Not Available",
-      skippedCount: (selected.skippedCount || 0) + 1,
-    });
-  }
-  async function requeuePatient(mode: "after2" | "end") {
-    if (!selected) return;
-    if (isQueueActionLocked(selected)) return;
-    if (apiSession && selected.queueEntryId) {
-      setBusy(true);
-      setMessage("");
-      try {
-        await apiFetch(`/queue/${selected.queueEntryId}/requeue`, apiSession, {
-          method: "POST",
-          body: JSON.stringify({
-            reason: "Requeued from doctor dashboard",
-            place_at_end: mode === "end",
-          }),
-        });
-        await loadLiveData(apiSession);
-        const next = nextEligibleAppointment(selected.id);
-        if (next) setSelectedAppointmentId(next.id);
-        setMessage("Token requeued.");
-      } catch (err: any) {
-        setMessage(err.message || "Could not requeue token.");
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    updateAppt(selected.id, {
-      status: "Scheduled",
-      queueStatus: "Requeued",
-      priority: mode === "after2" ? 2.5 : 5,
-      requeueMode: mode,
-    });
-  }
 
   const resetConsultation = () => {
     setConsultationValidationAttempted(false);
@@ -1053,204 +915,73 @@ export function DoctorConsultation({
 
     setAdmissionNeeded(false);
   };
-  async function cancelAppointment() {
-    if (!selected) return;
-    if (isQueueActionLocked(selected)) return;
-    if (apiSession && selected.queueEntryId) {
-      setBusy(true);
-      setMessage("");
-      resetConsultation();
 
-      try {
-        await apiFetch(`/queue/${selected.queueEntryId}/cancel`, apiSession, {
-          method: "POST",
-          body: JSON.stringify({ reason: "Cancelled from doctor dashboard" }),
-        });
-        await loadLiveData(apiSession);
-        setSelectedAppointmentId("");
-        setMessage("Appointment cancelled.");
-      } catch (err: any) {
-        setMessage(err.message || "Could not cancel appointment.");
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    updateAppt(selected.id, { status: "Cancelled", queueStatus: "Cancelled" });
-  }
-  function markDone() {
-    if (!selected) return;
-    const referralDoctor: any = referDoctor
-      ? doctorList.find((p: any) => p.id === referDoctorId)
-      : null;
-    updateAppt(selected.id, {
-      status: "Consultation Done",
-      queueStatus: "Completed",
-      doctorNotes: notes,
-      patientRemarks: remarks,
+  const {
+    callPatient,
+    callNext: callNextAction,
+    callNextInWorkspace: callNextInWorkspaceAction,
+    skipPatient,
+    requeuePatient,
+    cancelAppointment,
+    markDone,
+    saveBackendDraft,
+    signBackendConsultation,
+    saveAddendum,
+  } = useConsultationActions({
+    apiSession,
+    selected,
+    appointments,
+    setAppointments,
+    refetchAppointments,
+    setBusy,
+    setMessage,
+    setSelectedAppointmentId,
+    nextEligibleAppointment,
+    resetConsultation,
+    consultationDraftPayload,
+    labReferralSummary,
+    medicineRows,
+    prescription,
+    scanNeeded,
+    scanTests,
+    remarks,
+    treatmentType,
+    notes,
+    referDoctor,
+    referDoctorId,
+    setConsultationValidationAttempted,
+    addendumNote,
+    setAddendumNote,
+    setAddendums,
+    markDoneFields: {
       diagnosis,
-      prescription,
-      medicineAmount: Number(medicineAmount || 0),
+      medicineAmount,
       labNeeded,
       labTests,
-      labAmount: labNeeded ? labTests.split(",").length * 350 : 0,
-      scanNeeded,
-      scanTests,
-      scanAmount: scanNeeded ? scanTests.split(",").length * 900 : 0,
-      referDoctor,
-      referDoctorId: referralDoctor?.id,
-      referDoctorName: referralDoctor?.name,
+      referDoctorId,
+      doctorList,
       feeType,
       consultationCharge,
       ipBaseAmount,
-      extraFee: Number(extraFee || 0),
+      extraFee,
       finalFee,
-    });
-    setNotes("");
-    setRemarks("");
-    setDiagnosis("");
-    setExtraFee(0);
-    setLabNeeded(false);
-    setScanNeeded(false);
-    setReferDoctor(false);
+    },
+    resetAfterMarkDone: () => {
+      setNotes("");
+      setRemarks("");
+      setDiagnosis("");
+      setExtraFee(0);
+      setLabNeeded(false);
+      setScanNeeded(false);
+      setReferDoctor(false);
+    },
+  });
+  function callNext() {
+    callNextAction(current);
   }
-  async function ensureBackendConsultation() {
-    if (!apiSession || !selected)
-      throw new Error("Backend login and appointment selection are required.");
-    if (
-      selected.queueEntryId &&
-      statusKey(selected.queueStatus) !== "in_consultation" &&
-      statusKey(selected.status) !== "in_consultation"
-    ) {
-      try {
-        await apiFetch(
-          `/queue/${selected.queueEntryId}/start-consultation`,
-          apiSession,
-          {
-            method: "POST",
-            body: JSON.stringify({ reason: "Started from doctor dashboard" }),
-          },
-        );
-      } catch (err: any) {
-        if (!String(err.message || "").includes("already")) throw err;
-      }
-    }
-    if (selected.consultationId) return selected.consultationId;
-    const created = await apiFetch("/consultations", apiSession, {
-      method: "POST",
-      body: JSON.stringify({
-        appointment_id: selected.id,
-        created_by_user_id: apiSession.user?.id,
-        ...consultationDraftPayload(),
-      }),
-    });
-    await loadLiveData(apiSession);
-    return created.id;
-  }
-  async function saveBackendDraft() {
-    setBusy(true);
-    setMessage("");
-    try {
-      const consultationId = await ensureBackendConsultation();
-      const labText = labReferralSummary();
-      await apiFetch(`/consultations/${consultationId}`, apiSession, {
-        method: "PATCH",
-        body: JSON.stringify({
-          prescription_text: medicineRows || prescription,
-          lab_referral_text: labText || null,
-          scan_referral_text: scanNeeded ? scanTests : null,
-          follow_up_advice: remarks,
-          patient_remarks: remarks,
-          ...consultationDraftPayload(),
-        }),
-      });
-      await loadLiveData(apiSession);
-      setMessage("Consultation draft saved to backend.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not save consultation.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function signBackendConsultation() {
-    setConsultationValidationAttempted(true);
-    const draftPayload = consultationDraftPayload();
-    const hasComplaints = Boolean(draftPayload.chief_complaint);
-    const hasDiagnosis = Boolean(draftPayload.diagnosis);
-    const medicinesMissingDoseOrFrequency = splitRows(medicineRows).some((line: string) => {
-      const [_name, dosage, frequency] = line.split("|").map((part: string) => part.trim());
-      return !dosage || !frequency;
-    });
-    const missingFields = [
-      !treatmentType.trim() ? "treatment type" : "",
-      !hasComplaints ? "complaints" : "",
-      !hasDiagnosis ? "diagnosis" : "",
-      !notes.trim() ? "doctor notes" : "",
-      scanNeeded && !scanTests.trim() ? "scan / diagnostic" : "",
-      referDoctor && !referDoctorId ? "recommended doctor" : "",
-    ].filter(Boolean);
-    if (missingFields.length > 0) {
-      setMessage(`Add ${missingFields.join(", ")} before signing.`);
-      return;
-    }
-    if (medicinesMissingDoseOrFrequency) {
-      setMessage("Every prescribed medicine needs dosage and frequency before signing.");
-      return;
-    }
-    setBusy(true);
-    setMessage("");
-    try {
-      const consultationId = await ensureBackendConsultation();
-      const labText = labReferralSummary();
-      await apiFetch(`/consultations/${consultationId}`, apiSession, {
-        method: "PATCH",
-        body: JSON.stringify({
-          prescription_text: medicineRows || prescription,
-          lab_referral_text: labText || null,
-          scan_referral_text: scanNeeded ? scanTests : null,
-          follow_up_advice: remarks,
-          patient_remarks: remarks,
-          ...draftPayload,
-        }),
-      });
-      await apiFetch(`/consultations/${consultationId}/sign`, apiSession, {
-        method: "POST",
-        body: JSON.stringify({ signed_by_user_id: apiSession.user?.id }),
-      });
-      await loadLiveData(apiSession);
-      setConsultationValidationAttempted(false);
-      setMessage("Consultation Completed and locked in backend.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not sign consultation.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function saveAddendum() {
-    if (!apiSession || !selected?.consultationId || !addendumNote.trim())
-      return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const saved = await apiFetch(
-        `/consultations/${selected.consultationId}/addendums`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            note: addendumNote,
-            created_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      setAddendums((previous: any[]) => [...previous, saved]);
-      setAddendumNote("");
-      setMessage("Addendum saved to signed consultation.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not save addendum.");
-    } finally {
-      setBusy(false);
-    }
+  function callNextInWorkspace() {
+    const next = callNextInWorkspaceAction();
+    if (next) openConsultation(next.id);
   }
   if (view === "workspace")
     return (
@@ -1272,7 +1003,6 @@ export function DoctorConsultation({
                     setSelectedAppointmentId("");
                   }}
                   disabled={isDoctorUser}
-                  // className="select-filter"
                   searchable={doctorList.length > 8}
                   options={doctorList.map((d: any) => ({
                     value: d.id,

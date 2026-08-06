@@ -67,6 +67,8 @@ export function mapAppointment(
 
   return {
     id: row.id,
+    updated_at: row.updated_at,
+    created_at: row.created_at,
     queueEntryId: q?.id,
     queuePosition: Number(q?.queue_position || 0),
     queue_position: Number(q?.queue_position || 0),
@@ -99,6 +101,9 @@ export function mapAppointment(
     appointmentDate: row.appointment_date,
     appointment_time: row.appointment_time,
     appointmentTime: row.appointment_time,
+    acquisitionSource: row.acquisition_source || "direct",
+    referrerPatientId: row.referrer_patient_id || "",
+    referrerName: row.referrer_name || "",
     time: row.appointment_time || "Today",
     status: row.status,
     queueStatus: q?.status || row.status,

@@ -6,10 +6,21 @@ export const patientSchema = z
       .string()
       .trim()
       .min(3, "Full name must contain at least 3 characters"),
-
     mobile: z
       .string()
-      .regex(/^\d{10}$/, "Mobile number must be exactly 10 digits")
+      .regex(
+        /^[6-9]\d{9}$/,
+        "Mobile number must be exactly 10 digits and start with 6, 7, 8 or 9",
+      )
+      .optional()
+      .or(z.literal("")),
+
+    alternateMobile: z
+      .string()
+      .regex(
+        /^[6-9]\d{9}$/,
+        "Alternate phone number must be exactly 10 digits and start with 6, 7, 8 or 9",
+      )
       .optional()
       .or(z.literal("")),
 
@@ -34,12 +45,6 @@ export const patientSchema = z
       .optional()
       .or(z.literal("")),
 
-    alternateMobile: z
-      .string()
-      .regex(/^\d{10}$/, "Alternate phone number must be exactly 10 digits")
-      .optional()
-      .or(z.literal("")),
-
     email: z
       .string()
       .email("Please enter a valid email address")
@@ -53,12 +58,11 @@ export const patientSchema = z
     address: z.string().trim().min(1, "Address is required"),
 
     status: z.string().optional(),
-    whatsappConsentStatus: z.enum([
-      "not_recorded",
-      "opted_in",
-      "opted_out",
-    ]),
+
+    whatsappConsentStatus: z.enum(["not_recorded", "opted_in", "opted_out"]),
+
     whatsappConsentSource: z.string().optional(),
+
     whatsappPreferredLanguage: z.enum([
       "tenant_default",
       "en",
@@ -75,11 +79,20 @@ export const patientSchema = z
     ]),
   })
   .superRefine((values, context) => {
-    if (
-      values.mobile &&
-      values.alternateMobile &&
-      values.mobile === values.alternateMobile
-    ) {
+    const mobile = values.mobile?.trim();
+    const alternateMobile = values.alternateMobile?.trim();
+
+    // At least one contact number is required
+    if (!mobile && !alternateMobile) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mobile"],
+        message: "Mobile number or alternate mobile number is required",
+      });
+    }
+
+    // Prevent same number in both fields
+    if (mobile && alternateMobile && mobile === alternateMobile) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["alternateMobile"],

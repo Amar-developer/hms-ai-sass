@@ -38,7 +38,12 @@ cleanup() {
   exit_code=$?
   for pid in "${FRONTEND_PID}" "${BACKEND_PID}"; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
-      kill "${pid}" 2>/dev/null || true
+      # Each server was launched via `setsid` as its own process group
+      # leader, so `npm run start` (or uvicorn) plus any child process it
+      # forks (e.g. Next's underlying `next-server`) all share that group.
+      # Signal the whole group (negative PID) so the child can't outlive
+      # its parent and keep the E2E port bound for the next run.
+      kill -- "-${pid}" 2>/dev/null || kill "${pid}" 2>/dev/null || true
       wait "${pid}" 2>/dev/null || true
     fi
   done
@@ -165,7 +170,11 @@ database_name = os.environ["DB_NAME"]
 try:
     connection = psycopg.connect(dbname=database_name, **connection_args)
 except psycopg.OperationalError as exc:
-    if exc.sqlstate != "3D000":
+    # Connection-time FATAL errors (raised before the server reaches "ready
+    # for query") don't always carry a populated .sqlstate in psycopg 3, so
+    # fall back to matching Postgres's standard "does not exist" wording for
+    # SQLSTATE 3D000 (invalid_catalog_name).
+    if exc.sqlstate != "3D000" and "does not exist" not in str(exc):
         raise
     with psycopg.connect(dbname="postgres", **connection_args) as maintenance:
         with maintenance.cursor() as cursor:
@@ -193,7 +202,7 @@ export NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS="false"
 
 cd "${BACKEND_DIR}"
 PYTHONPATH=. "${PYTHON_BIN}" -m alembic -c alembic/alembic.ini upgrade head
-PYTHONPATH=. "${PYTHON_BIN}" -m uvicorn app.main:app \
+setsid env PYTHONPATH=. "${PYTHON_BIN}" -m uvicorn app.main:app \
   --host "${API_HOST}" --port "${API_PORT}" >"${BACKEND_LOG}" 2>&1 &
 BACKEND_PID=$!
 
@@ -224,7 +233,7 @@ PY
 cd "${FRONTEND_DIR}"
 rm -rf e2e/.state
 npm run build
-npm run start -- --hostname "${FRONTEND_HOST}" --port "${FRONTEND_PORT}" \
+setsid npm run start -- --hostname "${FRONTEND_HOST}" --port "${FRONTEND_PORT}" \
   >"${FRONTEND_LOG}" 2>&1 &
 FRONTEND_PID=$!
 

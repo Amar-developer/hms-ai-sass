@@ -4,7 +4,11 @@ from app.modules.appointments.models import Appointment
 from app.modules.billing.models import CreditNote, Invoice
 from app.modules.consultations.models import Consultation
 from app.modules.lab.models import LabOrder
+from app.modules.patients.contact import patient_contact_numbers
 from app.modules.patients.models import Patient, WhatsAppConsentStatus
+from app.infrastructure.integrations.adapters.messaging.http_template import (
+    normalize_mobile_number,
+)
 
 
 def patient_for_notification_resource(
@@ -49,14 +53,22 @@ def patient_allows_whatsapp(patient: Patient | None) -> bool:
     )
 
 
-def patient_notification_mobile(patient: Patient | None) -> str | None:
-    """Use the patient's primary mobile, falling back to the alternate mobile."""
+def patient_notification_destination(
+    patient: Patient | None, default_country_code: str
+) -> str | None:
+    """The one number to message, in primary → alternate → guardian order.
+
+    Returns as soon as a number normalizes, so a patient who has several
+    numbers on file still receives a single copy of each message rather than
+    one per number.
+    """
     if not patient:
         return None
-    for value in (patient.mobile, patient.alternate_mobile):
-        normalized = str(value or "").strip()
-        if normalized:
-            return normalized
+    for value in patient_contact_numbers(patient):
+        try:
+            return normalize_mobile_number(value, default_country_code)
+        except ValueError:
+            continue
     return None
 
 

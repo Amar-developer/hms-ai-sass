@@ -1,6 +1,65 @@
 from datetime import date
 
 
+def test_practitioner_list_batches_branch_and_department_links(monkeypatch):
+    from app.modules.practitioners.models import Practitioner
+    from app.modules.practitioners.services import practitioner_service
+
+    practitioners = [
+        Practitioner(id="doctor_one", tenant_id="tenant_one", full_name="Dr. One"),
+        Practitioner(id="doctor_two", tenant_id="tenant_one", full_name="Dr. Two"),
+        Practitioner(id="doctor_three", tenant_id="tenant_one", full_name="Dr. Three"),
+    ]
+    calls = {"branches": 0, "departments": 0}
+
+    class FakePractitionerRepository:
+        def __init__(self, _session):
+            pass
+
+        def list_for_tenant(self, **_kwargs):
+            return practitioners
+
+    class FakeLinkRepository:
+        def __init__(self, _session):
+            pass
+
+        def active_branch_ids_by_practitioner(self, **_kwargs):
+            calls["branches"] += 1
+            return {
+                "doctor_one": ["branch_one"],
+                "doctor_two": ["branch_one"],
+                "doctor_three": ["branch_two"],
+            }
+
+        def active_department_ids_by_practitioner(self, **_kwargs):
+            calls["departments"] += 1
+            return {
+                "doctor_one": ["general"],
+                "doctor_two": ["general"],
+                "doctor_three": ["ped"],
+            }
+
+    monkeypatch.setattr(
+        practitioner_service, "PractitionerRepository", FakePractitionerRepository
+    )
+    monkeypatch.setattr(
+        practitioner_service, "PractitionerLinkRepository", FakeLinkRepository
+    )
+
+    rows = practitioner_service.list_practitioners(
+        object(),
+        tenant_id="tenant_one",
+        branch_id=None,
+        department_id=None,
+        doctor_practitioner_id=None,
+    )
+
+    assert len(rows) == 3
+    assert calls == {"branches": 1, "departments": 1}
+    assert rows[0].branch_ids == ["branch_one"]
+    assert rows[2].department_ids == ["ped"]
+
+
 def setup_tenant_branch_departments_patient(client):
     tenant = client.post("/api/v1/tenants", json={"name": "Practitioner Clinic"}).json()
     branch = client.post(
@@ -79,7 +138,8 @@ def test_appointment_create_permission_can_read_doctors_and_calendar(client):
         json={
             "branch_id": branch["id"],
             "department_id": "general",
-            "weekday": date(2026, 5, 4).weekday(),
+            "mode": "custom",
+            "weekdays": [date(2026, 5, 4).weekday()],
             "start_time": "09:00:00",
             "end_time": "10:00:00",
             "slot_minutes": 15,
@@ -158,7 +218,8 @@ def test_appointment_creator_can_read_doctor_when_department_code_is_sent(client
         json={
             "branch_id": branch["id"],
             "department_id": department["id"],
-            "weekday": date(2026, 5, 4).weekday(),
+            "mode": "custom",
+            "weekdays": [date(2026, 5, 4).weekday()],
             "start_time": "09:00:00",
             "end_time": "10:00:00",
             "slot_minutes": 15,
@@ -336,7 +397,8 @@ def test_scheduling_crud_permissions_can_manage_doctor_time_slots(client):
         json={
             "branch_id": branch["id"],
             "department_id": "general",
-            "weekday": 1,
+            "mode": "custom",
+            "weekdays": [1],
             "start_time": "09:00:00",
             "end_time": "11:00:00",
             "slot_minutes": 10,
@@ -349,7 +411,8 @@ def test_scheduling_crud_permissions_can_manage_doctor_time_slots(client):
         json={
             "branch_id": branch["id"],
             "department_id": "general",
-            "weekday": 1,
+            "mode": "custom",
+            "weekdays": [1],
             "start_time": "10:00:00",
             "end_time": "12:00:00",
             "slot_minutes": 15,
@@ -423,7 +486,8 @@ def test_scheduling_read_permission_cannot_create_doctor_time_slots(client):
         json={
             "branch_id": branch["id"],
             "department_id": "general",
-            "weekday": 1,
+            "mode": "custom",
+            "weekdays": [1],
             "start_time": "09:00:00",
             "end_time": "11:00:00",
             "slot_minutes": 10,
@@ -497,11 +561,11 @@ def test_schedule_management_list_update_and_delete(client):
         json={
             "branch_id": branch["id"],
             "department_id": "general",
-            "weekday": 1,
+            "mode": "custom",
+            "weekdays": [1],
             "start_time": "09:00:00",
             "end_time": "12:00:00",
             "slot_minutes": 15,
-            "room_name": "Room 1",
         },
     ).json()
 
@@ -513,11 +577,11 @@ def test_schedule_management_list_update_and_delete(client):
         headers={"X-Tenant-ID": tenant["id"]},
         json={
             "branch_id": other_branch["id"],
-            "weekday": 2,
+            "mode": "custom",
+            "weekdays": [2],
             "start_time": "10:00:00",
             "end_time": "13:00:00",
             "slot_minutes": 20,
-            "room_name": "Room 2",
         },
     )
     deleted = client.delete(
@@ -533,7 +597,7 @@ def test_schedule_management_list_update_and_delete(client):
     assert [row["id"] for row in listed.json()] == [schedule["id"]]
     assert updated.status_code == 200
     assert updated.json()["branch_id"] == other_branch["id"]
-    assert updated.json()["weekday"] == 2
+    assert updated.json()["weekdays"] == [2]
     assert updated.json()["slot_minutes"] == 20
     assert deleted.status_code == 200
     assert inactive_list.status_code == 200
@@ -560,7 +624,8 @@ def test_schedule_rejects_department_not_mapped_to_practitioner(client):
         json={
             "branch_id": branch["id"],
             "department_id": "orthopaedics",
-            "weekday": 1,
+            "mode": "custom",
+            "weekdays": [1],
             "start_time": "09:00:00",
             "end_time": "12:00:00",
             "slot_minutes": 15,
@@ -589,7 +654,8 @@ def test_schedule_allows_same_timing_as_separate_department_records(client):
     ).json()
     payload = {
         "branch_id": branch["id"],
-        "weekday": 1,
+        "mode": "custom",
+        "weekdays": [1],
         "start_time": "09:00:00",
         "end_time": "13:00:00",
         "slot_minutes": 15,
@@ -669,7 +735,8 @@ def test_appointment_accepts_practitioner_assigned_to_branch_and_department(clie
         json={
             "branch_id": branch["id"],
             "department_id": "ped",
-            "weekday": date.today().weekday(),
+            "mode": "custom",
+            "weekdays": [date.today().weekday()],
             "start_time": "09:00:00",
             "end_time": "12:00:00",
             "slot_minutes": 15,
@@ -713,7 +780,8 @@ def test_date_only_appointment_requires_practitioner_scheduled_weekday(client):
         json={
             "branch_id": branch["id"],
             "department_id": "general",
-            "weekday": 1,
+            "mode": "custom",
+            "weekdays": [1],
             "start_time": "09:00:00",
             "end_time": "12:00:00",
             "slot_minutes": 15,
@@ -765,7 +833,8 @@ def test_backend_auto_assigns_next_available_exact_slots(client):
         json={
             "branch_id": branch["id"],
             "department_id": "general",
-            "weekday": 1,
+            "mode": "custom",
+            "weekdays": [1],
             "start_time": "10:00:00",
             "end_time": "13:00:00",
             "slot_minutes": 15,
@@ -857,11 +926,11 @@ def test_schedule_availability_allows_booking_and_prevents_double_booking(client
         json={
             "branch_id": branch["id"],
             "department_id": "general",
-            "weekday": 0,
+            "mode": "custom",
+            "weekdays": [0],
             "start_time": "09:00:00",
             "end_time": "12:00:00",
             "slot_minutes": 15,
-            "room_name": "Room 1",
         },
     )
     availability = client.get(
@@ -905,7 +974,9 @@ def test_schedule_availability_allows_booking_and_prevents_double_booking(client
     assert availability.status_code == 200
     assert availability.json()["available"] is True
     assert availability.json()["schedule_id"] == schedule.json()["id"]
-    assert availability.json()["room_name"] == "Room 1"
+    # Room tracking on the schedule was dropped (no business requirement);
+    # only an explicit PractitionerRoomAssignment resolves a room now.
+    assert availability.json()["room_name"] is None
     assert booked.status_code == 201
     assert duplicate.status_code == 409
     assert (
@@ -934,7 +1005,8 @@ def test_same_patient_cannot_book_same_doctor_twice_in_same_timing_session(clien
             json={
                 "branch_id": branch["id"],
                 "department_id": "general",
-                "weekday": 0,
+                "mode": "custom",
+                "weekdays": [0],
                 "start_time": start_time,
                 "end_time": end_time,
                 "slot_minutes": 15,
@@ -1011,7 +1083,8 @@ def test_same_patient_cannot_book_two_doctors_at_same_exact_time(client):
             json={
                 "branch_id": branch["id"],
                 "department_id": "general",
-                "weekday": 0,
+                "mode": "custom",
+                "weekdays": [0],
                 "start_time": "09:00:00",
                 "end_time": "12:00:00",
                 "slot_minutes": 15,
@@ -1077,7 +1150,8 @@ def test_same_doctor_cannot_book_two_patients_across_departments_at_same_time(cl
             json={
                 "branch_id": branch["id"],
                 "department_id": department_id,
-                "weekday": 0,
+                "mode": "custom",
+                "weekdays": [0],
                 "start_time": "09:00:00",
                 "end_time": "12:00:00",
                 "slot_minutes": 15,
@@ -1157,7 +1231,8 @@ def test_practitioner_leave_blocks_timed_appointment(client):
         headers={"X-Tenant-ID": tenant["id"]},
         json={
             "branch_id": branch["id"],
-            "weekday": 0,
+            "mode": "custom",
+            "weekdays": [0],
             "start_time": "09:00:00",
             "end_time": "12:00:00",
             "slot_minutes": 15,
@@ -1264,11 +1339,11 @@ def test_practitioner_calendar_generates_available_booked_and_leave_slots(client
         json={
             "branch_id": branch["id"],
             "department_id": "general",
-            "weekday": 0,
+            "mode": "custom",
+            "weekdays": [0],
             "start_time": "09:00:00",
             "end_time": "10:00:00",
             "slot_minutes": 30,
-            "room_name": "Room Calendar",
         },
     )
     client.post(
@@ -1312,7 +1387,8 @@ def test_practitioner_calendar_generates_available_booked_and_leave_slots(client
     assert day["total_slots"] == 2
     assert day["available_slots"] == 0
     assert [slot["status"] for slot in day["slots"]] == ["booked", "leave"]
-    assert day["slots"][0]["room_name"] == "Room Calendar"
+    # Room tracking on the schedule was dropped; no assignment exists here.
+    assert day["slots"][0]["room_name"] is None
 
 
 def test_practitioner_calendar_rejects_large_date_range(client):
@@ -1341,3 +1417,156 @@ def test_practitioner_calendar_rejects_large_date_range(client):
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Calendar range cannot exceed 62 days"
+
+
+def _schedule_doctor(client, tenant, branch):
+    return client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. Date Schedule",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
+    ).json()
+
+
+def test_doctor_can_hold_split_sessions_but_not_overlapping_ones(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
+    practitioner = _schedule_doctor(client, tenant, branch)
+    headers = {"X-Tenant-ID": tenant["id"]}
+
+    def create(start_time, end_time):
+        return client.post(
+            f"/api/v1/practitioners/{practitioner['id']}/schedules",
+            headers=headers,
+            json={
+                "branch_id": branch["id"],
+                "department_id": "general",
+                "mode": "custom",
+                "weekdays": [0],
+                "start_time": start_time,
+                "end_time": end_time,
+                "slot_minutes": 15,
+            },
+        )
+
+    morning = create("09:00:00", "12:00:00")
+    evening = create("18:00:00", "21:00:00")
+    overlapping = create("11:00:00", "13:00:00")
+    other_weekday = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "mode": "custom",
+            "weekdays": [1],
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
+
+    assert morning.status_code == 201
+    # Separate sessions in one department are legitimate (morning + evening).
+    assert evening.status_code == 201
+    # A window that overlaps an existing one is still a duplicate.
+    assert overlapping.status_code == 400
+    assert "overlapping" in overlapping.json()["detail"]
+    # The same window on a different weekday is a different slot entirely.
+    assert other_weekday.status_code == 201
+
+
+def test_daily_and_mon_saturday_modes_resolve_weekdays_server_side(client):
+    """A schedule is one row now, so a client only sends `mode` (plus
+    `weekdays` for custom); daily/mon_saturday are always resolved by the
+    server, not trusted from the client."""
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
+    practitioner = _schedule_doctor(client, tenant, branch)
+    headers = {"X-Tenant-ID": tenant["id"]}
+
+    daily = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "mode": "daily",
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
+    assert daily.status_code == 201
+    assert daily.json()["weekdays"] == [0, 1, 2, 3, 4, 5, 6]
+
+    mon_sat = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "mode": "mon_saturday",
+            "start_time": "18:00:00",
+            "end_time": "20:00:00",
+            "slot_minutes": 15,
+        },
+    )
+    assert mon_sat.status_code == 201
+    assert mon_sat.json()["weekdays"] == [0, 1, 2, 3, 4, 5]
+
+    flat = client.get("/api/v1/practitioners/schedules", headers=headers)
+    assert flat.status_code == 200
+    assert len(flat.json()) == 2
+
+
+def test_custom_schedule_covers_only_its_selected_weekdays(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
+    practitioner = _schedule_doctor(client, tenant, branch)
+    headers = {"X-Tenant-ID": tenant["id"]}
+
+    response = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "mode": "custom",
+            "weekdays": [0, 2, 4],
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["weekdays"] == [0, 2, 4]
+    assert response.json()["mode"] == "custom"
+
+
+def test_custom_schedule_without_weekdays_is_rejected(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
+    practitioner = _schedule_doctor(client, tenant, branch)
+    headers = {"X-Tenant-ID": tenant["id"]}
+
+    response = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "mode": "custom",
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
+    assert response.status_code == 422

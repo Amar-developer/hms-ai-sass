@@ -69,3 +69,21 @@ class AuthSession(SQLModel, table=True):
     expires_at: datetime = Field(index=True)
     revoked_at: datetime | None = Field(default=None)
     created_at: datetime = Field(default_factory=now_utc)
+
+
+class PrivilegedAccessGrant(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("access_grant"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    user_id: str = Field(index=True, foreign_key="user.id")
+    permission_keys_json: str = Field(default="[]")
+    reason: str = Field(min_length=3, max_length=500)
+    starts_at: datetime = Field(default_factory=now_utc, index=True)
+    expires_at: datetime = Field(index=True)
+    revoked_at: datetime | None = Field(default=None, index=True)
+    granted_by_user_id: str = Field(index=True, foreign_key="user.id")
+    revoked_by_user_id: str | None = Field(
+        default=None, index=True, foreign_key="user.id"
+    )
+    revoke_reason: str | None = Field(default=None, max_length=500)
+    created_at: datetime = Field(default_factory=now_utc)
+    updated_at: datetime = Field(default_factory=now_utc)

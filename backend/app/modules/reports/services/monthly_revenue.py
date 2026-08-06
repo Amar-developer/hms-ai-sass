@@ -8,6 +8,7 @@ from app.modules.reports.services.classification import ReportInvoiceClassifier
 from app.modules.reports.services.calculations import (
     invoice_approved_discount,
     invoice_billing_discount,
+    invoice_due_balance,
     invoice_item_total,
     invoice_membership_benefit,
     invoice_offer_discount,
@@ -83,6 +84,10 @@ def build_monthly_revenue_report(
         modes = sorted(value for value in values if value and value != "-")
         return " + ".join(modes) if modes else "-"
 
+    def percentage(value: int, total: int, fallback_total: int = 0) -> str:
+        basis = total or fallback_total
+        return "0%" if not basis else f"{round((value / basis) * 100)}%"
+
     appointments = {
         row.id: row
         for row in repo.list_appointments_by_ids(
@@ -154,9 +159,7 @@ def build_monthly_revenue_report(
                     ["Settlement", _money(total_settlement)],
                     [
                         "Settlement %",
-                        "0%"
-                        if not total_paid
-                        else f"{round((total_settlement / total_paid) * 100)}%",
+                        percentage(total_settlement, total_paid, total_item),
                     ],
                     ["Clinic Profit", _money(total_profit)],
                 ],
@@ -206,7 +209,7 @@ def build_monthly_revenue_report(
             bucket["membership"] += invoice_membership_benefit(invoice)
             bucket["invoice"] += int(invoice.total_amount or 0)
             bucket["paid"] += int(invoice.paid_amount or 0)
-            bucket["balance"] += int(invoice.balance_amount or 0)
+            bucket["balance"] += invoice_due_balance(invoice)
             bucket["payment_modes"].add(payment_mode(invoice))
             bucket["doctor"] += invoice_doctor_fee(invoice)
             bucket["settlement"] += invoice_settlement(invoice)
@@ -227,9 +230,7 @@ def build_monthly_revenue_report(
                 _money(row["tax"]),
                 _money(row["doctor"]),
                 _money(row["settlement"]),
-                "0%"
-                if not row["paid"]
-                else f"{round((row['settlement'] / row['paid']) * 100)}%",
+                percentage(row["settlement"], row["paid"], row["item"]),
                 _money(row["paid"] - row["tax"] - row["doctor"] - row["settlement"]),
             ]
             for row in sorted(
@@ -301,12 +302,12 @@ def build_monthly_revenue_report(
                     _money(invoice_billing_discount(report_invoice)),
                     _money(int(invoice.total_amount or 0)),
                     _money(paid),
-                    _money(int(invoice.balance_amount or 0)),
+                    _money(invoice_due_balance(invoice)),
                     payment_mode(invoice),
                     _money(paid_tax),
                     _money(doctor_fee),
                     _money(settlement),
-                    "0%" if not paid else f"{round((settlement / paid) * 100)}%",
+                    percentage(settlement, paid, invoice_item_total(invoice)),
                     _money(paid - paid_tax - doctor_fee - settlement),
                 ]
             )

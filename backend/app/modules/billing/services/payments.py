@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlmodel import Session
 
 from app.core.access_control import enforce_entitlement, require_user_branch_access
+from app.core.config import get_settings
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.billing.models import Invoice, InvoiceStatus, Payment
 from app.modules.billing.repositories.payment_repository import BillingPaymentRepository
@@ -15,6 +16,7 @@ from app.modules.notifications.models import NotificationEventType, Notification
 from app.modules.notifications.service import (
     queue_notification_if_allowed,
     queue_whatsapp_template_if_allowed,
+    whatsapp_template_integration_enabled,
 )
 from app.modules.tenants.models import now_utc
 
@@ -93,6 +95,7 @@ def record_invoice_payment(
         patient
         and invoice.status == InvoiceStatus.PAID
         and before["status"] != InvoiceStatus.PAID
+        and get_settings().permanent_invoice_delivery_enabled
     ):
         paid_event = queue_whatsapp_template_if_allowed(
             session,
@@ -126,7 +129,7 @@ def record_invoice_payment(
             resource_id=invoice.id,
             queued_by_user_id=payload.collected_by_user_id,
         )
-        queue_whatsapp_template_if_allowed(
+        pending_template_event = queue_whatsapp_template_if_allowed(
             session,
             tenant_id=tenant_id,
             branch_id=invoice.branch_id,
@@ -137,6 +140,25 @@ def record_invoice_payment(
             dedupe_key=f"whatsapp:invoice:{invoice.id}:pending:{payment.id}",
             queued_by_user_id=payload.collected_by_user_id,
         )
+        if not pending_template_event and not whatsapp_template_integration_enabled(
+            session, tenant_id
+        ):
+            queue_notification_if_allowed(
+                session,
+                tenant_id=tenant_id,
+                branch_id=invoice.branch_id,
+                provider=NotificationProvider.WHATSAPP,
+                event_type=NotificationEventType.PAYMENT_REMINDER,
+                recipient=patient.mobile,
+                subject="Payment pending",
+                message=(
+                    f"Payment pending for invoice {invoice.invoice_number}: "
+                    f"Rs. {invoice.balance_amount}."
+                ),
+                resource_type="invoice",
+                resource_id=invoice.id,
+                queued_by_user_id=payload.collected_by_user_id,
+            )
     record_audit_event(
         session,
         tenant_id=tenant_id,

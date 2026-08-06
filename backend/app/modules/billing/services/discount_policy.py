@@ -51,6 +51,28 @@ def compose_invoice_discounts(
     )
 
 
+def invoice_service_scope(invoice: Invoice) -> str:
+    """The tax/offer scope an invoice bills under.
+
+    Source-specific ids are checked before ``consultation_id`` because a
+    physiotherapy or home care invoice can also carry a consultation
+    reference, and it should be scoped to the service that produced it.
+    """
+    if invoice.lab_order_id:
+        return "lab"
+    if invoice.pharmacy_issue_id:
+        return "pharmacy"
+    if invoice.physiotherapy_case_id:
+        return "physiotherapy"
+    if invoice.home_care_booking_id:
+        return "home_care"
+    if invoice.ip_admission_id:
+        return "ip"
+    if invoice.consultation_id or invoice.appointment_id:
+        return "consultation"
+    return "service"
+
+
 def invoice_has_applied_membership_benefit(invoice: Invoice) -> bool:
     return any(
         money_value(value) > 0

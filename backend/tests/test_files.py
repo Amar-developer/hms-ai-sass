@@ -97,6 +97,29 @@ def test_file_upload_list_update_delete_and_audit(client, test_engine):
         assert {"file.uploaded", "file.updated", "file.deleted"}.issubset(actions)
 
 
+def test_file_page_reports_filtered_total(client):
+    tenant, _branch = create_file_tenant_and_branch(client)
+    headers = {"X-Tenant-ID": tenant["id"]}
+    for name in ("first.png", "second.png"):
+        response = client.post(
+            "/api/v1/files",
+            headers=headers,
+            data={"category": "clinical"},
+            files={"file": (name, _png(), "image/png")},
+        )
+        assert response.status_code == 201
+
+    response = client.get(
+        "/api/v1/files/page?category=clinical&limit=1&offset=1",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 2
+    assert len(response.json()["items"]) == 1
+    assert response.json()["offset"] == 1
+
+
 def test_lab_report_upload_replaces_same_order_attachment(client):
     tenant, branch = create_file_tenant_and_branch(client)
     headers = {"X-Tenant-ID": tenant["id"]}
@@ -128,7 +151,8 @@ def test_lab_report_upload_replaces_same_order_attachment(client):
 
     assert first.status_code == 201
     assert second.status_code == 201
-    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["id"] != first.json()["id"]
+    assert second.json()["document_version"] == 2
     assert second.json()["file_name"] == "final-report.png"
     assert len(listed.json()) == 1
 

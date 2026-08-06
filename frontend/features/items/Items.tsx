@@ -3,21 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionButton,
-  ActionGroup,
   Badge,
-  Button,
   Card,
   RefreshButton,
-  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiFetch } from "@/lib/api";
-import {
-  FormField,
-  NumberField,
-  SelectField,
-} from "@/app/components/FormElements";
-import { Input } from "@/app/components/common/ui";
+import { NumberField, SelectField } from "@/app/components/FormElements";
 import { humanizeOptionLabel } from "@/lib/options";
 import {
   homeServiceTypes,
@@ -33,23 +24,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RowActions } from "../admin/components/RowActions";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
-import { findDuplicateItem, itemEndpoint } from "./helpers";
-
-function generatedItemCode(type: string, name: string) {
-  const prefixes: Record<string, string> = {
-    medicine: "MED",
-    lab_test: "LAB",
-    lab_package: "PKG",
-    physio_equipment: "PHY",
-    home_care_service: "HC",
-    home_visit_service: "HV",
-  };
-  const compactName = String(name || "ITEM")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "")
-    .slice(0, 6);
-  return `${prefixes[type] || "ITM"}-${compactName || "ITEM"}-${Date.now().toString().slice(-5)}`;
-}
+import { generatedItemCode } from "./helpers";
+import { useItemsActions, useItemsData } from "./api";
+import { FilterSection } from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
+import { Pagination } from "@/app/components/common/Pagination";
 
 function itemCodePreview(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -117,11 +97,17 @@ export function Items({ apiSession, branchId }: any) {
   const [type, setType] = useState("medicine");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [medicines, setMedicines] = useState<any[]>([]);
-  const [tests, setTests] = useState<any[]>([]);
-  const [packages, setPackages] = useState<any[]>([]);
-  const [equipment, setEquipment] = useState<any[]>([]);
-  const [homeCareServices, setHomeCareServices] = useState<any[]>([]);
+  const {
+    medicines,
+    tests,
+    packages,
+    equipment,
+    homeCareServices,
+    stockSuppliers,
+    loading,
+    loadError,
+    load,
+  } = useItemsData({ apiSession, branchId });
   const [packageTestIds, setPackageTestIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<any>(null);
   const [confirmAction, setConfirmAction] = useState<any>(null);
@@ -135,11 +121,6 @@ export function Items({ apiSession, branchId }: any) {
   const [page, setPage] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 10;
-  function setFiltersAndReset(f: any) {
-    setFilters(f);
-    setPage(1);
-  }
-  const [stockSuppliers, setStockSuppliers] = useState<any[]>([]);
   const [form, setForm] = useState<any>(() => createEmptyForm("medicine"));
   const autoCode = editing
     ? type === "physio_equipment"
@@ -207,24 +188,24 @@ export function Items({ apiSession, branchId }: any) {
         id: row.id,
         raw: row,
       })),
-      ...homeCareServices.filter((row: any) =>
-        String(row.code || "").startsWith("HV-"),
-      ).map((row: any) => {
-        return {
-          type: "home_visit_service",
-          kind: "Home Visit Service",
-          name: row.name,
-          code: row.code,
-          mrp_price: row.mrp_price || 0,
-          price: row.default_price,
-          purchase_price: null,
-          supplier: "-",
-          meta: row.description || "Home visit",
-          created_at: row.created_at || row.updated_at || "",
-          id: row.id,
-          raw: row,
-        };
-      }),
+      ...homeCareServices
+        .filter((row: any) => String(row.code || "").startsWith("HV-"))
+        .map((row: any) => {
+          return {
+            type: "home_visit_service",
+            kind: "Home Visit Service",
+            name: row.name,
+            code: row.code,
+            mrp_price: row.mrp_price || 0,
+            price: row.default_price,
+            purchase_price: null,
+            supplier: "-",
+            meta: row.description || "Home visit",
+            created_at: row.created_at || row.updated_at || "",
+            id: row.id,
+            raw: row,
+          };
+        }),
     ],
     [medicines, tests, packages, equipment, homeCareServices, stockSuppliers],
   );
@@ -276,8 +257,8 @@ export function Items({ apiSession, branchId }: any) {
   }, [filteredRows, filters.sortBy]);
 
   useEffect(() => {
-    load();
-  }, [apiSession?.tenantId, branchId]);
+    if (loadError) setMessage(loadError);
+  }, [loadError]);
 
   function setField(key: string, value: any) {
     setForm((prev: any) => ({ ...prev, [key]: value }));
@@ -307,282 +288,21 @@ export function Items({ apiSession, branchId }: any) {
     setPackageTestIds([]);
   }
 
-  async function load() {
-    if (!apiSession) return;
-    try {
-      const [
-        medicineRows,
-        testRows,
-        packageRows,
-        equipmentRows,
-        homeCareServiceRows,
-        supplierRows,
-      ] = await Promise.all([
-        apiFetch("/pharmacy/medicines", apiSession).catch(() => []),
-        apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
-        apiFetch("/lab/catalog/packages", apiSession).catch(() => []),
-        apiFetch("/physiotherapy/equipment", apiSession).catch(() => []),
-        apiFetch("/home-care/services", apiSession).catch(() => []),
-        apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
-      ]);
-      setMedicines(medicineRows);
-      setTests(testRows);
-      setPackages(packageRows);
-      setEquipment(equipmentRows);
-      setHomeCareServices(homeCareServiceRows);
-      setStockSuppliers(supplierRows);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load items.");
-    }
-  }
+  const { handleItemSubmit, confirmDelete } = useItemsActions({
+    apiSession,
+    type,
+    editing,
+    rows,
+    packageTestIds,
+    setEditing,
+    setBusy,
+    setMessage,
+    setConfirmAction,
+    confirmAction,
+    resetItemForm,
+    load,
+  });
 
-  async function createItem(e: any) {
-    e.preventDefault();
-    if (!apiSession) return;
-    setBusy("save");
-    setMessage("");
-    try {
-      const method = editing ? "PATCH" : "POST";
-      const supplierId = form.supplier_id || null;
-      const purchasePrice = Number(form.purchase_price || 0);
-      const itemCode = editing
-        ? type === "physio_equipment"
-          ? form.serial_number ||
-            form.code ||
-            generatedItemCode(type, form.name)
-          : form.code || generatedItemCode(type, form.name)
-        : generatedItemCode(type, form.name);
-      let savedHomeCareService: any = null;
-      if (type === "medicine") {
-        await apiFetch(
-          editing ? `/pharmacy/medicines/${editing.id}` : "/pharmacy/medicines",
-          apiSession,
-          {
-            method,
-            body: JSON.stringify({
-              branch_id: null,
-              code: itemCode,
-              name: form.name,
-              generic_name: form.generic_name || null,
-              form: "Tablet",
-              supplier_id: supplierId,
-              mrp_price: Number(form.mrp_price || 0),
-              purchase_price: purchasePrice,
-              default_sale_price: Number(form.price || 0),
-              reorder_level: Number(form.reorder_level || 0),
-              created_by_user_id: apiSession.user?.id,
-              updated_by_user_id: apiSession.user?.id,
-            }),
-          },
-        );
-      } else if (type === "lab_test") {
-        await apiFetch(
-          editing ? `/lab/catalog/tests/${editing.id}` : "/lab/catalog/tests",
-          apiSession,
-          {
-            method,
-            body: JSON.stringify({
-              branch_id: null,
-              code: itemCode,
-              name: form.name,
-              supplier_id: supplierId,
-              mrp_price: Number(form.mrp_price || 0),
-              purchase_price: purchasePrice,
-              sample_type: form.sample_type || null,
-              default_price: Number(form.price || 0),
-              created_by_user_id: apiSession.user?.id,
-              updated_by_user_id: apiSession.user?.id,
-            }),
-          },
-        );
-      } else if (type === "lab_package") {
-        await apiFetch(
-          editing
-            ? `/lab/catalog/packages/${editing.id}`
-            : "/lab/catalog/packages",
-          apiSession,
-          {
-            method,
-            body: JSON.stringify({
-              code: itemCode,
-              name: form.name,
-              branch_id: null,
-              description: form.description || null,
-              supplier_id: null,
-              mrp_price: Number(form.mrp_price || 0),
-              purchase_price: 0,
-              package_price: Number(form.price || 0),
-              test_ids: packageTestIds,
-              created_by_user_id: apiSession.user?.id,
-              updated_by_user_id: apiSession.user?.id,
-            }),
-          },
-        );
-        setPackageTestIds([]);
-      } else if (homeServiceTypes.includes(type)) {
-        savedHomeCareService = await apiFetch(
-          editing ? `/home-care/services/${editing.id}` : "/home-care/services",
-          apiSession,
-          {
-            method,
-            body: JSON.stringify({
-              branch_id: null,
-              code: itemCode,
-              name: form.name,
-              description: form.description || null,
-              mrp_price: Number(form.mrp_price || 0),
-              default_price: Number(form.price || 0),
-            }),
-          },
-        );
-      } else {
-        await apiFetch(
-          editing
-            ? `/physiotherapy/equipment/${editing.id}`
-            : "/physiotherapy/equipment",
-          apiSession,
-          {
-            method,
-            body: JSON.stringify({
-              branch_id: null,
-              name: form.name,
-              modality_type: form.modality_type,
-              supplier_id: supplierId,
-              mrp_price: Number(form.mrp_price || 0),
-              purchase_price: purchasePrice,
-              manufacturer: form.manufacturer || null,
-              model_number: form.model_number || null,
-              serial_number: itemCode,
-              is_portable: form.is_portable === "true",
-            }),
-          },
-        );
-      }
-      const wasEditing = Boolean(editing);
-      setEditing(null);
-      setPackageTestIds([]);
-      resetItemForm(type);
-      if (homeServiceTypes.includes(type) && savedHomeCareService) {
-        setHomeCareServices((prev: any[]) =>
-          wasEditing
-            ? prev.map((row) =>
-                row.id === savedHomeCareService.id ? savedHomeCareService : row,
-              )
-            : [savedHomeCareService, ...prev],
-        );
-        void load();
-      } else {
-        await load();
-      }
-      setMessage(wasEditing ? "Item updated." : "Item saved.");
-    } catch (err: any) {
-      setMessage(err.detail || err.message || "Could not save item.");
-    } finally {
-      setBusy("");
-    }
-  }
-  async function handleItemSubmit(data: ItemFormValues) {
-    if (!apiSession) return;
-
-    const duplicate = findDuplicateItem(rows, data.name, editing?.id);
-    if (duplicate) {
-      setMessage(`An item named "${data.name.trim()}" already exists.`);
-      return false;
-    }
-
-    setBusy("save");
-    setMessage("");
-
-    try {
-      const isEditing = !!editing;
-      const method = isEditing ? "PATCH" : "POST";
-      const itemCode = isEditing
-        ? type === "physio_equipment"
-          ? editing.serial_number ||
-            editing.code ||
-            generatedItemCode(type, data.name)
-          : editing.code || generatedItemCode(type, data.name)
-        : generatedItemCode(type, data.name);
-
-      const endpoint = itemEndpoint(type, editing?.id);
-      let body: any = { code: itemCode, name: data.name };
-
-      if (type === "medicine") {
-        body = {
-          ...body,
-          generic_name: data.generic_name || null,
-          supplier_id: data.supplier_id || null,
-          mrp_price: Number(data.mrp_price || 0),
-          purchase_price: Number(data.purchase_price || 0),
-          default_sale_price: Number(data.price || 0),
-          reorder_level: Number(data.reorder_level || 0),
-        };
-      } else if (type === "lab_test") {
-        body = {
-          ...body,
-          supplier_id: data.supplier_id || null,
-          mrp_price: Number(data.mrp_price || 0),
-          purchase_price: Number(data.purchase_price || 0),
-          default_price: Number(data.price || 0),
-          sample_type: data.sample_type || null,
-        };
-      } else if (type === "lab_package") {
-        body = {
-          ...body,
-          description: data.description || null,
-          mrp_price: Number(data.mrp_price || 0),
-          purchase_price: 0,
-          package_price: Number(data.price || 0),
-          test_ids: packageTestIds,
-          ...(isEditing
-            ? { updated_by_user_id: apiSession.user?.id }
-            : { created_by_user_id: apiSession.user?.id }),
-        };
-      } else if (homeServiceTypes.includes(type)) {
-        body = {
-          ...body,
-          description: data.description || null,
-          mrp_price: Number(data.mrp_price || 0),
-          default_price: Number(data.price || 0),
-        };
-      } else if (type === "physio_equipment") {
-        body = {
-          ...body,
-          modality_type: data.modality_type,
-          supplier_id: data.supplier_id || null,
-          mrp_price: Number(data.mrp_price),
-          purchase_price: Number(data.purchase_price || 0),
-          manufacturer: data.manufacturer || null,
-          model_number: data.model_number || null,
-          serial_number: itemCode,
-          is_portable: data.is_portable === "true",
-        };
-      }
-
-      await apiFetch(endpoint, apiSession, {
-        method,
-        body: JSON.stringify(body),
-      });
-
-      // ✅ Refresh data
-      await load();
-
-      // ✅ Reset form + editing state
-      setEditing(null);
-      resetItemForm(type); // This should clear the form
-
-      setMessage(
-        isEditing ? "Item updated successfully." : "Item created successfully.",
-      );
-      return true;
-    } catch (err: any) {
-      console.error(err);
-      setMessage(err.detail || err.message || "Failed to save item.");
-      return false;
-    } finally {
-      setBusy("");
-    }
-  }
   function startEdit(row: any) {
     const raw = row.raw;
     setEditing(row);
@@ -608,43 +328,131 @@ export function Items({ apiSession, branchId }: any) {
     });
   }
 
-  async function confirmDelete() {
-    if (!apiSession || !confirmAction) return;
-
-    const row = confirmAction.row;
-
-    setBusy(`delete-${row.id}`);
-    setMessage("");
-
-    const path =
-      row.type === "medicine"
-        ? `/pharmacy/medicines/${row.id}`
-        : row.type === "lab_test"
-          ? `/lab/catalog/tests/${row.id}`
-          : row.type === "lab_package"
-            ? `/lab/catalog/packages/${row.id}`
-            : homeServiceTypes.includes(row.type)
-              ? `/home-care/services/${row.id}`
-              : `/physiotherapy/equipment/${row.id}`;
-
-    try {
-      await apiFetch(path, apiSession, {
-        method: "DELETE",
-      });
-
-      await load();
-
-      setMessage("Item deleted.");
-      setConfirmAction(null);
-    } catch (err: any) {
-      setMessage(err.message || "Could not delete item.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
   const pagedRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  function updateFilter(key: string, value: string) {
+    setFilters((prev: any) => ({ ...prev, [key]: value }));
+    setPage(1);
+  }
+
+  const itemFilters = [
+    {
+      key: "type",
+      label: "Type",
+      options: [
+        { value: "all", label: "All item types" },
+        ...itemTypes.map(([value, label]) => ({ value, label })),
+      ],
+    },
+    {
+      key: "sortBy",
+      label: "Sort By",
+      options: sort_type_options,
+    },
+    {
+      key: "priceBand",
+      label: "Price",
+      options: price_options,
+    },
+  ];
+
+  const filterValues = {
+    type: filters.type,
+    sortBy: filters.sortBy,
+    priceBand: filters.priceBand,
+  };
+
+  const itemColumns: Column<any>[] = [
+    {
+      key: "type",
+      header: "Type",
+      width: "180px",
+      render: (row: any) => (
+        <p className="text-sm font-bold">{humanizeOptionLabel(row.kind)}</p>
+      ),
+    },
+    {
+      key: "name",
+      header: "Item",
+      width: "180px",
+      render: (row: any) => <b className="text-sm">{row.name}</b>,
+    },
+    {
+      key: "supplier",
+      header: "Supplier",
+      width: "130px",
+      render: (row: any) => <span className="text-sm">{row.supplier}</span>,
+    },
+    {
+      key: "mrp_price",
+      header: "MRP",
+      width: "100px",
+      render: (row: any) => (
+        <span className="text-sm">
+          {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
+        </span>
+      ),
+    },
+    {
+      key: "purchase_price",
+      header: "Purchase",
+      width: "100px",
+      render: (row: any) => (
+        <span className="text-sm">
+          {row.purchase_price === null ? "-" : `₹${row.purchase_price || 0}`}
+        </span>
+      ),
+    },
+    {
+      key: "price",
+      header: "Sale Price",
+      width: "120px",
+      className: "text-center",
+      cellClassName: "text-center",
+      render: (row: any) => (
+        <span className="text-sm">
+          {row.price === null ? "-" : `₹${row.price}`}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      width: "100px",
+      className: "text-right",
+      cellClassName: "text-right",
+      disableRowClick: true,
+      render: (row: any) => (
+        <div className="flex justify-end">
+          <RowActions
+            actions={[
+              {
+                label: "Edit",
+                onClick: () => {
+                  startEdit(row);
+
+                  setTimeout(() => {
+                    containerRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                  }, 100);
+                },
+              },
+              {
+                label: busy === `delete-${row.id}` ? "Deleting..." : "Delete",
+                onClick: () => deleteItem(row),
+                disabled: busy === `delete-${row.id}`,
+                danger: true,
+              },
+            ]}
+            className="right-8 -bottom-5"
+          />
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6 scroll-mt-24" ref={containerRef}>
@@ -676,6 +484,8 @@ export function Items({ apiSession, branchId }: any) {
           onTypeChange={changeItemType}
         />
       </Card>
+
+      {/* Item List */}
       <Card>
         <div className="flex flex-col gap-4">
           <div>
@@ -684,131 +494,33 @@ export function Items({ apiSession, branchId }: any) {
               Configure items used across healthcare services
             </p>
           </div>
-          <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <FormField label="Search">
-              <Input
-                value={filters.query}
-                onChange={(event: any) =>
-                  setFiltersAndReset({
-                    ...filters,
-                    query: event.target.value,
-                  })
-                }
-                placeholder="Name, code, type"
-              />
-            </FormField>
-            <FormField label="Type">
-              <SearchableSelect
-                value={filters.type}
-                onChange={(v) => setFiltersAndReset({ ...filters, type: v })}
-                searchable={false}
-                options={[
-                  { value: "all", label: "All item types" },
-                  ...itemTypes.map(([value, label]) => ({
-                    value,
-                    label,
-                  })),
-                ]}
-              />
-            </FormField>
-            <FormField label="Sort By">
-              <SearchableSelect
-                value={filters.sortBy}
-                onChange={(v) => setFiltersAndReset({ ...filters, sortBy: v })}
-                searchable={false}
-                options={sort_type_options}
-              />
-            </FormField>
-            <FormField label="Price">
-              <SearchableSelect
-                value={filters.priceBand}
-                onChange={(v) =>
-                  setFiltersAndReset({ ...filters, priceBand: v })
-                }
-                searchable={false}
-                options={price_options}
-              />
-            </FormField>
-          </div>
+          <FilterSection
+            title="Items"
+            filters={itemFilters}
+            filterValues={filterValues}
+            className="lg:grid-cols-5"
+            query={filters.query}
+            setQuery={(value: string) => updateFilter("query", value)}
+            onFilterChange={updateFilter}
+            onReset={() => {
+              setFilters({
+                type: "all",
+                query: "",
+                labOnly: "all",
+                priceBand: "all",
+                sortBy: "name",
+              });
+              setPage(1);
+            }}
+          />
         </div>
-        <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3 ">Type</th>
-                <th>Item</th>
-                <th>Supplier</th>
-                <th>MRP</th>
-                <th>Purchase</th>
-                <th>Sale Price</th>
-                <th className="pr-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {sortedRows.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-4 py-4 text-slate-500">
-                    No items match your filter.
-                  </td>
-                </tr>
-              )}
-              {pagedRows.map((row: any) => (
-                <tr key={`${row.kind}-${row.id}`}>
-                  <td className="px-4 py-3">
-                    <p className="text-xs font-bold">
-                      {humanizeOptionLabel(row.kind)}
-                    </p>
-                  </td>
-                  <td className="text-xs">
-                    <b>{row.name}</b>
-                  </td>
-                  <td className="text-xs">{row.supplier}</td>
-                  <td className="text-xs">
-                    {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
-                  </td>
-                  <td className="text-xs">
-                    {row.purchase_price === null
-                      ? "-"
-                      : `₹${row.purchase_price || 0}`}
-                  </td>
-
-                  <td className="text-xs text-center pr-2">
-                    {row.price === null ? "-" : `₹${row.price}`}
-                  </td>
-                  <td className="pr-4">
-                    <div className="flex justify-end">
-                      <RowActions
-                        actions={[
-                          {
-                            label: "Edit",
-                            onClick: () => {
-                              startEdit(row);
-
-                              setTimeout(() => {
-                                containerRef.current?.scrollIntoView({
-                                  behavior: "smooth",
-                                  block: "start",
-                                });
-                              }, 100);
-                            },
-                          },
-                          {
-                            label:
-                              busy === `delete-${row.id}`
-                                ? "Deleting..."
-                                : "Delete",
-                            onClick: () => deleteItem(row),
-                            disabled: busy === `delete-${row.id}`,
-                            danger: true,
-                          },
-                        ]}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-4">
+          <DataTable
+            columns={itemColumns}
+            data={pagedRows}
+            loading={loading}
+            emptyMessage="No items match your filter."
+          />
           {confirmAction && (
             <ConfirmModal
               action={confirmAction}
@@ -818,25 +530,12 @@ export function Items({ apiSession, branchId }: any) {
             />
           )}
         </div>
-        <div className="flex items-center justify-between border-t px-4 py-3 text-sm">
-          <span className="text-slate-500">
-            Page {page} of {totalPages} · {sortedRows.length} items
-          </span>
-          <div className="flex gap-2">
-            <ActionButton
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              Previous
-            </ActionButton>
-            <ActionButton
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-            >
-              Next
-            </ActionButton>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={sortedRows.length}
+          onPage={setPage}
+        />
       </Card>
     </div>
   );

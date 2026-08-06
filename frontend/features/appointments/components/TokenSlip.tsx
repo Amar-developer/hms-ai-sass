@@ -1,5 +1,6 @@
 import { STATIC_CLINIC } from "@/features/consulation/components/PrescriptionDocument";
 import { capitalizeFirst } from "@/utils/helper";
+import { calculateBMI } from "../helpers";
 
 export type TokenSlipData = {
   patientName: string;
@@ -94,39 +95,48 @@ export default function TokenSlip({ data }: { data: TokenSlipData }) {
           <p className="text-[11px] font-bold uppercase text-slate-900">
             Time : <span className="font-semibold">{data.appointmentTime}</span>
           </p>
+          <p className="text-[11px] font-bold uppercase text-slate-900">
+            BMI :{" "}
+            <span className="font-semibold">
+              {calculateBMI(
+                Number(data.intakeWeight),
+                Number(data.intakeHeight),
+              )}
+            </span>
+          </p>
         </div>
       </div>
-        <div className=" border-slate-900">
-          <p className="border-b-2 border-slate-900 flex justify-between px-3 py-1 text-[11px] font-bold uppercase">
-            Vitals  <span className="text-[11px]">{data.visitLabel}</span>
-          </p>
-          <div className="grid grid-cols-2">
-            <div className="border-b-2 border-r-2 border-slate-900 px-3 py-1.5 text-[11px]">
-              <span className="font-semibold">BP: </span>
-              <span>{data.intakeBp || "-"}</span>
-            </div>
-            <div className="border-b-2 border-r border-slate-900 px-3 py-1.5 text-[11px]">
-              <span className="font-semibold">PR: </span>
-              <span>{data.intakePulse || "-"}</span>
-            </div>
-            <div className="border-b-2 border-r-2 border-slate-900 px-3 py-1.5 text-[11px]">
-              <span className="font-semibold">SpO2: </span>
-              <span>{data.intakeSpo2 || "-"}</span>
-            </div>
-            <div className="border-b-2 border-r border-slate-900 px-3 py-1.5 text-[11px]">
-              <span className="font-semibold">Temp: </span>
-              <span>{data.intakeTemp || "-"}</span>
-            </div>
-            <div className="border-r-2 border-slate-900 px-3 py-1.5 text-[11px]">
-              <span className="font-semibold">Height: </span>
-              <span>{data.intakeHeight || "-"}</span>
-            </div>
-            <div className="border-r border-slate-900 px-3 py-1.5 text-[11px]">
-              <span className="font-semibold">Weight: </span>
-              <span>{data.intakeWeight || "-"}</span>
-            </div>
+      <div className=" border-slate-900">
+        <p className="border-b-2 border-slate-900 flex justify-between px-3 py-1 text-[11px] font-bold uppercase">
+          Vitals <span className="text-[11px]">{data.visitLabel}</span>
+        </p>
+        <div className="grid grid-cols-2">
+          <div className="border-b-2 border-r-2 border-slate-900 px-3 py-1.5 text-[11px]">
+            <span className="font-semibold">BP: </span>
+            <span>{data.intakeBp || "-"}</span>
+          </div>
+          <div className="border-b-2 border-r border-slate-900 px-3 py-1.5 text-[11px]">
+            <span className="font-semibold">PR: </span>
+            <span>{data.intakePulse || "-"}</span>
+          </div>
+          <div className="border-b-2 border-r-2 border-slate-900 px-3 py-1.5 text-[11px]">
+            <span className="font-semibold">SpO2: </span>
+            <span>{data.intakeSpo2 || "-"}</span>
+          </div>
+          <div className="border-b-2 border-r border-slate-900 px-3 py-1.5 text-[11px]">
+            <span className="font-semibold">Temp: </span>
+            <span>{data.intakeTemp || "-"}</span>
+          </div>
+          <div className="border-r-2 border-slate-900 px-3 py-1.5 text-[11px]">
+            <span className="font-semibold">Height: </span>
+            <span>{data.intakeHeight || "-"}</span>
+          </div>
+          <div className="border-r border-slate-900 px-3 py-1.5 text-[11px]">
+            <span className="font-semibold">Weight: </span>
+            <span>{data.intakeWeight || "-"}</span>
           </div>
         </div>
+      </div>
       <div className="grid grid-cols-2 border-b border-t-2 border-slate-900">
         <div className="border-b-2 border-r-2 border-slate-900 px-3 py-1.5 text-[11px]">
           <span className="font-semibold">Dept: </span>

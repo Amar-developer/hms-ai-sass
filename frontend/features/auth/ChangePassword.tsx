@@ -57,7 +57,7 @@ export function ChangePassword({ apiSession, onClose, required = false, onChange
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
       <Card className="w-full max-w-md">
-       {!required && (
+       {!required || message=="Password changed successfully." && (
          <div className="flex justify-end" onClick={() => onClose()}>
            <X className="cursor-pointer hover:bg-slate-100" />
          </div>

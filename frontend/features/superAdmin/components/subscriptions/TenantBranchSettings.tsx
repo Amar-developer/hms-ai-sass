@@ -394,10 +394,10 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h4 className="text-base font-bold lg:text-lg">
+            <h1 className="card-title font-bold">
               Accounts & Bank Details
-            </h4>
-            <p className="text-xs text-slate-500 lg:text-sm">
+            </h1>
+            <p className="card-desc text-slate-500">
               Tenant bank account details shown on printable invoices.
             </p>
           </div>
@@ -480,10 +480,10 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h4 className="text-base lg:text-lg font-bold">
+            <h1 className="card-title font-bold">
               Document Numbering
-            </h4>
-            <p className="text-xs lg:text-sm text-slate-500">
+            </h1>
+            <p className="card-desc text-slate-500">
               Set the tenant prefix, digit length, and module codes used for
               generated IDs.
             </p>
@@ -551,17 +551,17 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h4 className="text-base lg:text-lg font-bold">
+            <h1 className="card-title font-bold">
               Catalog Plugin Controls
-            </h4>
-            <p className="text-xs lg:text-sm text-slate-500">
+            </h1>
+            <p className="card-desc text-slate-500">
               Tenant-specific catalog source routing for custom integrations.
               Disabled plugins use MedizinHub local catalog data.
             </p>
           </div>
           <Badge
             tone="blue"
-            className="rounded-lg w-[25%] lg:w-[15%] px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            className="normal-badge"
           >
             Tenant scoped
           </Badge>
@@ -598,10 +598,10 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h4 className="text-base lg:text-lg font-bold">
+            <h4 className="card-title font-bold">
               Plan Module Access
             </h4>
-            <p className="text-xs lg:text-sm text-slate-500">
+            <p className="card-desc text-slate-500">
               Modules are controlled by the active subscription plan. Upgrade
               the tenant plan from Subscription Management to change access.
             </p>
@@ -612,7 +612,6 @@ export function TenantBranchSettings({
                 <Badge tone="blue" className="normal-badge">
                   {activePlan.name}
                 </Badge>
-                <p className="mt-1 text-xs text-slate-500">Current plan</p>
               </>
             ) : (
               <Badge tone="amber" className="normal-badge">
@@ -653,9 +652,6 @@ export function TenantBranchSettings({
                         Patient Membership
                       </Badge>
                     )}
-                  </span>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    {key}
                   </span>
                 </span>
               </div>

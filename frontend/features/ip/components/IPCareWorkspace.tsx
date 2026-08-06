@@ -1,10 +1,13 @@
-import { apiFetch, uploadAssetUrl } from "@/lib/api";
+import { uploadAssetUrl } from "@/lib/api";
 import { appendLine, inr, splitRows, today } from "@/utils/helper";
-import { catalogKey, dailyDoseQuantity, isClosedAdmission, parseAmount } from "../helpers";
+import { catalogKey, isClosedAdmission } from "../helpers";
 import { useEffect, useState } from "react";
 import { medicineFrequencyOptions,rowTagLabel, SearchPicker, TagEntryBox } from "@/app/components/clinicalRows";
 import { FormField } from "@/app/components/FormElements";
 import { Card,Button,Input,Select,Badge } from "@/app/components/common/ui";
+import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { useIPCareActions } from "../api";
 
 import { CollapsibleIPSection } from "./CollapsibleIPSection";
 
@@ -22,6 +25,7 @@ export function IPCareWorkspace({
   autoRoomTotal,
   runningBillTotal,
   ipInvoice,
+  loading = false,
   apiSession,
   busy,
   setBusy,
@@ -33,9 +37,8 @@ export function IPCareWorkspace({
   postWork,
   latestConsent,
   latestDischarge,
-  setLatestConsent,
-  setLatestDischarge,
-  sign,
+  signConsentEntry,
+  finalizeDischargeEntry,
 }: any) {
   const [medicineRows, setMedicineRows] = useState(
     "Paracetamol | 500 mg | 1-0-1 | oral",
@@ -223,153 +226,25 @@ export function IPCareWorkspace({
     );
   }
 
-  async function submitCare(e: any) {
-    e.preventDefault();
-    if (closed) {
-      setError(
-        "This IP admission is discharged. New care entries and billing items are locked.",
-      );
-      return;
-    }
-    const fd = new FormData(e.currentTarget);
-    const careDate = String(fd.get("care_date") || today());
-    const roundType = String(fd.get("round_type") || "ward_round");
-    const notes = String(fd.get("notes") || "");
-    const complaints = String(fd.get("complaints") || "") || undefined;
-    const diagnosis = String(fd.get("diagnosis") || "") || undefined;
-    const feeAmount = Number(fd.get("fee_amount") || 0);
-    const markGiven = Boolean(fd.get("mark_given"));
-    const vitals = {
-      bp: String(fd.get("bp") || ""),
-      pulse: String(fd.get("pulse") || ""),
-      temperature: String(fd.get("temperature") || ""),
-    };
-    setBusy("ip care");
-    setError("");
-    setMessage("");
-    try {
-      if (!apiSession)
-        throw new Error("Backend login is required for IP care.");
-      await apiFetch(`/ip/admissions/${admission.id}/treatments`, apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          treatment_date: careDate,
-          treatment_type: roundType,
-          notes,
-          medication_summary: medicineRows || undefined,
-          orders: referralRows || undefined,
-        }),
-      });
-      const consultation = await apiFetch(
-        `/ip/admissions/${admission.id}/consultations`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            consultation_date: careDate,
-            consultation_type: roundType,
-            fee_amount: feeAmount,
-            vitals_json: JSON.stringify(vitals),
-            complaints,
-            diagnosis,
-            notes,
-            prescription_text: medicineRows || undefined,
-          }),
-        },
-      );
-      await apiFetch(`/ip/consultations/${consultation.id}/sign`, apiSession, {
-        method: "POST",
-      });
-
-      const knownOrders = [...medicationOrders];
-      for (const line of splitRows(medicineRows)) {
-        const [medicine_name, dosage, frequency, route, amountText] = line
-          .split("|")
-          .map((part) => part.trim());
-        if (!medicine_name) continue;
-        const unitAmount =
-          parseAmount(amountText) || medicineUnitAmount(medicine_name);
-        let order = knownOrders.find(
-          (row: any) =>
-            String(row.status || "active") === "active" &&
-            String(row.medicine_name || "").toLowerCase() ===
-              medicine_name.toLowerCase() &&
-            String(row.dosage || "") === String(dosage || "") &&
-            String(row.frequency || "") === String(frequency || "") &&
-            String(row.route || "") === String(route || "") &&
-            Number(row.unit_amount || 0) === unitAmount,
-        );
-        if (!order) {
-          order = await apiFetch(
-            `/ip/admissions/${admission.id}/medication-orders`,
-            apiSession,
-            {
-              method: "POST",
-              body: JSON.stringify({
-                medicine_name,
-                dosage: dosage || undefined,
-                frequency: frequency || undefined,
-                route: route || undefined,
-                start_date: careDate,
-                unit_amount: unitAmount,
-              }),
-            },
-          );
-          knownOrders.push(order);
-        }
-        if (markGiven) {
-          await apiFetch(
-            `/ip/admissions/${admission.id}/medication-orders/${order.id}/administrations`,
-            apiSession,
-            {
-              method: "POST",
-              body: JSON.stringify({
-                quantity: dailyDoseQuantity(dosage, frequency),
-                status: "given",
-                notes: "Given from IP care entry",
-              }),
-            },
-          );
-        }
-      }
-
-      for (const line of splitRows(referralRows)) {
-        const [sourceType, itemName, priority, instructions, amountText] = line
-          .split("|")
-          .map((part) => part.trim());
-        if (!itemName) continue;
-        const normalizedType =
-          sourceType === "scan" ? "scan_referral" : "lab_referral";
-        const amount = parseAmount(amountText) || labUnitAmount(itemName);
-        if (amount > 0) {
-          await apiFetch(
-            `/ip/admissions/${admission.id}/billing-items`,
-            apiSession,
-            {
-              method: "POST",
-              body: JSON.stringify({
-                source_type: normalizedType,
-                description: `${sourceType?.toUpperCase() || "LAB"} - ${itemName}${priority ? ` (${priority})` : ""}${instructions ? ` - ${instructions}` : ""}`,
-                quantity: 1,
-                unit_amount: amount,
-              }),
-            },
-          );
-        }
-      }
-
-      await loadAdmissionWork(admission.id);
-      await refresh();
-      setMessage("IP care entry saved, signed, and billable items updated.");
-    } catch (err: any) {
-      setError(err.message || "Unable to save IP care entry.");
-    } finally {
-      setBusy("");
-    }
-  }
+  const { submitCare } = useIPCareActions({
+    apiSession,
+    admission,
+    closed,
+    medicineRows,
+    referralRows,
+    medicationOrders,
+    getMedicineUnitAmount: medicineUnitAmount,
+    getLabUnitAmount: labUnitAmount,
+    setBusy,
+    setError,
+    setMessage,
+    loadAdmissionWork,
+    refresh,
+  });
 
   return (
-    <div className="grid gap-6">
+    <div className="relative grid gap-6">
+      {loading && <OverlayLoader />}
       <div className="grid gap-6">
         <Card>
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
@@ -690,11 +565,13 @@ export function IPCareWorkspace({
             </div>
 
             <Button disabled={closed || busy === "ip care"}>
-              {busy === "ip care"
-                ? "Saving..."
-                : closed
-                  ? "Admission Locked"
-                  : "Save IP Care Entry"}
+              <ButtonLoader loading={busy === "ip care"}>
+                {busy === "ip care"
+                  ? "Saving..."
+                  : closed
+                    ? "Admission Locked"
+                    : "Save IP Care Entry"}
+              </ButtonLoader>
             </Button>
           </form>
         </Card>
@@ -774,21 +651,19 @@ export function IPCareWorkspace({
               )}
               <div className="flex flex-wrap gap-2">
                 <Button disabled={closed || busy === "consent"}>
-                  Save Consent
+                  <ButtonLoader loading={busy === "consent"}>
+                    {busy === "consent" ? "Saving..." : "Save Consent"}
+                  </ButtonLoader>
                 </Button>
                 <Button
                   type="button"
                   disabled={closed || !latestConsent || busy === "consent sign"}
-                  onClick={() =>
-                    sign(
-                      `/ip/consents/${latestConsent.id}/sign`,
-                      "consent sign",
-                      setLatestConsent,
-                    )
-                  }
+                  onClick={() => signConsentEntry(latestConsent.id)}
                   className="bg-emerald-700"
                 >
-                  Mark Signed
+                  <ButtonLoader loading={busy === "consent sign"}>
+                    {busy === "consent sign" ? "Signing..." : "Mark Signed"}
+                  </ButtonLoader>
                 </Button>
               </div>
             </form>
@@ -837,23 +712,25 @@ export function IPCareWorkspace({
               )}
               <div className="flex flex-wrap gap-2">
                 <Button disabled={closed || busy === "discharge"}>
-                  Save Summary
+                  <ButtonLoader loading={busy === "discharge"}>
+                    {busy === "discharge" ? "Saving..." : "Save Summary"}
+                  </ButtonLoader>
                 </Button>
                 <Button
                   type="button"
                   disabled={
                     closed || !latestDischarge || busy === "discharge finalize"
                   }
-                  onClick={() =>
-                    sign(
-                      `/ip/discharge-summaries/${latestDischarge.id}/finalize`,
-                      "discharge finalize",
-                      setLatestDischarge,
-                    )
-                  }
+                  onClick={() => finalizeDischargeEntry(latestDischarge.id)}
                   className="bg-emerald-700"
                 >
-                  {closed ? "Discharged" : "Finalize"}
+                  <ButtonLoader loading={busy === "discharge finalize"}>
+                    {closed
+                      ? "Discharged"
+                      : busy === "discharge finalize"
+                        ? "Finalizing..."
+                        : "Finalize"}
+                  </ButtonLoader>
                 </Button>
               </div>
             </form>
@@ -905,13 +782,15 @@ export function IPCareWorkspace({
             onClick={generateInvoice}
             className="mt-4 w-full"
           >
-            {busy === "invoice"
-              ? "Generating..."
-              : closed
-                ? "Final Bill Locked"
-                : ipInvoice
-                  ? "Regenerate IP Invoice"
-                  : "Generate IP Invoice"}
+            <ButtonLoader loading={busy === "invoice"}>
+              {busy === "invoice"
+                ? "Generating..."
+                : closed
+                  ? "Final Bill Locked"
+                  : ipInvoice
+                    ? "Regenerate IP Invoice"
+                    : "Generate IP Invoice"}
+            </ButtonLoader>
           </Button>
         </CollapsibleIPSection>
 

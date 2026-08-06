@@ -1,7 +1,15 @@
 import { patientName } from "@/utils/helper";
 import { LOCKED_STATUSES } from "./constants";
 
-export { addDays, dayCount, recurrenceEndDate } from "./calendar";
+export {
+  addDays,
+  dayCount,
+  plannedVisitCount,
+  plannedVisitDates,
+  recurrenceEndDate,
+  visitDayModeOptions,
+  visitWeekdayOptions,
+} from "./calendar";
 
 
 

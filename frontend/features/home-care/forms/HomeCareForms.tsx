@@ -8,7 +8,6 @@ import {
   DateField,
   FormField,
   NumberField,
-  SearchableSelectField,
   TextareaField,
 } from "@/app/components/FormElements";
 import {
@@ -19,6 +18,7 @@ import {
   SearchableSelect,
 } from "@/app/components/common/ui";
 import { FormError } from "@/app/components/common/FormError";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { PatientLookupField } from "@/features/patients/components/PatientLookupCreate";
 import { displayDate, today } from "@/utils/helper";
 import {
@@ -31,9 +31,11 @@ import {
 import { money } from "@/utils/helper";
 import {
   patientLocation,
-  dayCount,
   patientSearchLabel,
+  plannedVisitCount,
   recurrenceEndDate,
+  visitDayModeOptions,
+  visitWeekdayOptions,
 } from "../helpers";
 import { BookingFormProps } from "../types";
 
@@ -76,6 +78,8 @@ export function BookingForm({
       patient_id: "",
       booking_type: "home_care",
       recurrence: "daily",
+      visit_day_mode: "all",
+      visit_weekdays: [],
       start_date: today(),
       end_date: today(),
       status: "requested",
@@ -104,6 +108,8 @@ export function BookingForm({
         patient_id: editing.patient_id || "",
         booking_type: isVisitBooking ? "home_visit" : "home_care",
         recurrence: editing.recurrence || "daily",
+        visit_day_mode: editing.visit_day_mode || "all",
+        visit_weekdays: editing.visit_weekdays || [],
         start_date: editing.start_date || today(),
         end_date: editing.end_date || "",
         status: editing.status || "requested",
@@ -120,6 +126,8 @@ export function BookingForm({
         patient_id: "",
         booking_type: "home_care",
         recurrence: "daily",
+        visit_day_mode: "all",
+        visit_weekdays: [],
         start_date: today(),
         end_date: today(),
         status: "requested",
@@ -136,10 +144,27 @@ export function BookingForm({
   const recurrence = watch("recurrence");
   const startDate = watch("start_date");
   const endDate = watch("end_date");
-
+  const visitDayMode = watch("visit_day_mode");
+  const visitWeekdays = watch("visit_weekdays");
   const isHomeVisitBooking = bookingType === "home_visit";
   const visibleServices = isHomeVisitBooking ? visitServices : [];
-  const days = dayCount(startDate, endDate);
+  // Bill for the days actually visited, not every day in the span: a
+  // fortnight booking that only runs Tue/Thu/Sat is 6 visits, not 15.
+  const days = plannedVisitCount(
+    startDate,
+    endDate,
+    visitDayMode,
+    visitWeekdays,
+  );
+  const visitDayScheduleLabel =
+    visitDayMode === "alternate"
+      ? "alternate days"
+      : visitDayMode === "weekdays" && (visitWeekdays || []).length
+        ? visitWeekdayOptions
+            .filter(([value]) => (visitWeekdays || []).includes(value))
+            .map(([, label]) => label)
+            .join(", ")
+        : "";
   const formLineTotal = lineItems.reduce(
     (sum: number, row: any) =>
       sum +
@@ -239,6 +264,8 @@ export function BookingForm({
         patient_id: "",
         booking_type: "home_care",
         recurrence: "daily",
+        visit_day_mode: "all",
+        visit_weekdays: [],
         start_date: today(),
         end_date: today(),
         status: "requested",
@@ -372,6 +399,72 @@ export function BookingForm({
             />
           )}
         />
+        {recurrence !== "daily" && (
+          <FormField label="Visit Days" error={errors.visit_day_mode?.message}>
+            <Controller
+              name="visit_day_mode"
+              control={control}
+              render={({ field }) => (
+                <SearchableSelect
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={visitDayModeOptions.map(([value, label]) => ({
+                    value,
+                    label,
+                  }))}
+                  placeholder="Every day"
+                  searchable={false}
+                />
+              )}
+            />
+          </FormField>
+        )}
+
+        {visitDayMode === "weekdays" && (
+          <div className="md:col-span-2 lg:col-span-3">
+            <FormField
+              label="Which weekdays"
+              required
+              error={(errors as any).visit_weekdays?.message}
+            >
+              <Controller
+                name="visit_weekdays"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex flex-wrap gap-2">
+                    {visitWeekdayOptions.map(([value, label]) => {
+                      const selected = (field.value || []).includes(value);
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() =>
+                            field.onChange(
+                              selected
+                                ? (field.value || []).filter(
+                                    (day: number) => day !== value,
+                                  )
+                                : [...(field.value || []), value].sort(
+                                    (a: number, b: number) => a - b,
+                                  ),
+                            )
+                          }
+                          className={`rounded-full border px-4 py-2 text-xs font-bold transition ${
+                            selected
+                              ? "border-slate-900 bg-slate-900 text-white"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              />
+            </FormField>
+          </div>
+        )}
 
         <FormField label="Status" required error={errors.status?.message}>
           <Controller
@@ -437,9 +530,7 @@ export function BookingForm({
                   : "Manual hourly service entry"}
               </span>
             </p>
-            {!isHomeVisitBooking && (
-              <ActionButton onClick={addLine}>Add Service</ActionButton>
-            )}
+            <ActionButton onClick={addLine}>Add Service</ActionButton>
           </div>
           <div className="space-y-3">
             {lineItems.map((line, index) => (
@@ -537,19 +628,23 @@ export function BookingForm({
                   onChange={(value) => setLine(index, "unit_amount", value)}
                   min={0}
                 />
-                <div className="flex items-end">
+                <div
+                  className={`flex items-center ${errors.lineItems?.[index]?.service_id?.message ? "mt-0" : "mt-5"}`}
+                >
                   <ActionButton
                     tone="danger"
                     onClick={() => removeLine(index)}
-                    disabled={isHomeVisitBooking || lineItems.length === 1}
+                    disabled={lineItems.length === 1}
                   >
                     Remove
                   </ActionButton>
                 </div>
                 <div className="text-right text-xs text-slate-500 md:col-span-4">
                   <p className="mt-1 text-xs font-bold text-blue-600">
-                    × {days} day{days > 1 ? "s" : ""} ({displayDate(startDate)}{" "}
-                    → {displayDate(endDate || startDate)})
+                    × {days} visit{days === 1 ? "" : "s"} (
+                    {displayDate(startDate)} →{" "}
+                    {displayDate(endDate || startDate)}
+                    {visitDayScheduleLabel ? `, ${visitDayScheduleLabel}` : ""})
                   </p>
                   {Number(line.quantity || 0)}{" "}
                   {isHomeVisitBooking ? "visit" : "hr"}
@@ -576,7 +671,13 @@ export function BookingForm({
         </div>
         <div className="flex items-end gap-2 md:col-span-4">
           <Button disabled={busy} className="save-button">
-            {busy ? "Saving..." : editing ? "Update Booking" : "Create Booking"}
+            <ButtonLoader loading={busy}>
+              {busy
+                ? "Saving..."
+                : editing
+                  ? "Update Booking"
+                  : "Create Booking"}
+            </ButtonLoader>
           </Button>
           <button
             type="button"

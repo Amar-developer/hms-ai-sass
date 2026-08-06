@@ -11,12 +11,12 @@ import {
   SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiFetch } from "@/lib/api";
 import { FormField, NumberField } from "@/app/components/FormElements";
 import { SearchPicker } from "@/app/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { displayDate, displayDateTime } from "@/utils/helper";
+import { displayDate, displayDateTime, today } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import {
   isBilledIssue,
   isCancelledIssue,
@@ -30,26 +30,24 @@ import {
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "../admin/components/RowActions";
+import type { PharmacyIssueSummary } from "@/lib/contracts";
+import {
+  useAvailableMedicines,
+  useMedicineDetail,
+  usePharmacyActions,
+  usePharmacyWorkspace,
+} from "./api";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 
 const pageSize = 10;
 
 export function Pharmacy({
   apiSession,
   branchId,
-  patients,
   appointments,
   loadLiveData,
-  liveInvoices = [],
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
-  const [issues, setIssues] = useState<any[]>([]);
-  const [issuesLoaded, setIssuesLoaded] = useState(false);
-  const [medicines, setMedicines] = useState<any[]>([]);
-  const [batches, setBatches] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [lowStock, setLowStock] = useState<any[]>([]);
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState("");
   const [patientId, setPatientId] = useState("");
   const [source, setSource] = useState("op_direct");
   const [externalPrescriber, setExternalPrescriber] = useState("");
@@ -58,10 +56,8 @@ export function Pharmacy({
   const [batchId, setBatchId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [issueItems, setIssueItems] = useState<any[]>([]);
-  const [availableMedicines, setAvailableMedicines] = useState<any[]>([]);
   const [medicineSearch, setMedicineSearch] = useState("");
   const [selectedMedicineId, setSelectedMedicineId] = useState("");
-  const [medicineLoading, setMedicineLoading] = useState(false);
   const [editingAmountId, setEditingAmountId] = useState("");
   const [editingAmountValue, setEditingAmountValue] = useState("");
   const [dismissedConsultations, setDismissedConsultations] = useState<
@@ -86,7 +82,7 @@ export function Pharmacy({
   const [purchaseQty, setPurchaseQty] = useState("50");
   const [purchaseOrderId, setPurchaseOrderId] = useState("PO-001");
   const [purchaseDate, setPurchaseDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
+    today(),
   );
   const [purchaseDiscount, setPurchaseDiscount] = useState("0");
   const [lineDiscount, setLineDiscount] = useState("0");
@@ -96,11 +92,40 @@ export function Pharmacy({
   const [localInvoicedIssueIds, setLocalInvoicedIssueIds] = useState<string[]>(
     [],
   );
-  const [selectedIssue, setSelectedIssue] = useState<any>(null);
+  const [selectedIssue, setSelectedIssue] =
+    useState<PharmacyIssueSummary | null>(null);
   const [viewConsult, setViewConsult] = useState<any>(null);
-  const [consultDetail, setConsultDetail] = useState<any>(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
   const [page, setPage] = useState(1);
+
+  const { issues, issuesLoaded, medicines, batches, suppliers, load } =
+    usePharmacyWorkspace(apiSession, branchId, {
+      setMessage: (value: string) => setMessage(value),
+    });
+  const { availableMedicines, medicineLoading } = useAvailableMedicines(
+    apiSession,
+    branchId,
+    medicineSearch,
+  );
+  const {
+    detail: consultDetail,
+    loading: loadingDetail,
+    error: consultDetailError,
+  } = useMedicineDetail(apiSession, viewConsult?.consultationId);
+  const {
+    busy,
+    message,
+    setMessage,
+    createMedicine,
+    createSupplier,
+    createPurchase,
+    returnExpiredStock,
+    createDirect,
+    createFromConsultation,
+    updateStatus,
+    generateInvoice,
+    updateIssueAmount,
+  } = usePharmacyActions(apiSession, { load, loadLiveData });
+
   const issuedConsultationIds = useMemo(
     () =>
       new Set(
@@ -129,12 +154,12 @@ export function Pharmacy({
   const invoicedIssueIds = useMemo(
     () =>
       new Set([
-        ...(liveInvoices || [])
-          .map((inv: any) => inv.pharmacy_issue_id)
-          .filter(Boolean),
+        ...issues
+          .filter((issue: any) => Boolean(issue.billing_invoice_id))
+          .map((issue: any) => issue.id),
         ...localInvoicedIssueIds,
       ]),
-    [liveInvoices, localInvoicedIssueIds],
+    [issues, localInvoicedIssueIds],
   );
   const totalPages = Math.max(1, Math.ceil(issues.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -142,13 +167,10 @@ export function Pharmacy({
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
-  const patientMap = useMemo(
-    () => new Map(patients.map((p: any) => [p.id, p])),
-    [patients],
+  const { patients, patientMap } = usePatientReferencesQuery(
+    apiSession,
+    issues.map((issue: any) => issue.patient_id),
   );
-  useEffect(() => {
-    load();
-  }, [apiSession?.tenantId]);
   useEffect(() => {
     if (!medicineId && medicines[0]?.id) setMedicineId(medicines[0].id);
   }, [medicines, medicineId]);
@@ -167,37 +189,8 @@ export function Pharmacy({
       );
   }, [dismissedConsultations]);
   useEffect(() => {
-    if (!apiSession?.tenantId) {
-      setAvailableMedicines([]);
-      return;
-    }
-    let alive = true;
-    const search = medicineSearch.trim();
-    const timer = window.setTimeout(
-      async () => {
-        setMedicineLoading(true);
-        try {
-          const params = new URLSearchParams();
-          if (branchId) params.set("branch_id", branchId);
-          if (search) params.set("search", search);
-          const rows = await apiFetch(
-            `/pharmacy/catalog/available-medicines${params.toString() ? `?${params}` : ""}`,
-            apiSession,
-          );
-          if (alive) setAvailableMedicines(Array.isArray(rows) ? rows : []);
-        } catch {
-          if (alive) setAvailableMedicines([]);
-        } finally {
-          if (alive) setMedicineLoading(false);
-        }
-      },
-      search ? 250 : 0,
-    );
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [apiSession, apiSession?.tenantId, branchId, medicineSearch]);
+    if (consultDetailError) setMessage(consultDetailError);
+  }, [consultDetailError]);
 
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
@@ -233,153 +226,6 @@ export function Pharmacy({
     (m: any) => (m.id || m.slug || m.name) === selectedMedicineId,
   );
 
-  async function load() {
-    if (!apiSession) {
-      setIssues([]);
-      return;
-    }
-    try {
-      const [issueRows, medicineRows, batchRows, supplierRows, lowRows] =
-        await Promise.all([
-          apiFetch("/pharmacy/issues", apiSession),
-          apiFetch("/pharmacy/medicines", apiSession),
-          apiFetch("/pharmacy/batches", apiSession),
-          apiFetch("/pharmacy/suppliers", apiSession),
-          apiFetch(`/pharmacy/low-stock?branch_id=${branchId}`, apiSession),
-        ]);
-      setIssues(issueRows);
-      setMedicines(medicineRows);
-      setBatches(batchRows);
-      setSuppliers(supplierRows);
-      setLowStock(lowRows);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load pharmacy workspace.");
-    } finally {
-      setIssuesLoaded(true);
-    }
-  }
-
-  async function createMedicine(e: any) {
-    e.preventDefault();
-    if (!apiSession) return;
-    setBusy("medicine");
-    setMessage("");
-    try {
-      await apiFetch("/pharmacy/medicines", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchId,
-          code,
-          name,
-          generic_name: generic,
-          form: "Tablet",
-          default_sale_price: Number(salePrice || 0),
-          reorder_level: Number(reorder || 0),
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Medicine added to catalog.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create medicine.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function createSupplier() {
-    if (!apiSession) return;
-    setBusy("supplier");
-    setMessage("");
-    try {
-      await apiFetch("/pharmacy/suppliers", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          name: supplierName,
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Supplier created.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create supplier.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function createPurchase() {
-    if (!apiSession || !medicineId) return;
-    setBusy("purchase");
-    setMessage("");
-    try {
-      const med = medicines.find((m: any) => m.id === medicineId);
-      await apiFetch("/pharmacy/purchases", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchId,
-          supplier_id: suppliers[0]?.id || null,
-          purchase_order_id: purchaseOrderId,
-          invoice_number: `PINV-${Date.now().toString().slice(-5)}`,
-          purchase_date: new Date(`${purchaseDate}T00:00:00`).toISOString(),
-          discount_percentage: Number(purchaseDiscount || 0),
-          items: [
-            {
-              medicine_id: medicineId,
-              batch_number: `B-${Date.now().toString().slice(-4)}`,
-              quantity: Number(purchaseQty || 0),
-              cost_price: Math.max(1, Number(med?.default_sale_price || 0) - 2),
-              sale_price: Number(med?.default_sale_price || 0),
-              discount_percentage: Number(lineDiscount || 0),
-              cgst_percentage: Number(cgst || 0),
-              sgst_percentage: Number(sgst || 0),
-            },
-          ],
-          purchased_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Purchase added with discount/GST and stock ledger updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create purchase.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function returnExpiredStock() {
-    if (!apiSession || !medicineId || !batchId) return;
-    setBusy("return");
-    setMessage("");
-    try {
-      const batch = batches.find((b: any) => b.id === batchId);
-      await apiFetch("/pharmacy/returns", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchId,
-          supplier_id: suppliers[0]?.id || null,
-          purchase_id: batch?.purchase_id || null,
-          reason: "Expired medicine returned to supplier",
-          items: [
-            {
-              medicine_id: medicineId,
-              batch_id: batchId,
-              quantity: Number(returnQty || 1),
-              amount: Number(returnQty || 1) * Number(batch?.cost_price || 0),
-            },
-          ],
-          returned_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Expired medicine returned and stock ledger updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not return expired stock.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   function buildIssueItem() {
     const name =
       selectedMedicine?.item_name ||
@@ -398,56 +244,25 @@ export function Pharmacy({
     };
   }
 
-  async function createDirect(e: any) {
+  async function handleCreateDirect(e: any) {
     e.preventDefault();
-    if (!apiSession) return;
-    if (!branchId || !patientId) {
-      setMessage("Branch and patient are required.");
-      return;
-    }
-    if (source === "external_prescription" && !externalPrescriber.trim()) {
-      setMessage("External prescriber is required.");
-      return;
-    }
-    setBusy("create");
-    setMessage("");
     const fallback = buildIssueItem();
     const itemRows = issueItems.length
       ? issueItems
       : fallback
         ? [fallback]
         : [];
-    const names = itemRows
-      .map((item: any) => item.medicine_name)
-      .filter(Boolean);
-    if (!names.length) {
-      setMessage("Add at least one medicine.");
-      setBusy("");
-      return;
-    }
-    try {
-      await apiFetch("/pharmacy/issues", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchId,
-          patient_id: patientId,
-          source,
-          medicine_text: names.join(", "),
-          external_prescriber:
-            source === "external_prescription" ? externalPrescriber : null,
-          items: itemRows,
-          issued_by_user_id: apiSession.user?.id,
-        }),
-      });
+    const ok = await createDirect({
+      branchId,
+      patientId,
+      source,
+      externalPrescriber,
+      itemRows,
+    });
+    if (ok) {
       setIssueItems([]);
       setSelectedMedicineId("");
       setMedicineSearch("");
-      await load();
-      setMessage("Pharmacy issue created.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create pharmacy issue.");
-    } finally {
-      setBusy("");
     }
   }
 
@@ -465,82 +280,12 @@ export function Pharmacy({
     );
   }
 
-  async function createFromConsultation(a: any) {
-    setBusy(a.consultationId);
-    setMessage("");
-    try {
-      await apiFetch(
-        `/pharmacy/issues/from-consultation/${a.consultationId}`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            amount: 0,
-            issued_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      await load();
-      setMessage(
-        "Pharmacy issue created. Set amount manually before marking billed.",
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not create prescription issue.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function updateStatus(issue: any, status: string) {
-    setBusy(issue.id);
-    setMessage("");
-    try {
-      await apiFetch(`/pharmacy/issues/${issue.id}/status`, apiSession, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status,
-          actor_user_id: apiSession.user?.id,
-          reason:
-            status === "cancelled"
-              ? "Cancelled from pharmacy screen"
-              : undefined,
-        }),
-      });
-      await load();
-    } catch (err: any) {
-      setMessage(err.message || "Could not update pharmacy issue.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function generateInvoice(issue: any) {
-    setBusy(`invoice-${issue.id}`);
-    setMessage("");
-    try {
-      const detail = await apiFetch(
-        "/billing/invoices/from-pharmacy-issue",
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            pharmacy_issue_id: issue.id,
-            created_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
+  async function handleGenerateInvoice(issue: any) {
+    const detail = await generateInvoice(issue);
+    if (detail) {
       setLocalInvoicedIssueIds((ids) =>
         ids.includes(issue.id) ? ids : [...ids, issue.id],
       );
-      await load();
-      await loadLiveData?.(apiSession);
-      setMessage(
-        `Pharmacy invoice ${detail.invoice?.invoice_number || ""} generated.`,
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not generate pharmacy invoice.");
-    } finally {
-      setBusy("");
     }
   }
 
@@ -548,7 +293,7 @@ export function Pharmacy({
     if (!action) return;
     if (action === "partial") return updateStatus(issue, "partially_dispensed");
     if (action === "dispense") return updateStatus(issue, "dispensed");
-    if (action === "invoice") return generateInvoice(issue);
+    if (action === "invoice") return handleGenerateInvoice(issue);
     if (action === "cancel") return updateStatus(issue, "cancelled");
   }
 
@@ -564,42 +309,10 @@ export function Pharmacy({
 
   async function saveIssueAmount(issue: any) {
     const amount = Number(editingAmountValue || 0);
-    if (Number.isNaN(amount) || amount < 0) {
-      setMessage("Enter a valid amount.");
-      return;
-    }
-    setBusy(`amount-${issue.id}`);
-    setMessage("");
-    try {
-      await apiFetch(`/pharmacy/issues/${issue.id}/amount`, apiSession, {
-        method: "PATCH",
-        body: JSON.stringify({ amount, actor_user_id: apiSession.user?.id }),
-      });
+    const ok = await updateIssueAmount(issue, amount);
+    if (ok) {
       setEditingAmountId("");
       setEditingAmountValue("");
-      await load();
-      setMessage("Pharmacy amount updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not update amount.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function loadConsultDetail(a: any) {
-    setViewConsult(a);
-    setConsultDetail(null);
-    setLoadingDetail(true);
-    try {
-      const detail = await apiFetch(
-        `/consultations/${a.consultationId}`,
-        apiSession,
-      );
-      setConsultDetail(detail);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load consultation.");
-    } finally {
-      setLoadingDetail(false);
     }
   }
 
@@ -619,6 +332,7 @@ export function Pharmacy({
           issue={selectedIssue}
           apiSession={apiSession}
           patient={
+            selectedIssue.patient_name ||
             (patientMap.get(selectedIssue.patient_id) as any)?.name ||
             publicDisplayValue(selectedIssue.patient_id, "Patient")
           }
@@ -643,7 +357,7 @@ export function Pharmacy({
         <Card>
           <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
           <form
-            onSubmit={createDirect}
+            onSubmit={handleCreateDirect}
             className="mt-4 grid gap-3 md:grid-cols-4"
           >
             <FormField label="Patient" required>
@@ -807,7 +521,7 @@ export function Pharmacy({
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-2">
                             <ActionButton
-                              onClick={() => loadConsultDetail(a)}
+                              onClick={() => setViewConsult(a)}
                               className="close-button"
                             >
                               View
@@ -864,7 +578,14 @@ export function Pharmacy({
               </tr>
             </thead>
             <tbody className="divide-y">
-              {issues.length === 0 && (
+              {!issuesLoaded && (
+                <tr>
+                  <td colSpan={7} className="p-0">
+                    <TableSkeleton />
+                  </td>
+                </tr>
+              )}
+              {issuesLoaded && issues.length === 0 && (
                 <tr>
                   <td
                     colSpan={7}
@@ -874,7 +595,7 @@ export function Pharmacy({
                   </td>
                 </tr>
               )}
-              {pharmacyPageRows.map((issue: any, index: number) => {
+              {issuesLoaded && pharmacyPageRows.map((issue: any, index: number) => {
                 const p: any = patientMap.get(issue.patient_id);
                 const selected = selectedIssue?.id === issue.id;
                 const dispensed = isDispensed(issue);
@@ -915,7 +636,8 @@ export function Pharmacy({
                     <td className="text-xs">
                       <div className="flex items-center gap-2">
                         <span>
-                          {p?.name ||
+                          {issue.patient_name ||
+                            p?.name ||
                             publicDisplayValue(issue.patient_id, "Patient")}
                         </span>
                         <CopyIdButton

@@ -15,6 +15,7 @@ def next_token_number(
     department_id: str | None,
     appointment_date,
     emergency: bool,
+    exclude_appointment_id: str | None = None,
 ) -> str:
     # Serialize token issuance within a branch by locking the branch row, so two
     # concurrent bookings can't both read the same count and mint duplicate
@@ -35,6 +36,8 @@ def next_token_number(
         statement = statement.where(Appointment.practitioner_id == practitioner_id)
     elif department_id:
         statement = statement.where(Appointment.department_id == department_id)
+    if exclude_appointment_id:
+        statement = statement.where(Appointment.id != exclude_appointment_id)
     count = session.exec(statement).one()
     if emergency:
         return f"E-{count + 1:03d}"

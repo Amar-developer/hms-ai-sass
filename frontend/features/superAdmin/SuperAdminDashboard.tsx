@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge, Card, StatusToast } from "@/app/components/common/ui";
+import { superAdminPath } from "./routing";
 import { catalogSubscriptionPlans,tenantSelectOptions } from "./helpers";
 import { Overview } from "./components/overview/Overview";
 import { TenantManagement } from "./components/tenants/TenantManagement";
@@ -13,15 +15,9 @@ import { CreateRole } from "./components/roles/CreateRole";
 import { EditRole } from "./components/roles/EditRole";
 import { RolePermissions } from "./components/roles/RolePermissions";
 import { TenantUsers } from "./components/users/TenantUsers";
-import { CreateUser } from "./components/users/CreateUser";
-import { EditUser } from "./components/users/EditUser";
-import { PlatformAdmins } from "./components/users/PlatformAdmins";
+import { PrivilegedAccess } from "./components/users/PrivilegedAccess";
 import { DepartmentsManagement } from "./components/departments/DepartmentsManagement";
-import { CreateDepartment } from "./components/departments/CreateDepartment";
-import { EditDepartment } from "./components/departments/EditDepartment";
 import { BranchesManagement } from "./components/branches/BranchesManagement";
-import { CreateBranch } from "./components/branches/CreateBranch";
-import { EditBranch } from "./components/branches/EditBranch";
 import { AssignTemplate } from "./components/shared/AssignTemplate";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { PasswordResetModal } from "./components/shared/PasswordResetModal";
@@ -29,29 +25,88 @@ import { SubscriptionManagement } from "./components/subscriptions/SubscriptionM
 import { TenantBranchSettings } from "./components/subscriptions/TenantBranchSettings";
 import { TenantPicker } from "./components/shared/TenantPicker";
 import { WhatsAppIntegrationSettings } from "@/features/admin/components/WhatsAppIntegrationSettings";
+import { UserForm } from "@/features/admin/forms/UserForm";
+import { BranchForm } from "@/features/admin/forms/BranchForm";
+import { DepartmentForm } from "@/features/admin/forms/DepartmentForm";
 import { useSuperAdminData, useSuperAdminActions } from "./api";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
+import { canResetUserPassword } from "./helpers";
 
 export { superAdminSections } from "./constants";
+export { platformSectionsForUser } from "./constants";
 
 export function SuperAdminDashboard({
   apiSession,
   switchTenant,
   section,
   setSection,
+  selectedDetailId = "",
 }: any) {
-  const [localSection, setLocalSection] = useState("overview");
-  const currentSection = section || localSection;
-  const changeSection = setSection || setLocalSection;
-  const [selectedRoleId, setSelectedRoleId] = useState("");
-  const [selectedUserId, setSelectedUserId] = useState("");
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
-  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const router = useRouter();
+  const currentSection = section || "overview";
+
+  // Children set the target record and then switch section as two separate
+  // calls (setSelectedRoleId(id); setSection("roleEdit")). Since the id now
+  // lives in the URL rather than state, hold it in a ref so the section
+  // change that follows can build a path that already includes it.
+  const pendingIds = useRef<{
+    tenantId?: string;
+    roleId?: string;
+    userId?: string;
+    departmentId?: string;
+    branchId?: string;
+  }>({});
+
+  const selectedRoleId = selectedDetailId;
+  const selectedUserId = selectedDetailId;
+  const selectedDepartmentId = selectedDetailId;
+  const selectedBranchId = selectedDetailId;
+  const setSelectedRoleId = (id: string) => {
+    pendingIds.current.roleId = id;
+  };
+  const setSelectedUserId = (id: string) => {
+    pendingIds.current.userId = id;
+  };
+  const setSelectedDepartmentId = (id: string) => {
+    pendingIds.current.departmentId = id;
+  };
+  const setSelectedBranchId = (id: string) => {
+    pendingIds.current.branchId = id;
+  };
+
+  function changeSection(nextSection: string) {
+    router.push(superAdminPath(nextSection, pendingIds.current));
+  }
   const [confirmAction, setConfirmAction] = useState<any>(null);
   const [tenantSuccess, setTenantSuccess] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
 
   const data = useSuperAdminData(apiSession);
+  // data.selectedId is the workspace-wide "which tenant am I managing"
+  // context, not just a detail-page id, so it stays state — but record it
+  // too, so a following changeSection("tenantEdit") can put it in the URL.
+  const setSelectedTenantId = (id: string) => {
+    pendingIds.current.tenantId = id;
+    data.setSelectedId(id);
+  };
+  // A direct/bookmarked /superadmin/tenants/{id}/edit link must re-point the
+  // workspace at that tenant rather than whatever was last selected.
+  useEffect(() => {
+    if (
+      currentSection === "tenantEdit" &&
+      selectedDetailId &&
+      selectedDetailId !== data.selectedId
+    ) {
+      data.setSelectedId(selectedDetailId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSection, selectedDetailId, data.selectedId]);
+  const isRoot = Boolean(apiSession?.user?.is_super_admin);
+  const isPrivilegedWorkspace = Boolean(
+    isRoot ||
+      apiSession?.user?.user_type === "platform_admin" ||
+      apiSession?.user?.user_type === "support_admin",
+  );
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
 
   const selectableTenants = tenantSelectOptions(data.tenants);
@@ -130,7 +185,7 @@ export function SuperAdminDashboard({
     loadTenantAccess: data.loadTenantAccess,
     setBusy: data.setBusy,
     setMessage: data.setMessage,
-    setSelectedId: data.setSelectedId,
+    setSelectedId: setSelectedTenantId,
     setTenants: data.setTenants,
     setRoles: data.setRoles,
     setUsers: data.setUsers,
@@ -151,6 +206,10 @@ export function SuperAdminDashboard({
   });
 
   useEffect(() => {
+    // Don't judge a record "missing" while its list is still being fetched —
+    // on a direct/bookmarked detail link the collections start out empty,
+    // which would otherwise bounce straight back to the listing.
+    if (data.busy) return;
     const detailRoutes: Record<string, { list: string; exists: boolean }> = {
       tenantEdit: { list: "tenants", exists: Boolean(selected) },
       roleEdit: {
@@ -195,7 +254,8 @@ export function SuperAdminDashboard({
       },
     };
     const route = detailRoutes[currentSection];
-    if (route && !route.exists) changeSection(route.list);
+    if (route && !route.exists) router.replace(superAdminPath(route.list));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     currentSection,
     selected,
@@ -203,19 +263,29 @@ export function SuperAdminDashboard({
     selectedUserId,
     selectedDepartmentId,
     selectedBranchId,
+    data.busy,
     data.roles,
     data.users,
     data.departments,
     data.tenantBranches,
   ]);
 
-  if (!apiSession?.user?.is_super_admin)
+  const editingUser = data.users.find(
+    (user: any) => user.id === selectedUserId,
+  );
+  const editingDepartment = data.departments.find(
+    (department: any) => department.id === selectedDepartmentId,
+  );
+  const editingBranch = data.tenantBranches.find(
+    (branch: any) => branch.id === selectedBranchId,
+  );
+
+  if (!isPrivilegedWorkspace)
     return (
       <Card>
         <h3 className="text-lg font-bold">Super Admin</h3>
         <p className="mt-2 text-sm text-slate-500">
-          This workspace is available only for MedizinHub HMS primary tenant
-          super admin users.
+          This workspace is available only for authorized platform accounts.
         </p>
       </Card>
     );
@@ -235,7 +305,11 @@ export function SuperAdminDashboard({
             </p>
           </div>
           <Badge tone="blue" className="px-2 py-2 lg:px-4 lg:py-3 text-xs rounded-lg">
-            Global Platform Access
+            {isRoot
+              ? "Root Platform Access"
+              : apiSession?.user?.user_type === "support_admin"
+                ? "Temporary Support Access"
+                : "Scoped Platform Access"}
           </Badge>
         </div>
       </Card>
@@ -247,11 +321,14 @@ export function SuperAdminDashboard({
           trialTenants={trialTenants}
           plans={data.plans}
           estimatedRevenue={estimatedRevenue}
+          loading={data.busy}
         />
       )}
-      {currentSection === "platformAdmins" && (
-        <PlatformAdmins
+      {currentSection === "privilegedAccess" && (
+        <PrivilegedAccess
           apiSession={apiSession}
+          tenants={selectableTenants}
+          switchTenant={switchTenant}
           busy={data.busy}
           setBusy={data.setBusy}
           setMessage={data.setMessage}
@@ -260,7 +337,7 @@ export function SuperAdminDashboard({
       {currentSection === "tenants" && (
         <TenantManagement
           tenants={selectableTenants}
-          setSelectedId={data.setSelectedId}
+          setSelectedId={setSelectedTenantId}
           setSection={changeSection}
           switchTenant={switchTenant}
           apiSession={apiSession}
@@ -302,20 +379,21 @@ export function SuperAdminDashboard({
           customerTenants={customerTenants}
           selected={selected}
           selectedId={data.selectedId}
-          setSelectedId={data.setSelectedId}
+          setSelectedId={setSelectedTenantId}
           roles={data.roles}
           canCopyIds={canCopyIds}
           setSelectedRoleId={setSelectedRoleId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
+          busy={data.busy}
         />
       )}
       {currentSection === "roleCreate" && (
         <CreateRole
           tenants={selectableTenants}
           selectedId={data.selectedId}
-          setSelectedId={data.setSelectedId}
+          setSelectedId={setSelectedTenantId}
           permissionCatalog={data.permissionCatalog}
           busy={data.busy}
           createRole={actions.createRole}
@@ -358,36 +436,41 @@ export function SuperAdminDashboard({
         <TenantUsers
           tenants={selectableTenants}
           selectedId={data.selectedId}
-          setSelectedId={data.setSelectedId}
+          setSelectedId={setSelectedTenantId}
           users={data.users.filter((user: any) => !user.is_super_admin)}
           canCopyIds={canCopyIds}
           setSelectedUserId={setSelectedUserId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
+          busy={data.busy}
         />
       )}
       {currentSection === "userCreate" && (
-        <CreateUser
+        <UserForm
+          title="Create User"
+          roles={data.roles.filter((role: any) => role.key !== "super_admin")}
+          branches={data.tenantBranches}
+          busy={data.busy}
           tenants={selectableTenants}
           selectedId={data.selectedId}
-          setSelectedId={data.setSelectedId}
-          branches={data.tenantBranches}
-          roles={data.roles.filter((role: any) => role.key !== "super_admin")}
-          busy={data.busy}
-          createUser={actions.createUser}
+          setSelectedId={setSelectedTenantId}
+          defaultUserType="tenant_admin"
+          apiSession={apiSession}
+          onSubmit={actions.createUser}
           back={() => changeSection("users")}
         />
       )}
       {currentSection === "userEdit" && (
-        <EditUser
-          apiSession={apiSession}
-          selected={selected}
-          user={data.users.find((u: any) => u.id === selectedUserId)}
-          branches={data.tenantBranches}
+        <UserForm
+          title="Edit User"
+          user={editingUser}
           roles={data.roles.filter((role: any) => role.key !== "super_admin")}
+          branches={data.tenantBranches}
           busy={data.busy}
-          updateUser={actions.updateUser}
+          apiSession={apiSession}
+          canResetPassword={canResetUserPassword(apiSession, editingUser, selected)}
+          onSubmit={(formData: any) => actions.updateUser(formData, editingUser)}
           onResetPassword={setPasswordUser}
           back={() => changeSection("users")}
         />
@@ -398,31 +481,38 @@ export function SuperAdminDashboard({
           customerTenants={customerTenants}
           selected={selected}
           selectedId={data.selectedId}
-          setSelectedId={data.setSelectedId}
+          setSelectedId={setSelectedTenantId}
           departments={data.departments}
           setSelectedDepartmentId={setSelectedDepartmentId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
+          busy={data.busy}
         />
       )}
       {currentSection === "departmentCreate" && (
-        <CreateDepartment
+        <DepartmentForm
+          title="Create Medical Department"
+          departments={data.departments}
+          branches={data.tenantBranches}
+          busy={data.busy}
           tenants={selectableTenants}
           selectedId={data.selectedId}
-          setSelectedId={data.setSelectedId}
-          busy={data.busy}
-          createDepartment={actions.createDepartment}
+          setSelectedId={setSelectedTenantId}
+          onSubmit={actions.createDepartment}
           back={() => changeSection("departments")}
         />
       )}
       {currentSection === "departmentEdit" && (
-        <EditDepartment
-          department={data.departments.find(
-            (d: any) => d.id === selectedDepartmentId,
-          )}
+        <DepartmentForm
+          title="Edit Medical Department"
+          department={editingDepartment}
+          departments={data.departments}
+          branches={data.tenantBranches}
           busy={data.busy}
-          updateDepartment={actions.updateDepartment}
+          onSubmit={(formData: any) =>
+            actions.updateDepartment(formData, editingDepartment)
+          }
           back={() => changeSection("departments")}
         />
       )}
@@ -445,32 +535,33 @@ export function SuperAdminDashboard({
           tenants={selectableTenants}
           selected={selected}
           selectedId={data.selectedId}
-          setSelectedId={data.setSelectedId}
+          setSelectedId={setSelectedTenantId}
           branches={data.tenantBranches}
           canCopyIds={canCopyIds}
           setSelectedBranchId={setSelectedBranchId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
+          busy={data.busy}
         />
       )}
       {currentSection === "branchCreate" && (
-        <CreateBranch
+        <BranchForm
+          title="Create Branch"
+          busy={data.busy}
           tenants={selectableTenants}
           selectedId={data.selectedId}
-          setSelectedId={data.setSelectedId}
-          busy={data.busy}
-          createBranch={actions.createBranch}
+          setSelectedId={setSelectedTenantId}
+          onSubmit={actions.createBranch}
           back={() => changeSection("branches")}
         />
       )}
       {currentSection === "branchEdit" && (
-        <EditBranch
-          branch={data.tenantBranches.find(
-            (b: any) => b.id === selectedBranchId,
-          )}
+        <BranchForm
+          title="Edit Branch"
+          branch={editingBranch}
           busy={data.busy}
-          updateBranch={actions.updateBranch}
+          onSubmit={(formData: any) => actions.updateBranch(formData, editingBranch)}
           back={() => changeSection("branches")}
         />
       )}
@@ -494,7 +585,7 @@ export function SuperAdminDashboard({
           plans={data.plans}
           tenants={customerTenants}
           selectedId={data.selectedId}
-          setSelectedId={data.setSelectedId}
+          setSelectedId={setSelectedTenantId}
           reloadPlans={data.reload}
           modules={data.moduleRegistry}
         />
@@ -505,7 +596,7 @@ export function SuperAdminDashboard({
           selected={selected}
           tenants={customerTenants}
           selectedId={data.selectedId}
-          setSelectedId={data.setSelectedId}
+          setSelectedId={setSelectedTenantId}
           plans={data.plans}
           modules={data.moduleRegistry}
           reloadPlans={data.reload}
@@ -518,9 +609,9 @@ export function SuperAdminDashboard({
               <TenantPicker
                 tenants={customerTenants}
                 selectedId={data.selectedId}
-                setSelectedId={data.setSelectedId}
+                setSelectedId={setSelectedTenantId}
               />
-              <Badge tone={tenantWhatsAppEnabled ? "green" : "slate"}>
+              <Badge tone={tenantWhatsAppEnabled ? "green" : "slate"} className="normal-badge">
                 {tenantWhatsAppEnabled
                   ? "Included in active subscription"
                   : "Not included in active subscription"}

@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from app.modules.files.models import FileDocument
 
@@ -22,8 +22,21 @@ class FileDocumentRepository:
         attached_to_doctype: str | None,
         attached_to_name: str | None,
         attached_to_field: str | None,
+        original_file_id: str | None = None,
+        artifact_type: str | None = None,
     ) -> FileDocument | None:
-        statement = select(FileDocument).where(FileDocument.tenant_id == tenant_id)
+        statement = select(FileDocument).where(
+            FileDocument.tenant_id == tenant_id,
+            FileDocument.is_active == True,  # noqa: E712
+        )
+        if original_file_id:
+            statement = statement.where(
+                FileDocument.original_file_id == original_file_id
+            )
+        else:
+            statement = statement.where(FileDocument.original_file_id.is_(None))
+        if artifact_type:
+            statement = statement.where(FileDocument.artifact_type == artifact_type)
         if attached_to_doctype and attached_to_name and attached_to_field:
             statement = statement.where(
                 FileDocument.attached_to_doctype == attached_to_doctype,
@@ -32,7 +45,68 @@ class FileDocumentRepository:
             )
         else:
             statement = statement.where(FileDocument.file_url == file_url)
-        return self.session.exec(statement).first()
+        return self.session.exec(
+            statement.order_by(FileDocument.document_version.desc())
+        ).first()
+
+    def list_renditions(
+        self, *, tenant_id: str, original_file_id: str
+    ) -> list[FileDocument]:
+        return list(
+            self.session.exec(
+                select(FileDocument)
+                .where(
+                    FileDocument.tenant_id == tenant_id,
+                    FileDocument.original_file_id == original_file_id,
+                    FileDocument.is_active == True,  # noqa: E712
+                )
+                .order_by(FileDocument.document_version.desc())
+            ).all()
+        )
+
+    def find_ready_rendition(
+        self,
+        *,
+        tenant_id: str,
+        original_file_id: str,
+        artifact_type: str = "delivery",
+    ) -> FileDocument | None:
+        return self.session.exec(
+            select(FileDocument)
+            .where(
+                FileDocument.tenant_id == tenant_id,
+                FileDocument.original_file_id == original_file_id,
+                FileDocument.artifact_type == artifact_type,
+                FileDocument.optimization_status == "ready",
+                FileDocument.is_active == True,  # noqa: E712
+            )
+            .order_by(FileDocument.document_version.desc())
+        ).first()
+
+    def has_active_renditions(self, *, tenant_id: str, original_file_id: str) -> bool:
+        return (
+            self.session.exec(
+                select(FileDocument.id).where(
+                    FileDocument.tenant_id == tenant_id,
+                    FileDocument.original_file_id == original_file_id,
+                    FileDocument.is_active == True,  # noqa: E712
+                )
+            ).first()
+            is not None
+        )
+
+    def next_rendition_version(
+        self, *, tenant_id: str, original_file_id: str, minimum: int = 1
+    ) -> int:
+        latest = self.session.exec(
+            select(FileDocument.document_version)
+            .where(
+                FileDocument.tenant_id == tenant_id,
+                FileDocument.original_file_id == original_file_id,
+            )
+            .order_by(FileDocument.document_version.desc())
+        ).first()
+        return max(minimum, int(latest or 0) + 1)
 
     def find_by_url(self, *, tenant_id: str, file_url: str) -> FileDocument | None:
         return self.session.exec(
@@ -64,6 +138,7 @@ class FileDocumentRepository:
         attached_to_doctype: str | None = None,
         attached_to_name: str | None = None,
         q: str | None = None,
+        offset: int = 0,
         limit: int = 100,
     ) -> list[FileDocument]:
         statement = select(FileDocument).where(
@@ -99,6 +174,60 @@ class FileDocumentRepository:
             )
         return list(
             self.session.exec(
-                statement.order_by(FileDocument.created_at.desc()).limit(limit)
+                statement.order_by(FileDocument.created_at.desc())
+                .offset(offset)
+                .limit(limit)
             ).all()
         )
+
+    def count_active(self, **filters) -> int:
+        statement = self._active_filter_statement(**filters)
+        return int(
+            self.session.exec(
+                select(func.count()).select_from(statement.subquery())
+            ).one()
+        )
+
+    def _active_filter_statement(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None = None,
+        patient_id: str | None = None,
+        category: str | None = None,
+        attached_to_doctype: str | None = None,
+        attached_to_name: str | None = None,
+        q: str | None = None,
+    ):
+        statement = select(FileDocument).where(
+            FileDocument.tenant_id == tenant_id,
+            FileDocument.is_active == True,  # noqa: E712
+        )
+        if branch_id:
+            statement = statement.where(FileDocument.branch_id == branch_id)
+        if patient_id:
+            statement = statement.where(FileDocument.patient_id == patient_id)
+        if category:
+            statement = statement.where(FileDocument.category == category)
+        if attached_to_doctype:
+            statement = statement.where(
+                FileDocument.attached_to_doctype == attached_to_doctype
+            )
+        if attached_to_name:
+            statement = statement.where(
+                FileDocument.attached_to_name == attached_to_name
+            )
+        if q:
+            pattern = f"%{q.strip().lower()}%"
+            statement = statement.where(
+                or_(
+                    FileDocument.file_name.ilike(pattern),
+                    FileDocument.file_url.ilike(pattern),
+                    FileDocument.category.ilike(pattern),
+                    FileDocument.source_module.ilike(pattern),
+                    FileDocument.attached_to_doctype.ilike(pattern),
+                    FileDocument.attached_to_name.ilike(pattern),
+                    FileDocument.notes.ilike(pattern),
+                )
+            )
+        return statement

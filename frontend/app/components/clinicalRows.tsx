@@ -59,6 +59,7 @@ export function SearchPicker({
   onUseTyped,
   inputValue,
   onInputValueChange,
+  updateInputOnSelect = true,
   disabled = false,
   loading = false,
 }: any) {
@@ -83,7 +84,7 @@ export function SearchPicker({
     if (!typed) return;
     if (exact) {
       onChange(exact.value, exact.item);
-      onInputValueChange?.(exact.label);
+      if (updateInputOnSelect) onInputValueChange?.(exact.label);
     } else if (onUseTyped) {
       onUseTyped(typed);
     } else {
@@ -157,7 +158,7 @@ export function SearchPicker({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 onChange(row.value, row.item);
-                onInputValueChange?.(row.label);
+                if (updateInputOnSelect) onInputValueChange?.(row.label);
                 if (inputValue === undefined) setQuery("");
                 setOpen(false);
               }}

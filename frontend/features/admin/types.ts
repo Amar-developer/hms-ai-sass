@@ -54,3 +54,14 @@ export type Role = {
   created_at?: string;
   updated_at?: string;
 };
+
+
+export type File = {
+  id: string;
+  file_name: string;
+  category: string;
+  attached_to_doctype: string;
+  patient_id: string;
+  created_at: string;
+  file_url: string;
+};

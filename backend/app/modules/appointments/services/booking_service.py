@@ -16,6 +16,7 @@ from app.core.access_control import (
 from app.modules.appointments.models import (
     Appointment,
     AppointmentIdempotencyKey,
+    AppointmentStatus,
     AppointmentType,
 )
 from app.modules.appointments.repositories import (
@@ -27,6 +28,7 @@ from app.modules.appointments.schemas import (
     AppointmentBookingRead,
     AppointmentCreate,
     AppointmentRead,
+    AppointmentReschedule,
     FollowUpAppointmentCreate,
     QueueEntryRead,
 )
@@ -36,6 +38,7 @@ from app.modules.appointments.services.conflict_rules import (
     DuplicatePatientBookingRule,
 )
 from app.modules.audit.service import record_audit_event
+from app.modules.consultations.models import ConsultationStatus
 from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import (
@@ -50,7 +53,12 @@ from app.modules.practitioners.service import (
     generate_practitioner_calendar,
     practitioner_is_eligible,
 )
-from app.modules.queue.service import create_queue_entry_for_appointment
+from app.modules.queue.service import (
+    create_queue_entry_for_appointment,
+    next_token_number,
+    record_queue_event,
+)
+from app.modules.tenants.models import now_utc
 
 
 def _appointment_payload_hash(payload: AppointmentCreate) -> str:
@@ -196,6 +204,15 @@ class AppointmentBookingService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid patient"
             )
+        if payload.referrer_patient_id:
+            referrer = self.references.get_patient_for_tenant(
+                tenant_id, payload.referrer_patient_id
+            )
+            if not referrer:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid referrer patient",
+                )
         if payload.source_appointment_id:
             source_appointment = self.appointments.get_for_tenant(
                 tenant_id, payload.source_appointment_id
@@ -415,6 +432,181 @@ class AppointmentBookingService:
                         existing_key.booking_json
                     )
         return booking
+
+    def reschedule_appointment(
+        self,
+        *,
+        tenant_id: str,
+        appointment_id: str,
+        payload: AppointmentReschedule,
+        actor: User,
+    ) -> AppointmentBookingRead:
+        enforce_entitlement(self.session, tenant_id, "appointments")
+        appointment = self.appointments.get_for_tenant(tenant_id, appointment_id)
+        if not appointment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Appointment not found",
+            )
+        require_user_branch_access(actor, appointment.branch_id)
+        blocked_statuses = {
+            AppointmentStatus.IN_CONSULTATION,
+            AppointmentStatus.CONSULTATION_COMPLETED,
+            AppointmentStatus.BILLED,
+            AppointmentStatus.CANCELLED,
+            AppointmentStatus.NO_SHOW,
+        }
+        if appointment.status in blocked_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Completed, active-consultation, cancelled, or no-show appointments cannot be rescheduled",
+            )
+        consultation = self.references.get_consultation_for_appointment(
+            tenant_id=tenant_id,
+            appointment_id=appointment.id,
+        )
+        if consultation and consultation.status in {
+            ConsultationStatus.IN_PROGRESS,
+            ConsultationStatus.SIGNED,
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Appointments with an active or completed consultation cannot be rescheduled",
+            )
+        if payload.appointment_date == appointment.appointment_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Select a different appointment date",
+            )
+
+        appointment_time = payload.appointment_time
+        if (
+            appointment.appointment_type != AppointmentType.EMERGENCY
+            and appointment.practitioner_id
+        ):
+            if appointment_time is None:
+                appointment_time = self._first_available_practitioner_slot(
+                    tenant_id=tenant_id,
+                    practitioner_id=appointment.practitioner_id,
+                    branch_id=appointment.branch_id,
+                    department_id=appointment.department_id,
+                    appointment_date=payload.appointment_date,
+                )
+            else:
+                availability = check_practitioner_availability(
+                    self.session,
+                    tenant_id=tenant_id,
+                    practitioner_id=appointment.practitioner_id,
+                    branch_id=appointment.branch_id,
+                    department_id=appointment.department_id,
+                    appointment_date=payload.appointment_date,
+                    appointment_time=appointment_time,
+                )
+                if not availability.available:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=availability.reason
+                        or "Practitioner is not available at this time",
+                    )
+
+        candidate = AppointmentCreate(
+            branch_id=appointment.branch_id,
+            patient_id=appointment.patient_id,
+            department_id=appointment.department_id or "",
+            practitioner_id=appointment.practitioner_id or "",
+            appointment_type=appointment.appointment_type,
+            appointment_date=payload.appointment_date,
+            appointment_time=appointment_time,
+            acquisition_source=appointment.acquisition_source,
+            referrer_patient_id=appointment.referrer_patient_id,
+            referrer_name=appointment.referrer_name,
+            reason=appointment.reason,
+            visit_purpose=appointment.visit_purpose,
+            source_appointment_id=appointment.source_appointment_id,
+            is_billable=appointment.is_billable,
+            custom_fee_amount=appointment.custom_fee_amount,
+            billing_note=appointment.billing_note,
+            emergency_reason=appointment.emergency_reason,
+            intake_vitals=appointment.intake_vitals,
+            intake_complaints=appointment.intake_complaints,
+            created_by_user_id=appointment.created_by_user_id,
+        )
+        self.conflicts.validate(tenant_id, candidate)
+
+        previous_date = appointment.appointment_date
+        previous_time = appointment.appointment_time
+        previous_status = appointment.status
+        appointment.appointment_date = payload.appointment_date
+        appointment.appointment_time = appointment_time
+        appointment.status = AppointmentStatus.WAITING
+        appointment.updated_at = now_utc()
+        self.session.add(appointment)
+        self.session.flush()
+
+        queue_entry = self.references.get_queue_entry_for_appointment(
+            tenant_id=tenant_id,
+            appointment_id=appointment.id,
+        )
+        if queue_entry:
+            queue_entry.token_number = next_token_number(
+                self.session,
+                tenant_id=tenant_id,
+                branch_id=appointment.branch_id,
+                practitioner_id=appointment.practitioner_id,
+                department_id=appointment.department_id,
+                appointment_date=appointment.appointment_date,
+                emergency=appointment.appointment_type == AppointmentType.EMERGENCY,
+                exclude_appointment_id=appointment.id,
+            )
+            queue_entry.status = AppointmentStatus.WAITING
+            queue_entry.missed_call_count = 0
+            queue_entry.called_at = None
+            queue_entry.completed_at = None
+            queue_entry.updated_at = now_utc()
+            self.session.add(queue_entry)
+            record_queue_event(
+                self.session,
+                entry=queue_entry,
+                appointment=appointment,
+                action="queue.appointment_rescheduled",
+                from_status=previous_status,
+                to_status=AppointmentStatus.WAITING,
+                reason=f"Rescheduled from {previous_date} to {appointment.appointment_date}",
+                actor_user_id=actor.id,
+            )
+        else:
+            self.session.commit()
+            self.session.refresh(appointment)
+            queue_entry = create_queue_entry_for_appointment(self.session, appointment)
+
+        record_audit_event(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=appointment.branch_id,
+            actor_user_id=actor.id,
+            action="appointment.rescheduled",
+            resource_type="appointment",
+            resource_id=appointment.id,
+            purpose="appointment_scheduling",
+            metadata_json=json.dumps(
+                {
+                    "previous_date": str(previous_date),
+                    "previous_time": str(previous_time or ""),
+                    "appointment_date": str(appointment.appointment_date),
+                    "appointment_time": str(appointment.appointment_time or ""),
+                }
+            ),
+        )
+        self.session.refresh(appointment)
+        self.session.refresh(queue_entry)
+        return AppointmentBookingRead(
+            appointment=AppointmentRead.model_validate(
+                appointment, from_attributes=True
+            ),
+            queue_entry=QueueEntryRead.model_validate(
+                queue_entry, from_attributes=True
+            ),
+        )
 
     def book_follow_up_appointment(
         self,

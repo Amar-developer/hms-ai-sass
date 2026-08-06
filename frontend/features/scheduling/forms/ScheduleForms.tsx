@@ -1,18 +1,12 @@
 import { PractitionerPicker } from "../components/PractitionerPicker";
 import React, { useEffect, useState } from "react";
-import { ALL_BRANCHES, weekdays } from "../constants";
-import {
-  FormField,
-  NumberField,
-  TextField,
-  TimeField,
-} from "@/app/components/FormElements";
+import { ALL_BRANCHES } from "../constants";
+import { FormField, NumberField, TimeField } from "@/app/components/FormElements";
 import { Plus, X } from "lucide-react";
 import {
   Card,
   Button,
   SearchableSelect,
-  Field,
 } from "@/app/components/common/ui";
 import { useForm, Controller, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,6 +16,8 @@ import {
   WeekdayMode,
   WeekdaySelector,
 } from "@/app/components/common/WeekdaySelector";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { toWeekdayMode } from "../helpers";
 
 export function ScheduleForm({
   title,
@@ -30,67 +26,33 @@ export function ScheduleForm({
   departments,
   doctors,
   busy,
+  error,
   onSubmit,
   back,
 }: any) {
-  const defaultRanges = React.useMemo(() => {
-    const schedules = schedule?.schedules ?? [];
-    if (!schedules.length) {
-      return [
-        {
-          start: String(schedule?.start_time || "09:00").slice(0, 5),
-          end: String(schedule?.end_time || "13:00").slice(0, 5),
-          isActive: schedule?.is_active !== false,
-        },
-      ];
-    }
-
-    const unique = new Map();
-
-    schedules
-      .filter((row: any) => row.is_active !== false)
-      .forEach((row: any) => {
-        const key = `${row.start_time}-${row.end_time}`;
-
-        if (!unique.has(key)) {
-          unique.set(key, {
-            start: String(row.start_time).slice(0, 5),
-            end: String(row.end_time).slice(0, 5),
-            isActive: row.is_active !== false,
-          });
-        }
-      });
-
-    return Array.from(unique.values());
-  }, [schedule]);
-  // Add this before useForm
-  const defaultWeekdays: string[] = Array.from(
-    new Set(
-      (schedule?.schedules || [schedule])
-        .filter(Boolean)
-        .map((row: any) => String(row?.weekday ?? 0)),
-    ),
+  const defaultRanges = React.useMemo(
+    () => [
+      {
+        start: String(schedule?.start_time || "09:00").slice(0, 5),
+        end: String(schedule?.end_time || "13:00").slice(0, 5),
+        isActive: schedule?.is_active !== false,
+      },
+    ],
+    [schedule],
   );
 
-  const [mode, setMode] = useState<WeekdayMode>(() => {
-    if (!defaultWeekdays.length) return "";
-    if (defaultWeekdays.length === 7) return "daily";
-    if (
-      defaultWeekdays.length === 6 &&
-      !defaultWeekdays.includes(String(6))
-    ) {
-      return "mon-saturday";
-    }
-    return "custom";
-  });
+  const defaultWeekdays: string[] = (schedule?.weekdays || []).map(String);
+  const defaultWeekdayMode = toWeekdayMode(schedule?.mode);
 
-  // Then in defaultValues:
+  const [mode, setMode] = useState<WeekdayMode>(defaultWeekdayMode);
+
   const {
     register,
     handleSubmit,
     control,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<ScheduleFormValues>({
     resolver: zodResolver(scheduleSchema),
@@ -98,23 +60,47 @@ export function ScheduleForm({
       practitionerId: schedule?.practitioner_id || "",
       branchId: schedule?.branch_id || "",
       departmentId: schedule?.department_id || "",
-      weekdays: defaultWeekdays.length
-        ? defaultWeekdays
-        : [String(schedule?.weekday ?? 0)],
-      ranges: defaultRanges.length
-        ? defaultRanges
-        : [{ start: "09:00", end: "13:00", isActive: true }],
+      weekdayMode: defaultWeekdayMode,
+      weekdays: defaultWeekdays,
+      ranges: defaultRanges,
       slotMinutes: String(schedule?.slot_minutes || 15),
-      roomNumber: schedule?.room_number ? String(schedule.room_number) : "",
     },
   });
 
   const [ranges, setRanges] = useState(defaultRanges);
-  const [dayToAdd, setDayToAdd] = useState("");
+
+  // `schedule` can arrive asynchronously after this form has already
+  // mounted (e.g. a direct URL to an edit link, before the schedule list
+  // loads), so react-hook-form's initial defaultValues — and the `ranges`/
+  // `mode` local state seeded from it — would otherwise stay stuck on
+  // blank/default values. Re-sync everything once the real record shows up.
+  useEffect(() => {
+    if (!schedule?.id) return;
+    const weekdayMode = toWeekdayMode(schedule?.mode);
+    const weekdayValues: string[] = (schedule?.weekdays || []).map(String);
+    const rangeValues = [
+      {
+        start: String(schedule?.start_time || "09:00").slice(0, 5),
+        end: String(schedule?.end_time || "13:00").slice(0, 5),
+        isActive: schedule?.is_active !== false,
+      },
+    ];
+    reset({
+      practitionerId: schedule?.practitioner_id || "",
+      branchId: schedule?.branch_id || "",
+      departmentId: schedule?.department_id || "",
+      weekdayMode,
+      weekdays: weekdayValues,
+      ranges: rangeValues,
+      slotMinutes: String(schedule?.slot_minutes || 15),
+    });
+    setRanges(rangeValues);
+    setMode(weekdayMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedule?.id]);
 
   const selectedDoctorId = watch("practitionerId");
   const selectedBranchId = watch("branchId");
-  const selectedDepartmentId = watch("departmentId");
   const selectedDays = watch("weekdays");
 
   useEffect(() => {
@@ -128,6 +114,12 @@ export function ScheduleForm({
   );
   const isSingleBranchDoctor = doctorBranches.length === 1;
 
+  // Only auto-fills defaults for a genuine user pick (wired into the picker's
+  // onChange below) — NOT reactive to every `practitionerId` change, since
+  // the edit-resync effect above also sets `practitionerId` programmatically
+  // via `reset()`, and this would otherwise clobber the just-restored
+  // branch/department (e.g. a doctor's second department) with their first
+  // one on every edit-page load.
   const applyDoctorLinks = (doctorId: string) => {
     const doctor = doctors.find((item: any) => item.id === doctorId);
     if (!doctor) return;
@@ -137,21 +129,6 @@ export function ScheduleForm({
 
     setValue("branchId", branchIds[0] || "", { shouldValidate: true });
     setValue("departmentId", departmentIds[0] || "", { shouldValidate: true });
-  };
-
-  useEffect(() => {
-    if (selectedDoctorId) applyDoctorLinks(selectedDoctorId);
-  }, [selectedDoctorId]);
-
-  const removeDay = (value: string) => {
-    setValue(
-      "weekdays",
-      selectedDays.filter((d) => d !== value),
-      {
-        shouldValidate: true,
-        shouldDirty: true,
-      },
-    );
   };
 
   // Range helpers
@@ -177,7 +154,7 @@ export function ScheduleForm({
   };
 
   const onFormSubmit: SubmitHandler<ScheduleFormValues> = (data) => {
-    onSubmit(data); // Now properly typed
+    onSubmit(data);
   };
 
   return (
@@ -196,6 +173,10 @@ export function ScheduleForm({
         </button>
       </div>
 
+      {error && (
+        <p className="mt-3 text-sm font-bold text-red-500">{error}</p>
+      )}
+
       <form
         onSubmit={handleSubmit(onFormSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
@@ -212,6 +193,7 @@ export function ScheduleForm({
                   value={field.value}
                   onChange={(id) => {
                     field.onChange(id);
+                    applyDoctorLinks(id);
                   }}
                 />
               )}
@@ -291,7 +273,13 @@ export function ScheduleForm({
               <WeekdaySelector
                 mode={mode}
                 selectedDays={selectedDays}
-                onModeChange={setMode}
+                onModeChange={(nextMode) => {
+                  setMode(nextMode);
+                  setValue("weekdayMode", nextMode, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  });
+                }}
                 onDaysChange={(days) =>
                   setValue("weekdays", days, {
                     shouldValidate: true,
@@ -299,7 +287,7 @@ export function ScheduleForm({
                   })
                 }
               />
-              <FormError error={errors.weekdays?.message} />
+              <FormError error={errors.weekdayMode?.message || errors.weekdays?.message} />
             </FormField>
 
             <div>
@@ -318,25 +306,7 @@ export function ScheduleForm({
               />
               <FormError error={errors.slotMinutes?.message} />
             </div>
-
-            <div>
-              <Controller
-                name="roomNumber"
-                control={control}
-                render={({ field }) => (
-                  <NumberField
-                    label="Room Number"
-                    {...field}
-                    min={1}
-                    placeholder="012"
-                  />
-                )}
-              />
-              <FormError error={errors.roomNumber?.message} />
-            </div>
           </div>
-
-          {/* Slot Minutes & Room */}
         </div>
 
         {/* Time Ranges */}
@@ -412,11 +382,13 @@ export function ScheduleForm({
 
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
           <Button disabled={busy} type="submit" className="save-button">
-            {busy
-              ? "Saving..."
-              : schedule
-                ? "Save Schedule"
-                : "Create Schedule"}
+            <ButtonLoader loading={busy}>
+              {busy
+                ? "Saving..."
+                : schedule
+                  ? "Save Schedule"
+                  : "Create Schedule"}
+            </ButtonLoader>
           </Button>
           <button
             type="button"

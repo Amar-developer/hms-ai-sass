@@ -39,7 +39,7 @@ export function Badge({
   className = "px-2 py-2  text-xs lg:text-sm flex justify-center items-center",
 }: {
   children: React.ReactNode;
-  tone?: "slate" | "red" | "green" | "blue" | "amber" | "purple";
+  tone?: "slate" | "red" | "green" | "blue" | "amber" | "purple" | "orange" |'skyblue' | string;
   className?: string;
 }) {
   const m: any = {
@@ -49,6 +49,8 @@ export function Badge({
     blue: "bg-info-soft text-info-fg",
     amber: "bg-warning-soft text-warning-fg",
     purple: "bg-purple-100 text-purple-700",
+    orange: "bg-orange-100 text-orange-700",
+    skyblue: "bg-cyan-100 text-cyan-700",
   };
   return (
     <span
@@ -329,6 +331,12 @@ export function DateInput({
     return { year: base.getFullYear(), month: base.getMonth() };
   });
 
+  // Today (for visual highlight only — never treated as selected value)
+  const today = new Date();
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth();
+  const todayDay = today.getDate();
+
   useEffect(() => {
     if (isControlled) setDisplayValue(isoToDisplayDate(isoValue));
   }, [isControlled, isoValue]);
@@ -506,6 +514,10 @@ export function DateInput({
                 selectedParts.year === viewMonth.year &&
                 selectedParts.month === viewMonth.month &&
                 selectedParts.day === day;
+              const isToday =
+                viewMonth.year === todayYear &&
+                viewMonth.month === todayMonth &&
+                day === todayDay;
               const isDisabled = Boolean(
                 (min && iso < min) || (max && iso > max),
               );
@@ -518,7 +530,9 @@ export function DateInput({
                   className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm transition ${
                     isSelected
                       ? "bg-slate-900 font-bold text-white"
-                      : "text-slate-700 hover:bg-slate-100"
+                      : isToday
+                        ? "bg-slate-100 font-medium text-slate-800 ring-1 ring-slate-300"
+                        : "text-slate-700 hover:bg-slate-100"
                   } disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent`}
                 >
                   {day}
@@ -902,26 +916,29 @@ export function SearchableSelect<T = string>({
               </div>
             )}
 
-            {!loading && filtered.slice(0, maxOptions).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => commit(option.value)}
-                className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
-                  option.value === String(value) ? "bg-slate-50 font-bold" : ""
-                }`}
-              >
-                <span className="block truncate">
-                  {capitalizeFirst(option.label)}
-                </span>
-
-                {option.sublabel && (
-                  <span className="block truncate text-xs text-slate-500">
-                    {option.sublabel}
+            {!loading &&
+              filtered.slice(0, maxOptions).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => commit(option.value)}
+                  className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
+                    option.value === String(value)
+                      ? "bg-slate-50 font-bold"
+                      : ""
+                  }`}
+                >
+                  <span className="block truncate">
+                    {capitalizeFirst(option.label)}
                   </span>
-                )}
-              </button>
-            ))}
+
+                  {option.sublabel && (
+                    <span className="block truncate text-xs text-slate-500">
+                      {option.sublabel}
+                    </span>
+                  )}
+                </button>
+              ))}
           </div>,
           document.body,
         )}

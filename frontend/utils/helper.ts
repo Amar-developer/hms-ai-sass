@@ -89,8 +89,14 @@ export function displayDateTime(value: any, fallback = "-") {
   })}`;
 }
 
+export function localDateKey(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 export function today() {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey();
 }
 
 export function splitRows(value: string) {

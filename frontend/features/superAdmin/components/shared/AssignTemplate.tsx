@@ -2,6 +2,7 @@
 
 import { Button, Card, Select } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function AssignTemplate({
   title,
@@ -57,7 +58,9 @@ export function AssignTemplate({
         </FormField>
         <div className="flex items-end gap-2">
           <Button disabled={busy}>
-            {busy ? "Assigning..." : "Assign to Tenant"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Assigning..." : "Assign to Tenant"}
+            </ButtonLoader>
           </Button>
           <button
             type="button"

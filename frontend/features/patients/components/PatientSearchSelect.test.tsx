@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { apiFetch } from "@/lib/api";
+import { LIVE_DATA_CHANGED_EVENT, apiFetch } from "@/lib/api";
 import { PatientSearchSelect } from "./PatientSearchSelect";
 
 vi.mock("@/lib/api", async (importOriginal) => ({
@@ -70,5 +70,46 @@ describe("PatientSearchSelect", () => {
       ) as HTMLInputElement)
         .value,
     ).toBe("patient-44");
+  });
+
+  it("invalidates cached search results after a patient is created", async () => {
+    apiFetchMock
+      .mockResolvedValueOnce([
+        {
+          id: "patient-old",
+          full_name: "Search Refresh Old",
+          patient_number: "MHB-PAT-00045",
+          status: "active",
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "patient-new",
+          full_name: "Search Refresh New",
+          patient_number: "MHB-PAT-00046",
+          status: "active",
+        },
+      ]);
+
+    render(
+      <PatientSearchSelect apiSession={apiSession} value="" onChange={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Select patient" }));
+    fireEvent.change(
+      screen.getByPlaceholderText("Search name, patient ID, or mobile"),
+      { target: { value: "Search Refresh" } },
+    );
+    await screen.findByRole("button", { name: /Search Refresh Old/i });
+
+    window.dispatchEvent(
+      new CustomEvent(LIVE_DATA_CHANGED_EVENT, {
+        detail: { tenantId: "tenant-one", path: "/patients" },
+      }),
+    );
+
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
+    expect(
+      await screen.findByRole("button", { name: /Search Refresh New/i }),
+    ).toBeTruthy();
   });
 });

@@ -88,6 +88,17 @@ const savedSettings = {
     invoice_paid_patient: true,
     payment_pending_patient: false,
   },
+  custom_templates: [],
+  field_catalog: [
+    {
+      trigger_key: "appointment_booked_patient",
+      fields: [
+        { key: "recipient_name", label: "Recipient name" },
+        { key: "appointment_date", label: "Appointment date" },
+        { key: "appointment_time", label: "Appointment time" },
+      ],
+    },
+  ],
 };
 
 describe("WhatsApp integration settings design", () => {
@@ -171,30 +182,116 @@ describe("WhatsApp integration settings design", () => {
     expect(screen.getByText("4%")).toBeTruthy();
   });
 
-  it("shows four primary templates first and expands the remaining templates", () => {
-    render(<WhatsAppIntegrationSettings />);
+  it("manually creates and removes a custom notification template", async () => {
+    apiFetchMock.mockResolvedValueOnce(savedSettings);
+    render(
+      <WhatsAppIntegrationSettings
+        apiSession={{ tenantId: "tenant-1", user: { id: "admin-1" } }}
+      />,
+    );
 
-    expect(screen.getByText("Patient appointment confirmation")).toBeTruthy();
+    expect(
+      await screen.findByText("Patient appointment confirmation"),
+    ).toBeTruthy();
     expect(screen.getByText("Doctor appointment alert")).toBeTruthy();
     expect(screen.getByText("Paid invoice receipt")).toBeTruthy();
     expect(screen.getByText("Pending payment update")).toBeTruthy();
     expect(screen.queryByText("Patient appointment cancellation")).toBeNull();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Show 7 more templates" }),
+      screen.getByRole("switch", { name: "Enable WhatsApp integration" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add Notification Template" }),
     );
 
-    expect(screen.getByText("Patient appointment cancellation")).toBeTruthy();
-    expect(
-      screen
-        .getByRole("button", { name: "Show fewer templates" })
-        .getAttribute("aria-expanded"),
-    ).toBe("true");
+    const dialog = screen.getByRole("dialog", {
+      name: "Add Notification Template",
+    });
+    fireEvent.change(
+      within(dialog).getByPlaceholderText("Enter notification template name"),
+      { target: { value: "Birthday greeting" } },
+    );
+    fireEvent.change(
+      within(dialog).getByPlaceholderText("Enter approved English identifier"),
+      { target: { value: "patient_birthday_en" } },
+    );
+    // First combobox is "Recipient audience"; second is the new "Trigger
+    // event" picker (defaults to appointment_booked_patient, which is fine
+    // here — the field catalog fixture only covers that trigger).
+    fireEvent.change(within(dialog).getAllByRole("combobox")[0], {
+      target: { value: "user" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Recipient name" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add Template" }));
+
+    expect(screen.getByText("Birthday greeting")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", {
+      name: "Remove Birthday greeting",
+    }));
+    expect(screen.queryByText("Birthday greeting")).toBeNull();
+  });
+
+  it("persists newly configured notification templates", async () => {
+    apiFetchMock.mockResolvedValueOnce({ ...savedSettings, enabled: true });
+    render(
+      <WhatsAppIntegrationSettings
+        apiSession={{ tenantId: "tenant-1", user: { id: "admin-1" } }}
+      />,
+    );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Show fewer templates" }),
+      await screen.findByRole("button", { name: "Add Notification Template" }),
     );
-    expect(screen.queryByText("Patient appointment cancellation")).toBeNull();
+    const dialog = screen.getByRole("dialog", {
+      name: "Add Notification Template",
+    });
+    fireEvent.change(
+      within(dialog).getByPlaceholderText("Enter notification template name"),
+      { target: { value: "Birthday greeting" } },
+    );
+    fireEvent.change(
+      within(dialog).getByPlaceholderText("Enter approved English identifier"),
+      { target: { value: "patient_birthday_en" } },
+    );
+    // First combobox is "Recipient audience"; second is the new "Trigger
+    // event" picker (defaults to appointment_booked_patient, which is fine
+    // here — the field catalog fixture only covers that trigger).
+    fireEvent.change(within(dialog).getAllByRole("combobox")[0], {
+      target: { value: "user" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Recipient name" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add Template" }));
+
+    apiFetchMock.mockResolvedValueOnce({
+      ...savedSettings,
+      enabled: true,
+      custom_templates: [
+        {
+          id: "custom_birthday_greeting_test",
+          name: "Birthday greeting",
+          description: "",
+          audience: "user",
+          enabled: true,
+          trigger_key: "appointment_booked_patient",
+          parameters: ["recipient_name"],
+          identifiers: { en: "patient_birthday_en" },
+        },
+      ],
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save WhatsApp Settings" }),
+    );
+
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
+    const [, , request] = apiFetchMock.mock.calls[1];
+    expect(JSON.parse(String(request?.body)).custom_templates).toEqual([
+      expect.objectContaining({
+        name: "Birthday greeting",
+        audience: "user",
+        identifiers: { en: "patient_birthday_en" },
+      }),
+    ]);
   });
 
   it("keeps reminder schedules optional and disabled until the reminder flow is enabled", () => {
@@ -203,7 +300,7 @@ describe("WhatsApp integration settings design", () => {
       screen.getByRole("switch", { name: "Enable WhatsApp integration" }),
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Show 7 more templates" }),
+      screen.getByRole("button", { name: "Show 7 more automatic templates" }),
     );
 
     const reminder = screen.getByRole("switch", {

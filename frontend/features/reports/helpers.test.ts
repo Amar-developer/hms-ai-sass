@@ -1,10 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { aggregateInvoiceMetrics, toInputDate } from "./helpers";
+import {
+  aggregateInvoiceMetrics,
+  currentRange,
+  percent,
+  toInputDate,
+} from "./helpers";
 
 describe("report cost accounting", () => {
   it("formats report boundaries from the local calendar date", () => {
     expect(toInputDate(new Date(2026, 6, 1, 0, 15))).toBe("2026-07-01");
+  });
+
+  it("builds calendar quarter, half-year, and year ranges", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 27, 12));
+
+    expect(currentRange("quarterly")).toEqual(["2026-07-01", "2026-09-30"]);
+    expect(currentRange("half_yearly")).toEqual(["2026-07-01", "2026-12-31"]);
+    expect(currentRange("yearly")).toEqual(["2026-01-01", "2026-12-31"]);
+
+    vi.useRealTimers();
   });
 
   it("keeps consultation doctor fee separate from other settlements", () => {
@@ -45,6 +61,55 @@ describe("report cost accounting", () => {
         totals.doctorFee -
         totals.settlement,
     ).toBe(1000);
+  });
+
+  it("keeps doctor cost on a fully covered membership consultation", () => {
+    const totals = aggregateInvoiceMetrics([
+      {
+        appointment_id: "appointment-free",
+        subtotal_amount: 1000,
+        total_amount: 0,
+        paid_amount: 0,
+        balance_amount: 0,
+        discount_amount: 1000,
+        membership_discount_amount: 1000,
+        doctor_share_amount: 600,
+      },
+    ]);
+
+    expect(totals.grossRevenue).toBe(1000);
+    expect(totals.paidRevenue).toBe(0);
+    expect(totals.membershipDiscount).toBe(1000);
+    expect(totals.doctorFee).toBe(600);
+    expect(
+      totals.paidRevenue -
+        totals.paidTax -
+        totals.doctorFee -
+        totals.settlement,
+    ).toBe(-600);
+    expect(percent(-600, 0, totals.grossRevenue)).toBe("-60%");
+  });
+
+  it("uses delivered value for a free lab loss percentage", () => {
+    const totals = aggregateInvoiceMetrics(
+      [
+        {
+          lab_order_id: "lab-free",
+          subtotal_amount: 500,
+          total_amount: 0,
+          paid_amount: 0,
+          balance_amount: 0,
+          discount_amount: 500,
+          membership_discount_amount: 500,
+        },
+      ],
+      new Set(),
+      new Set(),
+      () => 200,
+    );
+
+    expect(totals.settlement).toBe(200);
+    expect(percent(-200, 0, totals.grossRevenue)).toBe("-40%");
   });
 
   it("aggregates approved and offer discounts without MRP markdown", () => {

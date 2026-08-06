@@ -53,6 +53,11 @@ class Appointment(SQLModel, table=True):
     status: AppointmentStatus = Field(default=AppointmentStatus.SCHEDULED, index=True)
     appointment_date: date = Field(index=True)
     appointment_time: time | None = None
+    acquisition_source: str = Field(default="direct", index=True, max_length=40)
+    referrer_patient_id: str | None = Field(
+        default=None, index=True, foreign_key="patient.id"
+    )
+    referrer_name: str | None = Field(default=None, max_length=180)
     reason: str | None = Field(default=None, max_length=500)
     visit_purpose: str | None = Field(default=None, max_length=120, index=True)
     source_appointment_id: str | None = Field(default=None, index=True)

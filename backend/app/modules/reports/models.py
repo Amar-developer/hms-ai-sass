@@ -11,6 +11,7 @@ from app.modules.tenants.models import new_id, now_utc
 class ReportJobStatus(str, Enum):
     QUEUED = "queued"
     RUNNING = "running"
+    DELIVERING = "delivering"
     SENT = "sent"
     FAILED = "failed"
 
@@ -27,6 +28,10 @@ class ReportJob(SQLModel, table=True):
     cc_json: str = Field(default="[]")
     filters_json: str = Field(default="{}")
     attachment_filename: str | None = Field(default=None, max_length=220)
+    artifact_file_id: str | None = Field(
+        default=None, index=True, foreign_key="filedocument.id"
+    )
+    artifact_file_ids_json: str = Field(default="[]")
     provider_message_id: str | None = Field(default=None, max_length=160)
     failure_reason: str | None = Field(default=None, max_length=1000)
     queued_by_user_id: str | None = Field(default=None, index=True)

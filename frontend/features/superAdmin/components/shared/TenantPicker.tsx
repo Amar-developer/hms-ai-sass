@@ -1,6 +1,6 @@
 "use client";
 
-import { SearchableSelect, Select } from "@/app/components/common/ui";
+import { SearchableSelect } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 
 export function TenantPicker({ tenants, selectedId, setSelectedId }: any) {

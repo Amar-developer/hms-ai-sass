@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from pydantic import BaseModel as PydanticBaseModel
@@ -68,6 +68,23 @@ class InvoiceCreateFromConsultation(BaseModel):
     created_by_user_id: UserId | None = None
 
 
+class PendingConsultationInvoiceRead(BaseModel):
+    """Signed consultation that does not yet have its consultation-fee invoice."""
+
+    consultation_id: ConsultationId
+    appointment_id: AppointmentId
+    branch_id: BranchId
+    patient_id: str
+    patient_name: str
+    practitioner_id: PractitionerId | None = None
+    practitioner_name: str | None = None
+    token_number: str | None = None
+    appointment_date: date
+    appointment_time: time | None = None
+    consultation_signed_at: datetime | None = None
+    consultation_created_at: datetime
+
+
 class InvoiceCreateFromLabOrder(BaseModel):
     lab_order_id: LabOrderId
     discount_offer_id: str | None = None
@@ -120,6 +137,8 @@ class InvoiceRead(BaseModel):
     tenant_id: str
     branch_id: str
     patient_id: str
+    patient_name: str | None = None
+    patient_number: str | None = None
     appointment_id: str | None
     appointment_type: AppointmentType | None = None
     consultation_id: str | None
@@ -177,6 +196,26 @@ class InvoiceMembershipBenefitRead(BaseModel):
     reason: str | None = None
 
 
+class InvoiceOfferBenefitRead(BaseModel):
+    is_applied: bool = False
+    can_apply: bool = False
+    can_remove: bool = False
+    eligible_count: int = 0
+    offer_id: str | None = None
+    offer_name: str | None = None
+    offer_code: str | None = None
+    discount_type: DiscountType | None = None
+    discount_value: Decimal = Decimal("0")
+    discount_amount: Decimal = Decimal("0")
+    payable_amount: Decimal = Decimal("0")
+    reason: str | None = None
+
+
+class InvoiceOfferApply(BaseModel):
+    discount_offer_id: str | None = None
+    code: str | None = Field(default=None, max_length=60)
+
+
 class InvoiceDetailRead(BaseModel):
     status: InvoiceStatus
     invoice: InvoiceRead
@@ -186,6 +225,7 @@ class InvoiceDetailRead(BaseModel):
     ledger_entries: list["BillingLedgerEntryRead"] = []
     adjustment_requests: list["BillingAdjustmentRequestRead"] = []
     membership_benefit: InvoiceMembershipBenefitRead | None = None
+    offer_benefit: InvoiceOfferBenefitRead | None = None
 
 
 class PaymentCreate(BaseModel):

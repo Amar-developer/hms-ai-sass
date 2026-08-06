@@ -78,6 +78,11 @@ from app.modules.practitioners.models import (
     PractitionerSchedule,
     PractitionerType,
 )
+from app.modules.practitioners.schedule_days import (
+    ScheduleMode,
+    dump_weekdays,
+    resolve_weekdays,
+)
 from app.modules.queue.models import QueueEntry
 from app.modules.queue.service import create_queue_entry_for_appointment
 from app.modules.settings.models import SettingKey, SettingScope
@@ -693,29 +698,30 @@ def ensure_demo_practitioner(
                     department_id=department_id,
                 )
             )
-    for weekday in range(6):
-        existing_schedule = _first_or_none(
-            session,
-            select(PractitionerSchedule).where(
-                PractitionerSchedule.tenant_id == tenant.id,
-                PractitionerSchedule.practitioner_id == DEMO_DOCTOR_ID,
-                PractitionerSchedule.branch_id == branch.id,
-                PractitionerSchedule.weekday == weekday,
-            ),
-        )
-        if not existing_schedule:
-            session.add(
-                PractitionerSchedule(
-                    tenant_id=tenant.id,
-                    practitioner_id=DEMO_DOCTOR_ID,
-                    branch_id=branch.id,
-                    weekday=weekday,
-                    start_time=time(9, 0),
-                    end_time=time(13, 0),
-                    slot_minutes=15,
-                    room_name="Consultation Room 1",
-                )
+    existing_schedule = _first_or_none(
+        session,
+        select(PractitionerSchedule).where(
+            PractitionerSchedule.tenant_id == tenant.id,
+            PractitionerSchedule.practitioner_id == DEMO_DOCTOR_ID,
+            PractitionerSchedule.branch_id == branch.id,
+        ),
+    )
+    if not existing_schedule:
+        session.add(
+            PractitionerSchedule(
+                tenant_id=tenant.id,
+                practitioner_id=DEMO_DOCTOR_ID,
+                branch_id=branch.id,
+                mode=ScheduleMode.MON_SATURDAY.value,
+                weekdays_json=dump_weekdays(
+                    resolve_weekdays(ScheduleMode.MON_SATURDAY, None)
+                ),
+                start_time=time(9, 0),
+                end_time=time(13, 0),
+                slot_minutes=15,
             )
+        )
+    for weekday in range(6):
         existing_room = _first_or_none(
             session,
             select(PractitionerRoomAssignment).where(

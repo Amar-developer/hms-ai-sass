@@ -1,3 +1,5 @@
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+
 export function DeleteConfirm({ plan, busy, deletePlan, onCancel }: any) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -11,7 +13,9 @@ export function DeleteConfirm({ plan, busy, deletePlan, onCancel }: any) {
         onClick={() => deletePlan(plan.id)}
         className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
       >
-        {busy === `delete-${plan.id}` ? "Deactivating..." : "Yes, Deactivate"}
+        <ButtonLoader loading={busy === `delete-${plan.id}`}>
+          {busy === `delete-${plan.id}` ? "Deactivating..." : "Yes, Deactivate"}
+        </ButtonLoader>
       </button>
       <button
         type="button"

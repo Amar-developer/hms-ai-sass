@@ -11,6 +11,7 @@ from app.core.access_control import (
     require_user_branch_access,
     scoped_branch_id,
 )
+from app.core.pagination import Page
 from app.modules.appointments.models import Appointment
 from app.modules.appointments.repositories import (
     AppointmentGridRepository,
@@ -23,36 +24,41 @@ from app.modules.identity.models import User
 def appointment_grid_row(row) -> AppointmentGridRead:
     (
         appointment,
-        tenant,
-        branch,
-        patient,
-        department,
-        practitioner,
-        queue_entry,
-        consultation,
+        tenant_id,
+        tenant_name,
+        branch_id,
+        branch_name,
+        patient_id,
+        patient_name,
+        patient_mobile,
+        department_id,
+        department_name,
+        practitioner_id,
+        practitioner_name,
+        token_number,
+        consultation_status,
     ) = row
     return AppointmentGridRead(
         id=appointment.id,
-        tenant_id=tenant.id,
-        tenant_name=tenant.name,
-        branch_id=branch.id,
-        branch_name=branch.name,
-        patient_id=patient.id,
-        patient_name=patient.full_name,
-        patient_mobile=patient.mobile,
-        department_id=department.id if department else appointment.department_id,
-        department_name=department.name if department else appointment.department_id,
-        practitioner_id=practitioner.id
-        if practitioner
-        else appointment.practitioner_id,
-        practitioner_name=practitioner.full_name
-        if practitioner
-        else appointment.practitioner_id,
-        token_number=queue_entry.token_number if queue_entry else None,
+        tenant_id=tenant_id,
+        tenant_name=tenant_name,
+        branch_id=branch_id,
+        branch_name=branch_name,
+        patient_id=patient_id,
+        patient_name=patient_name,
+        patient_mobile=patient_mobile,
+        department_id=department_id or appointment.department_id,
+        department_name=department_name or appointment.department_id,
+        practitioner_id=practitioner_id or appointment.practitioner_id,
+        practitioner_name=practitioner_name or appointment.practitioner_id,
+        token_number=token_number,
         appointment_type=appointment.appointment_type,
         visit_purpose=appointment.visit_purpose,
         reason=appointment.reason,
         source_appointment_id=appointment.source_appointment_id,
+        acquisition_source=appointment.acquisition_source,
+        referrer_patient_id=appointment.referrer_patient_id,
+        referrer_name=appointment.referrer_name,
         is_billable=appointment.is_billable,
         custom_fee_amount=appointment.custom_fee_amount,
         billing_note=appointment.billing_note,
@@ -62,7 +68,11 @@ def appointment_grid_row(row) -> AppointmentGridRead:
         appointment_date=appointment.appointment_date,
         appointment_time=appointment.appointment_time,
         status=appointment.status,
-        consultation_status=consultation.status.value if consultation else None,
+        consultation_status=(
+            consultation_status.value
+            if hasattr(consultation_status, "value")
+            else consultation_status
+        ),
         created_by_user_id=appointment.created_by_user_id,
         created_at=appointment.created_at,
         updated_at=appointment.updated_at,
@@ -142,6 +152,29 @@ class AppointmentQueryService:
             limit=limit,
         )
         return [appointment_grid_row(row) for row in rows]
+
+    def list_appointment_page(self, **kwargs) -> Page[AppointmentGridRead]:
+        items = self.list_appointments(**kwargs)
+        actor = kwargs["actor"]
+        branch_id = scoped_branch_id(actor, kwargs["branch_id"])
+        doctor_practitioner_id = current_doctor_practitioner_id(
+            self.session, kwargs["tenant_id"], actor
+        )
+        practitioner_id = doctor_practitioner_id or kwargs["practitioner_id"]
+        total = self.grid.count_for_tenant(
+            tenant_id=kwargs["tenant_id"],
+            branch_id=branch_id,
+            department_id=kwargs["department_id"],
+            practitioner_id=practitioner_id,
+            appointment_date=kwargs["appointment_date"],
+            q=kwargs["q"],
+        )
+        return Page(
+            items=items,
+            total=total,
+            limit=kwargs["limit"],
+            offset=kwargs["skip"],
+        )
 
     def get_appointment(
         self, *, tenant_id: str, appointment_id: str, actor: User

@@ -21,6 +21,8 @@ import {
 import { OnboardingReview } from "@/features/admin/components/OnboardingReview";
 import { PlanModulePreview } from "@/features/admin/components/PlanModulePreview";
 import { TemplateChecklist } from "@/features/admin/components/TemplateChecklist";
+import { FormField } from "@/app/components/FormElements";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 
 
@@ -302,25 +304,21 @@ export function CreateTenantForm({
         </div>
         <div className="min-h-[430px] px-5 py-5 lg:px-6">
         <div className={step === 0 ? "grid gap-4 md:grid-cols-3" : "hidden"}>
-          <Field label="Tenant Name">
+          <FormField label="Tenant Name" required>
             <Input
               name="name"
-              required
               placeholder="Clinic name"
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
-          </Field>
-          <Field label="Legal Name">
+          </FormField>
+          <FormField label="Legal Name">
             <Input
               name="legalName"
               placeholder="Registered legal name"
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
-          </Field>
-          <Field label="Tenant Type">
+          </FormField>
+          <FormField label="Tenant Type">
             <Select
               name="tenantType"
-              className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
             >
               {tenantTypes.map(([value, label]) => (
                 <option key={value} value={value}>
@@ -328,83 +326,76 @@ export function CreateTenantForm({
                 </option>
               ))}
             </Select>
-          </Field>
-          <Field label="Status">
+          </FormField>
+          <FormField label="Status">
             <Select
               name="status"
               defaultValue="trial"
-              className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
             >
               <option value="trial">Trial</option>
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
             </Select>
-          </Field>
-          <Field label="Tenant Logo">
+          </FormField>
+          <FormField label="Tenant Logo">
             <Input
               name="logoFile"
               type="file"
               accept="image/*"
-              className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm input-file"
+              className='rounded-lg px-2 py-2 lg:px-2 lg:py-1  text-xs lg:text-xs placeholder:text-xs'
             />
-          </Field>
-          <Field label="Email">
+          </FormField>
+          <FormField label="Email">
             <Input
               name="email"
               type="email"
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
-          </Field>
-          <Field label="Phone">
+          </FormField>
+          <FormField label="Phone">
             <Input
               name="phone"
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
-          </Field>
-          <Field label="Country">
+          </FormField>
+          <FormField label="Country">
             <Input
               name="country"
               defaultValue="IN"
               maxLength={2}
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
-          </Field>
-          <Field label="Timezone">
+          </FormField>
+          <FormField label="Timezone">
             <Input
               name="timezone"
               defaultValue="Asia/Kolkata"
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
-          </Field>
+          </FormField>
           <div className="md:col-span-3">
-            <Field label="Address">
+            <FormField label="Address">
               <Input
                 name="address"
-                className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
               />
-            </Field>
+            </FormField>
           </div>
           <div className="md:col-span-3">
-            <Field label="Description">
+            <FormField label="Description">
               <Input
                 name="description"
                 placeholder="Clinic, hospital, or group description"
-                className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
               />
-            </Field>
+            </FormField>
           </div>
         </div>
         <div className={step === 1 ? "grid gap-4" : "hidden"}>
           <div className="grid gap-4 md:grid-cols-3">
-            <Field label="Subscription Model">
-              <Select name="planId" required className='rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm'>
+            <FormField label="Subscription Model">
+              <Select name="planId" required >
                 {plans.map((plan: any) => (
                   <option key={plan.id} value={plan.id}>
                     {plan.name} - ₹{plan.price_inr_monthly}
                   </option>
                 ))}
               </Select>
-            </Field>
+            </FormField>
           </div>
           <div>
             <div className="flex items-center justify-between gap-3">
@@ -460,7 +451,6 @@ export function CreateTenantForm({
                         name={`branchName_${index}`}
                         defaultValue={index === 0 ? "Main Branch" : ""}
                         required
-                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="Branch Code">
@@ -469,35 +459,30 @@ export function CreateTenantForm({
                         defaultValue={index === 0 ? "MAIN" : ""}
                         placeholder={`BR${index + 1}`}
                         required
-                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="City">
                       <Input
                         name={`branchCity_${index}`}
                         placeholder="Chennai"
-                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="Area">
                       <Input
                         name={`branchArea_${index}`}
                         placeholder="Chrompet"
-                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="State">
                       <Input
                         name={`branchState_${index}`}
                         placeholder="Tamil Nadu"
-                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <div className="md:col-span-2">
                       <Field label="Branch Address">
                         <Input
                           name={`branchAddress_${index}`}
-                          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                         />
                       </Field>
                     </div>
@@ -546,7 +531,6 @@ export function CreateTenantForm({
               defaultValue="Tenant Admin"
               placeholder="Clinic Owner / Admin"
               required
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
           </Field>
           <Field label="Admin Email">
@@ -555,7 +539,6 @@ export function CreateTenantForm({
               type="email"
               placeholder="admin@clinic.local"
               required
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
           </Field>
           <Field label="Temporary Password">
@@ -565,21 +548,18 @@ export function CreateTenantForm({
               autoComplete="new-password"
               placeholder="Minimum 8 characters"
               required
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
           </Field>
           <Field label="Admin Mobile">
             <Input
               name="adminMobile"
               placeholder="Optional"
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
           </Field>
           <Field label="Must Change Password">
             <Select
               name="adminMustChangePassword"
               defaultValue="true"
-              className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
             >
               <option value="true">Yes</option>
               <option value="false">No</option>
@@ -630,7 +610,9 @@ export function CreateTenantForm({
             disabled={!canComplete}
             className="rounded-lg px-5 py-2.5 text-xs lg:text-sm"
           >
-            {busy ? "Onboarding..." : "Complete Onboarding"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Onboarding..." : "Complete Onboarding"}
+            </ButtonLoader>
           </Button>
         </div>
       </form>

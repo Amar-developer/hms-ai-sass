@@ -155,8 +155,21 @@ export function tenantRoleOptions(
   selectedKeys: string[],
 ) {
   const selectedSet = new Set(selectedKeys || []);
+  const withTenantAdmin = (roles || []).some(
+    (role: any) => role.key === "tenant_admin",
+  )
+    ? roles || []
+    : [
+        {
+          id: "tenant_admin_default",
+          key: "tenant_admin",
+          name: "Tenant Admin",
+          permission_keys: [],
+        },
+        ...(roles || []),
+      ];
   const byName = new Map<string, any>();
-  for (const role of roles || []) {
+  for (const role of withTenantAdmin) {
     const roleKey = String(role?.key || "").trim();
     if (!roleKey) continue;
     const roleName = String(role.name || roleKeyLabel(roleKey)).trim();

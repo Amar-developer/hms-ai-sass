@@ -187,6 +187,26 @@ def test_list_appointments_supports_patient_search_date_and_department_filters(
     assert department.json()[0]["patient_id"] == other_patient["id"]
 
 
+def test_appointment_page_reports_filtered_total(client: TestClient):
+    tenant = create_tenant(client)
+    branch = create_branch(client, tenant["id"])
+    first = create_patient(client, tenant["id"], "First Page Patient")
+    second = create_patient(client, tenant["id"], "Second Page Patient")
+    book(client, tenant["id"], branch["id"], first["id"])
+    book(client, tenant["id"], branch["id"], second["id"])
+
+    response = client.get(
+        "/api/v1/appointments/page?limit=1&offset=1",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 2
+    assert len(response.json()["items"]) == 1
+    assert response.json()["limit"] == 1
+    assert response.json()["offset"] == 1
+
+
 def _create_doctor_login(
     client: TestClient, tenant_id: str, branch_id: str, name: str, email: str
 ) -> tuple[dict, dict, dict]:
@@ -234,7 +254,8 @@ def _create_doctor_login(
         json={
             "branch_id": branch_id,
             "department_id": "ent",
-            "weekday": date.today().weekday(),
+            "mode": "custom",
+            "weekdays": [date.today().weekday()],
             "start_time": "09:00:00",
             "end_time": "17:00:00",
             "slot_minutes": 15,
@@ -915,3 +936,54 @@ def test_queue_display_supports_tamil_token_calling_text(client: TestClient):
     assert display.status_code == 200
     assert display.json()[0]["token_number"] == "N-001"
     assert "maruththuva" in display.json()[0]["call_message"]
+
+
+def test_appointment_grid_projects_only_display_fields():
+    from app.modules.appointments.repositories import AppointmentGridRepository
+
+    sql = str(AppointmentGridRepository(object())._statement())
+
+    assert "patient.full_name" in sql
+    assert "queueentry.token_number" in sql
+    assert "patient.whatsapp_consent_status" not in sql
+    assert "consultation.clinical_notes" not in sql
+
+
+def test_appointment_grid_projection_preserves_response_fields():
+    from datetime import date
+
+    from app.modules.appointments.models import Appointment
+    from app.modules.appointments.services.query_service import appointment_grid_row
+
+    appointment = Appointment(
+        id="appointment_one",
+        tenant_id="tenant_one",
+        branch_id="branch_one",
+        patient_id="patient_one",
+        department_id="general",
+        practitioner_id="doctor_one",
+        appointment_date=date(2026, 8, 2),
+    )
+    row = appointment_grid_row(
+        (
+            appointment,
+            "tenant_one",
+            "Clinic",
+            "branch_one",
+            "Main Branch",
+            "patient_one",
+            "Patient One",
+            "9000000001",
+            "general",
+            "General Medicine",
+            "doctor_one",
+            "Dr. One",
+            "N-001",
+            "signed",
+        )
+    )
+
+    assert row.patient_name == "Patient One"
+    assert row.practitioner_name == "Dr. One"
+    assert row.token_number == "N-001"
+    assert row.consultation_status == "signed"

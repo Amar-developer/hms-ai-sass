@@ -4,6 +4,7 @@ import { benefitLabel,sameName } from "../helpers";
 import { useEffect, useState } from "react";
 import { FormField } from "@/app/components/FormElements";
 import { Badge,Input } from "@/app/components/common/ui";
+import { Skeleton } from "@/app/components/common/loader/Skeleton";
 
 export function BenefitPicker({
   label,
@@ -20,6 +21,7 @@ export function BenefitPicker({
 }: any) {
   const [query, setQuery] = useState("");
   const [remote, setRemote] = useState<any[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
   const normalized = query.trim().toLowerCase();
   const selectedSet = new Set(selected);
   const filtered = (rows || [])
@@ -51,11 +53,13 @@ export function BenefitPicker({
     const q = query.trim();
     if (!apiSession || !searchPath || q.length < 2) {
       setRemote([]);
+      setRemoteLoading(false);
       return;
     }
     let alive = true;
     const timer = setTimeout(() => {
       const sep = searchPath.includes("?") ? "&" : "?";
+      setRemoteLoading(true);
       apiFetch(
         `${searchPath}${sep}search=${encodeURIComponent(q)}&page_size=10`,
         apiSession,
@@ -65,6 +69,9 @@ export function BenefitPicker({
         })
         .catch(() => {
           if (alive) setRemote([]);
+        })
+        .finally(() => {
+          if (alive) setRemoteLoading(false);
         });
     }, 250);
     return () => {
@@ -149,11 +156,13 @@ export function BenefitPicker({
       {query && (
         <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
           <div className="max-h-56 overflow-auto">
-            {filtered.length === 0 && remoteSuggestions.length === 0 && (
-              <p className="px-3 py-2 text-sm text-slate-500">
-                No matching {kind} found.
-              </p>
-            )}
+            {!remoteLoading &&
+              filtered.length === 0 &&
+              remoteSuggestions.length === 0 && (
+                <p className="px-3 py-2 text-sm text-slate-500">
+                  No matching {kind} found.
+                </p>
+              )}
             {filtered.map((row: any) => (
               <button
                 key={row.id}
@@ -174,7 +183,13 @@ export function BenefitPicker({
                 </span>
               </button>
             ))}
-            {remoteSuggestions.map((item: any, index: number) => (
+            {remoteLoading && (
+              <div className="space-y-2 px-3 py-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+              </div>
+            )}
+            {!remoteLoading && remoteSuggestions.map((item: any, index: number) => (
               <button
                 key={`remote-${item.id || item.slug || index}`}
                 type="button"

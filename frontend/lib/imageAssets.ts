@@ -46,6 +46,11 @@ export function invoiceLogoCandidates(
 function imageLoads(url: string) {
   return new Promise<boolean>((resolve) => {
     const image = new Image();
+    // html2canvas (invoice PDF export) loads images in crossOrigin="anonymous"
+    // mode to rasterize them into canvas. Checking the same way here means a
+    // URL that merely *displays* (no-cors) but can't be read cross-origin
+    // doesn't get reported as usable, only to fail later during export.
+    image.crossOrigin = "anonymous";
     image.onload = () => resolve(true);
     image.onerror = () => resolve(false);
     image.src = url;

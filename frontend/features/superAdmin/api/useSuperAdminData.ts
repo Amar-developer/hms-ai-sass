@@ -1,10 +1,29 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { tenantSelectOptions } from "../helpers";
+import {
+  getTenantBranches,
+  getTenantDepartments,
+} from "@/features/tenants/api/tenantReferenceQueries";
+
+function hasPermission(apiSession: any, permission: string) {
+  const keys = apiSession?.user?.permissions || [];
+  return Boolean(
+    apiSession?.user?.is_super_admin ||
+      keys.includes("*") ||
+      keys.includes(permission),
+  );
+}
+
+function hasAnyPermission(apiSession: any, permissions: string[]) {
+  return permissions.some((permission) => hasPermission(apiSession, permission));
+}
 
 export function useSuperAdminData(apiSession: any) {
+  const queryClient = useQueryClient();
   const [tenants, setTenants] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
@@ -20,19 +39,23 @@ export function useSuperAdminData(apiSession: any) {
   const [permissionCatalog, setPermissionCatalog] = useState<any[]>([]);
   const [moduleRegistry, setModuleRegistry] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState("");
-  const [busy, setBusy] = useState(false);
+  // Starts true: on mount there's a render before the load effect runs where
+  // the collections are still empty, and busy=false there would look
+  // identical to "finished, found nothing" to a not-found redirect guard.
+  const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
 
   const tenantAccessLoadSequence = useRef(0);
 
   async function loadPrimaryTemplates(primaryTenantId: string) {
     if (!apiSession || !primaryTenantId) return;
+    if (!hasPermission(apiSession, "platform.templates.manage")) return;
     try {
       const scoped = { ...apiSession, tenantId: primaryTenantId };
       const [roleRows, departmentRows, branchRows] = await Promise.all([
         apiFetch("/identity/roles", scoped),
-        apiFetch(`/tenants/${primaryTenantId}/departments`, scoped),
-        apiFetch(`/tenants/${primaryTenantId}/branches`, scoped),
+        getTenantDepartments(queryClient, scoped, primaryTenantId),
+        getTenantBranches(queryClient, scoped, primaryTenantId),
       ]);
       setPrimaryTemplates({
         roles: roleRows.filter((role: any) => role.key !== "super_admin"),
@@ -49,10 +72,23 @@ export function useSuperAdminData(apiSession: any) {
     setBusy(true);
     setMessage("");
     try {
+      const canLoadTenants = hasAnyPermission(apiSession, [
+        "platform.tenants.manage",
+        "platform.subscriptions.manage",
+        "platform.templates.manage",
+      ]);
+      const canLoadPlans = hasPermission(
+        apiSession,
+        "platform.subscriptions.manage",
+      );
       const [tenantRows, planRows, moduleRows] = await Promise.all([
-        apiFetch("/tenants", apiSession),
-        apiFetch("/subscription-plans", apiSession),
-        apiFetch("/modules", apiSession),
+        canLoadTenants ? apiFetch("/tenants", apiSession) : Promise.resolve([]),
+        canLoadPlans
+          ? apiFetch("/subscription-plans", apiSession)
+          : Promise.resolve([]),
+        canLoadPlans || hasPermission(apiSession, "platform.templates.manage")
+          ? apiFetch("/modules", apiSession)
+          : Promise.resolve([]),
       ]);
       const selectableRows = tenantSelectOptions(tenantRows);
       setTenants(tenantRows);
@@ -80,6 +116,21 @@ export function useSuperAdminData(apiSession: any) {
 
   async function loadTenantAccess(tenantId: string) {
     if (!apiSession || !tenantId) return;
+    if (
+      !hasAnyPermission(apiSession, [
+        "platform.tenants.manage",
+        "platform.templates.manage",
+        "platform.subscriptions.manage",
+      ])
+    ) {
+      setRoles([]);
+      setUsers([]);
+      setDepartments([]);
+      setTenantBranches([]);
+      setTenantSubscriptions([]);
+      setPermissionCatalog([]);
+      return;
+    }
     const requestSequence = ++tenantAccessLoadSequence.current;
     // Never display one tenant's grantable catalog while another tenant is
     // loading. Primary-tenant catalogs can contain platform-only permissions.
@@ -96,8 +147,8 @@ export function useSuperAdminData(apiSession: any) {
       ] = await Promise.all([
         apiFetch("/identity/roles", scoped),
         apiFetch("/identity/users", scoped),
-        apiFetch(`/tenants/${tenantId}/departments`, scoped),
-        apiFetch(`/tenants/${tenantId}/branches`, scoped),
+        getTenantDepartments(queryClient, scoped, tenantId),
+        getTenantBranches(queryClient, scoped, tenantId),
         apiFetch("/identity/permissions", scoped),
         apiFetch("/subscription-plans/tenant-subscriptions", scoped).catch(
           () => [],

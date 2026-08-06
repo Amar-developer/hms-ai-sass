@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session
 
@@ -6,6 +8,7 @@ from app.core.access_control import (
     enforce_entitlement,
     require_branch_in_tenant,
 )
+from app.core.pagination import Page
 from app.core.auth import user_permission_keys
 from app.core.uploads import UPLOADS_DIR, save_upload
 from app.modules.audit.service import diff_changes, record_audit_event
@@ -208,6 +211,36 @@ class PatientService:
             limit=limit,
         )
 
+    def search_patient_page(
+        self,
+        *,
+        tenant_id: str,
+        q: str | None,
+        branch_id: str | None,
+        active_only: bool,
+        status: PatientStatus | None,
+        gender: str | None,
+        from_date: date | None,
+        to_date: date | None,
+        offset: int,
+        limit: int,
+    ) -> Page[PatientSearchResult]:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        if branch_id:
+            require_branch_in_tenant(self.session, tenant_id, branch_id)
+        return PatientSearchService(self.session).search_page(
+            tenant_id=tenant_id,
+            q=q,
+            branch_id=branch_id,
+            active_only=active_only,
+            status=status,
+            gender=gender,
+            from_date=from_date,
+            to_date=to_date,
+            offset=offset,
+            limit=limit,
+        )
+
     def patient_references(
         self, *, tenant_id: str, patient_ids: list[str]
     ) -> list[PatientSearchResult]:
@@ -216,9 +249,19 @@ class PatientService:
             tenant_id=tenant_id, patient_ids=patient_ids
         )
 
-    def patient_count(self, *, tenant_id: str) -> int:
+    def patient_count(
+        self,
+        *,
+        tenant_id: str,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> int:
         enforce_entitlement(self.session, tenant_id, "patients")
-        return self.patients.count(tenant_id=tenant_id)
+        return self.patients.count(
+            tenant_id=tenant_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
 
     def get_patient(self, *, tenant_id: str, patient_id: str, actor: User) -> Patient:
         enforce_entitlement(self.session, tenant_id, "patients")

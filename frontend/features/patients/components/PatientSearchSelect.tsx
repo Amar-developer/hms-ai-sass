@@ -15,14 +15,16 @@ import {
   patientDisplayNumber,
 } from "@/features/patients/helpers";
 import { searchPatients } from "@/lib/hmsLogic";
+import type { PatientReference } from "@/lib/contracts";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 const MIN_QUERY_LENGTH = 2;
 const SEARCH_LIMIT = 20;
 const SEARCH_DEBOUNCE_MS = 300;
 const CACHE_TTL_MS = 30_000;
-const EMPTY_PATIENTS: any[] = [];
+const EMPTY_PATIENTS: PatientReference[] = [];
 
-type CachedSearch = { expiresAt: number; rows: any[] };
+type CachedSearch = { expiresAt: number; rows: PatientReference[] };
 const searchCache = new Map<string, CachedSearch>();
 
 function cacheKey(
@@ -42,7 +44,7 @@ function clearTenantPatientSearchCache(tenantId: string) {
   }
 }
 
-function patientOption(patient: any) {
+function patientOption(patient: PatientReference) {
   const number = patientDisplayNumber(patient);
   const mobile = patientDisplayMobile(patient);
   return {
@@ -52,8 +54,8 @@ function patientOption(patient: any) {
   };
 }
 
-function mergePatients(...groups: any[][]) {
-  const rows = new Map<string, any>();
+function mergePatients(...groups: PatientReference[][]) {
+  const rows = new Map<string, PatientReference>();
   groups.flat().forEach((patient) => {
     if (patient?.id) rows.set(String(patient.id), patient);
   });
@@ -63,18 +65,23 @@ function mergePatients(...groups: any[][]) {
 export async function fetchPatientReferences(
   apiSession: ApiSession,
   patientIds: Array<string | null | undefined>,
-) {
+): Promise<PatientReference[]> {
   const ids = [...new Set(patientIds.filter(Boolean).map(String))];
   const chunks: string[][] = [];
   for (let index = 0; index < ids.length; index += 100) {
     chunks.push(ids.slice(index, index + 100));
   }
-  const responses = await Promise.all(
-    chunks.map((chunk) => {
+  const responses = await mapWithConcurrency(
+    chunks,
+    (chunk) => {
       const params = new URLSearchParams();
       chunk.forEach((id) => params.append("ids", id));
-      return apiFetch(`/patients/references?${params}`, apiSession);
-    }),
+      return apiFetch<PatientReference[]>(
+        `/patients/references?${params}`,
+        apiSession,
+      );
+    },
+    4,
   );
   return mergePatients(
     ...responses.map((rows) => (Array.isArray(rows) ? rows : [])),
@@ -91,11 +98,12 @@ export function usePatientSearch({
   apiSession: ApiSession | null;
   query: string;
   selectedPatientId?: string;
-  initialPatients?: any[];
+  initialPatients?: PatientReference[];
   activeOnly?: boolean;
 }) {
-  const [results, setResults] = useState<any[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
+  const [results, setResults] = useState<PatientReference[]>([]);
+  const [selectedPatient, setSelectedPatient] =
+    useState<PatientReference | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -138,9 +146,11 @@ export function usePatientSearch({
     }
 
     const controller = new AbortController();
-    apiFetch(`/patients/${encodeURIComponent(selectedPatientId)}`, apiSession, {
-      signal: controller.signal,
-    })
+    apiFetch<PatientReference>(
+      `/patients/${encodeURIComponent(selectedPatientId)}`,
+      apiSession,
+      { signal: controller.signal },
+    )
       .then(setSelectedPatient)
       .catch((error) => {
         if (error?.name !== "AbortError") setSelectedPatient(null);
@@ -194,9 +204,11 @@ export function usePatientSearch({
           active_only: String(activeOnly),
           limit: String(SEARCH_LIMIT),
         });
-        const response = await apiFetch(`/patients?${params}`, apiSession, {
-          signal: controller.signal,
-        });
+        const response = await apiFetch<PatientReference[]>(
+          `/patients?${params}`,
+          apiSession,
+          { signal: controller.signal },
+        );
         const rows = Array.isArray(response) ? response : [];
         searchCache.set(key, {
           rows,
@@ -255,8 +267,8 @@ export function PatientSearchSelect({
   apiSession: ApiSession | null;
   value?: string;
   onChange: (patientId: string) => void;
-  onPatientSelect?: (patient: any | null) => void;
-  initialPatients?: any[];
+  onPatientSelect?: (patient: PatientReference | null) => void;
+  initialPatients?: PatientReference[];
   activeOnly?: boolean;
   name?: string;
   placeholder?: string;

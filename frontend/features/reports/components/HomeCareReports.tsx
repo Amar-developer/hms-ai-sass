@@ -1,8 +1,8 @@
 import React from "react";
 import CollapsibleReportSection from "./CollapsibleReportSection";
-import { DataTable } from "./DataTable";
 import { HomeCareReportsProps } from "../types";
 import { rowDate } from "../helpers";
+import { DataTable } from "@/app/components/common/DataTable";
 
 
 
@@ -12,7 +12,10 @@ const HomeCareReports = ({
   setOpenSections,
   money,
   onOpenInvoices,
+  loading,
 }: HomeCareReportsProps) => {
+  const moneyOrDash = (value: any) =>
+    Number(value || 0) === 0 ? "-" : money(value);
   const columns = [
     {
       key: "invoice",
@@ -49,68 +52,70 @@ const HomeCareReports = ({
     {
       key: "totalAmount",
       header: "Total",
-      render: (row: any) => money(row.totalAmount),
+      render: (row: any) => moneyOrDash(row.totalAmount),
       width:'90px'
     },
     {
       key: "paidAmount",
       header: "Paid",
-      render: (row: any) => money(row.paidAmount),
+      render: (row: any) => moneyOrDash(row.paidAmount),
       width:'90px'
     },
     {
       key: "balance",
-      header: "Balance",
-      render: (row: any) => money(row.balance),
+      header: "Amount Due",
+      render: (row: any) => moneyOrDash(row.balance),
       width:'90px'
     },
     {
       key: "approvedDiscount",
-      header: "Approved %",
-      render: (row: any) => money(row.approvedDiscount),
+      header: "Admin Discount",
+      render: (row: any) => moneyOrDash(row.approvedDiscount),
       width:'130px'
     },
     {
       key: "offerDiscount",
-      header: "Offer %",
-      render: (row: any) => money(row.offerDiscount),
+      header: "Offer Discount",
+      render: (row: any) => moneyOrDash(row.offerDiscount),
       width:'120px'
     },
     {
       key: "membershipBenefit",
-      header: "Membership",
-      render: (row: any) => money(row.membershipBenefit),
-      width:'120px'
-    },
-    {
-      key: "billingDiscount",
-      header: "Total %",
-      render: (row: any) => money(row.billingDiscount),
+      header: "Membership Benefit",
+      render: (row: any) => moneyOrDash(row.membershipBenefit),
       width:'120px'
     },
     {
       key: "paymentMode",
-      header: "M.O.P",
-      width:'90px'
+      header: "Payment Method",
+      width:'130px'
+    },
+    {
+      key: "paidTax",
+      header: "Paid GST",
+      render: (row: any) => moneyOrDash(row.paidTax),
+      width:'100px'
     },
     {
       key: "settlement",
       header: "Settlement",
-      render: (row: any) => money(row.settlement),
+      render: (row: any) => moneyOrDash(row.settlement),
       width:'120px'
     },
     {
       key: "grossProfit",
-      header: "Gross Profit",
+      header: "Realized Profit",
       render: (row: any) => (
-        <span className="font-bold">{money(row.grossProfit)}</span>
+        <span className="font-bold">{moneyOrDash(row.grossProfit)}</span>
       ),
       width:'140px'
     },
     {
       key: "grossProfitPercent",
-      header: "Gross Profit %",
-      width:'150px'
+      header: "Profit Margin",
+      width:'150px',
+      render: (row: any) =>
+        Number(row.grossProfit || 0) === 0 ? "-" : row.grossProfitPercent,
     },
   ];
 
@@ -127,7 +132,7 @@ const HomeCareReports = ({
         }))
       }
     >
-      <div className="mt-4 overflow-auto rounded-2xl border">
+      <div className="mt-4 overflow-auto scrollbar-hidden rounded-2xl border">
         <DataTable
           columns={columns}
           data={homeCareReportRows}
@@ -135,6 +140,7 @@ const HomeCareReports = ({
           paginate
           emptyMessage="No paid home care or home visit invoices match this filter."
           className="w-full min-w-[1280px] text-left text-sm"
+          loading={loading}
         />
       </div>
     </CollapsibleReportSection>

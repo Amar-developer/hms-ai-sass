@@ -12,6 +12,8 @@ export const bookingSchema = z
     patient_id: z.string().min(1, "Please select a patient"),
     booking_type: z.enum(["home_care", "home_visit"]),
     recurrence: z.string().min(1, "Recurrence is required"),
+    visit_day_mode: z.enum(["all", "alternate", "weekdays"]),
+    visit_weekdays: z.array(z.number()),
     start_date: z.string().min(1, "Start date is required"),
     end_date: z.string().min(1, "End date is required"),
     status: z.string().min(1, "Status is required"),
@@ -21,6 +23,13 @@ export const bookingSchema = z
     lineItems: z.array(lineItemSchema),
   })
   .superRefine((data, ctx) => {
+    if (data.visit_day_mode === "weekdays" && data.visit_weekdays.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["visit_weekdays"],
+        message: "Select at least one visit day",
+      });
+    }
     data.lineItems.forEach((line, index) => {
       if (data.booking_type === "home_care") {
         if (line.service_id?.trim()) {

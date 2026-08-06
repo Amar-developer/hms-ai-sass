@@ -8,6 +8,7 @@ interface SidebarProps {
   navigatePage: (page: any) => void;
 
   isSuperAdmin: boolean;
+  canAccessPlatformWorkspace: boolean;
 
   reportsOpen: boolean;
   setReportsOpen: any;
@@ -124,6 +125,9 @@ export function Sidebar(props: SidebarProps) {
       <nav className="mt-4 space-y-2 ">
         {props.visibleNav.map(([id, label, Icon]: any) => {
           const isActive = props.activePage === id;
+          if (id === "superadmin" && !props.isSuperAdmin) {
+            return null;
+          }
           if (id === "superadmin" && props.isSuperAdmin) {
             return (
               <div key={id}>

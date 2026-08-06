@@ -1,7 +1,8 @@
-import smtplib
-from email.message import EmailMessage
-
-from app.core.config import get_settings
+from app.infrastructure.integrations.factories import get_email_sender
+from app.infrastructure.integrations.ports.email import (
+    EmailAttachment,
+    EmailMessageRequest,
+)
 
 
 def send_report_email(
@@ -14,32 +15,22 @@ def send_report_email(
     content: bytes | None = None,
     attachments: list[tuple[str, bytes]] | None = None,
 ) -> str:
-    settings = get_settings()
-    if not settings.smtp_host:
-        raise RuntimeError(
-            "SMTP is not configured. Set MEDIZINHUB_SMTP_HOST and SMTP credentials."
-        )
-    message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
-    message["To"] = ", ".join(recipients)
-    if cc:
-        message["Cc"] = ", ".join(cc)
-    message.set_content(body)
     attachment_rows = list(attachments or [])
     if filename and content is not None:
         attachment_rows.append((filename, content))
-    for attachment_filename, attachment_content in attachment_rows:
-        message.add_attachment(
-            attachment_content,
-            maintype="application",
-            subtype="vnd.ms-excel",
-            filename=attachment_filename,
+    return get_email_sender().send_message(
+        EmailMessageRequest(
+            recipients=recipients,
+            cc=cc,
+            subject=subject,
+            body=body,
+            attachments=[
+                EmailAttachment(
+                    filename=attachment_filename,
+                    content=attachment_content,
+                    content_type="application/vnd.ms-excel",
+                )
+                for attachment_filename, attachment_content in attachment_rows
+            ],
         )
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
-        if settings.smtp_use_tls:
-            smtp.starttls()
-        if settings.smtp_username:
-            smtp.login(settings.smtp_username, settings.smtp_password or "")
-        smtp.send_message(message)
-    return message["Message-ID"] or ""
+    )

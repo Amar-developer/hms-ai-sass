@@ -1,4 +1,10 @@
-import { test, expect, openModule, selectBranch } from "../support/fixtures";
+import {
+  test,
+  expect,
+  openModule,
+  selectBranch,
+  selectDepartment,
+} from "../support/fixtures";
 import { authFile } from "../support/paths";
 import { expectApi } from "../support/api";
 
@@ -20,9 +26,20 @@ test.describe("queue and consultation workflow", () => {
     );
     const target = queueRows.find((row) => row.id === seed.queueEntryId);
     expect(target).toBeTruthy();
+    const departments = await expectApi<any[]>(
+      await adminApi.get(`/tenants/${seed.tenantId}/departments`, {
+        headers: adminHeaders,
+      }),
+      200,
+    );
+    const targetDepartment = departments.find(
+      (row) => row.id === seed.departmentId,
+    );
+    expect(targetDepartment).toBeTruthy();
 
     await page.goto("/");
     await selectBranch(page, seed.branchName);
+    await selectDepartment(page, targetDepartment.name);
     await openModule(page, "Token Queue");
     const targetRow = () =>
       page
@@ -30,8 +47,14 @@ test.describe("queue and consultation workflow", () => {
         .filter({ hasText: String(target.token_number || target.token) })
         .filter({ hasText: seed.patientName })
         .first();
+    const clickTargetAction = async (name: string) => {
+      const row = targetRow();
+      await expect(row).toBeVisible();
+      await row.getByRole("button", { name: "Open actions" }).click();
+      await page.getByRole("menuitem", { name, exact: true }).click();
+    };
 
-    await targetRow().getByRole("button", { name: "Call" }).click();
+    await clickTargetAction("Call");
     await expect
       .poll(async () => {
         const rows = await expectApi<any[]>(
@@ -45,7 +68,7 @@ test.describe("queue and consultation workflow", () => {
       })
       .toBe("called");
 
-    await targetRow().getByRole("button", { name: "Skip" }).click();
+    await clickTargetAction("Skip");
     await expect
       .poll(async () => {
         const rows = await expectApi<any[]>(
@@ -59,8 +82,8 @@ test.describe("queue and consultation workflow", () => {
       })
       .toBe("patient_not_available");
 
-    await targetRow().getByRole("button", { name: "Requeue" }).click();
-    await targetRow().getByRole("button", { name: "Details" }).click();
+    await clickTargetAction("Requeue");
+    await clickTargetAction("Details");
     await expect(
       page.getByRole("heading", { name: "Consultation Workspace" }),
     ).toBeVisible();

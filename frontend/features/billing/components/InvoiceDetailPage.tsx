@@ -1,16 +1,36 @@
 import { displayDateTime, money } from "@/utils/helper";
-import { claimedDetail, formatPercentage, invoiceDiscountParts, invoiceHasAppliedMembershipBenefit, invoiceItemPriceBreakdown, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, isMembershipPlanInvoice, itemTypeLabel, numberValue, percentLabel } from "../helpers";
+import {
+  claimedDetail,
+  formatPercentage,
+  invoiceDiscountParts,
+  invoiceHasAppliedMembershipBenefit,
+  invoiceItemPriceBreakdown,
+  invoiceLinkedRecord,
+  invoiceMembershipLabel,
+  invoiceSource,
+  invoiceTaxAdjustedDiscount,
+  isMembershipPlanInvoice,
+  itemTypeLabel,
+  numberValue,
+  percentLabel,
+} from "../helpers";
 import { useEffect, useState } from "react";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Input, SearchableSelect } from "@/app/components/common/ui";
 import { BillLine } from "./BillLine";
 import { InvoiceMeta } from "./InvoiceMeta";
-import { Badge,ActionButton,ActionGroup,Card } from "@/app/components/common/ui";
+import {
+  Badge,
+  ActionButton,
+  ActionGroup,
+  Card,
+} from "@/app/components/common/ui";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function InvoiceDetailPage({
   detail,
@@ -28,7 +48,10 @@ export function InvoiceDetailPage({
   collectPayment,
   collectSplitPayment,
   sendInvoice,
+  regenerateInvoice,
   applyMembershipBenefit,
+  applyOffer,
+  removeOffer,
   openReceipt,
   issueCreditNote,
   cancelInvoice,
@@ -53,8 +76,8 @@ export function InvoiceDetailPage({
   const hasPermission = (...keys: string[]) =>
     Boolean(
       currentUser?.is_super_admin ||
-        userPermissions.includes("*") ||
-        keys.some((key) => userPermissions.includes(key)),
+      userPermissions.includes("*") ||
+      keys.some((key) => userPermissions.includes(key)),
     );
   const currentUserRoles = Array.isArray(currentUser?.roles)
     ? currentUser.roles
@@ -65,27 +88,21 @@ export function InvoiceDetailPage({
     currentUserRoles.includes("tenant_admin") ||
     currentUserRoles.includes("super_admin");
   const canEditInvoices = hasPermission("billing.manage", "invoices.edit");
-  const canRequestDiscountPermission = hasPermission(
-    "billing.discounts.request",
-  ) || isTenantBillingAdmin;
-  const canRequestRefundPermission = hasPermission(
-    "billing.refunds.request",
-  ) || isTenantBillingAdmin;
-  const canRequestCancelPermission = hasPermission(
-    "invoices.cancel_request",
-  ) || isTenantBillingAdmin;
-  const canRecordPayments = hasPermission(
-    "payments.manage",
-    "payments.create",
-  );
+  const canRequestDiscountPermission =
+    hasPermission("billing.discounts.request") || isTenantBillingAdmin;
+  const canRequestRefundPermission =
+    hasPermission("billing.refunds.request") || isTenantBillingAdmin;
+  const canRequestCancelPermission =
+    hasPermission("invoices.cancel_request") || isTenantBillingAdmin;
+  const canRecordPayments = hasPermission("payments.manage", "payments.create");
   const source = invoiceSource(invoice);
   const isMembershipInvoice = isMembershipPlanInvoice(invoice);
   const sourceUsesVendor = Boolean(
     invoice.consultation_id ||
-      invoice.appointment_id ||
-      invoice.home_care_booking_id ||
-      invoice.lab_order_id ||
-      invoice.pharmacy_issue_id,
+    invoice.appointment_id ||
+    invoice.home_care_booking_id ||
+    invoice.lab_order_id ||
+    invoice.pharmacy_issue_id,
   );
   const showItemVendor =
     !isMembershipInvoice &&
@@ -103,9 +120,9 @@ export function InvoiceDetailPage({
     );
   const isConsultationInvoice = Boolean(
     (invoice.consultation_id || invoice.appointment_id) &&
-      !invoice.lab_order_id &&
-      !invoice.pharmacy_issue_id &&
-      !invoice.home_care_booking_id,
+    !invoice.lab_order_id &&
+    !invoice.pharmacy_issue_id &&
+    !invoice.home_care_booking_id,
   );
   const vendorLabel = isConsultationInvoice ? "Doctor" : "Vendor";
   const vendorPriceLabel = isConsultationInvoice
@@ -154,28 +171,48 @@ export function InvoiceDetailPage({
                 )
           }`
         : membershipBenefit?.reason || "No membership benefit applied";
+  const offerBenefit = detail.offer_benefit;
+  const offerBusy = busy === `offer-${invoice.id}`;
+  const offerNote =
+    discountParts.offerDiscount > 0
+      ? claimedDetail(discountParts.offerDiscount, invoice.subtotal_amount)
+      : offerBenefit?.can_apply
+        ? `${offerBenefit.offer_name} available · saves ${money(
+            offerBenefit.discount_amount,
+          )}${
+            offerBenefit.eligible_count > 1
+              ? ` (best of ${offerBenefit.eligible_count} eligible offers)`
+              : ""
+          }`
+        : offerBenefit?.reason || "No Offer & Discount Applied";
   const taxableAmount = numberValue(invoice.taxable_amount);
   const taxAmount = numberValue(invoice.tax_amount);
   const balanceDue = numberValue(invoice.balance_amount);
   const invoiceDelivery = detail.invoice_delivery || {};
+  const invoiceDeliveries = Array.isArray(detail.invoice_deliveries)
+    ? detail.invoice_deliveries
+    : [];
+  const invoiceDocument = detail.invoice_document || {};
   const invoiceDeliveryStatus = String(
     invoiceDelivery.status || "not_sent",
   ).toLowerCase();
   const invoiceDeliveryPending = ["queued", "processing"].includes(
     invoiceDeliveryStatus,
   );
-  const invoiceDeliveryLabel = {
-    not_sent: "Not sent",
-    queued: "Queued",
-    processing: "Sending",
-    sent: "Sent",
-    failed: "Failed",
-    cancelled: "Cancelled",
-  }[invoiceDeliveryStatus] || humanizeOptionLabel(invoiceDeliveryStatus);
+  const invoiceDeliveryLabel =
+    {
+      not_sent: "Not sent",
+      queued: "Queued",
+      processing: "Sending",
+      sent: "Sent",
+      failed: "Failed",
+      cancelled: "Cancelled",
+    }[invoiceDeliveryStatus] || humanizeOptionLabel(invoiceDeliveryStatus);
   const canSendInvoice =
     canEditInvoices &&
     String(invoice.status || "").toLowerCase() === "paid" &&
     balanceDue <= 0;
+  const canEmailInvoice = canSendInvoice && Boolean(patient?.email);
   const [payRows, setPayRows] = useState<any[]>([
     { method: defaultPaymentMethod, amount: "", reference: "" },
   ]);
@@ -394,7 +431,7 @@ export function InvoiceDetailPage({
       new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime(),
   );
   return (
-    <div className="space-y-5">
+    <div className="">
       <Card>
         <div className="-mx-6 -mt-6 border-b border-slate-200 bg-white px-6 py-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -412,7 +449,9 @@ export function InvoiceDetailPage({
                         ? "blue"
                         : invoice.status === "partially_paid"
                           ? "amber"
-                          : "slate"
+                          : invoice.status == "cancelled"
+                            ? "red"
+                            : "slate"
                   }
                   className="normal-badge"
                 >
@@ -434,7 +473,11 @@ export function InvoiceDetailPage({
                   />
                 </div>
                 <span className="text-slate-500">
-                  {patient?.name || patient?.full_name || "Patient"}
+                  {invoice.patient_name ||
+                    patient?.name ||
+                    patient?.full_name ||
+                    invoice.patient_number ||
+                    "Patient"}
                 </span>
               </div>
             </div>
@@ -455,7 +498,13 @@ export function InvoiceDetailPage({
               <InvoiceMeta label="Source" value={linkedRecord} />
               <InvoiceMeta
                 label="Patient"
-                value={patient?.name || patient?.full_name || "Patient"}
+                value={
+                  invoice.patient_name ||
+                  patient?.name ||
+                  patient?.full_name ||
+                  invoice.patient_number ||
+                  "Patient"
+                }
               />
               <InvoiceMeta
                 label="Status"
@@ -464,7 +513,7 @@ export function InvoiceDetailPage({
             </div>
           </div>
 
-          <div className="mt-5 space-y-5">
+          <div className="mt-5 ">
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -490,11 +539,19 @@ export function InvoiceDetailPage({
                 >
                   <thead className="bg-slate-100 text-[11px] font-medium text-slate-500">
                     <tr>
-                      <th className="w-12 border-r border-slate-200 px-3 py-2 text-center">No.</th>
-                      <th className="min-w-52 border-r border-slate-200 px-3 py-2">Item</th>
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">Quantity</th>
+                      <th className="w-12 border-r border-slate-200 px-3 py-2 text-center">
+                        No.
+                      </th>
+                      <th className="min-w-52 border-r border-slate-200 px-3 py-2">
+                        Item
+                      </th>
+                      <th className="border-r border-slate-200 px-3 py-2 text-right">
+                        Quantity
+                      </th>
                       {showItemVendor && (
-                        <th className="min-w-36 border-r border-slate-200 px-3 py-2">{vendorLabel}</th>
+                        <th className="min-w-36 border-r border-slate-200 px-3 py-2">
+                          {vendorLabel}
+                        </th>
                       )}
                       {showItemVendor && (
                         <th className="border-r border-slate-200 px-3 py-2 text-right">
@@ -502,10 +559,16 @@ export function InvoiceDetailPage({
                         </th>
                       )}
                       {showItemPricing && (
-                        <th className="border-r border-slate-200 px-3 py-2 text-right">MRP</th>
+                        <th className="border-r border-slate-200 px-3 py-2 text-right">
+                          MRP
+                        </th>
                       )}
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">Rate (INR)</th>
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">Discount %</th>
+                      <th className="border-r border-slate-200 px-3 py-2 text-right">
+                        Rate (INR)
+                      </th>
+                      <th className="border-r border-slate-200 px-3 py-2 text-right">
+                        Discount %
+                      </th>
                       <th className="border-r border-slate-200 px-3 py-2 text-right">
                         Discount amount
                       </th>
@@ -544,7 +607,10 @@ export function InvoiceDetailPage({
                           ? numberValue(itemSupplierOptions[0].buying_price)
                           : 0);
                       return (
-                        <tr key={item.id} className="align-middle hover:bg-slate-50/70">
+                        <tr
+                          key={item.id}
+                          className="align-middle hover:bg-slate-50/70"
+                        >
                           <td className="border-r border-t border-slate-200 px-3 py-2.5 text-center tabular-nums text-slate-600">
                             {index + 1}
                           </td>
@@ -649,10 +715,10 @@ export function InvoiceDetailPage({
               ) : null}
             </div>
 
-            <aside className="rounded-lg border border-slate-200 bg-white">
+            <aside className="rounded-lg border mt-3 border-slate-200 bg-white">
               <div className="border-b border-slate-200 px-4 py-4">
                 <h4 className="card-title font-bold">Payment Summary</h4>
-                <p className="table-data text-slate-500">
+                <p className="card-desc text-slate-500">
                   Staff collection view
                 </p>
               </div>
@@ -679,13 +745,35 @@ export function InvoiceDetailPage({
                     }
                     muted={discountParts.offerDiscount <= 0}
                     savings={discountParts.offerDiscount > 0}
-                    note={
-                      discountParts.offerDiscount > 0
-                        ? claimedDetail(
-                            discountParts.offerDiscount,
-                            invoice.subtotal_amount,
-                          )
-                        : "No Offer & Discount Applied"
+                    note={offerNote}
+                    action={
+                      offerBenefit?.is_applied ? (
+                        offerBenefit.can_remove ? (
+                          <ActionButton
+                            onClick={() => removeOffer(invoice)}
+                            disabled={offerBusy}
+                          >
+                            <ButtonLoader loading={offerBusy}>
+                              {offerBusy ? "Removing..." : "Remove"}
+                            </ButtonLoader>
+                          </ActionButton>
+                        ) : (
+                          <ActionButton disabled>Applied</ActionButton>
+                        )
+                      ) : offerBenefit?.can_apply ? (
+                        <ActionButton
+                          onClick={() =>
+                            applyOffer(invoice, offerBenefit.offer_id)
+                          }
+                          disabled={offerBusy}
+                        >
+                          <ButtonLoader loading={offerBusy}>
+                            {offerBusy
+                              ? "Applying..."
+                              : `Apply ${money(offerBenefit.discount_amount)}`}
+                          </ButtonLoader>
+                        </ActionButton>
+                      ) : null
                     }
                   />
                   <BillLine
@@ -726,9 +814,13 @@ export function InvoiceDetailPage({
                           onClick={() => applyMembershipBenefit(invoice)}
                           disabled={busy === `membership-${invoice.id}`}
                         >
-                          {busy === `membership-${invoice.id}`
-                            ? "Applying..."
-                            : `Apply ${money(membershipBenefit.discount_amount)}`}
+                          <ButtonLoader
+                            loading={busy === `membership-${invoice.id}`}
+                          >
+                            {busy === `membership-${invoice.id}`
+                              ? "Applying..."
+                              : `Apply ${money(membershipBenefit.discount_amount)}`}
+                          </ButtonLoader>
                         </ActionButton>
                       ) : null
                     }
@@ -765,7 +857,7 @@ export function InvoiceDetailPage({
                     danger={numberValue(invoice.balance_amount) > 0}
                   />
                 </div>
-                <div className="space-y-3">
+                <div className="">
                   <div className="rounded-2xl bg-slate-50 p-4">
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       <InvoiceMeta
@@ -781,7 +873,7 @@ export function InvoiceDetailPage({
                     </div>
                   </div>
                   {canCollectPayment ? (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="rounded-2xl my-3 border border-slate-200 bg-white p-4">
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-bold text-slate-900">
@@ -799,7 +891,7 @@ export function InvoiceDetailPage({
                           + Add mode
                         </button>
                       </div>
-                      <div className="mt-3 space-y-3">
+                      <div className="mt-3 ">
                         {payRows.map((row, index) => (
                           <div
                             key={index}
@@ -884,46 +976,52 @@ export function InvoiceDetailPage({
                         onClick={() => collectSplitPayment(invoice, payRows)}
                         className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-3.5 text-sm lg:text-base   font-black tracking-wide text-white shadow-lg shadow-slate-900/20 transition hover:from-slate-800 hover:to-slate-600 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                       >
-                        {busy === invoice.id ? (
-                          "Saving Payment..."
-                        ) : (
-                          <>
-                            <span>
-                              {payRows.filter((r) => Number(r.amount) > 0)
-                                .length > 1
-                                ? "Pay (Split)"
-                                : "Pay"}
-                            </span>
-                            <span className="tabular-nums">
-                              {money(enteredTotal)}
-                            </span>
-                          </>
-                        )}
+                        <ButtonLoader loading={busy === invoice.id}>
+                          {busy === invoice.id ? (
+                            "Saving Payment..."
+                          ) : (
+                            <>
+                              <span>
+                                {payRows.filter((r) => Number(r.amount) > 0)
+                                  .length > 1
+                                  ? "Pay (Split)"
+                                  : "Pay"}
+                              </span>
+                              <span className="tabular-nums">
+                                {money(enteredTotal)}
+                              </span>
+                            </>
+                          )}
+                        </ButtonLoader>
                       </button>
                     </div>
                   ) : isPaymentClosed ? (
-                    <div className="flex items-center justify-between rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700">
+                    <div className="flex mt-3 items-center justify-between rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700">
                       <span>{humanizeOptionLabel(invoice.status)} invoice</span>
                       <span>Payment locked</span>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
+                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 mt-3">
                       <span>Payment settled</span>
                       <span>{money(invoice.paid_amount)}</span>
                     </div>
                   )}
                   {String(invoice.status || "").toLowerCase() === "paid" && (
                     <div
-                      className={`rounded-lg border p-3 text-xs ${
+                      className={`rounded-lg border p-3 mt-3 text-xs ${
                         invoiceDeliveryStatus === "sent"
                           ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                          : ["failed", "cancelled"].includes(invoiceDeliveryStatus)
+                          : ["failed", "cancelled"].includes(
+                                invoiceDeliveryStatus,
+                              )
                             ? "border-red-200 bg-red-50 text-red-900"
                             : "border-amber-200 bg-amber-50 text-amber-900"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-bold">Patient invoice delivery</span>
+                      <div className="flex items-center justify-between  gap-3 mt-2">
+                        <span className="font-bold">
+                          Patient invoice delivery
+                        </span>
                         <Badge
                           tone={
                             invoiceDeliveryStatus === "sent"
@@ -934,6 +1032,7 @@ export function InvoiceDetailPage({
                                 ? "red"
                                 : "amber"
                           }
+                          className="normal-badge"
                         >
                           {invoiceDeliveryLabel}
                         </Badge>
@@ -945,40 +1044,107 @@ export function InvoiceDetailPage({
                       )}
                       {Number(invoiceDelivery.attempt_count || 0) > 0 && (
                         <p className="mt-1 opacity-80">
-                          Attempt {invoiceDelivery.attempt_count} of {invoiceDelivery.max_attempts}
+                          Attempt {invoiceDelivery.attempt_count} of{" "}
+                          {invoiceDelivery.max_attempts}
                         </p>
+                      )}
+                      {invoiceDeliveries.length > 0 && (
+                        <div className="mt-3 border-t border-current/15 pt-2">
+                          <p className="mb-1 font-bold">Recent deliveries</p>
+                          {invoiceDeliveries
+                            .slice(0, 5)
+                            .map((delivery: any, index: number) => (
+                              <div
+                                key={
+                                  delivery.delivery_id || delivery.id || index
+                                }
+                                className="flex justify-between gap-3 py-0.5"
+                              >
+                                <span>
+                                  {humanizeOptionLabel(
+                                    delivery.channel || "whatsapp",
+                                  )}
+                                  {delivery.artifact_version
+                                    ? ` · PDF v${delivery.artifact_version}`
+                                    : ""}
+                                </span>
+                                <span className="font-bold">
+                                  {humanizeOptionLabel(
+                                    delivery.status || "queued",
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
                       )}
                     </div>
                   )}
-                  <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                  <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 mt-3 ">
                     {canSendInvoice && (
                       <ActionButton
                         onClick={() => sendInvoice(invoice)}
                         disabled={
-                          busy === `send-invoice-${invoice.id}` ||
+                          busy === `send-invoice-whatsapp-${invoice.id}` ||
                           invoiceDeliveryPending
                         }
+                        className='rounded-lg border px-3 lg:text-xs'
                       >
-                        {busy === `send-invoice-${invoice.id}`
-                          ? "Sending Invoice..."
-                          : invoiceDeliveryPending
-                            ? "Invoice Queued"
-                            : invoiceDeliveryStatus === "sent"
-                              ? "Resend Invoice"
-                              : ["failed", "cancelled"].includes(
-                                    invoiceDeliveryStatus,
-                                  )
-                                ? "Retry Send Invoice"
-                                : "Send Invoice"}
+                        <ButtonLoader
+                          loading={
+                            busy === `send-invoice-whatsapp-${invoice.id}`
+                          }
+                        >
+                          {busy === `send-invoice-whatsapp-${invoice.id}`
+                            ? "Sending Invoice..."
+                            : invoiceDeliveryPending
+                              ? "Invoice Queued"
+                              : invoiceDeliveryStatus === "sent"
+                                ? "Resend Invoice"
+                                : ["failed", "cancelled"].includes(
+                                      invoiceDeliveryStatus,
+                                    )
+                                  ? "Retry Send Invoice"
+                                  : "Send Invoice"}
+                        </ButtonLoader>
+                      </ActionButton>
+                    )}
+                    {canEmailInvoice && (
+                      <ActionButton
+                        onClick={() => sendInvoice(invoice, false, "email")}
+                        disabled={busy === `send-invoice-email-${invoice.id}`}
+                      >
+                        <ButtonLoader
+                          loading={busy === `send-invoice-email-${invoice.id}`}
+                        >
+                          {busy === `send-invoice-email-${invoice.id}`
+                            ? "Queueing Email..."
+                            : "Send Invoice by Email"}
+                        </ButtonLoader>
+                      </ActionButton>
+                    )}
+                    {canSendInvoice && invoiceDocument.exists && (
+                      <ActionButton
+                        onClick={() => regenerateInvoice(invoice)}
+                        disabled={busy === `regenerate-invoice-${invoice.id}`}
+                      >
+                        <ButtonLoader
+                          loading={busy === `regenerate-invoice-${invoice.id}`}
+                        >
+                          {busy === `regenerate-invoice-${invoice.id}`
+                            ? "Regenerating PDF..."
+                            : `Regenerate PDF (v${invoiceDocument.version || 1})`}
+                        </ButtonLoader>
                       </ActionButton>
                     )}
                     <ActionButton
                       onClick={() => openReceipt(invoice)}
                       disabled={busy === `receipt-${invoice.id}`}
                     >
-                      {busy === `receipt-${invoice.id}`
-                        ? "Generating PDF..."
-                        : "Print Invoice"}
+                      <ButtonLoader loading={busy === `receipt-${invoice.id}`}>
+                        {busy === `receipt-${invoice.id}`
+                          ? "Generating PDF..."
+                          : "Print Invoice"}
+                      </ButtonLoader>
                     </ActionButton>
                     {canIssueCreditNote && (
                       <ActionButton onClick={() => issueCreditNote(invoice)}>
@@ -994,18 +1160,26 @@ export function InvoiceDetailPage({
                             numberValue(invoice.paid_amount) > 0
                           }
                         >
-                          {busy === `cancel-${invoice.id}`
-                            ? "Cancelling..."
-                            : "Cancel"}
+                          <ButtonLoader
+                            loading={busy === `cancel-${invoice.id}`}
+                          >
+                            {busy === `cancel-${invoice.id}`
+                              ? "Cancelling..."
+                              : "Cancel"}
+                          </ButtonLoader>
                         </ActionButton>
                       ) : (
                         <ActionButton
                           onClick={() => amendInvoice?.(invoice)}
                           disabled={busy === `amend-${invoice.id}`}
                         >
-                          {busy === `amend-${invoice.id}`
-                            ? "Amending..."
-                            : "Amend"}
+                          <ButtonLoader
+                            loading={busy === `amend-${invoice.id}`}
+                          >
+                            {busy === `amend-${invoice.id}`
+                              ? "Amending..."
+                              : "Amend"}
+                          </ButtonLoader>
                         </ActionButton>
                       ))}
                   </div>
@@ -1079,7 +1253,7 @@ export function InvoiceDetailPage({
                 <h4 className="card-title font-bold">
                   Discount, Refund & Cancellation Requests
                 </h4>
-                <p className="table-data text-slate-500">
+                <p className="card-desc text-slate-500">
                   Request, approve, and execute invoice adjustments.
                 </p>
               </div>
@@ -1175,7 +1349,8 @@ export function InvoiceDetailPage({
                           </Badge>
                         </td>
                         <td className="px-4 py-3">
-                          {canDecideAdjustment(row) && row.status === "pending" ? (
+                          {canDecideAdjustment(row) &&
+                          row.status === "pending" ? (
                             <ActionGroup>
                               <ActionButton
                                 onClick={() => approveAdjustment?.(row)}
@@ -1213,7 +1388,7 @@ export function InvoiceDetailPage({
             <div className="mt-5 rounded-lg border border-slate-200">
               <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
                 <h4 className="card-title font-bold">Billing Ledger</h4>
-                <p className="table-data text-slate-500">
+                <p className="card-desc text-slate-500">
                   Invoice lifecycle is tracked for audit. Credit and debit show
                   only payment, refund, or membership benefit movement.
                 </p>
@@ -1320,7 +1495,11 @@ export function InvoiceDetailPage({
           )}
         </div>
       </Card>
-      <ActivityLog resourceType="invoice" resourceId={invoice?.id} apiSession={apiSession} />
+      <ActivityLog
+        resourceType="invoice"
+        resourceId={invoice?.id}
+        apiSession={apiSession}
+      />
     </div>
   );
 }

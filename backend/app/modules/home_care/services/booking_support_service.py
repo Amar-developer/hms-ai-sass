@@ -2,7 +2,11 @@ from fastapi import HTTPException, status
 from sqlmodel import Session
 
 from app.core.access_control import require_user_branch_access
-from app.modules.home_care.models import HomeCareBooking, HomeCareBookingItem
+from app.modules.home_care.models import (
+    HomeCareBooking,
+    HomeCareBookingItem,
+    HomeCareVisitLog,
+)
 from app.modules.home_care.repositories import (
     HomeCareBookingItemRepository,
     HomeCareBookingRepository,
@@ -18,7 +22,9 @@ from app.modules.home_care.schemas import (
     HomeCareBookingUpdate,
     HomeCareVisitLogRead,
 )
+from app.modules.home_care.visit_days import parse_weekdays, planned_visit_count
 from app.modules.identity.models import User
+from app.modules.patients.services.references import PatientReference
 
 
 class HomeCareBookingSupportService:
@@ -43,20 +49,53 @@ class HomeCareBookingSupportService:
         require_user_branch_access(actor, booking.branch_id)
         return booking
 
-    def read_booking(self, booking: HomeCareBooking) -> HomeCareBookingRead:
-        items = self.items.list_for_booking(
-            tenant_id=booking.tenant_id, booking_id=booking.id
-        )
+    def read_booking(
+        self,
+        booking: HomeCareBooking,
+        patient_reference: PatientReference | None = None,
+        *,
+        items: list[HomeCareBookingItem] | None = None,
+        visit_logs: list[HomeCareVisitLog] | None = None,
+    ) -> HomeCareBookingRead:
+        if items is None:
+            items = self.items.list_for_booking(
+                tenant_id=booking.tenant_id, booking_id=booking.id
+            )
         data = HomeCareBookingRead.model_validate(
             booking, from_attributes=True
         ).model_dump()
+        # Expand the stored day selection into the plan, so callers never have
+        # to re-derive "how many visits is this booking actually for".
+        weekdays = parse_weekdays(booking.visit_weekdays_json)
+        data["visit_weekdays"] = weekdays
+        data["planned_visit_count"] = planned_visit_count(
+            start_date=booking.start_date,
+            end_date=booking.end_date,
+            visit_day_mode=booking.visit_day_mode,
+            visit_weekdays=weekdays,
+        )
+        if patient_reference is None:
+            patient = self.references.get_patient_for_tenant(
+                booking.tenant_id, booking.patient_id
+            )
+            if patient:
+                patient_reference = PatientReference(
+                    id=patient.id,
+                    name=patient.full_name,
+                    number=patient.patient_number,
+                    mobile=patient.mobile,
+                )
+        if patient_reference:
+            data["patient_name"] = patient_reference.name
+            data["patient_number"] = patient_reference.number
         data["services"] = [
             HomeCareBookingItemRead.model_validate(item, from_attributes=True)
             for item in items
         ]
-        visit_logs = self.visits.list_for_booking(
-            tenant_id=booking.tenant_id, booking_id=booking.id
-        )
+        if visit_logs is None:
+            visit_logs = self.visits.list_for_booking(
+                tenant_id=booking.tenant_id, booking_id=booking.id
+            )
         data["visit_logs"] = [
             HomeCareVisitLogRead.model_validate(row, from_attributes=True)
             for row in visit_logs

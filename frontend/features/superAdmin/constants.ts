@@ -203,7 +203,7 @@ export const requiredRolePermissions = [
 
 export const superAdminSections = [
   ["overview", "Overview", Activity],
-  ["platformAdmins", "Platform Admins", ShieldCheck],
+  ["privilegedAccess", "Privileged Access", ShieldCheck],
   ["tenants", "Tenants", Building2],
   ["roles", "Roles", ShieldCheck],
   ["users", "Users", Users],
@@ -214,8 +214,40 @@ export const superAdminSections = [
   ["whatsappSettings", "WhatsApp Settings", MessageCircleMore],
 ] as const;
 
+export function platformSectionsForUser(user: any) {
+  if (user?.is_super_admin) return [...superAdminSections];
+  if (user?.user_type === "support_admin") {
+    return superAdminSections.filter(([id]) => id === "privilegedAccess");
+  }
+  const permissions = new Set<string>(user?.permissions || []);
+  return superAdminSections.filter(([id]) => {
+    if (id === "overview") {
+      return [...permissions].some((key) => key.startsWith("platform."));
+    }
+    if (id === "tenants") return permissions.has("platform.tenants.manage");
+    if (id === "subscriptions") {
+      return permissions.has("platform.subscriptions.manage");
+    }
+    if (["roles", "departments", "branches"].includes(id)) {
+      return permissions.has("platform.templates.manage");
+    }
+    return false;
+  });
+}
+
 export const status_options = [
   { value: "all", label: "All status" },
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
+];
+
+export const tenant_status_options = [
+  { value: "all", label: "All status" },
+  { value: "trial", label: "Trial" },
+  { value: "active", label: "Active" },
+];
+
+export const dateFieldOptions  = [
+  { value: "updated_at", label: "Modified date" },
+  { value: "created_at", label: "Created date" },
 ];

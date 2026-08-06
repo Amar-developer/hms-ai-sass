@@ -3,9 +3,6 @@ import {
   RefreshButton,
   Button,
   Input,
-  SearchableSelect,
-  ActionButton,
-  ActionGroup,
   Badge,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
@@ -16,12 +13,14 @@ import {
   money,
   patientName,
 } from "@/utils/helper";
-import { bookingTotal, isBookingLocked, userName, bookingStaffName } from "../helpers";
+import { bookingTotal, isBookingLocked, bookingStaffName } from "../helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "@/features/admin/components/RowActions";
-
+import { FilterSection } from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 export function BookingsList({
   bookings,
@@ -33,6 +32,7 @@ export function BookingsList({
   setFilters,
   patientMap,
   staffMap,
+  loading = false,
   onRefresh,
   onCreate,
   onView,
@@ -42,6 +42,172 @@ export function BookingsList({
   canCreate = false,
   canCopyIds = false,
 }: any) {
+  const statusFilterConfigs = [
+    {
+      key: "status",
+      label: "Status",
+      options: [
+        { value: "all", label: "All statuses" },
+        ...statuses.map(([value, label]: [string, string]) => ({
+          value,
+          label,
+        })),
+      ],
+    },
+  ];
+
+  const bookingColumns: Column<any>[] = [
+    {
+      key: "booking_number",
+      header: "Booking ID",
+      width: "180px",
+      render: (booking: any) => (
+        <div>
+          <div className="flex items-center gap-2">
+            <b className="text-sm">{booking.booking_number}</b>
+            <CopyIdButton
+              value={booking.id}
+              label="Home Care Booking ID"
+              allowed={canCopyIds}
+            />
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "service_count",
+      header: "Service Count",
+      width: "160px",
+      render: (booking: any) => (
+        <div>
+          <p className="text-sm ">{booking.services?.length || 0} services</p>
+        </div>
+      ),
+    },
+    {
+      key: "patient",
+      header: "Patient",
+      width: "160px",
+      render: (booking: any) => {
+        const patient: any = patientMap.get(booking.patient_id);
+        return (
+          <span className="text-sm">
+            {capitalizeFirst(booking.patient_name || patientName(patient))}
+          </span>
+        );
+      },
+    },
+    {
+      key: "staff",
+      header: "Staff",
+      width: "160px",
+      render: (booking: any) => (
+        <div className="text-sm">
+          {bookingStaffName(booking, staffMap)}
+          {booking.staff_type && (
+            <p className="text-xs text-slate-500">
+              {humanizeOptionLabel(booking.staff_type)}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "date_range",
+      header: "Date Range",
+      width: "160px",
+      render: (booking: any) => (
+        <div className="text-sm">
+          {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
+        </div>
+      ),
+    },
+    {
+      key: "recurrence",
+      header: "Recurrence",
+      width: "160px",
+      render: (booking: any) => (
+        <div className="text-sm">
+            {humanizeOptionLabel(booking.recurrence || "daily")}
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      className: "text-center",
+      width: "120px",
+      render: (booking: any) => {
+        return (
+          <Badge
+            className="normal-badge"
+            tone={`${String(
+              booking.status == "requested"
+                ? "orange"
+                : booking.status == "paid"
+                  ? "green"
+                  : booking.status == "invoiced"
+                    ? "skyblue"
+                    : booking.status == "scheduled"
+                      ? "purple"
+                      : booking.status == "in_progress"
+                        ? "blue"
+                        : booking.status == "completed"
+                          ? "amber"
+                          : booking.status == "cancelled"
+                            ? "red"
+                            : "",
+            )}`}
+          >
+            {humanizeOptionLabel(booking.status)}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "total",
+      header: "Total",
+      width: "120px",
+      className: "text-center",
+      cellClassName: "text-center",
+      render: (booking: any) => money(bookingTotal(booking)),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      width:'100px',
+      className: "text-center",
+      cellClassName: "text-center",
+      disableRowClick: true,
+      render: (booking: any) => (
+        <div className="flex justify-center">
+          <RowActions
+            actions={[
+              {
+                label: "View",
+                onClick: () => onView(booking),
+              },
+              ...(canManage
+                ? [
+                    {
+                      label: "Edit",
+                      onClick: () => onEdit(booking),
+                      disabled: isBookingLocked(booking),
+                    },
+                  ]
+                : []),
+              {
+                label: "Invoice",
+                onClick: () => onInvoice(booking),
+              },
+            ]}
+            className="right-8 -bottom-5"
+          />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <Card>
       <div className="flex flex-col gap-3  lg:items-end lg:justify-between">
@@ -63,127 +229,57 @@ export function BookingsList({
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3 md:items-end justify-start w-full">
-          <FormField label="Search">
+        <FilterSection
+          title="Bookings"
+          query={filters.query}
+          setQuery={(value: string) => setFilters({ ...filters, query: value })}
+          filters={statusFilterConfigs}
+          filterValues={filters}
+          className="lg:grid-cols-5 xl:grid-cols-5"
+          onFilterChange={(key: string, value: string) =>
+            setFilters({ ...filters, [key]: value })
+          }
+          onReset={() =>
+            setFilters({
+              ...filters,
+              query: "",
+              status: "all",
+              fromDate: "",
+              toDate: "",
+            })
+          }
+        >
+          <FormField label="From">
             <Input
-              value={filters.query}
+              type="date"
+              value={filters.fromDate}
               onChange={(event: any) =>
-                setFilters({ ...filters, query: event.target.value })
+                setFilters({ ...filters, fromDate: event.target.value })
               }
-              placeholder="Booking, patient, staff, status"
             />
           </FormField>
-          <FormField label="Status">
-            <SearchableSelect
-              value={filters.status}
-              onChange={(value: string) =>
-                setFilters({ ...filters, status: value })
+          <FormField label="To">
+            <Input
+              type="date"
+              value={filters.toDate}
+              onChange={(event: any) =>
+                setFilters({ ...filters, toDate: event.target.value })
               }
-              options={[
-                { value: "all", label: "All statuses" },
-                ...statuses.map(([value, label]) => ({ value, label })),
-              ]}
-              searchable={false}
             />
           </FormField>
-        </div>
+        </FilterSection>
       </div>
 
-      <div className="mt-4 overflow-auto rounded-2xl border">
-        <table className="w-full min-w-[980px] text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Booking</th>
-              <th>Patient</th>
-              <th>Staff</th>
-              <th>Date Range</th>
-              <th>Status</th>
-              <th className=" w-[120px] text-center">Total</th>
-              <th className="pr-4 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {bookings.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-4 text-slate-500">
-                  No home care / visit bookings match your filter.
-                </td>
-              </tr>
-            )}
-            {bookings.map((booking: any) => {
-              const patient: any = patientMap.get(booking.patient_id);
-              return (
-                <tr key={booking.id}>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <b className="card-desc">{booking.booking_number}</b>
-                      <CopyIdButton
-                        value={booking.id}
-                        label="Home Care Booking ID"
-                        allowed={canCopyIds}
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      {booking.services?.length || 0} services
-                    </p>
-                  </td>
-                  <td className="card-desc">
-                    {capitalizeFirst(patientName(patient))}
-                  </td>
-                  <td className="card-desc">
-
-                    {bookingStaffName(booking, staffMap)}
-                    {booking.staff_type && (
-                      <p className="text-xs text-slate-500">
-                        {humanizeOptionLabel(booking.staff_type)}
-                      </p>
-                    )}
-                  </td>
-                  <td className="card-desc">
-                    {displayDate(booking.start_date)} to{" "}
-                    {displayDate(booking.end_date)}
-                    <p className="text-xs text-slate-500">
-                      {humanizeOptionLabel(booking.recurrence || "daily")}
-                    </p>
-                  </td>
-                  <td className="card-desc">
-                    <Badge className="normal-badge">
-                      {humanizeOptionLabel(booking.status)}
-                    </Badge>
-                  </td>
-                  <td className="card-desc text-center">
-                    {money(bookingTotal(booking))}
-                  </td>
-                  <td className="pr-4">
-                    <div className="flex justify-center">
-                      <RowActions
-                        actions={[
-                          {
-                            label: "View",
-                            onClick: () => onView(booking),
-                          },
-                          ...(canManage
-                            ? [
-                                {
-                                  label: "Edit",
-                                  onClick: () => onEdit(booking),
-                                  disabled: isBookingLocked(booking),
-                                },
-                              ]
-                            : []),
-                          {
-                            label: "Invoice",
-                            onClick: () => onInvoice(booking),
-                          },
-                        ]}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-2xl border border-slate-200">
+        <div className="min-w-[980px] ">
+          <DataTable
+            columns={bookingColumns}
+            data={bookings}
+            loading={loading}
+            emptyMessage="No home care / visit bookings match your filter."
+            onRowClick={(booking: any) => onView(booking)}
+          />
+        </div>
       </div>
       <Pagination
         page={page}

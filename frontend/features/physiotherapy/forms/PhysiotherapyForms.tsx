@@ -6,6 +6,7 @@ import { SearchSelect } from "../components/SearchSelect";
 import { Button,Card } from "../../../app/components/common/ui";
 import { FormField } from "../../../app/components/FormElements";
 import { PatientSearchSelect } from "@/features/patients/components/PatientSearchSelect";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function CaseForm({
   title,
@@ -109,7 +110,11 @@ export function CaseForm({
           >
             Cancel
           </button>
-          <Button disabled={busy}>Create OP Physio Case</Button>
+          <Button disabled={busy}>
+            <ButtonLoader loading={busy}>
+              {busy ? "Creating..." : "Create OP Physio Case"}
+            </ButtonLoader>
+          </Button>
         </div>
       </form>
     </Card>
@@ -205,7 +210,11 @@ export function IPCaseForm({
           >
             Cancel
           </button>
-          <Button disabled={busy}>Create IP Physio Case</Button>
+          <Button disabled={busy}>
+            <ButtonLoader loading={busy}>
+              {busy ? "Creating..." : "Create IP Physio Case"}
+            </ButtonLoader>
+          </Button>
         </div>
       </form>
     </Card>

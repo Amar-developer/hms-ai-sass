@@ -49,6 +49,27 @@ def test_create_patient_generates_patient_number_and_audit(client: TestClient):
     assert any(event["action"] == "patient.created" for event in audit)
 
 
+def test_patient_count_supports_created_date_range(client: TestClient):
+    tenant = create_tenant(client)
+    create_patient(client, tenant["id"])
+    today = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+
+    today_count = client.get(
+        f"/api/v1/patients/count?from_date={today}&to_date={today}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    future_count = client.get(
+        f"/api/v1/patients/count?from_date={tomorrow}&to_date={tomorrow}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert today_count.status_code == 200
+    assert today_count.json() == {"total": 1}
+    assert future_count.status_code == 200
+    assert future_count.json() == {"total": 0}
+
+
 def test_create_patient_rejects_future_date_of_birth(client: TestClient):
     tenant = create_tenant(client)
 
@@ -203,6 +224,54 @@ def test_patient_search_is_tenant_isolated(client: TestClient):
 
     assert response.status_code == 200
     assert [row["full_name"] for row in response.json()] == ["Tenant One Patient"]
+
+
+def test_patient_page_returns_database_total_and_applies_filters(client: TestClient):
+    tenant = create_tenant(client)
+    create_patient(
+        client,
+        tenant["id"],
+        full_name="Active Female",
+        gender="female",
+        mobile="9000000001",
+    )
+    inactive = create_patient(
+        client,
+        tenant["id"],
+        full_name="Inactive Female",
+        gender="female",
+        mobile="9000000002",
+    )
+    client.patch(
+        f"/api/v1/patients/{inactive['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"status": "inactive"},
+    )
+    create_patient(
+        client,
+        tenant["id"],
+        full_name="Active Male",
+        gender="male",
+        mobile="9000000003",
+    )
+
+    first_page = client.get(
+        "/api/v1/patients/page?active_only=false&limit=1&offset=0&gender=female",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    inactive_page = client.get(
+        "/api/v1/patients/page?status=inactive&limit=10",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert first_page.status_code == 200
+    assert first_page.json()["total"] == 2
+    assert len(first_page.json()["items"]) == 1
+    assert first_page.json()["limit"] == 1
+    assert first_page.json()["offset"] == 0
+    assert inactive_page.status_code == 200
+    assert inactive_page.json()["total"] == 1
+    assert inactive_page.json()["items"][0]["full_name"] == "Inactive Female"
 
 
 def test_patient_search_includes_subscription_plan_name_and_status(
@@ -388,3 +457,73 @@ def test_patient_view_and_summary_write_audit_events(client: TestClient):
 
     assert "patient.record.viewed" in actions
     assert "patient.summary.viewed" in actions
+
+
+def test_patient_contact_falls_back_primary_then_alternate_then_guardian():
+    from types import SimpleNamespace
+
+    from app.modules.patients.contact import (
+        patient_contact_mobile,
+        patient_contact_numbers,
+    )
+
+    def patient(mobile="", alternate="", guardian=""):
+        return SimpleNamespace(
+            mobile=mobile,
+            alternate_mobile=alternate,
+            guardian_mobile=guardian,
+        )
+
+    assert patient_contact_mobile(patient(mobile="111")) == "111"
+    # No primary: fall through to the alternate, then the guardian.
+    assert patient_contact_mobile(patient(alternate="222")) == "222"
+    assert patient_contact_mobile(patient(guardian="333")) == "333"
+    assert patient_contact_mobile(patient(alternate="222", guardian="333")) == "222"
+    # Blank strings must not count as a usable number.
+    assert patient_contact_mobile(patient(mobile="   ", alternate="222")) == "222"
+    assert patient_contact_mobile(patient()) is None
+    assert patient_contact_mobile(None) is None
+
+    # Priority order is preserved, and a number repeated across fields is
+    # listed once so the patient is never messaged twice.
+    assert patient_contact_numbers(
+        patient(mobile="111", alternate="222", guardian="333")
+    ) == ["111", "222", "333"]
+    assert patient_contact_numbers(patient(mobile="111", alternate="111")) == ["111"]
+
+
+def test_whatsapp_destination_uses_one_number_per_patient():
+    from types import SimpleNamespace
+
+    from app.modules.integrations.whatsapp_consent import (
+        patient_notification_destination,
+    )
+
+    def patient(mobile="", alternate="", guardian=""):
+        return SimpleNamespace(
+            mobile=mobile,
+            alternate_mobile=alternate,
+            guardian_mobile=guardian,
+        )
+
+    # Exactly one destination is returned even when several numbers exist,
+    # so an invoice or reminder is delivered a single time.
+    assert (
+        patient_notification_destination(
+            patient(mobile="9876500040", alternate="9876500041"), "+91"
+        )
+        == "+919876500040"
+    )
+    # Guardian is used when it is the only number on file.
+    assert (
+        patient_notification_destination(patient(guardian="9876500042"), "+91")
+        == "+919876500042"
+    )
+    # An unusable primary must not block a valid fallback.
+    assert (
+        patient_notification_destination(
+            patient(mobile="abc", alternate="9876500043"), "+91"
+        )
+        == "+919876500043"
+    )
+    assert patient_notification_destination(patient(), "+91") is None

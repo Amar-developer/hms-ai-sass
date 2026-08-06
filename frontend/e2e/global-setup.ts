@@ -322,7 +322,8 @@ export default async function globalSetup() {
     {
       branch_id: branchId,
       department_id: department.id,
-      weekday: new Date().getDay() === 0 ? 6 : new Date().getDay() - 1,
+      mode: "custom",
+      weekdays: [new Date().getDay() === 0 ? 6 : new Date().getDay() - 1],
       start_time: "09:00:00",
       end_time: "18:00:00",
       slot_minutes: 15,
@@ -484,7 +485,7 @@ export default async function globalSetup() {
       assigned_staff_name: "Frontend E2E Nurse",
       staff_type: "nurse",
       booking_type: "home_care",
-      recurrence: "once",
+      recurrence: "daily",
       start_date: new Date().toISOString().slice(0, 10),
       end_date: new Date().toISOString().slice(0, 10),
       location: "Frontend E2E Home",

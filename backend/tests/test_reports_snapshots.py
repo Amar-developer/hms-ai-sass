@@ -3,6 +3,7 @@ from datetime import date, datetime
 from sqlmodel import Session, select
 
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
+from app.modules.lab.models import LabTestPackage
 from app.modules.reports.models import MonthlyRevenueSnapshot
 from app.modules.reports.snapshots import (
     archive_due_months,
@@ -71,13 +72,16 @@ def test_compute_metrics_excludes_refunds_and_keeps_partial_net(test_engine):
                 status=InvoiceStatus.CANCELLED,
             )
         )
-        # Partially refunded -> kept at net paid (balance settled to 0 by backend).
+        # Partially refunded: 1000 billed, 1000 collected, 200 later refunded.
+        # update_invoice_payment_status never reduces total_amount on refund,
+        # so balance_amount is 200 here (the real backend behavior) even
+        # though nothing further is owed — it's refunded, not outstanding.
         session.add(
             _invoice(
                 tenant.id,
                 invoice_number="INV-4",
                 paid_amount=800,
-                balance_amount=0,
+                balance_amount=200,
                 status=InvoiceStatus.PARTIALLY_REFUNDED,
             )
         )
@@ -100,9 +104,80 @@ def test_compute_metrics_excludes_refunds_and_keeps_partial_net(test_engine):
     assert totals["doctorFee"] == 200 + 160
     assert totals["settlement"] == 0
     assert metrics["finalProfit"] == 1800 - (200 + 160)
+    # INV-4's 200 balance is refunded money, not money still due from the
+    # patient — it must not inflate the dashboard's outstanding balance.
+    assert totals["balance"] == 0
 
 
-def test_membership_claim_is_usage_not_revenue_or_profit(test_engine):
+def test_service_revenue_uses_paid_share_of_lab_package_items(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Service Revenue Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        package = LabTestPackage(
+            tenant_id=tenant.id,
+            code="HEALTH-PACK",
+            name="Health Package",
+            package_price=600,
+        )
+        session.add(package)
+        session.commit()
+        session.refresh(package)
+
+        invoice = _invoice(
+            tenant.id,
+            invoice_number="INV-SERVICE",
+            lab_order_id="lab-order-service",
+            subtotal_amount=1000,
+            total_amount=800,
+            paid_amount=800,
+            doctor_share_amount=0,
+            clinic_share_amount=800,
+        )
+        session.add(invoice)
+        session.flush()
+        session.add_all(
+            [
+                InvoiceItem(
+                    tenant_id=tenant.id,
+                    invoice_id=invoice.id,
+                    item_type="lab",
+                    description="Health Package",
+                    quantity=1,
+                    unit_amount=600,
+                    total_amount=600,
+                    external_item_code=package.id,
+                ),
+                InvoiceItem(
+                    tenant_id=tenant.id,
+                    invoice_id=invoice.id,
+                    item_type="lab",
+                    description="Blood Test",
+                    quantity=1,
+                    unit_amount=400,
+                    total_amount=400,
+                    external_item_code="lab-test-1",
+                ),
+            ]
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id=None,
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    assert metrics["totals"]["serviceRevenue"] == 480
+
+
+def test_free_membership_consultation_keeps_doctor_cost_and_reports_loss(
+    test_engine,
+):
     with Session(test_engine) as session:
         tenant = Tenant(name="Membership Report Clinic")
         session.add(tenant)
@@ -121,8 +196,8 @@ def test_membership_claim_is_usage_not_revenue_or_profit(test_engine):
                 clinic_share_amount=240,
             )
         )
-        # A fully covered consultation is a membership claim only. It must not
-        # increase gross/paid revenue, settlement, or final profit.
+        # A fully covered consultation creates no patient revenue, but the
+        # contractual doctor cost is still incurred.
         session.add(
             _invoice(
                 tenant.id,
@@ -133,7 +208,7 @@ def test_membership_claim_is_usage_not_revenue_or_profit(test_engine):
                 total_amount=0,
                 paid_amount=0,
                 balance_amount=0,
-                doctor_share_amount=0,
+                doctor_share_amount=360,
                 clinic_share_amount=0,
             )
         )
@@ -160,10 +235,68 @@ def test_membership_claim_is_usage_not_revenue_or_profit(test_engine):
             "claimedAmount": 600,
         }
     ]
-    assert totals["doctorFee"] == 360
+    assert totals["doctorFee"] == 720
     assert totals["settlement"] == 0
-    assert metrics["grossProfit"] == 240
-    assert metrics["finalProfit"] == 240
+    assert metrics["grossProfit"] == -120
+    assert metrics["finalProfit"] == -120
+
+
+def test_free_membership_lab_keeps_supplier_cost_and_reports_loss(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Free Membership Lab")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        lab = _invoice(
+            tenant.id,
+            invoice_number="INV-FREE-LAB",
+            lab_order_id="lab-order-free",
+            subtotal_amount=500,
+            discount_amount=500,
+            membership_discount_amount=500,
+            total_amount=0,
+            paid_amount=0,
+            balance_amount=0,
+            doctor_share_amount=0,
+            clinic_share_amount=0,
+        )
+        session.add(lab)
+        session.commit()
+        session.refresh(lab)
+        session.add(
+            InvoiceItem(
+                tenant_id=tenant.id,
+                invoice_id=lab.id,
+                item_type="lab_test",
+                description="Free outsourced test",
+                quantity=1,
+                unit_amount=500,
+                total_amount=500,
+                buying_amount=200,
+            )
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id=None,
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    assert metrics["totals"]["grossRevenue"] == 500
+    assert metrics["totals"]["paidRevenue"] == 0
+    assert metrics["totals"]["membershipDiscount"] == 500
+    assert metrics["totals"]["settlement"] == 200
+    assert metrics["labSettlement"] == {
+        "revenue": 0,
+        "purchaseCost": 200,
+        "profit": -200,
+    }
+    assert metrics["grossProfit"] == -200
+    assert metrics["finalProfit"] == -200
 
 
 def test_profit_separates_consultation_doctor_fee_from_supplier_settlement(

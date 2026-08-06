@@ -1,11 +1,11 @@
 "use client";
 
-export function SortButton({ label, field, sort, onSort }: any) {
+export function SortButton({ label, field, sort, onSort, className='text-left' }: any) {
   return (
     <button
       type="button"
       onClick={() => onSort(field)}
-      className="text-left font-bold uppercase text-slate-500 hover:text-slate-900"
+      className={`${className} font-bold uppercase text-slate-500 hover:text-slate-900`}
     >
       {label}
       {sort.key === field ? (

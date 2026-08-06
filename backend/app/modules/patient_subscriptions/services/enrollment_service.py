@@ -32,6 +32,7 @@ from app.modules.patient_subscriptions.services.eligibility import (
     resolve_current_enrollment,
 )
 from app.modules.patient_subscriptions.services.enrollment_reads import read_enrollment
+from app.modules.patients.services.references import patient_reference_map
 from app.modules.patient_subscriptions.services.validation import (
     _get_enrollment,
     _get_plan,
@@ -218,7 +219,12 @@ def list_enrollments(
         branch_id=effective_branch,
         patient_id=patient_id,
     )
-    return [read_enrollment(session, row) for row in rows]
+    patients = patient_reference_map(
+        session,
+        tenant_id=tenant_id,
+        patient_ids={row.patient_id for row in rows},
+    )
+    return [read_enrollment(session, row, patients.get(row.patient_id)) for row in rows]
 
 
 def update_enrollment(

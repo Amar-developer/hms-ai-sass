@@ -2,7 +2,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,16 +31,51 @@ class Settings(BaseSettings):
     environment: str = Field(default="local")
     log_level: str = Field(default="INFO")
     slow_request_ms: int = Field(default=1000, ge=1)
+    web_concurrency: int = Field(default=2, ge=1, le=64)
+    web_limit_concurrency: int = Field(default=80, ge=10, le=10000)
+    web_backlog: int = Field(default=2048, ge=128, le=65535)
+    web_timeout_keep_alive: int = Field(default=5, ge=1, le=120)
+    web_graceful_shutdown_seconds: int = Field(default=30, ge=5, le=600)
 
     api_prefix: str = Field(default="/api/v1")
     uploads_dir: Path = Field(
         default_factory=lambda: Path(__file__).resolve().parents[2] / "uploads"
     )
+    file_storage_backend: str = Field(default="local", pattern="^(local|s3)$")
+    aws_s3_bucket: str | None = Field(default=None)
+    aws_s3_region: str = Field(default="ap-south-1", min_length=1)
+    aws_s3_prefix: str = Field(default="", max_length=120)
+    aws_s3_endpoint_url: str | None = Field(default=None)
+    aws_s3_kms_key_id: str | None = Field(default=None)
+    aws_s3_presigned_url_ttl_seconds: int = Field(default=900, ge=60, le=86400)
+    permanent_invoice_delivery_enabled: bool = Field(default=True)
 
     enable_docs: bool = Field(default=True)
 
     database_url: str = Field(default="sqlite:///./medizinhub_hms.db")
+    # With PgBouncer in front of Postgres (recommended in production), these
+    # only bound how many client connections *this process* holds against
+    # PgBouncer, not Postgres itself — PgBouncer's own pool_size is what
+    # bounds real Postgres connections. Keep these modest per-process; raising
+    # them without also raising PgBouncer/Postgres capacity just moves the
+    # exhaustion point.
+    db_pool_size: int = Field(default=10, ge=1)
+    db_max_overflow: int = Field(default=20, ge=0)
+    db_pool_timeout: int = Field(default=10, ge=1)
+    db_statement_timeout_ms: int = Field(default=30000, ge=0)
+    db_lock_timeout_ms: int = Field(default=5000, ge=0)
+    db_idle_transaction_timeout_ms: int = Field(default=60000, ge=0)
+    db_disable_prepared_statements: bool = Field(default=False)
     redis_url: str = Field(default="redis://localhost:6379/0")
+    # TTL for caching per-user permission/role keys and tenant lookups in
+    # Redis so the auth hot path (run on almost every request) doesn't hit
+    # Postgres each time. Bounds how long a revoked permission or suspended
+    # tenant can still appear valid.
+    auth_cache_ttl_seconds: int = Field(default=30, ge=0)
+    login_rate_limit_attempts: int = Field(default=10, ge=3, le=100)
+    login_rate_limit_ip_attempts: int = Field(default=50, ge=10, le=1000)
+    login_rate_limit_window_seconds: int = Field(default=900, ge=60, le=86400)
+    secure_cookie: bool | None = Field(default=None)
     credential_encryption_key: str = Field(
         default="local-development-credential-key-change-before-production",
         min_length=32,
@@ -49,6 +84,12 @@ class Settings(BaseSettings):
     report_scheduler_lock_key: str = Field(
         default="medizinhub:reports:monthly:scheduler"
     )
+    report_worker_heartbeat_key: str = Field(
+        default="medizinhub:workers:reports:heartbeat"
+    )
+    report_worker_heartbeat_ttl_seconds: int = Field(default=30, ge=10)
+    report_queue_dedupe_ttl_seconds: int = Field(default=60, ge=10)
+    report_job_stale_after_seconds: int = Field(default=900, ge=60)
     # A finished month is frozen into a snapshot once it ends. For this many days
     # into the new month the snapshot is kept in sync with late same-period
     # entries (payments collected a day into the new month, backdated invoices);
@@ -106,6 +147,54 @@ class Settings(BaseSettings):
                 "app_version must use Semantic Versioning, for example 1.2.44"
             )
         return normalized
+
+    @model_validator(mode="after")
+    def _validate_storage_configuration(self):
+        environment = self.environment.strip().lower()
+        prefix = self.aws_s3_prefix.strip()
+        if prefix.startswith("/") or ".." in prefix.split("/"):
+            raise ValueError(
+                "aws_s3_prefix must be a relative server-controlled prefix"
+            )
+        if (
+            self.file_storage_backend == "s3"
+            and not str(self.aws_s3_bucket or "").strip()
+        ):
+            raise ValueError(
+                "aws_s3_bucket is required when file_storage_backend is s3"
+            )
+        if environment in {"production", "prod"}:
+            if self.secure_cookie is False:
+                raise ValueError(
+                    "production cannot disable secure authentication cookies"
+                )
+            if self.file_storage_backend != "s3":
+                raise ValueError("production must use the s3 file storage backend")
+            if self.aws_s3_endpoint_url:
+                raise ValueError("production cannot use a custom S3 endpoint URL")
+            bucket = str(self.aws_s3_bucket or "").strip().lower()
+            unsafe_markers = ("local", "dev", "staging", "stage", "test")
+            if any(marker in bucket for marker in unsafe_markers):
+                raise ValueError(
+                    "production cannot use a local, development, staging, or test bucket"
+                )
+            if self.aws_s3_presigned_url_ttl_seconds > 3600:
+                raise ValueError(
+                    "production S3 presigned URL TTL cannot exceed 3600 seconds"
+                )
+        elif self.file_storage_backend == "s3":
+            bucket = str(self.aws_s3_bucket or "").strip().lower()
+            if "prod" in bucket or "production" in bucket:
+                raise ValueError(
+                    "non-production environments cannot use a production bucket"
+                )
+        return self
+
+    @property
+    def secure_cookie_enabled(self) -> bool:
+        if self.secure_cookie is not None:
+            return self.secure_cookie
+        return self.environment.strip().lower() in {"production", "prod"}
 
     model_config = SettingsConfigDict(
         env_prefix="MEDIZINHUB_",

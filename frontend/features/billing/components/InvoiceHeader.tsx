@@ -15,6 +15,8 @@ const InvoiceHeader = ({ company }) => {
             src={company.logoUrl}
             alt={`${company.name} logo`}
             className="h-[60px] w-[100px] object-contain"
+            crossOrigin="anonymous"
+            onError={() => setLogoFailed(true)}
           />
         ) : (
           <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-emerald-400 text-xs font-bold text-emerald-500">

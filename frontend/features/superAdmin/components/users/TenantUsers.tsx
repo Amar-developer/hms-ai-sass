@@ -2,27 +2,26 @@
 
 import { useEffect, useState } from "react";
 import {
-  ActionButton,
-  ActionGroup,
   Badge,
   Card,
-  Field,
   Input,
   RefreshButton,
   SearchableSelect,
-  Select,
 } from "@/app/components/common/ui";
 import { formatDate } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { Pagination } from "@/app/components/common/Pagination";
 import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
 import { UserRoleList } from "./UserRoleList";
-import { status_options } from "../../constants";
+import { dateFieldOptions, status_options } from "../../constants";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { FormField } from "@/app/components/FormElements";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 export function TenantUsers({
   tenants,
@@ -34,6 +33,7 @@ export function TenantUsers({
   setSection,
   setConfirmAction,
   onRefresh,
+  busy,
 }: any) {
   const [filters, setFilters] = useState({
     query: "",
@@ -104,6 +104,133 @@ export function TenantUsers({
     setPage(1);
   }, [filters, sort, users.length]);
 
+  const userColumns: Column<any>[] = [
+    {
+      key: "name",
+      header: "User",
+      width: "180px",
+      render: (user: any) => (
+        <div>
+          <div className="flex items-center gap-2">
+            <b className="text-xs lg:text-sm">{user.name}</b>
+
+            <CopyIdButton
+              value={user.id}
+              label="User ID"
+              allowed={canCopyIds}
+            />
+          </div>
+
+          <p className="text-[10px] lg:text-xs text-slate-500">
+            {user.user_number || "User account"}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "email",
+      header: "Email",
+      width: "200px",
+      render: (user: any) => (
+        <span className="break-all text-xs lg:text-sm">{user.email}</span>
+      ),
+    },
+
+    {
+      key: "roles",
+      header: "Roles",
+      width: "150px",
+      className: "text-center",
+      render: (user: any) => <UserRoleList user={user} />,
+    },
+
+    {
+      key: "mobile",
+      header: "Mobile",
+      width: "120px",
+      className: "text-center",
+      render: (user: any) => (
+        <span className="text-xs lg:text-sm">{user.mobile || "-"}</span>
+      ),
+    },
+
+    {
+      key: "is_active",
+      header: "Status",
+      width: "120px",
+      className: "text-center",
+      render: (user: any) => (
+        <Badge
+          tone={user.is_active ? "green" : "red"}
+          className="rounded-full py-1 px-1 text-xs"
+        >
+          {user.is_active ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+
+    {
+      key: "created_at",
+      header: "Created",
+      width: "120px",
+      render: (user: any) => (
+        <span className="text-xs lg:text-sm">
+          {formatDate(user.created_at)}
+        </span>
+      ),
+    },
+
+    {
+      key: "updated_at",
+      header: "Modified",
+      width: "120px",
+      render: (user: any) => (
+        <span className="text-xs lg:text-sm">
+          {formatDate(user.updated_at)}
+        </span>
+      ),
+    },
+
+    {
+      key: "actions",
+      header: "Actions",
+      width: "100px",
+      disableRowClick: true,
+      render: (user: any) => {
+        const actions = [
+          {
+            label: "Edit",
+            onClick: () => {
+              setSelectedUserId(user.id);
+              setSection("userEdit");
+            },
+          },
+          {
+            label: user.is_active ? "Inactive" : "Active",
+            onClick: () =>
+              setConfirmAction({
+                entity: "user",
+                kind: "status",
+                user,
+              }),
+          },
+          {
+            label: "Delete",
+            danger: true,
+            onClick: () =>
+              setConfirmAction({
+                entity: "user",
+                kind: "delete",
+                user,
+              }),
+          },
+        ];
+
+        return <RowActions actions={actions} className="right-16 -bottom-5" />;
+      },
+    },
+  ];
+
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
@@ -142,7 +269,7 @@ export function TenantUsers({
         <FormField label="Status">
           <SearchableSelect
             value={filters.status}
-            onChange={(value:any) => updateFilter("status", value)}
+            onChange={(value: any) => updateFilter("status", value)}
             options={status_options}
             searchable={false}
           />
@@ -152,10 +279,7 @@ export function TenantUsers({
           <SearchableSelect
             value={filters.dateField}
             onChange={(value) => updateFilter("dateField", value)}
-            options={[
-              { value: "updated_at", label: "Modified date" },
-              { value: "created_at", label: "Created date" },
-            ]}
+            options={dateFieldOptions}
             searchable={false}
           />
         </FormField>
@@ -174,156 +298,21 @@ export function TenantUsers({
           />
         </FormField>
       </div>
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-        <div className="min-w-[1320px]">
-          <div className="hidden md:grid-cols-[.9fr_1.15fr_1fr_.65fr_.55fr_.65fr_.65fr_.7fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
-            <SortButton
-              label="User"
-              field="name"
-              sort={sort}
-              onSort={changeSort}
-            />
-            <SortButton
-              label="Email"
-              field="email"
-              sort={sort}
-              onSort={changeSort}
-            />
-            <span>Roles</span>
-            <span>Mobile</span>
-            <SortButton
-              label="Status"
-              field="is_active"
-              sort={sort}
-              onSort={changeSort}
-            />
-            <SortButton
-              label="Created"
-              field="created_at"
-              sort={sort}
-              onSort={changeSort}
-            />
-            <SortButton
-              label="Modified"
-              field="updated_at"
-              sort={sort}
-              onSort={changeSort}
-            />
-            <span className="text-start">Actions</span>
-          </div>
-          <div className="divide-y divide-slate-200">
-            {rows.length === 0 && <Empty text="No users match your search." />}
-            {rows.map((user: any) => {
-              const open = () => {
+      <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-2xl border border-slate-200 ">
+        <div className="min-w-[1000px]">
+          {busy && rows.length === 0 ? (
+            <TableSkeleton />
+          ) : (
+            <DataTable
+              columns={userColumns}
+              data={rows}
+              emptyMessage="No users match your search."
+              onRowClick={(user) => {
                 setSelectedUserId(user.id);
                 setSection("userEdit");
-              };
-              const stop = (handler: () => void) => (event: any) => {
-                event.stopPropagation();
-                handler();
-              };
-              return (
-                <div
-                  key={user.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={open}
-                  onKeyDown={(event: any) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      open();
-                    }
-                  }}
-                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_1.15fr_.65fr_.70fr_.65fr_.65fr_.7fr] md:items-center"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <b className="text-xs lg:text-sm">{user.name}</b>
-                      <CopyIdButton
-                        value={user.id}
-                        label="User ID"
-                        allowed={canCopyIds}
-                      />
-                    </div>
-                    <p className="text-[10px] lg:text-xs text-slate-500">
-                      {user.user_number || "User account"}
-                    </p>
-                  </div>
-                  <span className="break-all text-xs lg:text-sm">
-                    {user.email}
-                  </span>
-                  <UserRoleList user={user} />
-                  <span className="text-xs lg:text-sm">
-                    {user.mobile || "-"}
-                  </span>
-                  <Badge
-                    tone={user.is_active ? "green" : "red"}
-                    className="rounded-full text-xs py-1 px-1"
-                  >
-                    {user.is_active ? "Active" : "Inactive"}
-                  </Badge>
-                  <span className="text-xs lg:text-sm flex justify-start items-center">
-                    {formatDate(user.created_at)}
-                  </span>
-                  <span className="text-xs lg:text-sm flex justify-start items-center">
-                    {formatDate(user.updated_at)}
-                  </span>
-                  {rows.map((user: any) => {
-                    const open = () => {
-                      setSelectedUserId(user.id);
-                      setSection("userEdit");
-                    };
-
-                    const actions = [
-                      {
-                        label: "Edit",
-                        onClick: open,
-                      },
-                      {
-                        label: user.is_active ? "Inactive" : "Active",
-                        onClick: () =>
-                          setConfirmAction({
-                            entity: "user",
-                            kind: "status",
-                            user,
-                          }),
-                      },
-                      {
-                        label: "Delete",
-                        danger: true,
-                        onClick: () =>
-                          setConfirmAction({
-                            entity: "user",
-                            kind: "delete",
-                            user,
-                          }),
-                      },
-                    ];
-
-                    return (
-                      <div
-                        key={user.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={open}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            open();
-                          }
-                        }}
-                        className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_1.15fr_.65fr_.70fr_.65fr_.65fr_auto] md:items-center"
-                      >
-                        {/* Other columns */}
-
-                        <RowActions actions={actions} />
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
+              }}
+            />
+          )}
         </div>
       </div>
       <Pagination

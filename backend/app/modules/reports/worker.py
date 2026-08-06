@@ -1,15 +1,20 @@
 import json
-import time
-from datetime import date
+import logging
+import signal
+import threading
+from datetime import date, timedelta
 
 from sqlmodel import Session, select
 
+from app.core.config import get_settings
 from app.core.database import engine
+from app.core.logging import configure_logging
 from app.modules.error_logs.service import purge_expired_error_logs
 from app.modules.reports.models import ReportJob, ReportJobStatus
 from app.modules.reports.queue import (
     dequeue_monthly_report_job,
     enqueue_monthly_report_job,
+    record_worker_heartbeat,
     scheduler_lock,
 )
 from app.modules.reports.service import (
@@ -24,9 +29,24 @@ from app.modules.tenants.models import Tenant, TenantStatus, now_utc
 from app.modules.notifications.whatsapp_processor import (
     process_due_whatsapp_notifications,
 )
+from app.modules.notifications.email_processor import process_due_email_deliveries
 from app.modules.integrations.whatsapp_reminders import (
     queue_due_whatsapp_appointment_reminders,
 )
+
+
+logger = logging.getLogger("medizinhub.report_worker")
+_shutdown = threading.Event()
+
+
+def _heartbeat_loop() -> None:
+    interval = max(get_settings().report_worker_heartbeat_ttl_seconds // 3, 5)
+    while not _shutdown.is_set():
+        try:
+            record_worker_heartbeat()
+        except Exception:
+            logger.exception("report_worker.heartbeat_failed")
+        _shutdown.wait(interval)
 
 
 def enqueue_due_monthly_reports(session: Session) -> None:
@@ -64,7 +84,51 @@ def enqueue_due_monthly_reports(session: Session) -> None:
         session.add(job)
         session.commit()
         session.refresh(job)
-        enqueue_monthly_report_job(job.id)
+        try:
+            enqueue_monthly_report_job(job.id)
+        except Exception:
+            logger.exception(
+                "report_worker.queue_wakeup_failed",
+                extra={"report_job_id": job.id},
+            )
+
+
+def recover_stale_report_jobs(session: Session) -> int:
+    """Return abandoned RUNNING jobs to the durable queue after their lease."""
+    cutoff = now_utc() - timedelta(
+        seconds=get_settings().report_job_stale_after_seconds
+    )
+    jobs = session.exec(
+        select(ReportJob)
+        .where(
+            ReportJob.status == ReportJobStatus.RUNNING,
+            ReportJob.started_at <= cutoff,
+        )
+        .with_for_update(skip_locked=True)
+    ).all()
+    for job in jobs:
+        job.status = ReportJobStatus.QUEUED
+        job.started_at = None
+        job.failure_reason = "Recovered after an interrupted worker run"
+        job.updated_at = now_utc()
+        session.add(job)
+    if jobs:
+        session.commit()
+    return len(jobs)
+
+
+def _next_durable_job_id(session: Session, hinted_job_id: str | None) -> str | None:
+    if hinted_job_id:
+        hinted = session.get(ReportJob, hinted_job_id)
+        if hinted and hinted.status == ReportJobStatus.QUEUED:
+            return hinted.id
+    row = session.exec(
+        select(ReportJob)
+        .where(ReportJob.status == ReportJobStatus.QUEUED)
+        .order_by(ReportJob.created_at)
+        .limit(1)
+    ).first()
+    return row.id if row else None
 
 
 def run_once() -> None:
@@ -73,7 +137,12 @@ def run_once() -> None:
     # them per cycle. This is the app's only recurring background worker,
     # so periodic maintenance piggybacks on it rather than standing up a
     # separate scheduler.
-    if scheduler_lock():
+    try:
+        has_scheduler_lock = scheduler_lock()
+    except Exception:
+        has_scheduler_lock = False
+        logger.exception("report_worker.scheduler_lock_unavailable")
+    if has_scheduler_lock:
         with Session(engine) as session:
             enqueue_due_monthly_reports(session)
             # Freeze the just-finished month into income dashboard snapshots
@@ -83,8 +152,21 @@ def run_once() -> None:
             purge_expired_error_logs(session)
             queue_due_whatsapp_appointment_reminders(session)
     with Session(engine) as session:
+        recovered = recover_stale_report_jobs(session)
+        if recovered:
+            logger.warning(
+                "report_worker.stale_jobs_recovered",
+                extra={"recovered_count": recovered},
+            )
         process_due_whatsapp_notifications(session)
-    job_id = dequeue_monthly_report_job(timeout=5)
+        process_due_email_deliveries(session)
+    try:
+        job_id = dequeue_monthly_report_job(timeout=5)
+    except Exception:
+        job_id = None
+        logger.exception("report_worker.queue_dequeue_unavailable")
+    with Session(engine) as session:
+        job_id = _next_durable_job_id(session, job_id)
     if not job_id:
         return
     with Session(engine) as session:
@@ -102,13 +184,39 @@ def run_once() -> None:
         job.updated_at = now_utc()
         session.add(job)
         session.commit()
+    with Session(engine) as session:
+        process_due_email_deliveries(session)
 
 
 def main() -> None:
-    while True:
-        run_once()
-        time.sleep(1)
+    def request_shutdown(_signum, _frame) -> None:
+        _shutdown.set()
+
+    signal.signal(signal.SIGTERM, request_shutdown)
+    signal.signal(signal.SIGINT, request_shutdown)
+    heartbeat_thread = threading.Thread(
+        target=_heartbeat_loop,
+        name="report-worker-heartbeat",
+        daemon=True,
+    )
+    heartbeat_thread.start()
+    failure_delay = 1
+    while not _shutdown.is_set():
+        try:
+            run_once()
+            failure_delay = 1
+        except Exception:
+            logger.exception("report_worker.cycle_failed")
+            failure_delay = min(failure_delay * 2, 30)
+        _shutdown.wait(failure_delay)
+    heartbeat_thread.join(timeout=2)
 
 
 if __name__ == "__main__":
+    # This worker runs as its own process (`python -m app.modules.reports.worker`),
+    # separate from the FastAPI app in app/main.py — it never imports that
+    # module, so the JSON log formatter configured there was never applied
+    # here, silently dropping every structured `extra={...}` field (status
+    # codes, provider responses, etc.) down to the bare message text.
+    configure_logging()
     main()

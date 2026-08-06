@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { apiFetch } from "@/lib/api";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import {
   Card,
   Select,
@@ -23,7 +23,12 @@ import PrescriptionDocument, {
   type PrescriptionReferral,
 } from "./PrescriptionDocument";
 import { exportPrescriptionPdf } from "../exportPrescriptionPdf";
-import { treatment_type_options, vitalFields } from "../constants";
+import {
+  COMPLAINT_SUGGESTIONS,
+  treatment_type_options,
+  vitalFields,
+} from "../constants";
+import { useConsultationWorkspaceData } from "../api";
 
 function safeFilename(value: unknown) {
   return String(value || "")
@@ -155,42 +160,37 @@ export function ConsultationWorkspace(props: any) {
   const [labDraftName, setLabDraftName] = useState("");
   const [medicineAddAttempted, setMedicineAddAttempted] = useState(false);
   const [labAddAttempted, setLabAddAttempted] = useState(false);
-  const [availableMedicineCatalog, setAvailableMedicineCatalog] =
-    useState<any[]>(medicineCatalog);
-  const [medicineCatalogLoading, setMedicineCatalogLoading] = useState(false);
-  const [medicineCatalogError, setMedicineCatalogError] = useState("");
-  const [availableLabCatalog, setAvailableLabCatalog] = useState<any[]>(
-    Array.isArray(labCatalog) ? labCatalog : [],
-  );
-  const [externalLabLoading, setExternalLabLoading] = useState(false);
-  const [externalLabError, setExternalLabError] = useState("");
-  const [popularMedicines, setPopularMedicines] = useState<any[]>([]);
-  const [popularLabTests, setPopularLabTests] = useState<any[]>([]);
   const [showPrescriptionPrint, setShowPrescriptionPrint] = useState(false);
-  const [isExportingPrescription, setIsExportingPrescription] =
-    useState(false);
+  const [isExportingPrescription, setIsExportingPrescription] = useState(false);
   // The `patient` prop can arrive without `patient_number` (e.g. it hasn't
-  // finished loading in the parent yet). Fetch it directly so the printed
-  // Patient ID always matches the same patient_number shown on invoices,
-  // instead of falling back to nothing or the internal record id.
-  const [patientNumberFallback, setPatientNumberFallback] = useState("");
+  // finished loading in the parent yet). The workspace data hook fetches it
+  // directly so the printed Patient ID always matches the same
+  // patient_number shown on invoices, instead of falling back to nothing or
+  // the internal record id.
+  const {
+    availableMedicineCatalog,
+    medicineCatalogLoading,
+    medicineCatalogError,
+    availableLabCatalog,
+    externalLabLoading,
+    externalLabError,
+    popularMedicines,
+    popularLabTests,
+    patientNumberFallback,
+  } = useConsultationWorkspaceData({
+    apiSession,
+    patient,
+    branchId,
+    medicineCatalog,
+    labCatalog,
+    medicineSearch: medicineDraftName,
+    labSearch: labDraftName,
+  });
+  console.log(availableMedicineCatalog,'availableCatalog')
   useEffect(() => {
     setMedicineAddAttempted(false);
     setLabAddAttempted(false);
   }, [selected?.id]);
-  useEffect(() => {
-    setPatientNumberFallback("");
-    if (!apiSession || !patient?.id || patient?.patient_number) return;
-    let alive = true;
-    apiFetch(`/patients/${patient.id}`, apiSession)
-      .then((detail: any) => {
-        if (alive) setPatientNumberFallback(detail?.patient_number || "");
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [patient?.id, patient?.patient_number, apiSession?.tenantId]);
   const selectedReferralDoctor = practitioners?.find(
     (p: any) => String(p.id) === String(referDoctorId),
   );
@@ -319,119 +319,6 @@ export function ConsultationWorkspace(props: any) {
   const selectedLabTest = activeLabCatalog.find(
     (test: any) => (test.id || test.slug || test.name) === selectedLabTestId,
   );
-  useEffect(() => {
-    setAvailableMedicineCatalog(
-      Array.isArray(medicineCatalog) ? medicineCatalog : [],
-    );
-  }, [medicineCatalog]);
-  useEffect(() => {
-    setAvailableLabCatalog(Array.isArray(labCatalog) ? labCatalog : []);
-  }, [labCatalog]);
-  useEffect(() => {
-    if (!apiSession?.tenantId) {
-      setAvailableMedicineCatalog([]);
-      return;
-    }
-    let alive = true;
-    const search = medicineDraftName.trim();
-    const timer = window.setTimeout(
-      async () => {
-        setMedicineCatalogLoading(true);
-        setMedicineCatalogError("");
-        try {
-          const params = new URLSearchParams();
-          if (search) params.set("search", search);
-          const rows = await apiFetch(
-            `/pharmacy/catalog/available-medicines${params.toString() ? `?${params}` : ""}`,
-            apiSession,
-          );
-          if (alive)
-            setAvailableMedicineCatalog(Array.isArray(rows) ? rows : []);
-        } catch (err: any) {
-          if (alive) {
-            setAvailableMedicineCatalog([]);
-            setMedicineCatalogError(
-              err?.message || "Could not load medicine catalog.",
-            );
-          }
-        } finally {
-          if (alive) setMedicineCatalogLoading(false);
-        }
-      },
-      search ? 250 : 0,
-    );
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [apiSession, apiSession?.tenantId, medicineDraftName]);
-  useEffect(() => {
-    if (!apiSession?.tenantId) {
-      setAvailableLabCatalog([]);
-      return;
-    }
-    let alive = true;
-    const search = labDraftName.trim();
-    const timer = window.setTimeout(
-      async () => {
-        setExternalLabLoading(true);
-        setExternalLabError("");
-        try {
-          const params = new URLSearchParams();
-          if (branchId) params.set("branch_id", branchId);
-          if (search) params.set("search", search);
-          const rows = await apiFetch(
-            `/lab/catalog/available-tests${params.toString() ? `?${params}` : ""}`,
-            apiSession,
-          );
-          if (alive) setAvailableLabCatalog(Array.isArray(rows) ? rows : []);
-        } catch (err: any) {
-          if (alive) {
-            setAvailableLabCatalog([]);
-            setExternalLabError(
-              err?.message || "Could not load the available lab tests.",
-            );
-          }
-        } finally {
-          if (alive) setExternalLabLoading(false);
-        }
-      },
-      search ? 250 : 0,
-    );
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [apiSession, apiSession?.tenantId, branchId, labDraftName]);
-  useEffect(() => {
-    if (!apiSession?.tenantId) {
-      setPopularMedicines([]);
-      setPopularLabTests([]);
-      return;
-    }
-    let alive = true;
-    (async () => {
-      try {
-        const [meds, labs] = await Promise.all([
-          apiFetch("/pharmacy/catalog/popular-medicines", apiSession).catch(
-            () => [],
-          ),
-          apiFetch("/lab/catalog/popular-tests", apiSession).catch(() => []),
-        ]);
-        if (!alive) return;
-        setPopularMedicines(Array.isArray(meds) ? meds : []);
-        setPopularLabTests(Array.isArray(labs) ? labs : []);
-      } catch {
-        if (alive) {
-          setPopularMedicines([]);
-          setPopularLabTests([]);
-        }
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [apiSession, apiSession?.tenantId]);
   // Suggestion tags prefer the most-used items from prescription/referral
   // history; fall back to the catalog when there is no history yet.
   const medicineSuggestions = popularMedicines.length
@@ -561,13 +448,6 @@ export function ConsultationWorkspace(props: any) {
               className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
             >
               Call
-            </button>
-            <button
-              onClick={skipPatient}
-              disabled={queueActionDisabled}
-              className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Not Present
             </button>
             <button
               onClick={() => requeuePatient("after2")}
@@ -735,6 +615,38 @@ export function ConsultationWorkspace(props: any) {
                     }`}
                     placeholder="Fever | 2 days | medium"
                   />
+
+                  {/* Suggestions – show at least 5 */}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {COMPLAINT_SUGGESTIONS.slice(0, 8).map((suggestion) => {
+                      const alreadyAdded = complaints
+                        .split("\n")
+                        .map((line) => line.trim())
+                        .includes(suggestion);
+
+                      return (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          disabled={alreadyAdded}
+                          onClick={() => {
+                            setComplaints((prev: string) =>
+                              prev.trim()
+                                ? `${prev.trim()}\n${suggestion}`
+                                : suggestion,
+                            );
+                          }}
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition ${
+                            alreadyAdded
+                              ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
+                              : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                          }`}
+                        >
+                          {suggestion}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </FormField>
                 <FormField label="Diagnosis" required error={diagnosisError}>
                   <textarea
@@ -945,26 +857,39 @@ export function ConsultationWorkspace(props: any) {
                         </thead>
                         <tbody className="divide-y divide-slate-200">
                           {medicineItems.length ? (
-                            medicineItems.map((medicine: any, index: number) => (
-                              <tr key={`${medicine.name}-${index}`} className="h-[51px]">
-                                <td className="px-3 py-2.5 font-semibold text-slate-900">
-                                  {medicine.name || "-"}
-                                </td>
-                                <td className="px-3 py-2.5">{medicine.dosage || "-"}</td>
-                                <td className="px-3 py-2.5">{medicine.frequency || "-"}</td>
-                                <td className="px-3 py-2.5">{medicine.duration || "-"}</td>
-                                <td className="px-3 py-2.5">{medicine.instructions || "-"}</td>
-                                <td className="px-3 py-2.5 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => removeMedicineItem(index)}
-                                    className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
-                                  >
-                                    Remove
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
+                            medicineItems.map(
+                              (medicine: any, index: number) => (
+                                <tr
+                                  key={`${medicine.name}-${index}`}
+                                  className="h-[51px]"
+                                >
+                                  <td className="px-3 py-2.5 font-semibold text-slate-900">
+                                    {medicine.name || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.dosage || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.frequency || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.duration || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.instructions || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => removeMedicineItem(index)}
+                                      className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
+                                    >
+                                      Remove
+                                    </button>
+                                  </td>
+                                </tr>
+                              ),
+                            )
                           ) : (
                             <tr>
                               <td
@@ -1104,7 +1029,10 @@ export function ConsultationWorkspace(props: any) {
                             ) ? (
                               referralItems.map((item: any, index: number) =>
                                 item.type === "lab" ? (
-                                  <tr key={`${item.name}-${index}`} className="h-[51px]">
+                                  <tr
+                                    key={`${item.name}-${index}`}
+                                    className="h-[51px]"
+                                  >
                                     <td className="px-3 py-2.5 font-semibold text-slate-900">
                                       {item.name || "-"}
                                     </td>
@@ -1186,29 +1114,26 @@ export function ConsultationWorkspace(props: any) {
                       Refer another doctor
                     </label>
                     {referDoctor && (
-
-                        <SearchableSelect
-                          required
-                          name="referDoctorId"
-                          value={referDoctorId}
-                          onChange={(value) => setReferDoctorId(value)}
-                          searchable={false}
-                          options={[
-                            { value: "", label: "Select doctor" },
-                            ...practitioners
-                              .filter(
-                                (p: any) =>
-                                  p.role === "Doctor" && p.id !== doctor.id,
-                              )
-                              .map((p: any) => ({
-                                value: p.id,
-                                label: `${p.name} - ${p.specialty}`,
-                              })),
-                          ]}
-                          aria-invalid={
-                            Boolean(referralDoctorError) || undefined
-                          }
-                        />
+                      <SearchableSelect
+                        required
+                        name="referDoctorId"
+                        value={referDoctorId}
+                        onChange={(value) => setReferDoctorId(value)}
+                        searchable={false}
+                        options={[
+                          { value: "", label: "Select doctor" },
+                          ...practitioners
+                            .filter(
+                              (p: any) =>
+                                p.role === "Doctor" && p.id !== doctor.id,
+                            )
+                            .map((p: any) => ({
+                              value: p.id,
+                              label: `${p.name} - ${p.specialty}`,
+                            })),
+                        ]}
+                        aria-invalid={Boolean(referralDoctorError) || undefined}
+                      />
                     )}
                   </div>
                   <div className="rounded-lg bg-slate-50 p-4">
@@ -1291,7 +1216,13 @@ export function ConsultationWorkspace(props: any) {
                 onClick={apiSession ? saveBackendDraft : markDone}
                 disabled={busy || selected?.consultationStatus === "signed"}
               >
-                {apiSession ? "Save Draft" : "Mark Consultation Done"}
+                <ButtonLoader loading={busy}>
+                  {apiSession
+                    ? busy
+                      ? "Saving..."
+                      : "Save Draft"
+                    : "Mark Consultation Done"}
+                </ButtonLoader>
               </Button>
               {apiSession && (
                 <Button
@@ -1300,7 +1231,9 @@ export function ConsultationWorkspace(props: any) {
                   disabled={busy || selected?.consultationStatus === "signed"}
                   className="bg-emerald-700 text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
                 >
-                  Complete
+                  <ButtonLoader loading={busy}>
+                    {busy ? "Signing..." : "Complete"}
+                  </ButtonLoader>
                 </Button>
               )}
               <Button

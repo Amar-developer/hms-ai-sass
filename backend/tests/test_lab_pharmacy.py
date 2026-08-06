@@ -8,6 +8,7 @@ from app.modules.lab.models import (
     LabOrder,
     LabOrderItem,
     LabOrderSource,
+    LabOrderStatus,
     LabTestCatalog,
     LabTestPackage,
 )
@@ -18,6 +19,9 @@ def test_cancelled_lab_invoice_does_not_lock_order_for_billing(test_engine):
     from app.modules.billing.models import Invoice, InvoiceStatus
     from app.modules.billing.repositories.source_repository import (
         BillingSourceRepository,
+    )
+    from app.modules.billing.services.source_references import (
+        active_lab_invoice_reference_map,
     )
 
     with Session(test_engine) as session:
@@ -52,6 +56,14 @@ def test_cancelled_lab_invoice_does_not_lock_order_for_billing(test_engine):
             )
             is None
         )
+        assert (
+            active_lab_invoice_reference_map(
+                session,
+                tenant_id=order.tenant_id,
+                lab_order_ids={order.id},
+            )
+            == {}
+        )
 
         invoice.status = InvoiceStatus.ISSUED
         session.add(invoice)
@@ -63,6 +75,11 @@ def test_cancelled_lab_invoice_does_not_lock_order_for_billing(test_engine):
         )
         assert active_invoice is not None
         assert active_invoice.id == invoice.id
+        assert active_lab_invoice_reference_map(
+            session,
+            tenant_id=order.tenant_id,
+            lab_order_ids={order.id},
+        ) == {order.id: invoice.id}
 
 
 def test_lab_package_read_includes_updated_mrp_and_purchase_price(test_engine):
@@ -170,6 +187,94 @@ def test_available_medicines_uses_external_graphql_catalog(test_engine, monkeypa
 
     assert rows[0]["item_name"] == "DOLO 650 MG TABLET"
     assert rows[0]["source"] == "graphql"
+
+
+def test_available_medicines_skips_external_catalog_without_meaningful_search(
+    monkeypatch,
+):
+    from app.modules.pharmacy.services import catalog as pharmacy_catalog
+
+    monkeypatch.setattr(
+        pharmacy_catalog, "enforce_module_enabled", lambda *_args, **_kwargs: None
+    )
+
+    def unexpected_client():
+        raise AssertionError("blank searches must not call the external catalog")
+
+    monkeypatch.setattr(pharmacy_catalog, "medicine_graphql_client", unexpected_client)
+    actor = User(
+        tenant_id="tenant_medicine_search",
+        user_type="tenant_admin",
+        name="Tenant Admin",
+        email="tenant-admin@example.test",
+    )
+
+    assert (
+        pharmacy_catalog.list_available_medicines_service(
+            object(),
+            tenant_id="tenant_medicine_search",
+            branch_id=None,
+            search=None,
+            page_size=10,
+            current_page=1,
+            actor=actor,
+        )
+        == []
+    )
+    assert (
+        pharmacy_catalog.list_available_medicines_service(
+            object(),
+            tenant_id="tenant_medicine_search",
+            branch_id=None,
+            search=" d ",
+            page_size=10,
+            current_page=1,
+            actor=actor,
+        )
+        == []
+    )
+
+
+def test_local_available_medicines_applies_requested_page(monkeypatch):
+    from app.modules.pharmacy.services import catalog as pharmacy_catalog
+
+    captured = {}
+
+    class FakeRepository:
+        def __init__(self, _session):
+            pass
+
+        def list_active_medicines(self, **kwargs):
+            captured.update(kwargs)
+            return []
+
+    monkeypatch.setattr(
+        pharmacy_catalog, "enforce_module_enabled", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        pharmacy_catalog, "external_medicine_items_enabled", lambda *_args: False
+    )
+    monkeypatch.setattr(pharmacy_catalog, "PharmacyCatalogRepository", FakeRepository)
+    actor = User(
+        tenant_id="tenant_local_catalog",
+        user_type="tenant_admin",
+        name="Tenant Admin",
+        email="local-catalog@example.test",
+    )
+
+    rows = pharmacy_catalog.list_available_medicines_service(
+        object(),
+        tenant_id="tenant_local_catalog",
+        branch_id=None,
+        search="dolo",
+        page_size=10,
+        current_page=3,
+        actor=actor,
+    )
+
+    assert rows == []
+    assert captured["limit"] == 10
+    assert captured["offset"] == 20
 
 
 def setup_lab_pharmacy_tenant(client):
@@ -297,7 +402,7 @@ def test_trial_plan_blocks_lab_and_pharmacy_modules(client):
 
 
 def test_create_lab_order_from_consultation_and_release_result(client):
-    tenant, _branch, _patient, consultation = setup_signed_consultation(client)
+    tenant, _branch, patient, consultation = setup_signed_consultation(client)
 
     order = client.post(
         f"/api/v1/lab/orders/from-consultation/{consultation['id']}",
@@ -324,6 +429,8 @@ def test_create_lab_order_from_consultation_and_release_result(client):
     assert result.json()["order"]["status"] == "result_ready"
     assert result.json()["results"][0]["abnormal_flag"] is True
     assert len(listed) == 1
+    assert listed[0]["patient_name"] == patient["full_name"]
+    assert listed[0]["patient_number"] == patient["patient_number"]
 
 
 def test_zero_amount_lab_order_reprices_from_local_catalog(test_engine):
@@ -486,7 +593,10 @@ def test_available_lab_search_returns_local_lab_tests_and_services(
                 code="CBC",
                 name="Complete Blood Count",
                 sample_type="Blood (EDTA)",
+                mrp_price=450,
                 default_price=300,
+                purchase_price=100,
+                supplier_id="supplier-neuberg",
             )
         )
         session.add(
@@ -497,6 +607,8 @@ def test_available_lab_search_returns_local_lab_tests_and_services(
                 name="Cardiac Screening",
                 description="ECG + Chest X-Ray",
                 package_price=500,
+                purchase_price=225,
+                supplier_id="supplier-metropolis",
             )
         )
         session.commit()
@@ -516,16 +628,57 @@ def test_available_lab_search_returns_local_lab_tests_and_services(
             current_user=current_user,
         )
 
-    assert any(
-        row["item_name"] == "Complete Blood Count" and row["item_type"] == "lab_test"
-        for row in lab_rows
+    lab_row = next(
+        row for row in lab_rows if row["item_name"] == "Complete Blood Count"
     )
-    assert any(
-        row["item_name"] == "Cardiac Screening"
-        and row["item_type"] == "lab_package"
-        and row["kind"] == "Service"
-        for row in service_rows
+    assert lab_row["item_type"] == "lab_test"
+    assert lab_row["supplier_id"] == "supplier-neuberg"
+    assert lab_row["buying_price"] == 100
+    assert lab_row["mrp_price"] == 450
+    assert lab_row["selling_price"] == 300
+
+    service_row = next(
+        row for row in service_rows if row["item_name"] == "Cardiac Screening"
     )
+    assert service_row["item_type"] == "lab_package"
+    assert service_row["kind"] == "Service"
+    assert service_row["supplier_id"] == "supplier-metropolis"
+    assert service_row["buying_price"] == 225
+
+
+def test_lab_service_package_creates_one_package_price_invoice_line(test_engine):
+    from app.modules.billing.services.source_invoices import _lab_invoice_line_items
+
+    with Session(test_engine) as session:
+        package = LabTestPackage(
+            tenant_id="tenant-service-lines",
+            code="CARDIAC",
+            name="Cardiac Screening",
+            package_price=500,
+        )
+        session.add(package)
+        session.commit()
+        session.refresh(package)
+        items = [
+            LabOrderItem(
+                tenant_id=package.tenant_id,
+                branch_id="branch-1",
+                lab_order_id="order-1",
+                test_id=f"test-{index}",
+                package_id=package.id,
+                test_name=name,
+                price=0,
+            )
+            for index, name in enumerate(
+                ["12-Lead ECG", "Chest X-Ray PA View"], start=1
+            )
+        ]
+
+        lines = _lab_invoice_line_items(session, package.tenant_id, items)
+
+    assert len(lines) == 1
+    assert lines[0]["description"] == "Cardiac Screening"
+    assert lines[0]["total_amount"] == 500
 
 
 def test_create_direct_op_and_outside_referral_lab_orders(client):
@@ -564,6 +717,103 @@ def test_create_direct_op_and_outside_referral_lab_orders(client):
     assert external.status_code == 201
     assert external.json()["external_referrer"] == "Outside Clinic"
     assert status_update.json()["status"] == "sample_collected"
+
+
+def test_lab_order_multiple_file_upload_list_download_and_validation(
+    client, tmp_path, monkeypatch
+):
+    from app.core import uploads as uploads_module
+    from app.modules.lab.services import file_service as lab_file_service
+
+    monkeypatch.setattr(uploads_module, "PRIVATE_UPLOADS_DIR", tmp_path)
+    monkeypatch.setattr(lab_file_service, "PRIVATE_UPLOADS_DIR", tmp_path)
+    tenant, branch, patient = setup_lab_pharmacy_tenant(client)
+    order = client.post(
+        "/api/v1/lab/orders",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": patient["id"],
+            "source": "op_direct",
+            "tests": "CBC",
+            "amount": 450,
+        },
+    ).json()
+
+    upload = client.post(
+        f"/api/v1/lab/orders/{order['id']}/files",
+        headers={"X-Tenant-ID": tenant["id"]},
+        files=[
+            ("files", ("report.pdf", b"%PDF-1.4\n%lab\n", "application/pdf")),
+            (
+                "files",
+                (
+                    "scan.png",
+                    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR",
+                    "image/png",
+                ),
+            ),
+        ],
+    )
+    listed = client.get(
+        f"/api/v1/lab/orders/{order['id']}/files",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    first_file = upload.json()[0]
+    download = client.get(
+        f"/api/v1/lab/orders/{order['id']}/files/{first_file['id']}/download",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    invalid_upload = client.post(
+        f"/api/v1/lab/orders/{order['id']}/files",
+        headers={"X-Tenant-ID": tenant["id"]},
+        files=[("files", ("unsafe.txt", b"plain text", "text/plain"))],
+    )
+
+    assert upload.status_code == 201
+    assert len(upload.json()) == 2
+    assert {row["attached_to_name"] for row in upload.json()} == {order["id"]}
+    assert {row["category"] for row in upload.json()} == {"lab_report"}
+    assert listed.status_code == 200
+    assert len(listed.json()) == 2
+    assert download.status_code == 200
+    assert download.content.startswith(b"%PDF")
+    assert invalid_upload.status_code == 400
+    assert "Unsupported" in invalid_upload.json()["detail"]
+
+
+def test_cancelled_lab_order_rejects_file_upload(client, tmp_path, monkeypatch):
+    from app.core import uploads as uploads_module
+    from app.modules.lab.services import file_service as lab_file_service
+
+    monkeypatch.setattr(uploads_module, "PRIVATE_UPLOADS_DIR", tmp_path)
+    monkeypatch.setattr(lab_file_service, "PRIVATE_UPLOADS_DIR", tmp_path)
+    tenant, branch, patient = setup_lab_pharmacy_tenant(client)
+    order = client.post(
+        "/api/v1/lab/orders",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": patient["id"],
+            "source": "op_direct",
+            "tests": "CBC",
+            "amount": 450,
+        },
+    ).json()
+    client.patch(
+        f"/api/v1/lab/orders/{order['id']}/status",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"status": LabOrderStatus.CANCELLED.value, "reason": "Duplicate"},
+    )
+
+    upload = client.post(
+        f"/api/v1/lab/orders/{order['id']}/files",
+        headers={"X-Tenant-ID": tenant["id"]},
+        files=[("files", ("report.pdf", b"%PDF-1.4\n%lab\n", "application/pdf"))],
+    )
+
+    assert upload.status_code == 409
+    assert upload.json()["detail"] == "Cannot upload reports for a cancelled lab order"
 
 
 def test_lab_catalog_package_order_items_sample_template_report_and_consultation_visibility(
@@ -687,7 +937,7 @@ def test_lab_catalog_package_order_items_sample_template_report_and_consultation
 
 
 def test_create_pharmacy_issue_from_consultation_and_dispense(client):
-    tenant, _branch, _patient, consultation = setup_signed_consultation(client)
+    tenant, _branch, patient, consultation = setup_signed_consultation(client)
 
     issue = client.post(
         f"/api/v1/pharmacy/issues/from-consultation/{consultation['id']}",
@@ -699,12 +949,17 @@ def test_create_pharmacy_issue_from_consultation_and_dispense(client):
         headers={"X-Tenant-ID": tenant["id"]},
         json={"status": "dispensed", "actor_user_id": "pharmacy_user"},
     )
+    listed = client.get(
+        "/api/v1/pharmacy/issues", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert issue.status_code == 201
     assert issue.json()["medicine_text"] == "Paracetamol 500mg twice daily for 3 days"
     assert dispensed.status_code == 200
     assert dispensed.json()["status"] == "dispensed"
     assert dispensed.json()["dispensed_at"] is not None
+    assert listed[0]["patient_name"] == patient["full_name"]
+    assert listed[0]["patient_number"] == patient["patient_number"]
 
 
 def test_consultation_invoice_excludes_lab_and_pharmacy_charges(client):

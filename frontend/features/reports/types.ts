@@ -7,24 +7,14 @@ export type AppointmentReportsProps = {
   onOpenInvoices: any;
 };
 
-export type Column<T> = {
-  key: keyof T | string;
-  header: string;
+export type FileColumn<T> = {
+  key: keyof T | (string & {});
+  header: React.ReactNode;
   width?: string;
   className?: string;
   cellClassName?: string;
-  render?: (row: T, index: number) => React.ReactNode;
   disableRowClick?: boolean;
-};
-
-export type DataTableProps<T> = {
-  columns: Column<T>[];
-  data: T[];
-  emptyMessage?: string;
-  className?: string;
-  onRowClick?: (row: T) => void;
-  paginate?: boolean;
-  pageSize?: number;
+  render?: (row: T, index: number) => React.ReactNode;
 };
 
 export type HomeCareReportsProps = {
@@ -33,6 +23,7 @@ export type HomeCareReportsProps = {
   setOpenSections: any;
   money: any;
   onOpenInvoices: any;
+  loading?: boolean;
 };
 
 export type InvoiceProps = {
@@ -60,6 +51,7 @@ export type InvoiceProps = {
   totalInvoicePages:any
   setInvoicePage:any
   onOpenInvoices:any
+  loading?: boolean;
 };
 
 export type LabReportsProps = {
@@ -68,6 +60,7 @@ export type LabReportsProps = {
   setOpenSections: any;
   money: any;
   onOpenInvoices: any;
+  loading?: boolean;
 };
 
 export type MetrixProps = {
@@ -83,7 +76,7 @@ export type MetrixProps = {
   snapshotMessage?: string;
   onRecalculateSnapshot?: (snapshot: any) => void;
   money: (value: number) => string;
-  percent: (value: number, total: number) => string;
+  percent: (value: number, total: number, fallbackTotal?: number) => string;
 };
 
 export type DashboardView = {
@@ -103,4 +96,5 @@ export type PharmacyReportsProps = {
   setOpenSections: any;
   money: any;
   onOpenInvoices: any;
+  loading?: boolean;
 };
