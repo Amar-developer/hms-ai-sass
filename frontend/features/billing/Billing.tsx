@@ -978,6 +978,7 @@ export function Billing({
           title="Invoices"
           query={filters.query}
           setQuery={(value: string) => updateFilter("query", value)}
+          searchPlaceholder="Invoice, patient, source"
           className="lg:grid-cols-6 xl:grid-cols-6"
           filters={[
             {
