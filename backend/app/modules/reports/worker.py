@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 
 from app.core.config import get_settings
 from app.core.database import engine
+from app.core.logging import configure_logging
 from app.modules.error_logs.service import purge_expired_error_logs
 from app.modules.reports.models import ReportJob, ReportJobStatus
 from app.modules.reports.queue import (
@@ -212,4 +213,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # This worker runs as its own process (`python -m app.modules.reports.worker`),
+    # separate from the FastAPI app in app/main.py — it never imports that
+    # module, so the JSON log formatter configured there was never applied
+    # here, silently dropping every structured `extra={...}` field (status
+    # codes, provider responses, etc.) down to the bare message text.
+    configure_logging()
     main()

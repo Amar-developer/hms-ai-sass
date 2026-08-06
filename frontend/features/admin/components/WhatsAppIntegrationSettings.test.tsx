@@ -89,6 +89,16 @@ const savedSettings = {
     payment_pending_patient: false,
   },
   custom_templates: [],
+  field_catalog: [
+    {
+      trigger_key: "appointment_booked_patient",
+      fields: [
+        { key: "recipient_name", label: "Recipient name" },
+        { key: "appointment_date", label: "Appointment date" },
+        { key: "appointment_time", label: "Appointment time" },
+      ],
+    },
+  ],
 };
 
 describe("WhatsApp integration settings design", () => {
@@ -172,10 +182,17 @@ describe("WhatsApp integration settings design", () => {
     expect(screen.getByText("4%")).toBeTruthy();
   });
 
-  it("manually creates and removes a custom notification template", () => {
-    render(<WhatsAppIntegrationSettings />);
+  it("manually creates and removes a custom notification template", async () => {
+    apiFetchMock.mockResolvedValueOnce(savedSettings);
+    render(
+      <WhatsAppIntegrationSettings
+        apiSession={{ tenantId: "tenant-1", user: { id: "admin-1" } }}
+      />,
+    );
 
-    expect(screen.getByText("Patient appointment confirmation")).toBeTruthy();
+    expect(
+      await screen.findByText("Patient appointment confirmation"),
+    ).toBeTruthy();
     expect(screen.getByText("Doctor appointment alert")).toBeTruthy();
     expect(screen.getByText("Paid invoice receipt")).toBeTruthy();
     expect(screen.getByText("Pending payment update")).toBeTruthy();
@@ -199,9 +216,13 @@ describe("WhatsApp integration settings design", () => {
       within(dialog).getByPlaceholderText("Enter approved English identifier"),
       { target: { value: "patient_birthday_en" } },
     );
-    fireEvent.change(within(dialog).getByRole("combobox"), {
+    // First combobox is "Recipient audience"; second is the new "Trigger
+    // event" picker (defaults to appointment_booked_patient, which is fine
+    // here — the field catalog fixture only covers that trigger).
+    fireEvent.change(within(dialog).getAllByRole("combobox")[0], {
       target: { value: "user" },
     });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Recipient name" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Add Template" }));
 
     expect(screen.getByText("Birthday greeting")).toBeTruthy();
@@ -233,9 +254,13 @@ describe("WhatsApp integration settings design", () => {
       within(dialog).getByPlaceholderText("Enter approved English identifier"),
       { target: { value: "patient_birthday_en" } },
     );
-    fireEvent.change(within(dialog).getByRole("combobox"), {
+    // First combobox is "Recipient audience"; second is the new "Trigger
+    // event" picker (defaults to appointment_booked_patient, which is fine
+    // here — the field catalog fixture only covers that trigger).
+    fireEvent.change(within(dialog).getAllByRole("combobox")[0], {
       target: { value: "user" },
     });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Recipient name" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Add Template" }));
 
     apiFetchMock.mockResolvedValueOnce({
@@ -248,6 +273,8 @@ describe("WhatsApp integration settings design", () => {
           description: "",
           audience: "user",
           enabled: true,
+          trigger_key: "appointment_booked_patient",
+          parameters: ["recipient_name"],
           identifiers: { en: "patient_birthday_en" },
         },
       ],

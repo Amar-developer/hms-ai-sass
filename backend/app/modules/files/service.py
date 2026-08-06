@@ -28,7 +28,7 @@ def record_file_document(
     notes: str | None = None,
     uploaded_by_user_id: str | None = None,
     is_private: bool = False,
-    storage_backend: str = "local",
+    storage_backend: str | None = None,
     storage_key: str | None = None,
     storage_bucket: str | None = None,
     storage_region: str | None = None,
@@ -73,15 +73,31 @@ def record_file_document(
             uploaded_by_user_id or existing.uploaded_by_user_id
         )
         existing.is_private = is_private
-        existing.storage_backend = storage_backend
-        existing.storage_key = storage_key
-        existing.storage_bucket = storage_bucket
-        existing.storage_region = storage_region
-        existing.storage_version_id = storage_version_id
-        existing.checksum_sha256 = checksum_sha256
-        existing.original_size_bytes = original_size_bytes
-        existing.stored_size_bytes = stored_size_bytes
-        existing.storage_class = storage_class
+        # Storage location fields describe where the ALREADY-uploaded bytes
+        # live (e.g. an S3 key). A caller updating other metadata (like
+        # lab result release, which only knows the file's public URL) has
+        # no way to supply these, so — unlike the plain string fields above
+        # — omitting them must preserve what's already on the row instead
+        # of blanking it back to "local"/None and breaking signed-URL
+        # generation for the real stored object.
+        if storage_backend is not None:
+            existing.storage_backend = storage_backend
+        if storage_key is not None:
+            existing.storage_key = storage_key
+        if storage_bucket is not None:
+            existing.storage_bucket = storage_bucket
+        if storage_region is not None:
+            existing.storage_region = storage_region
+        if storage_version_id is not None:
+            existing.storage_version_id = storage_version_id
+        if checksum_sha256 is not None:
+            existing.checksum_sha256 = checksum_sha256
+        if original_size_bytes is not None:
+            existing.original_size_bytes = original_size_bytes
+        if stored_size_bytes is not None:
+            existing.stored_size_bytes = stored_size_bytes
+        if storage_class is not None:
+            existing.storage_class = storage_class
         existing.document_status = document_status
         existing.document_version = document_version
         existing.artifact_type = artifact_type
@@ -111,7 +127,7 @@ def record_file_document(
         notes=notes,
         uploaded_by_user_id=uploaded_by_user_id,
         is_private=is_private,
-        storage_backend=storage_backend,
+        storage_backend=storage_backend or "local",
         storage_key=storage_key,
         storage_bucket=storage_bucket,
         storage_region=storage_region,

@@ -156,8 +156,8 @@ def test_doctor_booking_template_uses_six_approved_values(test_engine):
             resource_type="appointment",
             resource_id=appointment.id,
         )
-        recipient_name, values, media_url, media_name = (
-            whatsapp_processor._message_values(
+        recipient_name, context, media_url, media_name, _language = (
+            whatsapp_processor._message_context(
                 session,
                 event,
                 {"appointment_view_url": "https://app.example.com/appointments"},
@@ -165,14 +165,14 @@ def test_doctor_booking_template_uses_six_approved_values(test_engine):
         )
 
         assert recipient_name == "Queue Doctor"
-        assert values == [
-            "Queue Doctor",
-            "booked",
-            appointment.id,
-            "25 July 2026",
-            "10:30 AM",
-            "https://app.example.com/appointments",
-        ]
+        assert context == {
+            "recipient_name": "Queue Doctor",
+            "appointment_status": "booked",
+            "appointment_id": appointment.id,
+            "appointment_date": "25 July 2026",
+            "appointment_time": "10:30 AM",
+            "appointment_view_url": "https://app.example.com/appointments",
+        }
         assert media_url is None
         assert media_name is None
 
@@ -876,6 +876,25 @@ def test_phase_seven_flows_resolve_authoritative_template_values(
             tests="Complete blood count",
         )
         session.add(lab_order)
+        session.commit()
+        session.refresh(lab_order)
+        session.add(
+            FileDocument(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=patient.id,
+                file_name="lab-report.pdf",
+                file_url="https://files.example.com/lab-report.pdf",
+                category="lab_report",
+                source_module="lab",
+                attached_to_doctype="LabOrder",
+                attached_to_name=lab_order.id,
+                attached_to_field="report_url",
+                attached_to_label="Lab Report",
+                document_status="ready",
+                is_active=True,
+            )
+        )
         consultation = Consultation(
             tenant_id=tenant.id,
             branch_id=branch.id,
@@ -958,8 +977,9 @@ def test_phase_seven_flows_resolve_authoritative_template_values(
         ]
         assert deliveries["lab_report_ready_patient"] == [
             "Queue Patient",
-            "LAB-007",
             "Complete blood count",
+            tenant.name,
+            lab_order.created_at.strftime("%d %B %Y"),
         ]
         assert deliveries["prescription_ready_patient"][2] == "Queue Doctor"
         assert deliveries["follow_up_advice_patient"] == [

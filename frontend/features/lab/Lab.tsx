@@ -735,11 +735,18 @@ export function Lab({
                   disabled: actionsBusy || cancelled,
                 },
                 {
+                  label: rowBusy ? "Releasing..." : "Release Result",
+                  onClick: () => handleOrderAction(o, "release"),
+                  hidden: released,
+                  disabled: actionsBusy || cancelled,
+                },
+                {
                   label: sendReportBusy
                     ? "Sending..."
                     : "Send Report (WhatsApp)",
                   onClick: () => handleOrderAction(o, "send-report"),
-                  disabled: actionsBusy || cancelled || docs.length === 0,
+                  disabled:
+                    actionsBusy || cancelled || docs.length === 0 || !released,
                 },
                 {
                   label: "Reupload Report",

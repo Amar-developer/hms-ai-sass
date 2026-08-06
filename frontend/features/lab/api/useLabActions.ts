@@ -185,7 +185,10 @@ export function useLabActions({
   // Best-effort: fires after a report upload/reupload so the patient gets
   // the WhatsApp copy immediately, without blocking the upload UI on it.
   // A 409 means the order isn't released yet (RESULT_READY/REPORT_DELIVERED)
-  // — that's an expected, silent no-op here, not an upload failure.
+  // — this function treats that as a silent no-op (returns null, doesn't
+  // throw), but callers must not swallow it too: an uploaded-but-unreleased
+  // report will never be delivered on its own, so they surface a warning
+  // telling staff to release the result.
   async function autoSendReportAfterUpload(order: any) {
     if (!apiSession) return null;
     try {
@@ -226,7 +229,7 @@ export function useLabActions({
           ? `Report uploaded and sent to patient on WhatsApp: ${document.file_name}`
           : sent === false
             ? `Report uploaded: ${document.file_name} (WhatsApp send failed — use Send Report to retry).`
-            : `Report uploaded: ${document.file_name}`,
+            : `Warning: report uploaded but not sent — release the result to deliver ${document.file_name} to the patient.`,
       );
     } catch (err: any) {
       setMessage(err.message || "Could not upload report.");
@@ -265,7 +268,7 @@ export function useLabActions({
           ? `Report replaced and sent to patient on WhatsApp: ${document.file_name}`
           : sent === false
             ? `Report replaced: ${document.file_name} (WhatsApp send failed — use Send Report to retry).`
-            : `Report replaced: ${document.file_name}`,
+            : `Warning: report replaced but not sent — release the result to deliver ${document.file_name} to the patient.`,
       );
     } catch (err: any) {
       setMessage(err.message || "Could not replace report.");

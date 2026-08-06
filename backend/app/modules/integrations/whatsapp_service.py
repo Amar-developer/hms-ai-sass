@@ -10,7 +10,14 @@ from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.identity.models import User
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.integrations.service import decode_config, get_tenant_plugin
+from app.modules.integrations.whatsapp_field_catalog import (
+    FLOW_FIELD_CATALOG,
+    default_field_order,
+)
 from app.modules.integrations.whatsapp_schemas import (
+    WhatsAppCustomTemplateSettings,
+    WhatsAppFieldCatalogRead,
+    WhatsAppFieldOption,
     WhatsAppFlowSettings,
     WhatsAppIntegrationRead,
     WhatsAppIntegrationUpdate,
@@ -48,6 +55,7 @@ DEFAULT_CONFIG = {
     "localized_templates": {},
     "flows": WhatsAppFlowSettings().model_dump(),
     "custom_templates": [],
+    "template_field_mappings": {},
 }
 
 TEST_RATE_LIMIT_PER_MINUTE = 5
@@ -94,6 +102,20 @@ def _read(row: TenantIntegrationPlugin | None) -> WhatsAppIntegrationRead:
         localized_templates=config.get("localized_templates") or {},
         flows=WhatsAppFlowSettings.model_validate(config.get("flows") or {}),
         custom_templates=config.get("custom_templates") or [],
+        template_field_mappings={
+            flow_key: (config.get("template_field_mappings") or {}).get(flow_key)
+            or default_field_order(flow_key)
+            for flow_key in FLOW_FIELD_CATALOG
+        },
+        field_catalog=[
+            WhatsAppFieldCatalogRead(
+                trigger_key=trigger_key,
+                fields=[
+                    WhatsAppFieldOption(key=key, label=label) for key, label in fields
+                ],
+            )
+            for trigger_key, fields in FLOW_FIELD_CATALOG.items()
+        ],
         updated_at=row.updated_at.isoformat() if row else None,
     )
 
@@ -182,6 +204,91 @@ def _audience_enabled(config: dict, flow_key: str) -> bool:
     return bool(config.get("patient_notifications_enabled", True))
 
 
+def _custom_template_audience_enabled(config: dict, audience: str) -> bool:
+    if audience == "doctor":
+        return bool(config.get("doctor_notifications_enabled", True))
+    if audience == "patient":
+        return bool(config.get("patient_notifications_enabled", True))
+    return True
+
+
+def _resolve_test_campaign_name(config: dict, payload: WhatsAppTestRequest) -> str:
+    if payload.custom_template_id is not None:
+        custom_templates = [
+            WhatsAppCustomTemplateSettings.model_validate(item)
+            for item in (config.get("custom_templates") or [])
+        ]
+        template = next(
+            (t for t in custom_templates if t.id == payload.custom_template_id), None
+        )
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="The custom template no longer exists.",
+            )
+        if not template.enabled:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Enable the custom template before sending a test message.",
+            )
+        if not _custom_template_audience_enabled(config, template.audience):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Notifications for this recipient type are disabled.",
+            )
+        if len(payload.template_parameters) != len(template.parameters):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"{template.name} requires exactly "
+                    f"{len(template.parameters)} template parameters"
+                ),
+            )
+        default_language = str(config.get("default_language") or "en")
+        requested_language = str(payload.language or default_language)
+        campaign_name = (
+            template.identifiers.get(requested_language)
+            or template.identifiers.get(default_language)
+            or next(iter(template.identifiers.values()), "")
+        )
+        if not campaign_name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="The custom template has no template identifier.",
+            )
+        return campaign_name
+
+    flow_key = payload.flow_key
+    flows = WhatsAppFlowSettings.model_validate(config.get("flows") or {})
+    if not getattr(flows, flow_key) or not _audience_enabled(config, flow_key):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The selected notification flow is disabled.",
+        )
+    configured_fields = (config.get("template_field_mappings") or {}).get(
+        flow_key
+    ) or default_field_order(flow_key)
+    if len(payload.template_parameters) != len(configured_fields):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"{flow_key} requires exactly {len(configured_fields)} "
+                "template parameters"
+            ),
+        )
+    campaign_name, _resolved_language = resolve_template_identifier(
+        config,
+        flow_key=flow_key,
+        preferred_language=payload.language,
+    )
+    if not campaign_name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The selected notification flow has no template identifier.",
+        )
+    return campaign_name
+
+
 def _enforce_test_rate_limit(session: Session, tenant_id: str, actor_id: str) -> None:
     cutoff = now_utc() - timedelta(minutes=1)
     recent = session.exec(
@@ -215,23 +322,7 @@ def test_whatsapp_integration(
             detail="Enable and save the integration before sending a test message.",
         )
     config = {**DEFAULT_CONFIG, **decode_config(row.config_json)}
-    flow_key = payload.flow_key
-    flows = WhatsAppFlowSettings.model_validate(config.get("flows") or {})
-    if not getattr(flows, flow_key) or not _audience_enabled(config, flow_key):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="The selected notification flow is disabled.",
-        )
-    campaign_name, resolved_language = resolve_template_identifier(
-        config,
-        flow_key=flow_key,
-        preferred_language=payload.language,
-    )
-    if not campaign_name:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="The selected notification flow has no template identifier.",
-        )
+    campaign_name = _resolve_test_campaign_name(config, payload)
     if not row.secret_ciphertext:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -269,8 +360,10 @@ def test_whatsapp_integration(
         purpose="integration_testing",
         metadata_json=json.dumps(
             {
-                "flow_key": flow_key,
-                "language": resolved_language,
+                "flow_key": payload.flow_key or payload.custom_template_id,
+                "language": str(
+                    payload.language or config.get("default_language") or "en"
+                ),
                 "destination_masked": f"••••{destination[-4:]}",
                 "success": result.success,
                 "status": result.status,

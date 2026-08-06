@@ -1,5 +1,6 @@
 import ipaddress
 import json
+import logging
 import re
 import socket
 from urllib.error import HTTPError, URLError
@@ -10,6 +11,14 @@ from app.infrastructure.integrations.ports.messaging import TemplateMessageResul
 
 
 MAX_RESPONSE_BYTES = 65_536
+MAX_LOGGED_ERROR_BODY = 2_000
+
+logger = logging.getLogger("medizinhub.whatsapp")
+
+
+def _mask_destination(destination: str) -> str:
+    digits = re.sub(r"\D", "", destination or "")
+    return f"***{digits[-4:]}" if len(digits) >= 4 else "***"
 
 
 class _NoRedirectHandler(HTTPRedirectHandler):
@@ -154,6 +163,21 @@ class HttpTemplateMessageGateway:
                     _safe_message_id(response_payload),
                 )
         except HTTPError as exc:
+            try:
+                error_body = exc.read(MAX_LOGGED_ERROR_BODY).decode(
+                    "utf-8", errors="replace"
+                )
+            except Exception:
+                error_body = ""
+            logger.warning(
+                "WhatsApp template message rejected by provider",
+                extra={
+                    "status_code": exc.code,
+                    "campaign_name": campaign_name,
+                    "destination": _mask_destination(destination),
+                    "provider_response": error_body,
+                },
+            )
             return _failure(exc.code, "The messaging service rejected the request.")
         except (TimeoutError, socket.timeout):
             return _failure(None, "The messaging service request timed out.")
