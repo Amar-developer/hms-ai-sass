@@ -105,17 +105,28 @@ def upgrade() -> None:
     # Collapse recurring rows: one row per weekday becomes one row covering
     # all its weekdays. Partition key deliberately excludes room fields
     # (being dropped) and `weekday` itself (being folded into weekdays_json).
-    recurring_rows = bind.execute(
-        sa.text(
-            """
-            SELECT id, tenant_id, practitioner_id, branch_id, department_id,
-                   weekday, start_time, end_time, slot_minutes, is_active, created_at
-            FROM practitionerschedule
-            WHERE weekdays_json IS NULL
-            ORDER BY created_at
-            """
-        )
-    ).fetchall()
+    #
+    # `weekday` only exists on databases that reached this point via the old
+    # incremental path (each row created back when the model still had a
+    # per-weekday `weekday` column). A fresh database instead gets
+    # practitionerschedule created directly with today's mode/weekdays_json
+    # shape (see 20260429_0003, which builds it from the live SQLModel
+    # metadata), so there's no legacy per-weekday data to collapse there.
+    recurring_rows = (
+        bind.execute(
+            sa.text(
+                """
+                SELECT id, tenant_id, practitioner_id, branch_id, department_id,
+                       weekday, start_time, end_time, slot_minutes, is_active, created_at
+                FROM practitionerschedule
+                WHERE weekdays_json IS NULL
+                ORDER BY created_at
+                """
+            )
+        ).fetchall()
+        if "weekday" in columns
+        else []
+    )
 
     partitions: dict[tuple, dict] = {}
     for row in recurring_rows:
@@ -170,7 +181,13 @@ def upgrade() -> None:
         "practitionerschedule", "mode", nullable=False, server_default="custom"
     )
     op.alter_column("practitionerschedule", "weekdays_json", nullable=False)
-    op.create_index("ix_practitionerschedule_mode", "practitionerschedule", ["mode"])
+    existing_index_names = {
+        index["name"] for index in inspector.get_indexes("practitionerschedule")
+    }
+    if "ix_practitionerschedule_mode" not in existing_index_names:
+        op.create_index(
+            "ix_practitionerschedule_mode", "practitionerschedule", ["mode"]
+        )
 
     for column in (
         "weekday",
