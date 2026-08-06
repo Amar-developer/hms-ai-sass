@@ -297,7 +297,8 @@ def create_clinical_context(
             json={
                 "branch_id": tenant.branch_id,
                 "department_id": department["id"],
-                "weekday": date.today().weekday(),
+                "mode": "custom",
+                "weekdays": [date.today().weekday()],
                 "start_time": "09:00:00",
                 "end_time": "17:00:00",
                 "slot_minutes": 15,

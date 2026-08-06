@@ -322,7 +322,8 @@ export default async function globalSetup() {
     {
       branch_id: branchId,
       department_id: department.id,
-      weekday: new Date().getDay() === 0 ? 6 : new Date().getDay() - 1,
+      mode: "custom",
+      weekdays: [new Date().getDay() === 0 ? 6 : new Date().getDay() - 1],
       start_time: "09:00:00",
       end_time: "18:00:00",
       slot_minutes: 15,
