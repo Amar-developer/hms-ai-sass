@@ -1,5 +1,6 @@
 from sqlmodel import Session, select
 
+from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.notifications.models import NotificationEvent
 
 
@@ -18,6 +19,8 @@ class NotificationEventRepository:
         branch_id: str | None = None,
         provider: str | None = None,
         status_filter: str | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
     ) -> list[NotificationEvent]:
         statement = select(NotificationEvent).where(
             NotificationEvent.tenant_id == tenant_id
@@ -29,5 +32,9 @@ class NotificationEventRepository:
         if status_filter:
             statement = statement.where(NotificationEvent.status == status_filter)
         return list(
-            self.session.exec(statement.order_by(NotificationEvent.created_at)).all()
+            self.session.exec(
+                statement.order_by(NotificationEvent.created_at)
+                .offset(offset)
+                .limit(limit)
+            ).all()
         )

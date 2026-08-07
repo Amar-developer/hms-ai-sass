@@ -5,6 +5,7 @@ from fastapi import (
     Depends,
     File,
     Form,
+    Query,
     Response,
     UploadFile,
     status,
@@ -13,6 +14,7 @@ from sqlmodel import Session
 
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
+from app.core.pagination import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from app.core.tenant_context import require_tenant_id
 from app.modules.billing.schemas import InvoiceDetailRead
 from app.modules.identity import permissions
@@ -164,6 +166,8 @@ def list_admissions(
     branch_id: str | None = None,
     patient_id: str | None = None,
     status_filter: str | None = None,
+    limit: int = Query(default=DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(default=0, ge=0),
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
     current_user: User = Depends(
@@ -177,6 +181,8 @@ def list_admissions(
         patient_id=patient_id,
         status_filter=status_filter,
         current_user=current_user,
+        limit=limit,
+        offset=offset,
     )
 
 

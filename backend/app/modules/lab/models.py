@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from enum import Enum
 
+from sqlalchemy import Index, desc
 from sqlmodel import Field, SQLModel
 
 from app.modules.tenants.models import new_id, now_utc
@@ -93,6 +94,14 @@ class LabResultTemplate(SQLModel, table=True):
 
 
 class LabOrder(SQLModel, table=True):
+    __table_args__ = (
+        Index(
+            "ix_laborder_tenant_created",
+            "tenant_id",
+            desc("created_at"),
+        ),
+    )
+
     id: str = Field(default_factory=lambda: new_id("labord"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")

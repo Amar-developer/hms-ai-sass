@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
 from io import BytesIO
 
 from fastapi.responses import FileResponse, StreamingResponse
@@ -6,6 +6,7 @@ from sqlmodel import Session
 
 from app.core.auth import require_any_permission
 from app.core.database import get_session
+from app.core.pagination import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
@@ -420,6 +421,8 @@ def list_lab_orders(
     patient_id: str | None = None,
     status_filter: LabOrderStatus | None = None,
     branch_id: str | None = None,
+    limit: int = Query(default=DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(permissions.LAB_MANAGE, permissions.LAB_READ)
@@ -432,6 +435,8 @@ def list_lab_orders(
         branch_id=branch_id,
         patient_id=patient_id,
         status_filter=status_filter,
+        limit=limit,
+        offset=offset,
     )
 
 

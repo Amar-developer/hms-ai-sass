@@ -1,6 +1,8 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
+
+from app.core.pagination import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission
@@ -478,6 +480,8 @@ def list_stock_ledger(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     medicine_id: str | None = None,
+    limit: int = Query(default=DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_READ)
@@ -489,6 +493,8 @@ def list_stock_ledger(
         branch_id=branch_id,
         medicine_id=medicine_id,
         actor=current_user,
+        limit=limit,
+        offset=offset,
     )
 
 

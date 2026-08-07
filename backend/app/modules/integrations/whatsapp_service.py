@@ -13,6 +13,7 @@ from app.modules.integrations.service import decode_config, get_tenant_plugin
 from app.modules.integrations.whatsapp_field_catalog import (
     FLOW_FIELD_CATALOG,
     default_field_order,
+    flow_fields,
 )
 from app.modules.integrations.whatsapp_schemas import (
     WhatsAppCustomTemplateSettings,
@@ -107,14 +108,20 @@ def _read(row: TenantIntegrationPlugin | None) -> WhatsAppIntegrationRead:
             or default_field_order(flow_key)
             for flow_key in FLOW_FIELD_CATALOG
         },
+        # Serialize the *merged* catalog (curated fields first, then every
+        # field the flow's modules expose), not the curated dict alone —
+        # this list is exactly what the template builder renders as chips, so
+        # anything missing here is unpickable in the UI no matter what the
+        # validator would accept.
         field_catalog=[
             WhatsAppFieldCatalogRead(
                 trigger_key=trigger_key,
                 fields=[
-                    WhatsAppFieldOption(key=key, label=label) for key, label in fields
+                    WhatsAppFieldOption(key=key, label=label)
+                    for key, label in flow_fields(trigger_key)
                 ],
             )
-            for trigger_key, fields in FLOW_FIELD_CATALOG.items()
+            for trigger_key in FLOW_FIELD_CATALOG
         ],
         updated_at=row.updated_at.isoformat() if row else None,
     )

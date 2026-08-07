@@ -1,5 +1,6 @@
 from sqlmodel import Session, delete, select
 
+from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.appointments.models import Appointment
 from app.modules.billing.models import Invoice, InvoiceItem
 from app.modules.ip.models import (
@@ -42,6 +43,8 @@ class IPAdmissionRepository:
         branch_id: str | None,
         patient_id: str | None,
         status_filter: str | None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
     ) -> list[IPAdmission]:
         statement = select(IPAdmission).where(IPAdmission.tenant_id == tenant_id)
         if branch_id:
@@ -55,6 +58,8 @@ class IPAdmissionRepository:
                 statement.order_by(
                     IPAdmission.updated_at.desc(), IPAdmission.created_at.desc()
                 )
+                .offset(offset)
+                .limit(limit)
             ).all()
         )
 

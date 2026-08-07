@@ -1,6 +1,7 @@
 from sqlmodel import Session
 
 from app.core.access_control import scoped_branch_id
+from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.identity.models import User
 from app.modules.pharmacy.models import (
     MedicineCatalog,
@@ -70,6 +71,8 @@ def list_stock_ledger_service(
     branch_id: str | None,
     medicine_id: str | None,
     actor: User,
+    limit: int = DEFAULT_LIST_LIMIT,
+    offset: int = 0,
 ) -> list[PharmacyStockLedger]:
     enforce_module_enabled(session, tenant_id, "pharmacy")
     branch_id = scoped_branch_id(actor, branch_id)
@@ -77,6 +80,8 @@ def list_stock_ledger_service(
         tenant_id=tenant_id,
         branch_id=branch_id,
         medicine_id=medicine_id,
+        limit=limit,
+        offset=offset,
     )
 
 

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session, select
+from starlette.concurrency import run_in_threadpool
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
 from app.core.model_update import apply_update_fields
@@ -396,10 +397,14 @@ class FileService:
         optimization_status = "not_required"
         if optimization_profile and optimization_profile.name == "invoice_pdf":
             try:
-                optimized = optimize_document(
-                    data=data,
-                    content_type=verified_content_type,
-                    profile=optimization_profile,
+                # CPU-bound PDF rewrite — off the event loop so it can't stall
+                # unrelated in-flight requests on this worker.
+                optimized = await run_in_threadpool(
+                    lambda: optimize_document(
+                        data=data,
+                        content_type=verified_content_type,
+                        profile=optimization_profile,
+                    )
                 )
             except OptimizationError as exc:
                 raise HTTPException(
@@ -432,25 +437,28 @@ class FileService:
             prefix=settings.aws_s3_prefix,
         )
         try:
-            stored_object = backend.put(
-                key=storage_key,
-                data=data,
-                content_type=verified_content_type,
-                checksum_sha256=checksum_sha256,
-                metadata={
-                    "sha256": checksum_sha256,
-                    "tenant-id": tenant_id,
-                    "document-id": document_id,
-                },
-                tags={
-                    "artifact": (
-                        "final"
-                        if (category or "").strip().lower() == "invoice"
-                        else "original"
-                    ),
-                    "retention": "permanent",
-                    "environment": settings.environment,
-                },
+            # Blocking network call (S3) — must not run on the event loop.
+            stored_object = await run_in_threadpool(
+                lambda: backend.put(
+                    key=storage_key,
+                    data=data,
+                    content_type=verified_content_type,
+                    checksum_sha256=checksum_sha256,
+                    metadata={
+                        "sha256": checksum_sha256,
+                        "tenant-id": tenant_id,
+                        "document-id": document_id,
+                    },
+                    tags={
+                        "artifact": (
+                            "final"
+                            if (category or "").strip().lower() == "invoice"
+                            else "original"
+                        ),
+                        "retention": "permanent",
+                        "environment": settings.environment,
+                    },
+                )
             )
         except Exception as exc:
             raise HTTPException(

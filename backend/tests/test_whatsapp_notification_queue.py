@@ -15,6 +15,7 @@ from app.modules.integrations.invoice_receipts import verify_invoice_receipt_sig
 from app.modules.integrations import invoice_receipts
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.files.models import FileDocument
+from app.modules.integrations.whatsapp_field_catalog import default_field_order
 from app.modules.integrations.whatsapp_gateway import WhatsAppGatewayResult
 from app.modules.integrations.whatsapp_consent import patient_notification_language
 from app.modules.integrations.whatsapp_templates import resolve_template_identifier
@@ -165,7 +166,7 @@ def test_doctor_booking_template_uses_six_approved_values(test_engine):
         )
 
         assert recipient_name == "Queue Doctor"
-        assert context == {
+        approved = {
             "recipient_name": "Queue Doctor",
             "appointment_status": "booked",
             "appointment_id": appointment.id,
@@ -173,6 +174,12 @@ def test_doctor_booking_template_uses_six_approved_values(test_engine):
             "appointment_time": "10:30 AM",
             "appointment_view_url": "https://app.example.com/appointments",
         }
+        assert approved.items() <= context.items()
+        # The context also carries every module field this flow exposes (so a
+        # template can later pick, say, the doctor's specialty), but what the
+        # flow *sends* is still only the six approved values above.
+        assert default_field_order("appointment_booked_doctor") == list(approved)
+        assert [context[field] for field in approved] == list(approved.values())
         assert media_url is None
         assert media_name is None
 

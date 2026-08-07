@@ -6,6 +6,14 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const frontendDirectory = resolve(scriptDirectory, "../frontend");
 const currentBuildName = ".next-build";
 const staleBuildPrefix = ".next-build-stale-";
+// `next dev` writes to ".next" (Next.js 16 puts its output under ".next/dev").
+// It is only removed by the explicit `--all` cleanup, never by `prebuild`:
+// deleting it mid-run would break a dev server that is legitimately using it,
+// which is the very race the separate distDir in next.config.mjs exists to
+// avoid. A root-owned ".next" left behind by the dev container is the usual
+// reason this needs clearing, and that case needs elevated permissions —
+// which the reporting below explains rather than silently failing.
+const devBuildName = ".next";
 const cleanLegacyDirectories = process.argv.includes("--all");
 
 const buildDirectories = readdirSync(frontendDirectory, { withFileTypes: true })
@@ -13,6 +21,7 @@ const buildDirectories = readdirSync(frontendDirectory, { withFileTypes: true })
     (entry) =>
       (entry.isDirectory() || entry.isSymbolicLink()) &&
       (entry.name === currentBuildName ||
+        (cleanLegacyDirectories && entry.name === devBuildName) ||
         (cleanLegacyDirectories && entry.name.startsWith(staleBuildPrefix))),
   )
   .map((entry) => entry.name);

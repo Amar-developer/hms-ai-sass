@@ -1,5 +1,6 @@
 from datetime import date, datetime
 
+from sqlalchemy import Index, desc
 from sqlmodel import Field, SQLModel
 
 from app.modules.tenants.models import new_id, now_utc
@@ -23,6 +24,15 @@ class IPRoom(SQLModel, table=True):
 
 
 class IPAdmission(SQLModel, table=True):
+    __table_args__ = (
+        Index(
+            "ix_ipadmission_tenant_updated_created",
+            "tenant_id",
+            desc("updated_at"),
+            desc("created_at"),
+        ),
+    )
+
     id: str = Field(default_factory=lambda: new_id("ipadm"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")

@@ -1,6 +1,7 @@
 from sqlmodel import Session
 
 from app.core.access_control import require_user_branch_access
+from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.billing.services.source_references import (
     active_lab_invoice_reference_map,
 )
@@ -21,6 +22,8 @@ def list_lab_orders_records(
     branch_id: str | None,
     patient_id: str | None,
     status_filter: LabOrderStatus | None,
+    limit: int = DEFAULT_LIST_LIMIT,
+    offset: int = 0,
 ) -> list[LabOrderRead]:
     enforce_module_enabled(session, tenant_id, "lab")
     rows = LabOrderRepository(session).list_orders(
@@ -28,6 +31,8 @@ def list_lab_orders_records(
         branch_id=branch_id,
         patient_id=patient_id,
         status_filter=status_filter,
+        limit=limit,
+        offset=offset,
     )
     patients = patient_reference_map(
         session,
