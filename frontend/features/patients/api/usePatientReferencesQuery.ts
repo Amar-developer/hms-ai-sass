@@ -33,6 +33,7 @@ export function usePatientReferencesQuery(
   });
 
   const patients = query.data ?? EMPTY_PATIENT_REFERENCES;
+
   const patientMap = useMemo(
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],

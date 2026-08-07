@@ -7,5 +7,5 @@ import { useShellChrome } from "@/features/shell/AppShell";
 export default function ConsultationWorkflowPage() {
   const ctx = useWorkspace();
   const { navigatePage } = useShellChrome();
-  return <DoctorConsultation {...ctx} view="workspace" setActive={navigatePage} />;
+  return <DoctorConsultation {...ctx} />;
 }

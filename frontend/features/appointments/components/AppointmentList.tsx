@@ -11,6 +11,10 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { today } from "@/utils/helper";
 import { APPOINTMENT_STATUS_FILTER_OPTIONS } from "../constants";
 import { DataTable } from "@/app/components/common/DataTable";
+import {
+  FilterConfig,
+  FilterSection,
+} from "@/app/components/common/FilterSection";
 
 export function AppointmentList(props: any) {
   const {
@@ -49,6 +53,56 @@ export function AppointmentList(props: any) {
     setPage,
   } = props;
 
+  const handleReset = () => {
+    setPlatformTenantId("");
+    setQuery("");
+    setFilterDate("");
+    setFilterDepartment("all");
+    setPlatformDepartment("all");
+    setFilterStatus("all");
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    if (key == "department") {
+      if (isSuperAdmin) {
+        setPlatformDepartment(value);
+      }
+      setFilterDepartment(value);
+    }
+    if (key == "status") {
+      setFilterStatus(value);
+    }
+  };
+
+  const appointmentFilters: FilterConfig[] = [
+    {
+      key: "department",
+      label: "Department",
+      options: isSuperAdmin
+        ? normalizedPlatformDepartmentOptions
+        : [
+            { value: "all", label: "All Departments" },
+            ...normalizedDepartmentOptions,
+          ],
+    },
+    // Only show status for non-super-admin
+    ...(!isSuperAdmin
+      ? [
+          {
+            key: "status",
+            label: "Status",
+            options: APPOINTMENT_STATUS_FILTER_OPTIONS.map((o) => ({
+              value: o.value,
+              label: o.label,
+            })),
+          },
+        ]
+      : []),
+  ];
+  const filteredValues = {
+    department: isSuperAdmin ? platformDepartment : filterDepartment,
+    status: filterStatus,
+  };
   return (
     <Card>
       {rescheduleAppointment && (
@@ -128,87 +182,40 @@ export function AppointmentList(props: any) {
           </div>
         </Button>
       </div>
-      <div className="mt-4 grid gap-3 grid-cols-2 md:grid-cols-5">
-        {isSuperAdmin && (
-          <FormField label="Clinic / Tenant">
-            <SearchableSelect
-              value={platformTenantId}
-              onChange={setPlatformTenantId}
-              options={[
-                { value: "", label: "All tenants" },
-                ...platformTenants
-                  .filter((t: any) => !t.is_primary)
-                  .map((t: any) => ({ value: t.id, label: t.name })),
-              ]}
-            />
-          </FormField>
-        )}
-        <FormField label="Patient name">
-          <Input
-            value={query}
-            onChange={(e: any) => setQuery(e.target.value)}
-            placeholder="Search patient or mobile or doctor name"
-          />
-        </FormField>
-        <FormField label="Select date">
-          <Input
-            type="date"
-            value={filterDate}
-            onChange={(e: any) => setFilterDate(e.target.value)}
-          />
-        </FormField>
-        <FormField label="Department">
-          {isSuperAdmin ? (
-            <SearchableSelect
-              value={platformDepartment}
-              onChange={(val: string) => setPlatformDepartment(val)}
-              options={normalizedPlatformDepartmentOptions}
-              placeholder="All Departments"
-              searchable={false}
-            />
-          ) : (
-            <SearchableSelect
-              value={filterDepartment}
-              onChange={(val: string) => setFilterDepartment(val)}
-              options={[
-                { value: "all", label: "All Departments" },
-                ...normalizedDepartmentOptions,
-              ]}
-              placeholder="All Departments"
-              searchable={false}
-            />
+      <div className={`mt-4 grid gap-3  $`}>
+        <FilterSection
+          query={query}
+          setQuery={setQuery}
+          title="Patients"
+          className='lg:grid-cols-5'
+          searchPlaceholder="Search Patients"
+          onReset={handleReset}
+          filters={appointmentFilters}
+          filterValues={filteredValues}
+          onFilterChange={handleFilterChange}
+        >
+          {isSuperAdmin && (
+            <FormField label="Clinic / Tenant">
+              <SearchableSelect
+                value={platformTenantId}
+                onChange={setPlatformTenantId}
+                options={[
+                  { value: "", label: "All tenants" },
+                  ...platformTenants
+                    .filter((t: any) => !t.is_primary)
+                    .map((t: any) => ({ value: t.id, label: t.name })),
+                ]}
+              />
+            </FormField>
           )}
-        </FormField>
-        {!isSuperAdmin && (
-          <FormField label="Status">
-            <SearchableSelect
-              value={filterStatus}
-              onChange={(val: string) => setFilterStatus(val)}
-              options={APPOINTMENT_STATUS_FILTER_OPTIONS.map((o) => ({
-                value: o.value,
-                label: o.label,
-              }))}
-              placeholder="Select status"
-              searchable={false}
+          <FormField label="Select date">
+            <Input
+              type="date"
+              value={filterDate}
+              onChange={(e: any) => setFilterDate(e.target.value)}
             />
           </FormField>
-        )}
-        <div className="flex items-end">
-          <Button
-            className="h-[50%] w-[50%] text-sm"
-            type="button"
-            onClick={() => {
-              setPlatformTenantId("");
-              setQuery("");
-              setFilterDate("");
-              setFilterDepartment("all");
-              setPlatformDepartment("all");
-              setFilterStatus("all");
-            }}
-          >
-            Reset
-          </Button>
-        </div>
+        </FilterSection>
       </div>
       <div className="mt-4">
         <DataTable

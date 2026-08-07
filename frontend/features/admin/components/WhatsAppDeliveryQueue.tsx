@@ -2,9 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 
 import { FormField } from "@/app/components/FormElements";
-import { Badge, Button, Card, Input, Select } from "@/app/components/common/ui";
+import { Badge, Card, Input } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
+import {
+  FilterConfig,
+  FilterSection,
+} from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 type QueueItem = {
   id: string;
@@ -27,7 +32,10 @@ type QueueResponse = {
   total: number;
   limit: number;
   offset: number;
-  counts: Record<"queued" | "processing" | "sent" | "failed" | "cancelled", number>;
+  counts: Record<
+    "queued" | "processing" | "sent" | "failed" | "cancelled",
+    number
+  >;
 };
 
 const emptyQueue: QueueResponse = {
@@ -52,19 +60,34 @@ const flowLabels: Record<string, string> = {
   appointment_reminder_patient: "Appointment reminder",
 };
 
-const statusTone: Record<string, "blue" | "green" | "red" | "slate" | "amber"> = {
-  queued: "blue",
-  processing: "amber",
-  sent: "green",
-  failed: "red",
-  cancelled: "slate",
-};
+const statusTone: Record<string, "blue" | "green" | "red" | "slate" | "amber"> =
+  {
+    queued: "blue",
+    processing: "amber",
+    sent: "green",
+    failed: "red",
+    cancelled: "slate",
+  };
 
 function dateTime(value?: string | null) {
   if (!value) return "—";
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleString("en-IN");
 }
+
+const flowFilterOptions: FilterConfig[] = [
+  {
+    key: "flow",
+    label: "Flow",
+    options: [
+      { value: "all", label: "All flows" },
+      ...Object.entries(flowLabels).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    ],
+  },
+];
 
 export function WhatsAppDeliveryQueue({
   apiSession,
@@ -90,7 +113,10 @@ export function WhatsAppDeliveryQueue({
     if (!apiSession || !tenantId || !expanded) return;
     setBusy(true);
     try {
-      const params = new URLSearchParams({ limit: "20", offset: String(offset) });
+      const params = new URLSearchParams({
+        limit: "20",
+        offset: String(offset),
+      });
       if (statusFilter) params.set("status_filter", statusFilter);
       if (flowFilter) params.set("flow_key", flowFilter);
       if (query.trim()) params.set("q", query.trim());
@@ -100,13 +126,28 @@ export function WhatsAppDeliveryQueue({
         `/communications/whatsapp/queue?${params.toString()}`,
         { ...apiSession, tenantId },
       );
-      setData({ ...emptyQueue, ...response, counts: { ...emptyQueue.counts, ...(response?.counts || {}) } });
+      setData({
+        ...emptyQueue,
+        ...response,
+        counts: { ...emptyQueue.counts, ...(response?.counts || {}) },
+      });
     } catch (error: any) {
       onMessage(error.message || "Could not load the delivery queue.");
     } finally {
       setBusy(false);
     }
-  }, [apiSession, expanded, flowFilter, fromDate, offset, onMessage, query, statusFilter, tenantId, toDate]);
+  }, [
+    apiSession,
+    expanded,
+    flowFilter,
+    fromDate,
+    offset,
+    onMessage,
+    query,
+    statusFilter,
+    tenantId,
+    toDate,
+  ]);
 
   useEffect(() => {
     if (!expanded) return undefined;
@@ -117,7 +158,11 @@ export function WhatsAppDeliveryQueue({
 
   async function runAction(item: QueueItem, action: "retry" | "cancel") {
     if (!apiSession || !tenantId) return;
-    if (action === "cancel" && !window.confirm("Cancel this queued notification?")) return;
+    if (
+      action === "cancel" &&
+      !window.confirm("Cancel this queued notification?")
+    )
+      return;
     setActionId(item.id);
     try {
       await apiFetch(
@@ -125,7 +170,11 @@ export function WhatsAppDeliveryQueue({
         { ...apiSession, tenantId },
         { method: "POST" },
       );
-      onMessage(action === "retry" ? "Notification queued for retry." : "Notification cancelled.");
+      onMessage(
+        action === "retry"
+          ? "Notification queued for retry."
+          : "Notification cancelled.",
+      );
       await loadQueue();
     } catch (error: any) {
       onMessage(error.message || `Could not ${action} the notification.`);
@@ -137,121 +186,235 @@ export function WhatsAppDeliveryQueue({
   const page = Math.floor(offset / 20) + 1;
   const pages = Math.max(1, Math.ceil(data.total / 20));
   const completed = data.counts.sent + data.counts.failed;
-  const successRate = completed ? Math.round((data.counts.sent / completed) * 100) : 0;
+  const successRate = completed
+    ? Math.round((data.counts.sent / completed) * 100)
+    : 0;
+
+  const columns: Column<QueueItem>[] = [
+    {
+      key: "recipient",
+      header: "Recipient",
+      render: (item) => (
+        <>
+          <p className="font-bold text-slate-800">{item.recipient_name}</p>
+          <p className="text-slate-500">{item.recipient_masked}</p>
+        </>
+      ),
+    },
+    {
+      key: "flow_key",
+      header: "Flow",
+      render: (item) => flowLabels[item.flow_key] || item.flow_key,
+    },
+    {
+      key: "resource_reference",
+      header: "Reference",
+      render: (item) => item.resource_reference || "—",
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (item) => (
+        <Badge tone={statusTone[item.status] || "slate"} className="normal-badge">{item.status}</Badge>
+      ),
+    },
+    {
+      key: "attempts",
+      header: "Attempts",
+      render: (item) => `${item.attempt_count}/${item.max_attempts}`,
+    },
+    {
+      key: "created_at",
+      header: "Created / next action",
+      render: (item) => (
+        <>
+          <p>{dateTime(item.created_at)}</p>
+          {item.status === "queued" && (
+            <p className="mt-1 text-slate-500">
+              Next: {dateTime(item.next_attempt_at)}
+            </p>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "failure_reason",
+      header: "Failure",
+      cellClassName: "max-w-56",
+      render: (item) => item.failure_reason || "—",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      className: "text-right",
+      cellClassName: "text-right",
+      disableRowClick: true,
+      render: (item) => (
+        <>
+          {(item.status === "failed" || item.status === "cancelled") && (
+            <button
+              type="button"
+              className="font-bold text-blue-700 disabled:opacity-50"
+              disabled={actionId === item.id}
+              onClick={() => void runAction(item, "retry")}
+            >
+              Retry
+            </button>
+          )}
+          {item.status === "queued" && (
+            <button
+              type="button"
+              className="font-bold text-red-700 disabled:opacity-50"
+              disabled={actionId === item.id}
+              onClick={() => void runAction(item, "cancel")}
+            >
+              Cancel
+            </button>
+          )}
+        </>
+      ),
+    },
+  ];
 
   return (
     <Card className="mt-4 px-4 py-4 text-xs lg:text-sm">
       <button
         type="button"
         className="flex w-full items-center justify-between gap-3 text-left"
-        onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
       >
         <div>
-          <h3 className="card-title font-bold text-slate-900">Delivery queue</h3>
+          <h3 className="card-title font-bold text-slate-900">
+            Delivery queue
+          </h3>
           <p className="card-desc mt-1 text-xs text-slate-500">
             Monitor queued, sent, failed and cancelled template notifications.
           </p>
         </div>
-        {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        <span
+          className={`hover:scale-105 hover:font-bold ${expanded ? "rotate-180" : ""}`}
+        >
+          <ChevronDown size={18} />
+        </span>
       </button>
 
       {expanded && (
         <div className="mt-4 border-t border-slate-200 pt-4">
           <div className="grid gap-2 sm:grid-cols-5">
-            {(["queued", "processing", "sent", "failed", "cancelled"] as const).map((status) => (
+            {(
+              ["queued", "processing", "sent", "failed", "cancelled"] as const
+            ).map((status) => (
               <button
                 key={status}
                 type="button"
-                onClick={() => { setStatusFilter(statusFilter === status ? "" : status); setOffset(0); }}
+                onClick={() => {
+                  setStatusFilter(statusFilter === status ? "" : status);
+                  setOffset(0);
+                }}
                 className={`rounded-lg border p-3 text-left ${statusFilter === status ? "border-slate-500 bg-slate-50" : "border-slate-200"}`}
               >
                 <p className="text-xs capitalize text-slate-500">{status}</p>
-                <p className="mt-1 text-xl font-black text-slate-900">{data.counts[status]}</p>
+                <p className="mt-1 text-xl font-black text-slate-900">
+                  {data.counts[status]}
+                </p>
               </button>
             ))}
           </div>
           <p className="mt-2 text-right text-xs text-slate-500">
-            Delivery success rate: <span className="font-bold text-slate-800">{successRate}%</span>
+            Delivery success rate:{" "}
+            <span className="font-bold text-slate-800">{successRate}%</span>
           </p>
 
-          <form
-            className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"
-            onSubmit={(event) => { event.preventDefault(); setOffset(0); void loadQueue(); }}
-          >
-            <FormField label="Search patient, mobile or reference">
-              <Input value={query} onChange={(event: any) => setQuery(event.target.value)} placeholder="Search queue" />
-            </FormField>
-            <FormField label="Flow">
-              <Select value={flowFilter} onChange={(event: any) => { setFlowFilter(event.target.value); setOffset(0); }}>
-                <option value="">All flows</option>
-                {Object.entries(flowLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </Select>
-            </FormField>
-            <FormField label="From date">
-              <Input type="date" value={fromDate} onChange={(event: any) => { setFromDate(event.target.value); setOffset(0); }} />
-            </FormField>
-            <FormField label="To date">
-              <Input type="date" value={toDate} onChange={(event: any) => { setToDate(event.target.value); setOffset(0); }} />
-            </FormField>
-            <div className="flex items-end gap-2">
-              <Button type="submit" disabled={busy}>Apply</Button>
-              <button type="button" className="close-button" onClick={() => void loadQueue()} disabled={busy} aria-label="Refresh delivery queue">
-                <RefreshCw size={16} className={busy ? "animate-spin" : ""} />
-              </button>
+          <div className="flex items-end justify-between gap-3">
+            <div className="flex-1">
+              <FilterSection
+                title="Search"
+                query={query}
+                setQuery={(value) => {
+                  setQuery(value);
+                  setOffset(0);
+                }}
+                searchPlaceholder="Search patient, mobile or reference"
+                className="lg:grid-cols-5"
+                filters={flowFilterOptions}
+                filterValues={{ flow: flowFilter || "all" }}
+                onFilterChange={(key, value) => {
+                  if (key === "flow") {
+                    setFlowFilter(value === "all" ? "" : value);
+                    setOffset(0);
+                  }
+                }}
+                onReset={() => {
+                  setFromDate("");
+                  setToDate("");
+                  setOffset(0);
+                }}
+              >
+                <FormField label="From date">
+                  <Input
+                    type="date"
+                    value={fromDate}
+                    onChange={(event: any) => {
+                      setFromDate(event.target.value);
+                      setOffset(0);
+                    }}
+                  />
+                </FormField>
+                <FormField label="To date">
+                  <Input
+                    type="date"
+                    value={toDate}
+                    onChange={(event: any) => {
+                      setToDate(event.target.value);
+                      setOffset(0);
+                    }}
+                  />
+                </FormField>
+              </FilterSection>
             </div>
-          </form>
+            <button
+              type="button"
+              className="close-button mt-4"
+              onClick={() => void loadQueue()}
+              disabled={busy}
+              aria-label="Refresh delivery queue"
+            >
+              <RefreshCw size={16} className={busy ? "animate-spin" : ""} />
+            </button>
+          </div>
 
-          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-            <table className="w-full min-w-[940px] text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="px-3 py-3">Recipient</th>
-                  <th className="px-3 py-3">Flow</th>
-                  <th className="px-3 py-3">Reference</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Attempts</th>
-                  <th className="px-3 py-3">Created / next action</th>
-                  <th className="px-3 py-3">Failure</th>
-                  <th className="px-3 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {busy && data.items.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="p-0">
-                      <TableSkeleton rows={6} />
-                    </td>
-                  </tr>
-                )}
-                {(!busy || data.items.length > 0) && data.items.map((item) => (
-                  <tr key={item.id} className="align-top">
-                    <td className="px-3 py-3"><p className="font-bold text-slate-800">{item.recipient_name}</p><p className="text-slate-500">{item.recipient_masked}</p></td>
-                    <td className="px-3 py-3">{flowLabels[item.flow_key] || item.flow_key}</td>
-                    <td className="px-3 py-3">{item.resource_reference || "—"}</td>
-                    <td className="px-3 py-3"><Badge tone={statusTone[item.status] || "slate"}>{item.status}</Badge></td>
-                    <td className="px-3 py-3">{item.attempt_count}/{item.max_attempts}</td>
-                    <td className="px-3 py-3">
-                      <p>{dateTime(item.created_at)}</p>
-                      {item.status === "queued" && <p className="mt-1 text-slate-500">Next: {dateTime(item.next_attempt_at)}</p>}
-                    </td>
-                    <td className="max-w-56 px-3 py-3 text-slate-600">{item.failure_reason || "—"}</td>
-                    <td className="px-3 py-3 text-right">
-                      {(item.status === "failed" || item.status === "cancelled") && <button type="button" className="font-bold text-blue-700 disabled:opacity-50" disabled={actionId === item.id} onClick={() => void runAction(item, "retry")}>Retry</button>}
-                      {item.status === "queued" && <button type="button" className="font-bold text-red-700 disabled:opacity-50" disabled={actionId === item.id} onClick={() => void runAction(item, "cancel")}>Cancel</button>}
-                    </td>
-                  </tr>
-                ))}
-                {!busy && data.items.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-500">No delivery records match these filters.</td></tr>}
-              </tbody>
-            </table>
+          <div className="mt-4">
+            <DataTable
+              columns={columns}
+              data={data.items}
+              loading={busy && data.items.length === 0}
+              emptyMessage="No delivery records match these filters."
+              className="min-w-[940px] text-xs"
+            />
           </div>
 
           <div className="mt-3 flex items-center justify-between">
-            <p className="text-xs text-slate-500">Page {page} of {pages} · {data.total} records</p>
+            <p className="text-xs text-slate-500">
+              Page {page} of {pages} · {data.total} records
+            </p>
             <div className="flex gap-2">
-              <button type="button" className="close-button" disabled={offset === 0 || busy} onClick={() => setOffset(Math.max(0, offset - 20))}>Previous</button>
-              <button type="button" className="close-button" disabled={offset + 20 >= data.total || busy} onClick={() => setOffset(offset + 20)}>Next</button>
+              <button
+                type="button"
+                className="close-button"
+                disabled={offset === 0 || busy}
+                onClick={() => setOffset(Math.max(0, offset - 20))}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="close-button"
+                disabled={offset + 20 >= data.total || busy}
+                onClick={() => setOffset(offset + 20)}
+              >
+                Next
+              </button>
             </div>
           </div>
         </div>

@@ -186,7 +186,6 @@ export function ConsultationWorkspace(props: any) {
     medicineSearch: medicineDraftName,
     labSearch: labDraftName,
   });
-  console.log(availableMedicineCatalog,'availableCatalog')
   useEffect(() => {
     setMedicineAddAttempted(false);
     setLabAddAttempted(false);

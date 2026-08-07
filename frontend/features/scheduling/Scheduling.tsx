@@ -3,25 +3,21 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { FormField } from "@/app/components/FormElements";
-import {
-  Card,
-  Field,
-  Input,
-  RefreshButton,
-  SearchableSelect,
-  StatusToast,
-} from "@/app/components/common/ui";
+import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { selectedSchedulePayloadsFromRHF } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
 import { pageSize, weekdays } from "./constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
-import { Empty } from "@/app/components/common/Empty";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
-import { ScheduleRow } from "./components/ScheduleRow";
 import { Pagination } from "@/app/components/common/Pagination";
 import { ScheduleFormValues } from "./schedule.schema";
 import { useSchedulingData, useSchedulingActions } from "./api";
+import { status_options } from "../superAdmin/constants";
+import {
+  type FilterConfig,
+  FilterSection,
+} from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
+import { getScheduleColumns } from "./column";
 
 export function Scheduling({
   apiSession,
@@ -297,7 +293,84 @@ export function Scheduling({
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
+  const scheduleFilters: FilterConfig[] = [
+    {
+      key: "branch",
+      label: "Branch",
+      options: [
+        { value: "All", label: "All Branches" },
+        ...branches.map((branch: any) => ({
+          value: branch.id,
+          label: branch.name,
+        })),
+      ],
+    },
+    {
+      key: "department",
+      label: "Department",
+      options: [
+        { value: "All", label: "All Departments" },
+        ...departments.map((department: any) => ({
+          value: department.id,
+          label: department.name,
+        })),
+      ],
+    },
+    {
+      key: "weekday",
+      label: "Weekday",
+      options: [
+        { value: "all", label: "All days" },
+        ...weekdays.map(([value, label]) => ({
+          value,
+          label,
+        })),
+      ],
+    },
+    {
+      key: "status",
+      label: "Status",
+      options: status_options,
+    },
+  ];
 
+  const filterValues = {
+    branch: filterBranch,
+    department: filterDepartment,
+    weekday: filterWeekday,
+    status: filterStatus,
+  };
+
+  const handleChange = (key: string, value: string) => {
+    if (key == "branch") {
+      setFilterBranch(value);
+    }
+    if (key == "department") {
+      setFilterDepartment(value);
+    }
+    if (key == "status") {
+      setFilterStatus(value);
+    }
+    if (key == "weekday") {
+      setFilterWeekday(value);
+    }
+    setPage(1);
+  };
+
+  const handleReset = () => {
+    setFilterBranch("all");
+    setFilterDepartment("all");
+    setQuery("");
+    setFilterStatus("active");
+    setFilterWeekday("all");
+  };
+  const columns = getScheduleColumns({
+    doctors,
+    branches,
+    departments,
+    onEdit: (id) => open("edit", id),
+    onDelete: (row) => setConfirm({ row }),
+  });
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
@@ -324,140 +397,26 @@ export function Scheduling({
       </div>
 
       <StatusToast message={message} onClose={() => setMessage("")} />
-
-      <div className="mt-4 grid gap-3 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5">
-        {isSuperAdmin && (
-          <Field label="Tenant">
-            <SearchableSelect
-              value={tenantId}
-              onChange={setTenantId}
-              options={tenants.map((tenant: any) => ({
-                value: tenant.id,
-                label: tenant.name,
-              }))}
-              placeholder="Select Tenant"
-              searchable
-            />
-          </Field>
-        )}
-
-        <FormField label="Search">
-          <Input
-            value={query}
-            onChange={(e: any) => {
-              setQuery(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Doctor, room, medical department"
-          />
-        </FormField>
-
-        <Field label="Branch">
-          <SearchableSelect
-            value={filterBranch}
-            onChange={(value) => {
-              setFilterBranch(value);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All branches" },
-              ...branches.map((branch: any) => ({
-                value: branch.id,
-                label: branch.name,
-              })),
-            ]}
-            placeholder="All branches"
-            searchable={false}
-          />
-        </Field>
-
-        <Field label="Department">
-          <SearchableSelect
-            value={filterDepartment}
-            onChange={(value) => {
-              setFilterDepartment(value);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All Departments" },
-              ...departments.map((department: any) => ({
-                value: department.id,
-                label: department.name,
-              })),
-            ]}
-            placeholder="All Departments"
-            searchable={false}
-          />
-        </Field>
-
-        <Field label="Weekday">
-          <SearchableSelect
-            value={filterWeekday}
-            onChange={(value) => {
-              setFilterWeekday(value);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All days" },
-              ...weekdays.map(([value, label]) => ({
-                value,
-                label,
-              })),
-            ]}
-            placeholder="All days"
-            searchable={false}
-          />
-        </Field>
-
-        <Field label="Status">
-          <SearchableSelect
-            value={filterStatus}
-            onChange={(value) => {
-              setFilterStatus(value);
-              setPage(1);
-            }}
-            options={[
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Inactive" },
-              { value: "all", label: "All" },
-            ]}
-            searchable={false}
-            placeholder="Status"
-          />
-        </Field>
-      </div>
-
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-        <div className="min-w-[1120px]">
-          <div className="md:grid grid-cols-[1.1fr_.9fr_.9fr_.9fr_.8fr_.65fr_.7fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
-            <span>Doctor</span>
-            <span>Branch</span>
-            <span>Department</span>
-            <span>Days</span>
-            <span>Timing</span>
-            <span>Slot</span>
-            <span className="text-center">Status</span>
-            <span className="text-center">Actions</span>
-          </div>
-
-          <div className="divide-y divide-slate-200">
-            {loading && pageRows.length === 0 && <TableSkeleton />}
-            {!loading && pageRows.length === 0 && (
-              <Empty text="No schedules match  search." />
-            )}
-            {pageRows.map((row: any) => (
-              <ScheduleRow
-                key={row.id}
-                row={row}
-                branches={branches}
-                departments={departments}
-                doctors={doctors}
-                onEdit={() => open("edit", row.id)}
-                onDelete={() => setConfirm({ row })}
-              />
-            ))}
-          </div>
-        </div>
+      <FilterSection
+        query={query}
+        setQuery={setQuery}
+        filters={scheduleFilters}
+        filterValues={filterValues}
+        onFilterChange={handleChange}
+        onReset={handleReset}
+        title="Search"
+        searchPlaceholder="Search"
+        className="lg:grid-cols-6"
+      />
+      <div className="mt-3 overflow-x-auto max-w-[1000px]">
+        <DataTable
+          columns={columns}
+          data={pageRows}
+          loading={loading}
+          emptyMessage="No schedules available"
+          className=" rounded-2xl border border-slate-200 overflow-auto"
+          onRowClick={(row) => open("edit", row.id)}
+        />
       </div>
 
       <Pagination

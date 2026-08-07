@@ -43,6 +43,13 @@ export function useSuperAdminData(apiSession: any) {
   // the collections are still empty, and busy=false there would look
   // identical to "finished, found nothing" to a not-found redirect guard.
   const [busy, setBusy] = useState(true);
+  // Tracks loadTenantAccess() separately from `busy` (which only wraps
+  // reload()). Without this, a not-found redirect guard reading `busy` sees
+  // false while roles/users/departments/branches for the newly selected
+  // tenant are still in flight — e.g. right after switchTenant or a tenant
+  // change — and bounces a just-opened detail page back to its list before
+  // the record has had a chance to load.
+  const [tenantAccessLoading, setTenantAccessLoading] = useState(true);
   const [message, setMessage] = useState("");
 
   const tenantAccessLoadSequence = useRef(0);
@@ -129,12 +136,14 @@ export function useSuperAdminData(apiSession: any) {
       setTenantBranches([]);
       setTenantSubscriptions([]);
       setPermissionCatalog([]);
+      setTenantAccessLoading(false);
       return;
     }
     const requestSequence = ++tenantAccessLoadSequence.current;
     // Never display one tenant's grantable catalog while another tenant is
     // loading. Primary-tenant catalogs can contain platform-only permissions.
     setPermissionCatalog([]);
+    setTenantAccessLoading(true);
     try {
       const scoped = { ...apiSession, tenantId };
       const [
@@ -161,6 +170,7 @@ export function useSuperAdminData(apiSession: any) {
       setTenantBranches(branchRows);
       setPermissionCatalog(permissionRows);
       setTenantSubscriptions(subscriptionRows);
+      setTenantAccessLoading(false);
     } catch {
       if (requestSequence !== tenantAccessLoadSequence.current) return;
       setRoles([]);
@@ -169,6 +179,7 @@ export function useSuperAdminData(apiSession: any) {
       setTenantBranches([]);
       setTenantSubscriptions([]);
       setPermissionCatalog([]);
+      setTenantAccessLoading(false);
     }
   }
 
@@ -206,6 +217,7 @@ export function useSuperAdminData(apiSession: any) {
     setSelectedId,
     busy,
     setBusy,
+    tenantAccessLoading,
     message,
     setMessage,
     reload,

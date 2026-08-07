@@ -12,8 +12,6 @@ import type { ApiSession } from "@/lib/api";
 import { today } from "@/utils/helper";
 import { SourceReferralFields } from "@/app/components/common/SourceReferralFields";
 
-
-
 type LabOrderFormProps = {
   apiSession: ApiSession;
   patients?: any[];
@@ -138,7 +136,10 @@ export function LabOrderForm({
         patients={patients}
         source={acquisitionSource}
         onSourceChange={(value) =>
-          setValue("acquisition_source", value as LabOrderFormValues["acquisition_source"])
+          setValue(
+            "acquisition_source",
+            value as LabOrderFormValues["acquisition_source"],
+          )
         }
         referrerName={referrerName}
         referrerPatientId={referrerPatientId}
@@ -165,26 +166,44 @@ export function LabOrderForm({
       </FormField>
 
       <FormField label="Supplier">
-        <Input value={selectedSupplierName} onChange={() => undefined} disabled />
+        <Input
+          value={selectedSupplierName}
+          onChange={() => undefined}
+          disabled
+        />
       </FormField>
       <FormField label="Supplier Price">
-        <Input value={selectedSupplierPrice} onChange={() => undefined} disabled />
+        <Input
+          value={selectedSupplierPrice}
+          onChange={() => undefined}
+          disabled
+        />
       </FormField>
       <FormField label="MRP">
         <Input value={selectedTestMrp} onChange={() => undefined} disabled />
       </FormField>
       <FormField label="Rate">
-        <Input value={selectedTestSelling} onChange={() => undefined} disabled />
+        <Input
+          value={selectedTestSelling}
+          onChange={() => undefined}
+          disabled
+        />
       </FormField>
 
       <div className="flex items-end gap-2 rounded-lg w-fit col-span-2">
-        <ActionButton type="button" onClick={onAddTest} className="close-button">
+        <ActionButton
+          type="button"
+          onClick={onAddTest}
+          className="close-button"
+        >
           Add
         </ActionButton>
 
-        <Button type="submit" disabled={busy} className="save-button">
-          {busy ? "Saving..." : "Create Order"}
-        </Button>
+        {orderTests.length > 0 && (
+          <Button type="submit" disabled={busy} className="save-button">
+            {busy ? "Saving..." : "Create Order"}
+          </Button>
+        )}
       </div>
 
       {orderTests.length > 0 && (
@@ -193,10 +212,15 @@ export function LabOrderForm({
             <button
               key={`${test.name}-${index}`}
               type="button"
-              onClick={() => onRemoveTest(index)}
               className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
             >
-              {test.name} ×
+              {test.name}{" "}
+              <span
+                className="px-1 hover:bg-black hover:text-white hover:rounded-full"
+                onClick={() => onRemoveTest(index)}
+              >
+                x
+              </span>
             </button>
           ))}
         </div>
