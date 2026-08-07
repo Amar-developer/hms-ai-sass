@@ -1,6 +1,7 @@
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.consultations.models import Consultation, ConsultationMedicine
 from app.modules.patients.models import Patient
 from app.modules.pharmacy.models import (
@@ -29,6 +30,20 @@ class PharmacyCatalogRepository:
         if not medicine or medicine.tenant_id != tenant_id:
             return None
         return medicine
+
+    def medicines_for_tenant(
+        self, *, tenant_id: str, medicine_ids: set[str]
+    ) -> dict[str, MedicineCatalog]:
+        """Batch equivalent of get_medicine_for_tenant, keyed by medicine id."""
+        if not medicine_ids:
+            return {}
+        rows = self.session.exec(
+            select(MedicineCatalog).where(
+                MedicineCatalog.tenant_id == tenant_id,
+                MedicineCatalog.id.in_(medicine_ids),
+            )
+        ).all()
+        return {row.id: row for row in rows}
 
     def list_active_medicines(
         self,
@@ -186,6 +201,8 @@ class PharmacyIssueRepository:
         branch_id: str | None,
         patient_id: str | None,
         status_filter: PharmacyIssueStatus | None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
     ) -> list[PharmacyIssue]:
         statement = select(PharmacyIssue).where(PharmacyIssue.tenant_id == tenant_id)
         if branch_id:
@@ -195,7 +212,11 @@ class PharmacyIssueRepository:
         if status_filter:
             statement = statement.where(PharmacyIssue.status == status_filter)
         return list(
-            self.session.exec(statement.order_by(PharmacyIssue.created_at.desc())).all()
+            self.session.exec(
+                statement.order_by(PharmacyIssue.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
         )
 
 
@@ -274,6 +295,8 @@ class PharmacyStockRepository:
         tenant_id: str,
         branch_id: str | None,
         medicine_id: str | None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
     ) -> list[PharmacyStockLedger]:
         statement = select(PharmacyStockLedger).where(
             PharmacyStockLedger.tenant_id == tenant_id
@@ -285,5 +308,7 @@ class PharmacyStockRepository:
         return list(
             self.session.exec(
                 statement.order_by(PharmacyStockLedger.created_at.desc())
+                .offset(offset)
+                .limit(limit)
             ).all()
         )

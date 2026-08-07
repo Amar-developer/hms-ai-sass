@@ -80,6 +80,11 @@ class NotificationEvent(SQLModel, table=True):
             "status",
             "next_attempt_at",
         ),
+        Index(
+            "ix_notificationevent_tenant_created",
+            "tenant_id",
+            "created_at",
+        ),
     )
 
     id: str = Field(default_factory=lambda: new_id("notification"), primary_key=True)

@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 from fastapi import HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from sqlalchemy.exc import IntegrityError
 
@@ -67,13 +67,25 @@ def _lab_invoice_line_items(
 ) -> list[dict[str, int | str | None]]:
     lines: list[dict[str, int | str | None]] = []
     added_package_ids: set[str] = set()
+    # Resolve every referenced package up front instead of once per item.
+    package_ids = {item.package_id for item in items if item.package_id}
+    packages = (
+        {
+            row.id: row
+            for row in session.exec(
+                select(LabTestPackage).where(LabTestPackage.id.in_(package_ids))
+            ).all()
+        }
+        if package_ids
+        else {}
+    )
     for item in items:
         if not item.package_id:
             lines.append(_lab_order_item_invoice_line(item))
             continue
         if item.package_id in added_package_ids:
             continue
-        package = session.get(LabTestPackage, item.package_id)
+        package = packages.get(item.package_id)
         if not package or package.tenant_id != tenant_id:
             continue
         added_package_ids.add(package.id)
@@ -110,6 +122,11 @@ def _sync_lab_order_item_catalog_prices(
     )
 
     changed = False
+    # One round-trip for every catalog test this order references, instead of
+    # one per item inside the loop below.
+    lab_tests = source_repo.lab_tests_by_ids(
+        {item.test_id for item in items if not item.package_id and item.test_id}
+    )
     for item in items:
         # Package/service components are operational tests included in the
         # package price. Keep their zero selling price instead of repricing
@@ -125,7 +142,7 @@ def _sync_lab_order_item_catalog_prices(
         old_external_slug = item.external_slug
         old_external_item_code = item.external_item_code
 
-        test = source_repo.get_lab_test(item.test_id) if item.test_id else None
+        test = lab_tests.get(item.test_id) if item.test_id else None
         if test is None:
             test = _find_lab_test(session, tenant_id, order.branch_id, item.test_name)
         pricing = _resolve_lab_price(test, item.test_name)

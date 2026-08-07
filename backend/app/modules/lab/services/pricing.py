@@ -113,15 +113,14 @@ def reprice_zero_order_items(session: Session, order: LabOrder) -> bool:
     if not zero_items:
         return False
     changed = False
+    # One round-trip for every catalog test referenced here, rather than one
+    # lookup per zero-priced item.
+    zero_item_tests = catalog_repo.tests_for_tenant(
+        tenant_id=order.tenant_id,
+        test_ids={item.test_id for item in zero_items if item.test_id},
+    )
     for item in zero_items:
-        test = (
-            catalog_repo.get_test_for_tenant(
-                tenant_id=order.tenant_id,
-                test_id=item.test_id,
-            )
-            if item.test_id
-            else None
-        )
+        test = zero_item_tests.get(item.test_id) if item.test_id else None
         if test is None:
             test = _find_lab_test(
                 session, order.tenant_id, order.branch_id, item.test_name
@@ -177,29 +176,41 @@ def add_order_items(
     names: list[str] = []
     seen_tests: set[str] = set()
     seen_names: set[str] = set()
+    # Resolve the packages, their component rows, and the referenced catalog
+    # tests in three round-trips instead of three per package/component. The
+    # loop below still walks package_ids in order, so an invalid package
+    # raises at the same point it did before.
+    packages_by_id = catalog_repo.packages_for_tenant(
+        tenant_id=order.tenant_id,
+        package_ids=set(package_ids),
+        active_only=True,
+    )
+    package_items_by_package = catalog_repo.package_items_for_packages(
+        tenant_id=order.tenant_id,
+        package_ids={package.id for package in packages_by_id.values()},
+    )
+    component_tests = catalog_repo.tests_for_tenant(
+        tenant_id=order.tenant_id,
+        test_ids={
+            row.test_id
+            for rows in package_items_by_package.values()
+            for row in rows
+            if row.test_id
+        },
+        active_only=True,
+    )
     for package_id in package_ids:
-        package = catalog_repo.get_package_for_tenant(
-            tenant_id=order.tenant_id,
-            package_id=package_id,
-            active_only=True,
-        )
+        package = packages_by_id.get(package_id)
         if not package:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid lab package"
             )
         total += package.package_price
-        package_items = catalog_repo.list_package_items(
-            tenant_id=order.tenant_id,
-            package_id=package.id,
-        )
+        package_items = package_items_by_package.get(package.id, [])
         for package_item in package_items:
             if package_item.test_id in seen_tests:
                 continue
-            test = catalog_repo.get_test_for_tenant(
-                tenant_id=order.tenant_id,
-                test_id=package_item.test_id,
-                active_only=True,
-            )
+            test = component_tests.get(package_item.test_id)
             if not test:
                 continue
             seen_tests.add(test.id)
@@ -223,14 +234,15 @@ def add_order_items(
                     ),
                 )
             )
+    standalone_tests = catalog_repo.tests_for_tenant(
+        tenant_id=order.tenant_id,
+        test_ids={test_id for test_id in test_ids if test_id not in seen_tests},
+        active_only=True,
+    )
     for test_id in test_ids:
         if test_id in seen_tests:
             continue
-        test = catalog_repo.get_test_for_tenant(
-            tenant_id=order.tenant_id,
-            test_id=test_id,
-            active_only=True,
-        )
+        test = standalone_tests.get(test_id)
         if not test:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid lab test"

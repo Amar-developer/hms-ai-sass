@@ -893,7 +893,7 @@ export function useAppController() {
       basePermissions: body.user?.permissions || [],
       user: body.user,
     };
-    localStorage.setItem("medizinhub.", JSON.stringify(session));
+    localStorage.setItem("medizinhub.session", JSON.stringify(session));
     const workspace = readWorkspace(session);
     setApiSession(session);
     const nextRole =

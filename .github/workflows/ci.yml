@@ -5,12 +5,122 @@ on:
   push:
     branches:
       - main
-      - master
       - develop
 
+# Pushing again while a run is still going supersedes it. Cancelling is only
+# safe for pull requests: a push to develop/main can reach the deploy job, and
+# cancelling mid-deploy would leave the box half-updated. Those runs are left
+# to finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Remembers which suites already passed for the exact code they test.
+  #
+  # Each suite gets a key built from a content hash of the files that can
+  # change its result. When a suite passes, it writes a tiny marker under that
+  # key. On a later push, an unchanged suite produces the same key, the marker
+  # is found, and the suite is skipped — so fixing one failing suite re-runs
+  # only that suite instead of the whole pipeline.
+  #
+  # Two consequences worth knowing:
+  #  - A flaky pass is remembered. Bump CACHE_VERSION below to invalidate every
+  #    marker at once if you ever need a forced clean run.
+  #  - Hashes cover this repository only. A suite whose result depends on
+  #    something external (a newly published image, a registry outage) can be
+  #    skipped while that external thing is broken.
+  plan:
+    name: Plan suites
+    runs-on: ubuntu-latest
+    env:
+      CACHE_VERSION: v1
+    outputs:
+      frontend_key: ${{ steps.keys.outputs.frontend }}
+      frontend_e2e_key: ${{ steps.keys.outputs.frontend_e2e }}
+      backend_key: ${{ steps.keys.outputs.backend }}
+      backend_e2e_key: ${{ steps.keys.outputs.backend_e2e }}
+      docker_key: ${{ steps.keys.outputs.docker }}
+      frontend_done: ${{ steps.frontend.outputs.cache-hit }}
+      frontend_e2e_done: ${{ steps.frontend_e2e.outputs.cache-hit }}
+      backend_done: ${{ steps.backend.outputs.cache-hit }}
+      backend_e2e_done: ${{ steps.backend_e2e.outputs.cache-hit }}
+      docker_done: ${{ steps.docker.outputs.cache-hit }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # A change to the workflow itself is part of every key: it can alter how
+      # any suite runs, so it must retire every marker.
+      - name: Build suite keys
+        id: keys
+        run: |
+          set -euo pipefail
+          ci='${{ hashFiles('.github/workflows/ci.yml') }}'
+          fe='${{ hashFiles('frontend/**', 'scripts/**') }}'
+          be='${{ hashFiles('backend/**') }}'
+          img='${{ hashFiles('frontend/Dockerfile*', 'backend/Dockerfile*', 'docker-compose*.yml', '.env*.example') }}'
+          v="${CACHE_VERSION}"
+          {
+            echo "frontend=pass-$v-frontend-$ci-$fe"
+            echo "frontend_e2e=pass-$v-frontend-e2e-$ci-$fe-$be"
+            echo "backend=pass-$v-backend-$ci-$be"
+            echo "backend_e2e=pass-$v-backend-e2e-$ci-$be"
+            echo "docker=pass-$v-docker-$ci-$fe-$be-$img"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Frontend already green?
+        id: frontend
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-pass
+          key: ${{ steps.keys.outputs.frontend }}
+          lookup-only: true
+
+      - name: Frontend E2E already green?
+        id: frontend_e2e
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-pass
+          key: ${{ steps.keys.outputs.frontend_e2e }}
+          lookup-only: true
+
+      - name: Backend already green?
+        id: backend
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-pass
+          key: ${{ steps.keys.outputs.backend }}
+          lookup-only: true
+
+      - name: Backend E2E already green?
+        id: backend_e2e
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-pass
+          key: ${{ steps.keys.outputs.backend_e2e }}
+          lookup-only: true
+
+      - name: Docker already green?
+        id: docker
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-pass
+          key: ${{ steps.keys.outputs.docker }}
+          lookup-only: true
+
+      - name: Summary
+        run: |
+          echo "frontend      already green: ${{ steps.frontend.outputs.cache-hit == 'true' }}"
+          echo "frontend-e2e  already green: ${{ steps.frontend_e2e.outputs.cache-hit == 'true' }}"
+          echo "backend       already green: ${{ steps.backend.outputs.cache-hit == 'true' }}"
+          echo "backend-e2e   already green: ${{ steps.backend_e2e.outputs.cache-hit == 'true' }}"
+          echo "docker        already green: ${{ steps.docker.outputs.cache-hit == 'true' }}"
+
   frontend:
     name: Frontend
+    needs: plan
+    if: needs.plan.outputs.frontend_done != 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -45,8 +155,21 @@ jobs:
         env:
           NEXT_PUBLIC_MEDIZINHUB_API_URL: http://localhost:8080/api/v1
 
+      # Only reached when every step above succeeded, so the marker means
+      # "this exact tree passed". A failing run writes nothing and the suite
+      # runs again next push.
+      - name: Mark suite green
+        run: 'mkdir -p .ci-pass && date -u > .ci-pass/passed-at'
+      - uses: actions/cache/save@v4
+        with:
+          path: .ci-pass
+          key: ${{ needs.plan.outputs.frontend_key }}
+
   frontend-e2e:
     name: Frontend E2E
+    needs: plan
+    # Its key covers backend/** too: this suite boots the real API.
+    if: needs.plan.outputs.frontend_e2e_done != 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -113,8 +236,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      # Only reached when every step above succeeded, so the marker means
+      # "this exact tree passed". A failing run writes nothing and the suite
+      # runs again next push.
+      - name: Mark suite green
+        run: 'mkdir -p .ci-pass && date -u > .ci-pass/passed-at'
+      - uses: actions/cache/save@v4
+        with:
+          path: .ci-pass
+          key: ${{ needs.plan.outputs.frontend_e2e_key }}
+
   backend:
     name: Backend
+    needs: plan
+    if: needs.plan.outputs.backend_done != 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -163,8 +298,20 @@ jobs:
       - name: Test
         run: pytest backend/tests -q
 
+      # Only reached when every step above succeeded, so the marker means
+      # "this exact tree passed". A failing run writes nothing and the suite
+      # runs again next push.
+      - name: Mark suite green
+        run: 'mkdir -p .ci-pass && date -u > .ci-pass/passed-at'
+      - uses: actions/cache/save@v4
+        with:
+          path: .ci-pass
+          key: ${{ needs.plan.outputs.backend_key }}
+
   backend-e2e:
     name: Backend E2E
+    needs: plan
+    if: needs.plan.outputs.backend_e2e_done != 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -205,8 +352,20 @@ jobs:
           MEDIZINHUB_E2E_SUPER_ADMIN_PASSWORD: SuperAdminE2EPass123
         run: bash backend/scripts/run_backend_e2e.sh
 
+      # Only reached when every step above succeeded, so the marker means
+      # "this exact tree passed". A failing run writes nothing and the suite
+      # runs again next push.
+      - name: Mark suite green
+        run: 'mkdir -p .ci-pass && date -u > .ci-pass/passed-at'
+      - uses: actions/cache/save@v4
+        with:
+          path: .ci-pass
+          key: ${{ needs.plan.outputs.backend_e2e_key }}
+
   docker:
     name: Docker Images
+    needs: plan
+    if: needs.plan.outputs.docker_done != 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -240,16 +399,46 @@ jobs:
           docker build -f backend/Dockerfile.dev backend
           docker build -f frontend/Dockerfile.dev frontend
 
-  # Deploys to the EC2 dev/test box only after frontend, backend, and
-  # docker checks all pass on develop. This runs as a job in this same
-  # workflow (rather than a separate workflow triggered by `workflow_run`)
-  # so it always executes the workflow definition from the branch that was
-  # actually pushed — `workflow_run` instead reads the workflow file from
-  # the repo's default branch, which caused a real deploy failure here when
-  # this job's own fixes existed only on develop.
+      # Only reached when every step above succeeded, so the marker means
+      # "this exact tree passed". A failing run writes nothing and the suite
+      # runs again next push.
+      - name: Mark suite green
+        run: 'mkdir -p .ci-pass && date -u > .ci-pass/passed-at'
+      - uses: actions/cache/save@v4
+        with:
+          path: .ci-pass
+          key: ${{ needs.plan.outputs.docker_key }}
+
+  # Single always-running status for branch protection to require. A suite
+  # that was already green reports "skipped", and a required check that never
+  # reports leaves a PR permanently unmergeable — so protection points here
+  # instead of at the individual suites. Skipped means "passed earlier for this
+  # exact code"; only a real failure or cancellation fails the gate.
+  gate:
+    name: CI
+    needs: [plan, frontend, frontend-e2e, backend, backend-e2e, docker]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check suite results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "Suite results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "A required suite reported '$result'."; exit 1 ;;
+            esac
+          done
+          echo "All suites that ran passed."
+
   deploy-dev:
     name: Deploy to Dev
-    needs: [frontend, frontend-e2e, backend, backend-e2e, docker]
+    # Depends on the gate rather than each suite: a skipped dependency would
+    # otherwise cascade and skip the deploy on a valid green run.
+    needs: gate
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: development
@@ -336,3 +525,12 @@ jobs:
               --concurrency 5 \
               --max-p95-ms 1000 \
               --max-error-rate 0
+
+  deploy-production:
+    name: Deploy to Production
+    # Depends on the gate rather than each suite: a skipped dependency would
+    # otherwise cascade and skip the deploy on a valid green run.
+    needs: gate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: ./.github/workflows/deploy-ec2.yml
+    secrets: inherit

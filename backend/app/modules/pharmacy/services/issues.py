@@ -42,15 +42,14 @@ def add_issue_items(session: Session, issue: PharmacyIssue, payload_items) -> No
     stock_repo = PharmacyStockRepository(session)
     total = 0
     names = []
+    # Resolve every referenced medicine in one round-trip; the loop below still
+    # validates each item in order, so an invalid id raises where it did before.
+    medicines_by_id = catalog_repo.medicines_for_tenant(
+        tenant_id=issue.tenant_id,
+        medicine_ids={item.medicine_id for item in payload_items if item.medicine_id},
+    )
     for item in payload_items:
-        medicine = (
-            catalog_repo.get_medicine_for_tenant(
-                tenant_id=issue.tenant_id,
-                medicine_id=item.medicine_id,
-            )
-            if item.medicine_id
-            else None
-        )
+        medicine = medicines_by_id.get(item.medicine_id) if item.medicine_id else None
         if item.medicine_id and not medicine:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid medicine"

@@ -27,6 +27,7 @@ from app.infrastructure.integrations.ports.messaging import (
     TemplateMessageGateway,
     TemplateMessageResult,
 )
+from app.modules.integrations.whatsapp_entity_fields import build_entity_context
 from app.modules.integrations.whatsapp_field_catalog import default_field_order
 from app.modules.integrations.whatsapp_schemas import (
     WhatsAppCustomTemplateSettings,
@@ -72,6 +73,23 @@ class NotificationRetryable(RuntimeError):
 
 def _money(value: Decimal) -> str:
     return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def _tenant_scoped(session: Session, model, row_id, tenant_id):
+    """Load a row only if it belongs to this tenant.
+
+    Placeholder values are read straight off these rows, so a row from another
+    tenant must never reach a message. Pass tenant_id=None for the Tenant row
+    itself, whose id is the tenant.
+    """
+    if not row_id:
+        return None
+    row = session.get(model, row_id)
+    if row is None:
+        return None
+    if tenant_id is not None and getattr(row, "tenant_id", None) != tenant_id:
+        return None
+    return row
 
 
 def _public_file_url(row: FileDocument | None) -> tuple[str | None, str | None]:
@@ -268,6 +286,24 @@ def _message_context(
             if appointment.appointment_time
             else "Scheduled time"
         )
+        # Resolve every module row this flow can draw placeholders from, so a
+        # template can reference any of their exposed fields (a patient's date
+        # of birth, the doctor's specialty) without further code here.
+        practitioner = _tenant_scoped(
+            session, Practitioner, appointment.practitioner_id, event.tenant_id
+        )
+        appointment_patient = _tenant_scoped(
+            session, Patient, appointment.patient_id, event.tenant_id
+        )
+        entity_context = build_entity_context(
+            event.template_key,
+            {
+                "patient": appointment_patient,
+                "appointment": appointment,
+                "doctor": practitioner,
+                "clinic": _tenant_scoped(session, Tenant, event.tenant_id, None),
+            },
+        )
         if event.template_key == "appointment_booked_doctor":
             appointment_view_url = str(config.get("appointment_view_url") or "").strip()
             if not appointment_view_url:
@@ -281,11 +317,21 @@ def _message_context(
                 "appointment_view_url": appointment_view_url,
             }
         else:
+            # Approved patient templates commonly name the doctor and the
+            # clinic ("Doctor: {{2}} ... Hospital/Clinic: {{5}}"), so keep flat
+            # keys for those alongside the namespaced module fields — existing
+            # saved templates reference the flat ones.
+            clinic = _tenant_scoped(session, Tenant, event.tenant_id, None)
             context = {
                 "recipient_name": recipient.full_name,
                 "appointment_date": appointment.appointment_date.strftime("%d %B %Y"),
                 "appointment_time": appointment_time,
+                "doctor_name": practitioner.full_name if practitioner else "Doctor",
+                "clinic_name": clinic.name if clinic else "",
+                "appointment_id": appointment.id,
             }
+        # Flat keys win on collision: they are what existing templates saved.
+        context = {**entity_context, **context}
         if event.template_key.startswith("appointment_cancelled_"):
             cancellation = session.exec(
                 select(QueueEvent)
@@ -308,10 +354,19 @@ def _message_context(
         patient = session.get(Patient, invoice.patient_id)
         if not patient or patient.tenant_id != event.tenant_id:
             raise NotificationCancelled("The invoice patient no longer exists.")
+        invoice_entities = build_entity_context(
+            event.template_key,
+            {
+                "patient": patient,
+                "invoice": invoice,
+                "clinic": _tenant_scoped(session, Tenant, event.tenant_id, None),
+            },
+        )
         if event.template_key == "payment_pending_patient":
             return (
                 patient.full_name,
                 {
+                    **invoice_entities,
                     "recipient_name": patient.full_name,
                     "invoice_number": invoice.invoice_number,
                     "paid_amount": _money(invoice.paid_amount),
@@ -337,6 +392,7 @@ def _message_context(
         return (
             patient.full_name,
             {
+                **invoice_entities,
                 "recipient_name": patient.full_name,
                 "invoice_number": invoice.invoice_number,
                 "service_description": service[:500] or "Healthcare services",
@@ -382,6 +438,10 @@ def _message_context(
         return (
             patient.full_name,
             {
+                **build_entity_context(
+                    event.template_key,
+                    {"patient": patient, "clinic": tenant},
+                ),
                 "recipient_name": patient.full_name,
                 "report_name": order.tests[:500],
                 "clinic_name": tenant.name if tenant else "",
@@ -420,6 +480,16 @@ def _message_context(
         return (
             patient.full_name,
             {
+                **build_entity_context(
+                    event.template_key,
+                    {
+                        "patient": patient,
+                        "doctor": practitioner,
+                        "clinic": _tenant_scoped(
+                            session, Tenant, event.tenant_id, None
+                        ),
+                    },
+                ),
                 "recipient_name": patient.full_name,
                 "consultation_date": consultation_date,
                 "doctor_name": practitioner.full_name if practitioner else "Doctor",

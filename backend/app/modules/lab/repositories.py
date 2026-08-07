@@ -1,5 +1,6 @@
 from sqlmodel import Session, select
 
+from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.appointments.models import Appointment
 from app.modules.consultations.models import (
     Consultation,
@@ -39,6 +40,26 @@ class LabCatalogRepository:
         if active_only and not test.is_active:
             return None
         return test
+
+    def tests_for_tenant(
+        self, *, tenant_id: str, test_ids: set[str], active_only: bool = False
+    ) -> dict[str, LabTestCatalog]:
+        """Batch equivalent of get_test_for_tenant, keyed by test id.
+
+        Applies the same tenant and active filters, so a caller can swap a
+        per-item lookup for one round-trip without changing which rows it sees.
+        """
+        if not test_ids:
+            return {}
+        statement = select(LabTestCatalog).where(
+            LabTestCatalog.tenant_id == tenant_id,
+            LabTestCatalog.id.in_(test_ids),
+        )
+        if active_only:
+            statement = statement.where(
+                LabTestCatalog.is_active == True  # noqa: E712
+            )
+        return {row.id: row for row in self.session.exec(statement).all()}
 
     def list_active_tests(
         self, *, tenant_id: str, search: str | None = None
@@ -82,6 +103,39 @@ class LabCatalogRepository:
                 | (LabTestPackage.code.ilike(pattern))
             )
         return list(self.session.exec(statement.order_by(LabTestPackage.name)).all())
+
+    def packages_for_tenant(
+        self, *, tenant_id: str, package_ids: set[str], active_only: bool = False
+    ) -> dict[str, LabTestPackage]:
+        """Batch equivalent of get_package_for_tenant, keyed by package id."""
+        if not package_ids:
+            return {}
+        statement = select(LabTestPackage).where(
+            LabTestPackage.tenant_id == tenant_id,
+            LabTestPackage.id.in_(package_ids),
+        )
+        if active_only:
+            statement = statement.where(
+                LabTestPackage.is_active == True  # noqa: E712
+            )
+        return {row.id: row for row in self.session.exec(statement).all()}
+
+    def package_items_for_packages(
+        self, *, tenant_id: str, package_ids: set[str]
+    ) -> dict[str, list[LabTestPackageItem]]:
+        """Batch equivalent of list_package_items, grouped by package id."""
+        if not package_ids:
+            return {}
+        rows = self.session.exec(
+            select(LabTestPackageItem).where(
+                LabTestPackageItem.tenant_id == tenant_id,
+                LabTestPackageItem.package_id.in_(package_ids),
+            )
+        ).all()
+        grouped: dict[str, list[LabTestPackageItem]] = {}
+        for row in rows:
+            grouped.setdefault(row.package_id, []).append(row)
+        return grouped
 
     def list_package_items(
         self, *, tenant_id: str, package_id: str
@@ -238,6 +292,8 @@ class LabOrderRepository:
         branch_id: str | None,
         patient_id: str | None,
         status_filter: LabOrderStatus | None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
     ) -> list[LabOrder]:
         statement = select(LabOrder).where(LabOrder.tenant_id == tenant_id)
         if branch_id:
@@ -247,7 +303,11 @@ class LabOrderRepository:
         if status_filter:
             statement = statement.where(LabOrder.status == status_filter)
         return list(
-            self.session.exec(statement.order_by(LabOrder.created_at.desc())).all()
+            self.session.exec(
+                statement.order_by(LabOrder.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
         )
 
     def list_order_items(self, *, tenant_id: str, order_id: str) -> list[LabOrderItem]:
