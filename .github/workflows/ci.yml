@@ -420,18 +420,38 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      # Results are read per suite rather than through `join(needs.*.result)`
+      # so a failure names the suite responsible. The joined form printed six
+      # bare words in dependency order ("success success failure ..."), which
+      # meant opening jobs one by one to find the red one.
       - name: Check suite results
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          PLAN: ${{ needs.plan.result }}
+          FRONTEND: ${{ needs.frontend.result }}
+          FRONTEND_E2E: ${{ needs['frontend-e2e'].result }}
+          BACKEND: ${{ needs.backend.result }}
+          BACKEND_E2E: ${{ needs['backend-e2e'].result }}
+          DOCKER: ${{ needs.docker.result }}
         run: |
           set -euo pipefail
-          echo "Suite results: $RESULTS"
-          for result in $RESULTS; do
+          failed=""
+          for entry in "Plan suites|$PLAN" "Frontend|$FRONTEND" \
+                       "Frontend E2E|$FRONTEND_E2E" "Backend|$BACKEND" \
+                       "Backend E2E|$BACKEND_E2E" "Docker Images|$DOCKER"; do
+            name="${entry%%|*}"
+            result="${entry##*|}"
             case "$result" in
-              success|skipped) ;;
-              *) echo "A required suite reported '$result'."; exit 1 ;;
+              success) echo "  PASS     $name" ;;
+              skipped) echo "  SKIPPED  $name (already green for this code)" ;;
+              *)       echo "  FAILED   $name ($result)"; failed="$failed $name" ;;
             esac
           done
+          if [ -n "$failed" ]; then
+            echo
+            echo "CI failed. Suite(s) needing attention:$failed"
+            exit 1
+          fi
+          echo
           echo "All suites that ran passed."
 
   deploy-dev:
