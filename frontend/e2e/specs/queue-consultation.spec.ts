@@ -83,6 +83,24 @@ test.describe("queue and consultation workflow", () => {
       .toBe("patient_not_available");
 
     await clickTargetAction("Requeue");
+    // Wait for the requeue to land before opening the row menu again, the same
+    // way Call and Skip above do. Every queue action triggers a burst of
+    // refetches, and each one re-renders the row — clicking straight into the
+    // menu races that render and Playwright loses the item mid-click
+    // ("element was detached from the DOM").
+    await expect
+      .poll(async () => {
+        const rows = await expectApi<any[]>(
+          await adminApi.get("/queue", {
+            headers: adminHeaders,
+            params: { include_completed: true },
+          }),
+          200,
+        );
+        return rows.find((row) => row.id === seed.queueEntryId)?.status;
+      })
+      .toBe("requeued");
+
     await clickTargetAction("Details");
     await expect(
       page.getByRole("heading", { name: "Consultation Workspace" }),
