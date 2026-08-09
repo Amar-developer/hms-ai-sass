@@ -37,10 +37,20 @@ jobs:
             # Remove only this known collision so git pull can fast-forward.
             git clean -f -- frontend/Dockerfile
 
-            # Pull latest code from main
-            git fetch origin
+            # Deploy the exact remote main commit. A production checkout must
+            # never merge server-only commits into a release. Preserve any
+            # such commits under refs/archive before realigning the branch.
+            git fetch origin main
             git checkout main
-            git pull --ff-only origin main
+            LOCAL_MAIN="$(git rev-parse HEAD)"
+            REMOTE_MAIN="$(git rev-parse origin/main)"
+            if [ "$LOCAL_MAIN" != "$REMOTE_MAIN" ] && \
+               ! git merge-base --is-ancestor "$LOCAL_MAIN" "$REMOTE_MAIN"; then
+              ARCHIVE_REF="refs/archive/production-main-$(date -u +%Y%m%dT%H%M%SZ)"
+              git update-ref "$ARCHIVE_REF" "$LOCAL_MAIN"
+              echo "Preserved divergent server commit $LOCAL_MAIN at $ARCHIVE_REF"
+            fi
+            git reset --hard "$REMOTE_MAIN"
 
             # VERSION is the release identity used by the image and runtime.
             export MEDIZINHUB_APP_VERSION="$(tr -d '\r\n' < VERSION)"
