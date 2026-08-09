@@ -456,10 +456,16 @@ jobs:
 
   deploy-dev:
     name: Deploy to Dev
-    # Depends on the gate rather than each suite: a skipped dependency would
-    # otherwise cascade and skip the deploy on a valid green run.
+    # Cached suites are intentionally skipped. Because skipped jobs propagate
+    # through a dependency chain, override the implicit success() check and
+    # rely explicitly on the gate's result. The gate has already verified
+    # that every suite either passed now or was cached as green.
     needs: gate
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    if: >-
+      !cancelled() &&
+      needs.gate.result == 'success' &&
+      github.ref == 'refs/heads/develop' &&
+      github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: development
     concurrency:
@@ -548,9 +554,13 @@ jobs:
 
   deploy-production:
     name: Deploy to Production
-    # Depends on the gate rather than each suite: a skipped dependency would
-    # otherwise cascade and skip the deploy on a valid green run.
+    # Use the same explicit gate check as deploy-dev so cached/skipped suites
+    # cannot suppress a valid production deployment either.
     needs: gate
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: >-
+      !cancelled() &&
+      needs.gate.result == 'success' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push'
     uses: ./.github/workflows/deploy-ec2.yml
     secrets: inherit
