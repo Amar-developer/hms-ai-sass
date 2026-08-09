@@ -13,9 +13,6 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     environment: production
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'workflow_call'
 
     steps:
       - name: Deploy over SSH
