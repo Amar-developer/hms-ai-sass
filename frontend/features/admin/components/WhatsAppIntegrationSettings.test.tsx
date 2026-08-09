@@ -232,6 +232,64 @@ describe("WhatsApp integration settings design", () => {
     expect(screen.queryByText("Birthday greeting")).toBeNull();
   });
 
+  it("edits a saved custom template's fields in place", async () => {
+    apiFetchMock.mockResolvedValueOnce(savedSettings);
+    render(
+      <WhatsAppIntegrationSettings
+        apiSession={{ tenantId: "tenant-1", user: { id: "admin-1" } }}
+      />,
+    );
+
+    expect(
+      await screen.findByText("Patient appointment confirmation"),
+    ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Enable WhatsApp integration" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add Notification Template" }),
+    );
+    const dialog = screen.getByRole("dialog", {
+      name: "Add Notification Template",
+    });
+    fireEvent.change(
+      within(dialog).getByPlaceholderText("Enter notification template name"),
+      { target: { value: "Editable greeting" } },
+    );
+    fireEvent.change(
+      within(dialog).getByPlaceholderText("Enter approved English identifier"),
+      { target: { value: "editable_en" } },
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Recipient name" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add Template" }));
+
+    // The saved card must now expose the same picker the built-in flows have,
+    // so a template's fields can be changed without deleting and recreating it.
+    const card = screen.getByText("Editable greeting").closest("div.rounded-lg");
+    expect(card).toBeTruthy();
+    const scope = within(card as HTMLElement);
+
+    expect(scope.getByText("{{1}} Recipient name")).toBeTruthy();
+
+    // The field list is collapsed on a saved template so the card stays
+    // readable; the selected values are what matters at a glance.
+    expect(scope.queryByRole("button", { name: "Appointment date" })).toBeNull();
+    fireEvent.click(scope.getByRole("button", { name: "Add field" }));
+
+    // Add a second field, then confirm it landed in position {{2}}.
+    fireEvent.click(scope.getByRole("button", { name: "Appointment date" }));
+    expect(scope.getByText("{{2}} Appointment date")).toBeTruthy();
+
+    // Reorder: appointment date moves up to {{1}}.
+    fireEvent.click(scope.getAllByRole("button", { name: "Move up" })[1]);
+    expect(scope.getByText("{{1}} Appointment date")).toBeTruthy();
+    expect(scope.getByText("{{2}} Recipient name")).toBeTruthy();
+
+    // Remove one and the remaining placeholder renumbers.
+    fireEvent.click(scope.getAllByRole("button", { name: "Remove" })[0]);
+    expect(scope.getByText("{{1}} Recipient name")).toBeTruthy();
+  });
+
   it("persists newly configured notification templates", async () => {
     apiFetchMock.mockResolvedValueOnce({ ...savedSettings, enabled: true });
     render(

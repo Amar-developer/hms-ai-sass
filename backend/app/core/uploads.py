@@ -2,6 +2,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import get_settings
 
@@ -76,8 +77,10 @@ async def _save_upload_to(
     # Filename is fully server-generated: opaque id + validated extension. The
     # client's original filename/extension is never used on disk.
     filename = f"{prefix}_{uuid.uuid4().hex}{ext}"
-    _ensure_dir(directory)
-    (directory / filename).write_bytes(data)
+    # Callers are `async def`, so these run on the event loop. Disk I/O there
+    # stalls every other in-flight request on this worker, not just this one.
+    await run_in_threadpool(_ensure_dir, directory)
+    await run_in_threadpool((directory / filename).write_bytes, data)
     return filename, f"{url_prefix}/{filename}", content_type
 
 

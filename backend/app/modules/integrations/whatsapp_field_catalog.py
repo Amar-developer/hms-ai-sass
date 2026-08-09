@@ -12,13 +12,24 @@ This is the single source of truth shared by:
 
 Deliberately has no dependency on `whatsapp_schemas.py` to avoid a circular
 import (that module imports from here, not the other way around).
+
+The lists below are the *curated* fields — the handful an approved template
+usually needs, kept first in the picker. They are not the whole menu: every
+column each flow's module entities expose is appended automatically by
+`whatsapp_entity_fields.py`, so adding a placeholder such as a patient's date
+of birth to a template is a settings change, not a code change.
 """
+
+from app.modules.integrations.whatsapp_entity_fields import entity_catalog
 
 FLOW_FIELD_CATALOG: dict[str, list[tuple[str, str]]] = {
     "appointment_booked_patient": [
         ("recipient_name", "Recipient name"),
+        ("doctor_name", "Doctor name"),
         ("appointment_date", "Appointment date"),
         ("appointment_time", "Appointment time"),
+        ("clinic_name", "Hospital/clinic name"),
+        ("appointment_id", "Appointment ID"),
     ],
     "appointment_booked_doctor": [
         ("recipient_name", "Doctor name"),
@@ -80,13 +91,50 @@ FLOW_FIELD_CATALOG: dict[str, list[tuple[str, str]]] = {
 }
 
 
+# Flows whose default parameter order is deliberately NARROWER than the full
+# catalog above. `default_field_order` is what a tenant sends when they have not
+# saved a custom template, so it must keep matching the template they already
+# had approved — widening the catalog to offer more optional fields must never
+# silently add parameters to those existing sends. Only list a flow here when
+# its catalog was extended after tenants were already live on it.
+FLOW_DEFAULT_FIELD_ORDER: dict[str, list[str]] = {
+    "appointment_booked_patient": [
+        "recipient_name",
+        "appointment_date",
+        "appointment_time",
+    ],
+}
+
+
+def flow_fields(flow_key: str) -> list[tuple[str, str]]:
+    """Every selectable (key, label) for a flow, in the order the UI shows them.
+
+    The hand-written entries above come first so the fields an approved
+    template most commonly needs stay at the top of the picker; the
+    module-derived fields (patient.date_of_birth, invoice.balance_amount, ...)
+    follow. A module field whose flat equivalent is already listed is skipped,
+    so "Recipient name" and "Patient · Full name" never both appear.
+    """
+    curated = list(FLOW_FIELD_CATALOG.get(flow_key, []))
+    seen = {key for key, _label in curated}
+    for key, label in entity_catalog(flow_key):
+        if key in seen:
+            continue
+        seen.add(key)
+        curated.append((key, label))
+    return curated
+
+
 def flow_field_keys(flow_key: str) -> set[str]:
-    return {key for key, _label in FLOW_FIELD_CATALOG.get(flow_key, [])}
+    return {key for key, _label in flow_fields(flow_key)}
 
 
 def flow_field_labels(flow_key: str) -> dict[str, str]:
-    return dict(FLOW_FIELD_CATALOG.get(flow_key, []))
+    return dict(flow_fields(flow_key))
 
 
 def default_field_order(flow_key: str) -> list[str]:
+    pinned = FLOW_DEFAULT_FIELD_ORDER.get(flow_key)
+    if pinned is not None:
+        return list(pinned)
     return [key for key, _label in FLOW_FIELD_CATALOG.get(flow_key, [])]

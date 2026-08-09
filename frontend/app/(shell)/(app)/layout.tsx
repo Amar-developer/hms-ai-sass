@@ -10,7 +10,6 @@ import { useWorkspaceController } from "@/features/shell/WorkspaceContext";
 export default function AuthenticatedAppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { authenticated, initializing, shellProps } = useWorkspaceController();
-
   useEffect(() => {
     if (!initializing && !authenticated) {
       router.replace("/login");

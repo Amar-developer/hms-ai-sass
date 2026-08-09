@@ -121,7 +121,6 @@ export function useAppController() {
   const mutationRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-
   function updateActive(value: string) {
     activeRef.current = value;
     setActive(value);
@@ -871,7 +870,7 @@ export function useAppController() {
           throw new Error("Sign-in succeeded, but loading tenants timed out.");
         }
         throw new Error(
-          `Login succeeded, but tenants could not be loaded from ${API_BASE}/tenants.`,
+          `Login succeeded, but tenants could not sessionbe loaded from ${API_BASE}/tenants.`,
         );
       }
       if (tenantsRes.ok) {

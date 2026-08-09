@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { FormField } from "@/app/components/FormElements";
+import { TemplateFieldPicker } from "./TemplateFieldPicker";
 import {
   Badge,
   Button,
@@ -57,6 +58,11 @@ type WhatsAppCustomTemplate = {
 };
 
 type WhatsAppFieldOption = { key: string; label: string };
+
+// Mirrors the backend cap on WhatsAppCustomTemplateSettings.parameters. Worth
+// enforcing here too: the field picker now offers every field a flow's modules
+// expose, so it is easy to select past the limit and only find out on save.
+const MAX_TEMPLATE_PARAMETERS = 10;
 
 const languageOptions: Array<{ value: WhatsAppLanguage; label: string }> = [
   { value: "en", label: "English" },
@@ -733,6 +739,49 @@ export function WhatsAppIntegrationSettings({
       ),
     }));
   }
+
+  // Custom templates keep their ordered field keys on the template itself,
+  // rather than in templateFieldMappings like the built-in flows, so they need
+  // their own add/reorder helpers. Behaviour is otherwise identical.
+  function toggleCustomTemplateField(templateId: string, fieldKey: string) {
+    setDraft((current) => ({
+      ...current,
+      customTemplates: current.customTemplates.map((template) => {
+        if (template.id !== templateId) return template;
+        const selected = template.parameters.includes(fieldKey);
+        if (!selected && template.parameters.length >= MAX_TEMPLATE_PARAMETERS) {
+          return template;
+        }
+        return {
+          ...template,
+          parameters: selected
+            ? template.parameters.filter((key) => key !== fieldKey)
+            : [...template.parameters, fieldKey],
+        };
+      }),
+    }));
+  }
+
+  function moveCustomTemplateField(
+    templateId: string,
+    index: number,
+    direction: -1 | 1,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      customTemplates: current.customTemplates.map((template) => {
+        if (template.id !== templateId) return template;
+        const target = index + direction;
+        if (target < 0 || target >= template.parameters.length) return template;
+        const parameters = [...template.parameters];
+        [parameters[index], parameters[target]] = [
+          parameters[target],
+          parameters[index],
+        ];
+        return { ...template, parameters };
+      }),
+    }));
+  }
   const activeTemplates =
     activeTemplateLanguage === draft.defaultLanguage
       ? draft.templates
@@ -1366,86 +1415,19 @@ export function WhatsAppIntegrationSettings({
                 </div>
                 {activeTemplateLanguage === draft.defaultLanguage && (
                   <div className="mt-3">
-                    <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
-                      Template values
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Click fields to add them, in the order your approved
-                      template expects {"{{1}}"}, {"{{2}}"}, ...
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {(draft.fieldCatalog[flow.key] || []).map((field) => {
-                        const selected = (
-                          draft.templateFieldMappings[flow.key] || []
-                        ).includes(field.key);
-                        return (
-                          <button
-                            type="button"
-                            key={field.key}
-                            disabled={disabled || !draft.flows[flow.key]}
-                            onClick={() => toggleTemplateField(flow.key, field.key)}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
-                              selected
-                                ? "border-emerald-600 bg-emerald-50 text-emerald-700"
-                                : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                            }`}
-                          >
-                            {field.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {(draft.templateFieldMappings[flow.key] || []).length > 0 && (
-                      <ul className="mt-2 space-y-1.5">
-                        {(draft.templateFieldMappings[flow.key] || []).map(
-                          (fieldKey, index, all) => {
-                            const field = (draft.fieldCatalog[flow.key] || []).find(
-                              (option) => option.key === fieldKey,
-                            );
-                            return (
-                              <li
-                                key={fieldKey}
-                                className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs"
-                              >
-                                <span>
-                                  <span className="font-bold text-slate-700">{`{{${index + 1}}}`}</span>{" "}
-                                  {field?.label || fieldKey}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    disabled={disabled || index === 0}
-                                    onClick={() => moveTemplateField(flow.key, index, -1)}
-                                    className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30"
-                                    aria-label="Move up"
-                                  >
-                                    ↑
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={disabled || index === all.length - 1}
-                                    onClick={() => moveTemplateField(flow.key, index, 1)}
-                                    className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30"
-                                    aria-label="Move down"
-                                  >
-                                    ↓
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={disabled}
-                                    onClick={() => toggleTemplateField(flow.key, fieldKey)}
-                                    className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
-                                    aria-label="Remove"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </span>
-                              </li>
-                            );
-                          },
-                        )}
-                      </ul>
-                    )}
+                    <TemplateFieldPicker
+                      fields={draft.fieldCatalog[flow.key] || []}
+                      selected={
+                        draft.templateFieldMappings[flow.key] ||
+                        (draft.fieldCatalog[flow.key] || []).map((f) => f.key)
+                      }
+                      onToggle={(fieldKey) => toggleTemplateField(flow.key, fieldKey)}
+                      onMove={(index, direction) =>
+                        moveTemplateField(flow.key, index, direction)
+                      }
+                      disabled={disabled || !draft.flows[flow.key]}
+                      max={MAX_TEMPLATE_PARAMETERS}
+                    />
                   </div>
                 )}
                 {flow.key === "appointment_reminder_patient" && (
@@ -1528,6 +1510,11 @@ export function WhatsAppIntegrationSettings({
                             ?.label || template.trigger_key}
                         </p>
                         <div className="mt-1.5 flex flex-wrap gap-1">
+                          {template.parameters.length === 0 && (
+                            <span className="text-[11px] font-semibold text-amber-600">
+                              No fields selected yet
+                            </span>
+                          )}
                           {template.parameters.map((fieldKey, index) => {
                             const field = (
                               draft.fieldCatalog[template.trigger_key] || []
@@ -1583,6 +1570,47 @@ export function WhatsAppIntegrationSettings({
                         />
                       </FormField>
                     </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <FormField label="Template name">
+                        <Input
+                          value={template.name}
+                          onChange={(event: any) =>
+                            updateCustomTemplate(template.id, {
+                              name: event.target.value,
+                            })
+                          }
+                          disabled={disabled}
+                        />
+                      </FormField>
+                      <FormField label="Description">
+                        <Input
+                          value={template.description}
+                          onChange={(event: any) =>
+                            updateCustomTemplate(template.id, {
+                              description: event.target.value,
+                            })
+                          }
+                          placeholder="When or why this template is used"
+                          disabled={disabled}
+                        />
+                      </FormField>
+                    </div>
+                    {activeTemplateLanguage === draft.defaultLanguage && (
+                      <div className="mt-3">
+                        <TemplateFieldPicker
+                          fields={draft.fieldCatalog[template.trigger_key] || []}
+                          selected={template.parameters}
+                          onToggle={(fieldKey) =>
+                            toggleCustomTemplateField(template.id, fieldKey)
+                          }
+                          onMove={(index, direction) =>
+                            moveCustomTemplateField(template.id, index, direction)
+                          }
+                          disabled={disabled}
+                          max={MAX_TEMPLATE_PARAMETERS}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1695,78 +1723,17 @@ export function WhatsAppIntegrationSettings({
           </Select>
         </FormField>
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
-            Template values
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Click fields to add them, in the order your approved template
-            expects {"{{1}}"}, {"{{2}}"}, ...
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(draft.fieldCatalog[newTemplate.triggerKey] || []).map((field) => (
-              <button
-                type="button"
-                key={field.key}
-                onClick={() => toggleNewTemplateField(field.key)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                  newTemplate.parameters.includes(field.key)
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
-                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {field.label}
-              </button>
-            ))}
-          </div>
-          {newTemplate.parameters.length > 0 && (
-            <ul className="mt-3 space-y-1.5">
-              {newTemplate.parameters.map((fieldKey, index) => {
-                const field = (
-                  draft.fieldCatalog[newTemplate.triggerKey] || []
-                ).find((option) => option.key === fieldKey);
-                return (
-                  <li
-                    key={fieldKey}
-                    className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs"
-                  >
-                    <span>
-                      <span className="font-bold text-slate-700">{`{{${index + 1}}}`}</span>{" "}
-                      {field?.label || fieldKey}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={index === 0}
-                        onClick={() => moveNewTemplateField(index, -1)}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30"
-                        aria-label="Move up"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        disabled={index === newTemplate.parameters.length - 1}
-                        onClick={() => moveNewTemplateField(index, 1)}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30"
-                        aria-label="Move down"
-                      >
-                        ↓
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleNewTemplateField(fieldKey)}
-                        className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                        aria-label="Remove"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <TemplateFieldPicker
+            fields={draft.fieldCatalog[newTemplate.triggerKey] || []}
+            selected={newTemplate.parameters}
+            onToggle={toggleNewTemplateField}
+            onMove={moveNewTemplateField}
+            max={MAX_TEMPLATE_PARAMETERS}
+            // Picking fields is the point of this dialog, so skip the collapse.
+            defaultOpen
+          />
         </div>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <FormField label="English identifier" required>
             <Input

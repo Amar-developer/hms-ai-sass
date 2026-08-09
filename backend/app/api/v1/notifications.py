@@ -8,6 +8,7 @@ from app.core.access_control import (
 )
 from app.core.auth import get_current_user, require_any_permission
 from app.core.database import get_session
+from app.core.pagination import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
@@ -83,6 +84,8 @@ def list_notifications(
     provider: str | None = None,
     status_filter: str | None = None,
     branch_id: str | None = None,
+    limit: int = Query(default=DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(default=0, ge=0),
     current_user: User = Depends(
         require_any_permission(
             permissions.NOTIFICATIONS_MANAGE, permissions.NOTIFICATIONS_READ
@@ -97,6 +100,8 @@ def list_notifications(
         branch_id=branch_id,
         provider=provider,
         status_filter=status_filter,
+        limit=limit,
+        offset=offset,
     )
 
 

@@ -29,12 +29,24 @@ class S3ObjectStorage(ObjectStorage):
         if client is None:
             try:
                 import boto3
+                from botocore.config import Config
             except ImportError as exc:  # pragma: no cover - deployment guard
                 raise RuntimeError(
                     "boto3 is required when FILE_STORAGE_BACKEND=s3"
                 ) from exc
+            # boto3 defaults to a 60s connect + 60s read timeout, so a degraded
+            # S3 endpoint would stall a request-handling worker for minutes.
+            # Bound it like every other outbound integration here, and use
+            # adaptive retries so transient 5xx/throttling still recovers.
             client = boto3.client(
-                "s3", region_name=self.region, endpoint_url=endpoint_url or None
+                "s3",
+                region_name=self.region,
+                endpoint_url=endpoint_url or None,
+                config=Config(
+                    connect_timeout=5,
+                    read_timeout=10,
+                    retries={"max_attempts": 3, "mode": "adaptive"},
+                ),
             )
         self.client = client
 

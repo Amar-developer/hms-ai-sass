@@ -9,7 +9,6 @@ export const USER_COLUMNS: Column[] = [
   { label: "Roles", width: "min-w-[200px]" },
   { label: "Email", width: "min-w-[230px]" },
   { label: "Branch", width: "min-w-[180px]" },
-  // { label: "Created", width: "min-w-[100px]" },
   { label: "Actions", width: "min-w-[240px]" },
 ];
 

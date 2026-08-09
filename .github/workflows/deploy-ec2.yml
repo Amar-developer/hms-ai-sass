@@ -2,13 +2,7 @@ name: Deploy to Production
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - CI
-    types:
-      - completed
-    branches:
-      - main
+  workflow_call:
 
 concurrency:
   group: production-deploy
@@ -21,13 +15,11 @@ jobs:
     environment: production
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main' &&
-       github.event.workflow_run.event == 'push')
+      github.event_name == 'workflow_call'
 
     steps:
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@v1.2.0
         env:
           MEDIZINHUB_BACKUP_PASSPHRASE: ${{ secrets.PRODUCTION_BACKUP_PASSPHRASE }}
           MEDIZINHUB_BACKUP_DIR: ${{ secrets.PRODUCTION_BACKUP_DIR }}

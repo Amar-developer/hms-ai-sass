@@ -5,6 +5,7 @@ from json import dumps
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core.access_control import require_user_branch_access
 from app.core.config import get_settings
@@ -164,22 +165,25 @@ async def upload_lab_order_files(
                     extension=extension,
                     prefix=settings.aws_s3_prefix,
                 )
-                stored = configured_backend.put(
-                    key=storage_key,
-                    data=data,
-                    content_type=verified_content_type,
-                    checksum_sha256=checksum,
-                    metadata={
-                        "sha256": checksum,
-                        "tenant-id": tenant_id,
-                        "document-id": document_id,
-                        "artifact-type": "original",
-                    },
-                    tags={
-                        "artifact": "original",
-                        "retention": "permanent",
-                        "environment": settings.environment,
-                    },
+                # Blocking network call (S3) — must not run on the event loop.
+                stored = await run_in_threadpool(
+                    lambda: configured_backend.put(
+                        key=storage_key,
+                        data=data,
+                        content_type=verified_content_type,
+                        checksum_sha256=checksum,
+                        metadata={
+                            "sha256": checksum,
+                            "tenant-id": tenant_id,
+                            "document-id": document_id,
+                            "artifact-type": "original",
+                        },
+                        tags={
+                            "artifact": "original",
+                            "retention": "permanent",
+                            "environment": settings.environment,
+                        },
+                    )
                 )
                 stored_objects.append((configured_backend, stored))
                 url_path = f"/api/v1/files/{document_id}/download"

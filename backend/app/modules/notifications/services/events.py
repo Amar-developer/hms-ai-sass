@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.modules.audit.service import record_audit_event
+from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.notifications.models import (
     NotificationEvent,
     NotificationEventType,
@@ -97,12 +98,16 @@ def list_notifications(
     branch_id: str | None = None,
     provider: str | None = None,
     status_filter: str | None = None,
+    limit: int = DEFAULT_LIST_LIMIT,
+    offset: int = 0,
 ) -> list[NotificationEvent]:
     return NotificationEventRepository(session).list_events(
         tenant_id=tenant_id,
         branch_id=branch_id,
         provider=provider,
         status_filter=status_filter,
+        limit=limit,
+        offset=offset,
     )
 
 

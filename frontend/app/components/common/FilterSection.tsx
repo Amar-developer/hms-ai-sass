@@ -8,7 +8,7 @@ type FilterOption = {
   label: string;
 };
 
-type FilterConfig = {
+export type FilterConfig = {
   key: string;
   label: string;
   options: FilterOption[];
@@ -48,6 +48,7 @@ export function FilterSection({
     });
     onReset?.();
   }
+
   return (
     <div className={`mt-4 grid gap-3 md:grid-cols-2 ${className}`}>
       {/* Search */}

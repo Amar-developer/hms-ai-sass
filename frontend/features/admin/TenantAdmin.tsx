@@ -42,6 +42,7 @@ import { useAdminData } from "./AdminDataContext";
 import { useTenantAdminActions } from "./api/useTenantAdminActions";
 import { Role } from "./types";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
+import { status_options } from "../superAdmin/constants";
 
 function uniqueRoleFilterOptions(roles: any[]) {
   const byName = new Map<string, any>();
@@ -684,11 +685,7 @@ export function TenantAdmin({
             {
               key: "status",
               label: "Status",
-              options: [
-                { value: "all", label: "All Status" },
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-              ],
+              options: status_options,
             },
           ]}
           onFilterChange={(key: string, value: string) => {
@@ -761,11 +758,7 @@ export function TenantAdmin({
             {
               key: "status",
               label: "Status",
-              options: [
-                { value: "all", label: "All Status" },
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-              ],
+              options: status_options,
             },
           ]}
           onFilterChange={(key: string, value: string) => {
@@ -840,11 +833,7 @@ export function TenantAdmin({
             {
               key: "status",
               label: "Status",
-              options: [
-                { value: "all", label: "All Status" },
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-              ],
+              options: status_options,
             },
           ]}
           onFilterChange={(key: string, value: string) => {
@@ -914,11 +903,7 @@ export function TenantAdmin({
             {
               key: "status",
               label: "Status",
-              options: [
-                { value: "all", label: "All Status" },
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-              ],
+              options: status_options,
             },
           ]}
           onFilterChange={(key: string, value: string) => {

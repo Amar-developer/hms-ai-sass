@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
+from sqlalchemy import Index, desc
 from sqlmodel import Field, SQLModel
 
 from app.modules.tenants.models import new_id, now_utc
@@ -157,6 +158,14 @@ class PharmacyReturnItem(SQLModel, table=True):
 
 
 class PharmacyStockLedger(SQLModel, table=True):
+    __table_args__ = (
+        Index(
+            "ix_pharmacystockledger_tenant_created",
+            "tenant_id",
+            desc("created_at"),
+        ),
+    )
+
     id: str = Field(default_factory=lambda: new_id("stock"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
@@ -174,6 +183,14 @@ class PharmacyStockLedger(SQLModel, table=True):
 
 
 class PharmacyIssue(SQLModel, table=True):
+    __table_args__ = (
+        Index(
+            "ix_pharmacyissue_tenant_created",
+            "tenant_id",
+            desc("created_at"),
+        ),
+    )
+
     id: str = Field(default_factory=lambda: new_id("pharm"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")

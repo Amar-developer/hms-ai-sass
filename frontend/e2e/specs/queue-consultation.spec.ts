@@ -54,35 +54,39 @@ test.describe("queue and consultation workflow", () => {
       await page.getByRole("menuitem", { name, exact: true }).click();
     };
 
-    await clickTargetAction("Call");
-    await expect
-      .poll(async () => {
-        const rows = await expectApi<any[]>(
-          await adminApi.get("/queue", {
-            headers: adminHeaders,
-            params: { include_completed: true },
-          }),
-          200,
-        );
-        return rows.find((row) => row.id === seed.queueEntryId)?.status;
-      })
-      .toBe("called");
+    const queueStatus = async () => {
+      const rows = await expectApi<any[]>(
+        await adminApi.get("/queue", {
+          headers: adminHeaders,
+          params: { include_completed: true },
+        }),
+        200,
+      );
+      return rows.find((row) => row.id === seed.queueEntryId)?.status;
+    };
 
-    await clickTargetAction("Skip");
-    await expect
-      .poll(async () => {
-        const rows = await expectApi<any[]>(
-          await adminApi.get("/queue", {
-            headers: adminHeaders,
-            params: { include_completed: true },
-          }),
-          200,
-        );
-        return rows.find((row) => row.id === seed.queueEntryId)?.status;
-      })
-      .toBe("patient_not_available");
+    // Drive a row action until the server actually reports the new status.
+    //
+    // A single click is not reliable here because the queue screen disables
+    // every row action while any transition is in flight (`busyId`) and does
+    // not refetch when one finishes — it waits for the next poll. So a click
+    // issued between "the API already moved" and "the row re-rendered" can
+    // land on a disabled item, or on a row that is about to be replaced, and
+    // quietly do nothing. Re-opening the menu and clicking again is safe: the
+    // status is re-read first, so an action that already succeeded is never
+    // repeated.
+    const applyAction = async (name: string, expected: string) => {
+      await expect(async () => {
+        if ((await queueStatus()) === expected) return;
+        await clickTargetAction(name);
+        expect(await queueStatus()).toBe(expected);
+      }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
+    };
 
-    await clickTargetAction("Requeue");
+    await applyAction("Call", "called");
+    await applyAction("Skip", "patient_not_available");
+    await applyAction("Requeue", "requeued");
+
     await clickTargetAction("Details");
     await expect(
       page.getByRole("heading", { name: "Consultation Workspace" }),

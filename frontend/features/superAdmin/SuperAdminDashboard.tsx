@@ -208,8 +208,12 @@ export function SuperAdminDashboard({
   useEffect(() => {
     // Don't judge a record "missing" while its list is still being fetched —
     // on a direct/bookmarked detail link the collections start out empty,
-    // which would otherwise bounce straight back to the listing.
-    if (data.busy) return;
+    // which would otherwise bounce straight back to the listing. `busy` only
+    // covers the platform-level reload() (tenants/plans); roles, users,
+    // departments, and branches load separately via loadTenantAccess(), so
+    // that has to be checked too or a detail page opened right as the tenant
+    // data (re)loads gets redirected back before it arrives.
+    if (data.busy || data.tenantAccessLoading) return;
     const detailRoutes: Record<string, { list: string; exists: boolean }> = {
       tenantEdit: { list: "tenants", exists: Boolean(selected) },
       roleEdit: {
@@ -254,6 +258,15 @@ export function SuperAdminDashboard({
       },
     };
     const route = detailRoutes[currentSection];
+    console.log("[superadmin-detail-guard]", {
+      currentSection,
+      selectedDetailId,
+      busy: data.busy,
+      tenantAccessLoading: data.tenantAccessLoading,
+      usersCount: data.users.length,
+      userIds: data.users.map((u: any) => u.id),
+      route,
+    });
     if (route && !route.exists) router.replace(superAdminPath(route.list));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -264,6 +277,7 @@ export function SuperAdminDashboard({
     selectedDepartmentId,
     selectedBranchId,
     data.busy,
+    data.tenantAccessLoading,
     data.roles,
     data.users,
     data.departments,

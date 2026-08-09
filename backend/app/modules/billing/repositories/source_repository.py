@@ -93,6 +93,19 @@ class BillingSourceRepository:
     def get_lab_test(self, test_id: str) -> LabTestCatalog | None:
         return self.session.get(LabTestCatalog, test_id)
 
+    def lab_tests_by_ids(self, test_ids: set[str]) -> dict[str, LabTestCatalog]:
+        """Fetch many catalog tests in one round-trip, keyed by id.
+
+        Invoice generation repriced one lab order item per query; a 40-item
+        order meant 40 sequential round-trips.
+        """
+        if not test_ids:
+            return {}
+        rows = self.session.exec(
+            select(LabTestCatalog).where(LabTestCatalog.id.in_(test_ids))
+        ).all()
+        return {row.id: row for row in rows}
+
     def get_lab_order_invoice(
         self, *, tenant_id: str, lab_order_id: str
     ) -> Invoice | None:
