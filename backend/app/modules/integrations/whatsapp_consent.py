@@ -43,6 +43,13 @@ def patient_for_notification_resource(
     elif resource_type == "consultation":
         row = session.get(Consultation, resource_id)
         patient_id = row.patient_id if row and row.tenant_id == tenant_id else None
+    elif resource_type == "patient_engagement_action":
+        # Local import avoids making the general integration policy module own
+        # the optional Patient Intelligence plugin at import time.
+        from app.modules.patient_intelligence.models import PatientEngagementAction
+
+        row = session.get(PatientEngagementAction, resource_id)
+        patient_id = row.patient_id if row and row.tenant_id == tenant_id else None
     patient = session.get(Patient, patient_id or "")
     return patient if patient and patient.tenant_id == tenant_id else None
 
@@ -50,6 +57,13 @@ def patient_for_notification_resource(
 def patient_allows_whatsapp(patient: Patient | None) -> bool:
     return not patient or (
         patient.whatsapp_consent_status != WhatsAppConsentStatus.OPTED_OUT
+    )
+
+
+def patient_allows_engagement_whatsapp(patient: Patient | None) -> bool:
+    """Intelligence-driven engagement requires explicit, recorded consent."""
+    return bool(
+        patient and patient.whatsapp_consent_status == WhatsAppConsentStatus.OPTED_IN
     )
 
 

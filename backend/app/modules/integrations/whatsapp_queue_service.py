@@ -25,6 +25,7 @@ from app.modules.notifications.models import (
 )
 from app.modules.lab.models import LabOrder
 from app.modules.patients.models import Patient
+from app.modules.patient_intelligence.models import PatientEngagementAction
 from app.modules.practitioners.models import Practitioner
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
@@ -174,6 +175,14 @@ def _display_context(
             return (
                 patient.full_name if patient else "Unknown patient",
                 consultation.created_at.strftime("%d %b %Y"),
+            )
+    if event.resource_type == "patient_engagement_action":
+        action = session.get(PatientEngagementAction, event.resource_id or "")
+        if action and action.tenant_id == event.tenant_id:
+            patient = session.get(Patient, action.patient_id)
+            return (
+                patient.full_name if patient else "Unknown patient",
+                action.action_key.replace("_", " ").title(),
             )
     return "Unknown recipient", event.resource_id
 

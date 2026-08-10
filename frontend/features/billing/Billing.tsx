@@ -37,6 +37,7 @@ import {
 } from "./api/billing.api";
 import { Column } from "@/utils/types";
 import { DataTable } from "@/app/components/common/DataTable";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 export function Billing({
   apiSession,
@@ -513,7 +514,12 @@ export function Billing({
       render: (invoice) => {
         const p: any = patientMap.get(invoice.patient_id);
 
-        return capitalizeFirst(invoice.patient_name || p?.name || p?.full_name || "Patient")
+        return (
+          <div>
+            {capitalizeFirst(invoice.patient_name || p?.name || p?.full_name || "Patient")}
+            <PatientFlagBadges patient={p} className="mt-1" />
+          </div>
+        );
       },
       cellClassName: "font-medium",
     },

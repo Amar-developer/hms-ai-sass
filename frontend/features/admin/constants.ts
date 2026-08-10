@@ -4,6 +4,7 @@ import {
   FileText,
   KeyRound,
   MessageCircleMore,
+  BrainCircuit,
   Percent,
   Plus,
   Settings,
@@ -32,6 +33,7 @@ export const sections = [
   ["membership", "Patient Membership", ShieldCheck],
   ["files", "Files", FileText],
   ["settings", "Tenant & Branch Settings", Settings],
+  ["patient-intelligence", "Patient Intelligence", BrainCircuit],
   ["whatsapp", "WhatsApp Settings", MessageCircleMore],
 ] as const;
 

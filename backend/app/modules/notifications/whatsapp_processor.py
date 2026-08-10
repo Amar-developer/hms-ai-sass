@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+import json
 import logging
 from urllib.parse import urlparse
 
@@ -52,7 +53,19 @@ from app.modules.notifications.models import (
 )
 from app.modules.lab.models import LabOrder
 from app.modules.patients.models import Patient
+from app.modules.patient_intelligence.models import (
+    EngagementActionStatus,
+    PatientEngagementAction,
+    PatientMetricSnapshot,
+)
+from app.modules.patient_subscriptions.models import (
+    PatientSubscriptionEnrollment,
+    PatientSubscriptionEnrollmentStatus,
+    PatientSubscriptionPlan,
+)
+from app.modules.integrations.whatsapp_consent import patient_allows_engagement_whatsapp
 from app.modules.practitioners.models import Practitioner
+from app.modules.pharmacy.models import PharmacyIssue
 from app.modules.queue.models import QueueEvent
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Tenant, now_utc
@@ -251,11 +264,90 @@ def _message_context(
             resource_type=event.resource_type or "",
             resource_id=event.resource_id or "",
         )
-        if not patient_allows_whatsapp(patient):
+        intelligence_engagement = event.resource_type == "patient_engagement_action"
+        if intelligence_engagement and not patient_allows_engagement_whatsapp(patient):
             raise NotificationCancelled(
-                "The patient has opted out of WhatsApp notifications."
+                "The patient has not explicitly opted in to engagement messages."
+            )
+        if not intelligence_engagement and not patient_allows_whatsapp(patient):
+            raise NotificationCancelled(
+                "The patient has opted out of WhatsApp communication."
             )
         language = patient_notification_language(patient) if patient else None
+    if event.resource_type == "patient_engagement_action":
+        action = session.get(PatientEngagementAction, event.resource_id or "")
+        if not action or action.tenant_id != event.tenant_id:
+            raise NotificationCancelled("The engagement action no longer exists.")
+        if action.status in {
+            EngagementActionStatus.CANCELLED,
+            EngagementActionStatus.SUPPRESSED,
+            EngagementActionStatus.FAILED,
+        }:
+            raise NotificationCancelled("The engagement action is no longer active.")
+        patient = session.get(Patient, action.patient_id)
+        if not patient or patient.tenant_id != event.tenant_id:
+            raise NotificationCancelled("The engagement patient no longer exists.")
+        tenant = session.get(Tenant, event.tenant_id)
+        snapshot = session.exec(
+            select(PatientMetricSnapshot).where(
+                PatientMetricSnapshot.tenant_id == event.tenant_id,
+                PatientMetricSnapshot.patient_id == patient.id,
+            )
+        ).first()
+        membership = session.exec(
+            select(PatientSubscriptionEnrollment)
+            .where(
+                PatientSubscriptionEnrollment.tenant_id == event.tenant_id,
+                PatientSubscriptionEnrollment.patient_id == patient.id,
+                PatientSubscriptionEnrollment.status
+                == PatientSubscriptionEnrollmentStatus.ACTIVE,
+            )
+            .order_by(PatientSubscriptionEnrollment.ends_on.desc())
+        ).first()
+        membership_plan = (
+            session.get(PatientSubscriptionPlan, membership.plan_id)
+            if membership
+            else None
+        )
+        membership_invoice = (
+            session.get(Invoice, membership.purchase_invoice_id)
+            if membership and membership.purchase_invoice_id
+            else None
+        )
+        latest_pharmacy_issue = session.exec(
+            select(PharmacyIssue)
+            .where(
+                PharmacyIssue.tenant_id == event.tenant_id,
+                PharmacyIssue.patient_id == patient.id,
+            )
+            .order_by(PharmacyIssue.created_at.desc())
+        ).first()
+        values = json.loads(action.personalization_json or "{}")
+        entity_values = build_entity_context(
+            action.template_key,
+            {
+                "patient": patient,
+                "clinic": tenant,
+                "intelligence": snapshot,
+                "membership": membership,
+                "membership_plan": membership_plan,
+                "invoice": membership_invoice,
+                "pharmacy_issue": latest_pharmacy_issue,
+                "engagement_action": action,
+            },
+        )
+        context = {
+            **entity_values,
+            "recipient_name": patient.full_name,
+            "clinic_name": tenant.name if tenant else "",
+            "action_key": action.action_key,
+            "action_channel": action.channel,
+            "action_template_key": action.template_key,
+            "action_status": action.status.value,
+            "action_reason": action.reason,
+            **{str(key): str(value) for key, value in values.items()},
+        }
+        return patient.full_name, context, None, None, language
     if event.template_key in {
         "appointment_booked_patient",
         "appointment_booked_doctor",
@@ -440,7 +532,7 @@ def _message_context(
             {
                 **build_entity_context(
                     event.template_key,
-                    {"patient": patient, "clinic": tenant},
+                    {"patient": patient, "clinic": tenant, "lab_order": order},
                 ),
                 "recipient_name": patient.full_name,
                 "report_name": order.tests[:500],
@@ -459,9 +551,21 @@ def _message_context(
         if not patient or patient.tenant_id != event.tenant_id:
             raise NotificationCancelled("The consultation patient no longer exists.")
         if event.template_key == "follow_up_advice_patient":
+            practitioner = session.get(Practitioner, consultation.practitioner_id or "")
             return (
                 patient.full_name,
                 {
+                    **build_entity_context(
+                        event.template_key,
+                        {
+                            "patient": patient,
+                            "doctor": practitioner,
+                            "clinic": _tenant_scoped(
+                                session, Tenant, event.tenant_id, None
+                            ),
+                            "consultation": consultation,
+                        },
+                    ),
                     "recipient_name": patient.full_name,
                     "follow_up_advice": consultation.follow_up_advice
                     or "Follow up as advised",
@@ -488,6 +592,7 @@ def _message_context(
                         "clinic": _tenant_scoped(
                             session, Tenant, event.tenant_id, None
                         ),
+                        "consultation": consultation,
                     },
                 ),
                 "recipient_name": patient.full_name,
@@ -534,6 +639,13 @@ def _cancel(session: Session, event: NotificationEvent, reason: str) -> None:
     event.processing_started_at = None
     event.updated_at = now_utc()
     session.add(event)
+    if event.resource_type == "patient_engagement_action":
+        action = session.get(PatientEngagementAction, event.resource_id or "")
+        if action and action.tenant_id == event.tenant_id:
+            action.status = EngagementActionStatus.CANCELLED
+            action.reason = reason[:1000]
+            action.updated_at = now_utc()
+            session.add(action)
     delivery = session.exec(
         select(DocumentDelivery).where(
             DocumentDelivery.notification_event_id == event.id
@@ -683,6 +795,21 @@ def _save_result(
         event.status = NotificationStatus.FAILED
         event.failure_reason = result.message[:500]
     session.add(event)
+    if event.resource_type == "patient_engagement_action":
+        action = session.get(PatientEngagementAction, event.resource_id or "")
+        if action and action.tenant_id == event.tenant_id:
+            action.status = (
+                EngagementActionStatus.SENT
+                if result.success
+                else (
+                    EngagementActionStatus.QUEUED
+                    if event.status == NotificationStatus.QUEUED
+                    else EngagementActionStatus.FAILED
+                )
+            )
+            action.reason = event.failure_reason or action.reason
+            action.updated_at = now
+            session.add(action)
     delivery = session.exec(
         select(DocumentDelivery).where(
             DocumentDelivery.notification_event_id == event.id

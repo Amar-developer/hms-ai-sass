@@ -5,6 +5,7 @@ import { displayDate, money } from "@/utils/helper";
 import { enrollmentPageSize } from "../constants";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { DataTable } from "@/app/components/common/DataTable";
+import { PatientFlagBadges } from "./PatientFlagBadges";
 
 export function ActiveEnrollmentsTable({
   rows,
@@ -133,14 +134,17 @@ export function ActiveEnrollmentsTable({
       key: "patient",
       header: "Patient",
       width: "140px",
-      render: (row: any) => (
-        <b className="text-xs lg:text-sm">
-          {row.patient_name ||
-            patientMap.get(row.patient_id)?.name ||
-            patientMap.get(row.patient_id)?.full_name ||
-            "Patient"}
-        </b>
-      ),
+      render: (row: any) => {
+        const patient = patientMap.get(row.patient_id);
+        return (
+          <div>
+            <b className="text-xs lg:text-sm">
+              {row.patient_name || patient?.name || patient?.full_name || "Patient"}
+            </b>
+            <PatientFlagBadges patient={patient} className="mt-1" />
+          </div>
+        );
+      },
     },
     {
       key: "patient_number",

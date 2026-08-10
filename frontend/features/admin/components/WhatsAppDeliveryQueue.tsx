@@ -58,6 +58,20 @@ const flowLabels: Record<string, string> = {
   prescription_ready_patient: "Prescription ready",
   follow_up_advice_patient: "Follow-up advice",
   appointment_reminder_patient: "Appointment reminder",
+  medicine_refill_patient: "Medicine refill",
+  membership_renewal_patient: "Membership renewal",
+  patient_reengagement: "Patient re-engagement",
+  home_care_booking_patient: "Home care booking",
+  home_care_visit_patient: "Home care visit",
+  home_visit_booking_patient: "Home visit booking",
+  home_visit_reminder_patient: "Home visit reminder",
+  ip_admission_patient: "IP admission",
+  ip_discharge_patient: "IP discharge",
+  physiotherapy_case_patient: "Physiotherapy case",
+  physiotherapy_session_patient: "Physiotherapy session",
+  pharmacy_dispense_patient: "Pharmacy dispense",
+  service_invoice_patient: "Service invoice",
+  service_follow_up_patient: "Service follow-up",
 };
 
 const statusTone: Record<string, "blue" | "green" | "red" | "slate" | "amber"> =

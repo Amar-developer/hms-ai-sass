@@ -70,6 +70,30 @@ def test_module_fields_are_selectable_without_code_changes():
     assert "patient.blood_group" in available
     assert "doctor.primary_specialty" in available
     assert "invoice.balance_amount" in flow_field_keys("invoice_paid_patient")
+    assert "lab_order.tests" in flow_field_keys("lab_report_ready_patient")
+    assert "consultation.diagnosis" in flow_field_keys("prescription_ready_patient")
+    assert "membership_plan.price_amount" in flow_field_keys(
+        "membership_renewal_patient"
+    )
+    assert "membership.used_consultations" in flow_field_keys(
+        "membership_renewal_patient"
+    )
+    assert "engagement_action.reason" in flow_field_keys("patient_reengagement")
+    assert "pharmacy_issue.medicine_text" in flow_field_keys("medicine_refill_patient")
+    assert "home_care_booking.start_date" in flow_field_keys(
+        "home_care_booking_patient"
+    )
+    assert "home_care_visit.visit_date" in flow_field_keys(
+        "home_visit_reminder_patient"
+    )
+    assert "ip_admission.admission_date" in flow_field_keys("ip_admission_patient")
+    assert "ip_discharge.final_diagnosis" in flow_field_keys("ip_discharge_patient")
+    assert "physiotherapy_case.condition" in flow_field_keys(
+        "physiotherapy_case_patient"
+    )
+    assert "physiotherapy_session.home_program" in flow_field_keys(
+        "physiotherapy_session_patient"
+    )
 
 
 def test_entity_context_renders_values_for_a_loaded_row():
@@ -94,6 +118,61 @@ def test_entity_context_renders_values_for_a_loaded_row():
     assert context["patient.blood_group"] == "O+"
     # An entity the caller could not resolve renders empty, never "None".
     assert context["doctor.full_name"] == ""
+
+
+def test_membership_and_lab_entity_contexts_render_values():
+    from datetime import date
+
+    from app.modules.integrations.whatsapp_entity_fields import build_entity_context
+    from app.modules.lab.models import LabOrder
+    from app.modules.patient_subscriptions.models import (
+        PatientSubscriptionEnrollment,
+        PatientSubscriptionEnrollmentStatus,
+        PatientSubscriptionPlan,
+    )
+
+    plan = PatientSubscriptionPlan(
+        tenant_id="t1",
+        name="Smart Premium Care",
+        price_amount=5000,
+        duration_days=365,
+        free_consultations=4,
+        free_lab_test_ids_json='["cbc","lipid"]',
+        free_medicine_ids_json='["med1"]',
+    )
+    enrollment = PatientSubscriptionEnrollment(
+        tenant_id="t1",
+        branch_id="b1",
+        patient_id="p1",
+        plan_id="plan1",
+        starts_on=date(2026, 8, 1),
+        ends_on=date(2027, 8, 1),
+        status=PatientSubscriptionEnrollmentStatus.ACTIVE,
+        used_consultations=2,
+        paid_amount=5000,
+    )
+    lab_order = LabOrder(
+        tenant_id="t1",
+        branch_id="b1",
+        patient_id="p1",
+        tests="CBC, Lipid Profile",
+        amount=1200,
+    )
+
+    membership_context = build_entity_context(
+        "membership_renewal_patient",
+        {"membership": enrollment, "membership_plan": plan},
+    )
+    lab_context = build_entity_context(
+        "lab_report_ready_patient", {"lab_order": lab_order}
+    )
+
+    assert membership_context["membership_plan.name"] == "Smart Premium Care"
+    assert membership_context["membership_plan.price_amount"] == "5000"
+    assert membership_context["membership_plan.free_lab_tests"] == "2"
+    assert membership_context["membership.used_consultations"] == "2"
+    assert lab_context["lab_order.tests"] == "CBC, Lipid Profile"
+    assert lab_context["lab_order.amount"] == "1200"
 
 
 def test_unset_values_never_render_as_none():

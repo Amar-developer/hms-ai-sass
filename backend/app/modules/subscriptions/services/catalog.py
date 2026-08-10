@@ -27,6 +27,7 @@ FULL_HMS_MODULES = [
     "reports",
     "physiotherapy",
     "ip",
+    "patient_intelligence",
 ]
 
 STARTER_HMS_MODULES = [
@@ -44,6 +45,7 @@ GROWTH_HMS_MODULES = [
     "sms",
     "whatsapp",
     "reports",
+    "patient_intelligence",
 ]
 
 PRO_HMS_MODULES = [
@@ -140,6 +142,15 @@ DEFAULT_PLANS = [
 # installations. Preserve that contractual entitlement without replacing any
 # other modules an administrator may have configured.
 HOME_CARE_DEFAULT_PLAN_KEYS = {
+    "growth",
+    "pro",
+    "hospital",
+    "monthly_clinic",
+    "half_yearly_clinic",
+    "yearly_clinic",
+}
+
+PATIENT_INTELLIGENCE_DEFAULT_PLAN_KEYS = {
     "growth",
     "pro",
     "hospital",

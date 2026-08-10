@@ -30,6 +30,7 @@ import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { useAppointmentsQuery } from "@/features/appointments/api/useAppointmentsQuery";
 import { call_language_options, display_mode_options } from "./constants";
 import { DataTable } from "@/app/components/common/DataTable";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 export function TokenQueue({
   apiSession,
@@ -100,6 +101,9 @@ export function TokenQueue({
         return true;
       }),
     ),
+  );
+  const patientMap = new Map(
+    (patients || []).map((patient: any) => [String(patient.id), patient]),
   );
   const visibleQueue =
     displayMode === "called_only"
@@ -187,16 +191,24 @@ export function TokenQueue({
       header: "Patient",
       width: "150px",
       render: (appointment: any) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            openConsultation(appointment);
-          }}
-          className="text-left text-xs font-semibold hover:underline"
-        >
-          {appointment.patient}
-        </button>
+        <div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              openConsultation(appointment);
+            }}
+            className="text-left text-xs font-semibold hover:underline"
+          >
+            {appointment.patient}
+          </button>
+          <PatientFlagBadges
+            patient={patientMap.get(
+              String(appointment.patientId || appointment.patient_id),
+            )}
+            className="mt-1"
+          />
+        </div>
       ),
       disableRowClick: true,
     },
@@ -385,6 +397,17 @@ export function TokenQueue({
                         publicDisplayValue(item.patient_id, "Patient")}
                     </span>
                   </p>
+                  <PatientFlagBadges
+                    patient={patientMap.get(
+                      String(
+                        appointment.patientId ||
+                          appointment.patient_id ||
+                          item.patient_id,
+                      ),
+                    )}
+                    className="mt-1"
+                    inverse
+                  />
 
                   <p className="mt-1 truncate text-xs text-slate-300">
                     {appointment.doctor || "Doctor"} ·{" "}

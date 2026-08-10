@@ -54,7 +54,6 @@ Database:
 | `lib/navigation.ts` | Sidebar modules and role-to-module defaults. |
 | `lib/moduleAccess.ts` | Checks if a module can open for role and tenant. |
 | `lib/liveData.ts` | Converts backend patient/appointment data into frontend shape. |
-| `lib/authPresets.ts` | Demo login presets and visible demo role labels. |
 | `components/ui.tsx` | Shared simple UI components: `Card`, `Badge`, `Field`, `Input`, `Select`, `Button`. |
 | `features/dashboard/Dashboard.tsx` | Dashboard cards and click-through navigation. |
 | `features/platform/SuperAdminDashboard.tsx` | Super admin tenant, users, roles, branches, departments, subscriptions, settings. |

@@ -71,6 +71,14 @@ from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionPlan,
 )
+from app.modules.patient_intelligence.models import (
+    PatientEngagementAction,
+    PatientIntelligenceFlag,
+    PatientIntelligenceFlagHistory,
+    PatientIntelligencePatientSetting,
+    PatientIntelligenceRule,
+    PatientMetricSnapshot,
+)
 from app.modules.pharmacy.models import (
     MedicineBatch,
     MedicineCatalog,
@@ -168,6 +176,12 @@ __all__ = [
     "PatientContact",
     "PatientSubscriptionEnrollment",
     "PatientSubscriptionPlan",
+    "PatientEngagementAction",
+    "PatientIntelligenceFlag",
+    "PatientIntelligenceFlagHistory",
+    "PatientIntelligencePatientSetting",
+    "PatientIntelligenceRule",
+    "PatientMetricSnapshot",
     "Payment",
     "MedicineBatch",
     "MedicineCatalog",

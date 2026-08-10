@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { DataTable } from "@/app/components/common/DataTable";
+import { PatientFlagBadges } from "./PatientFlagBadges";
 
 export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
   const [page, setPage] = useState(1);
@@ -21,21 +22,23 @@ export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
     {
       key: "patient",
       header: "Patient",
-      render: (row: any) => (
-        <>
-          <b>
-            {row.patient_name ||
-              patientMap.get(row.patient_id)?.name ||
-              patientMap.get(row.patient_id)?.full_name ||
-              "Patient"}
-          </b>
-          <p className="text-xs text-slate-500">
-            {row.patient_number ||
-              patientMap.get(row.patient_id)?.patient_number ||
-              ""}
-          </p>
-        </>
-      ),
+      render: (row: any) => {
+        const patient = patientMap.get(row.patient_id);
+        return (
+          <>
+            <b>
+              {row.patient_name ||
+                patient?.name ||
+                patient?.full_name ||
+                "Patient"}
+            </b>
+            <p className="text-xs text-slate-500">
+              {row.patient_number || patient?.patient_number || ""}
+            </p>
+            <PatientFlagBadges patient={patient} className="mt-1" />
+          </>
+        );
+      },
       cellClassName: "text-xs lg:text-sm",
     },
     {

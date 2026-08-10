@@ -168,7 +168,26 @@ export function SearchPicker({
                   : ""
               }`}
             >
-              {row.label}
+              <span className="block">{row.label}</span>
+              {Boolean(row.badges?.length) && (
+                <span className="mt-1 flex flex-wrap gap-1">
+                  {row.badges.map((badge: any) => (
+                    <span
+                      key={badge.label}
+                      title={badge.title}
+                      style={row.value === value ? undefined : badge.style}
+                      className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-bold leading-none ${
+                        row.value === value
+                          ? "border-white/30 bg-white/10 text-white"
+                          : badge.className ||
+                            "border-slate-300 bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      {badge.label}
+                    </span>
+                  ))}
+                </span>
+              )}
             </button>
           ))}
         </div>

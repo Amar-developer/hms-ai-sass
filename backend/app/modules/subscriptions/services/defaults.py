@@ -4,6 +4,7 @@ from app.modules.subscriptions.models import SubscriptionPlan
 from app.modules.subscriptions.services.catalog import (
     DEFAULT_PLANS,
     HOME_CARE_DEFAULT_PLAN_KEYS,
+    PATIENT_INTELLIGENCE_DEFAULT_PLAN_KEYS,
 )
 from app.modules.subscriptions.services.serialization import (
     modules_from_json,
@@ -30,6 +31,14 @@ def ensure_default_plans(session: Session) -> None:
             if "home_care" not in enabled_modules:
                 exists.enabled_modules_json = modules_to_json(
                     [*enabled_modules, "home_care"]
+                )
+                exists.updated_at = now
+                session.add(exists)
+        if exists and exists.key in PATIENT_INTELLIGENCE_DEFAULT_PLAN_KEYS:
+            enabled_modules = modules_from_json(exists.enabled_modules_json)
+            if "patient_intelligence" not in enabled_modules:
+                exists.enabled_modules_json = modules_to_json(
+                    [*enabled_modules, "patient_intelligence"]
                 )
                 exists.updated_at = now
                 session.add(exists)

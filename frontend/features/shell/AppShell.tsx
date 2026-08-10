@@ -77,7 +77,6 @@ export function AppShell({
     doctorScope,
     apiSession,
     role,
-    demoUsers,
     liveStatus,
     showPassword,
     setShowPassword,
@@ -143,8 +142,9 @@ export function AppShell({
   const showNavigationSkeleton = useNavigationSkeleton(Boolean(pendingPage));
   const primaryRole = apiSession?.user?.roles?.[0] || role;
   const roleLabel =
-    demoUsers.find((u: any) => u[0] === primaryRole)?.[1] ||
-    primaryRole?.replace(/_/g, " ") ||
+    primaryRole
+      ?.replace(/_/g, " ")
+      .replace(/\b\w/g, (character: string) => character.toUpperCase()) ||
     "User";
   const isTenantAdmin = Boolean(
     apiSession?.user?.roles?.includes("tenant_admin") ||
@@ -238,7 +238,9 @@ export function AppShell({
   const visibleTenantAdminSections = tenantAdminSections.filter(
     ([sectionId]: any) =>
       canUseTenantAdminSection(sectionId, apiSession?.user) &&
-      (sectionId !== "whatsapp" || clinic.modules?.includes("whatsapp")),
+      (sectionId !== "whatsapp" || clinic.modules?.includes("whatsapp")) &&
+      (sectionId !== "patient-intelligence" ||
+        clinic.modules?.includes("patient_intelligence")),
   );
   const activeTenantAdminSection = visibleTenantAdminSections.some(
     ([sectionId]: any) => sectionId === tenantAdminSection,

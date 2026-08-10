@@ -49,6 +49,7 @@ import {
 } from "./api";
 import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
 import { useAppointmentsQuery } from "@/features/appointments/api/useAppointmentsQuery";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 export function DoctorConsultation({
   clinic,
@@ -1071,6 +1072,14 @@ export function DoctorConsultation({
                     <p className="truncate text-sm font-bold text-slate-900">
                       {a.token} · {a.patient}
                     </p>
+                    <PatientFlagBadges
+                      patient={patients.find(
+                        (patient: any) =>
+                          String(patient.id) ===
+                          String(a.patientId || a.patient_id),
+                      )}
+                      className="mt-1"
+                    />
                     <p className="mt-1 text-xs text-slate-500">
                       {displayTime(a.time || a.appointment_time)}
                     </p>

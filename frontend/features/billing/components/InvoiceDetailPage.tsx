@@ -361,6 +361,120 @@ export function InvoiceDetailPage({
     }
     return Math.max(-numberValue(entry.paid_amount_delta), 0);
   }
+  const paymentById = new Map<string, any>(
+    payments.map((payment: any) => [payment.id, payment]),
+  );
+  function paymentAccount(entry: any) {
+    const payment = paymentById.get(entry.related_payment_id);
+    const method = String(payment?.method || "").toLowerCase();
+    if (method.includes("cash")) return "Cash";
+    if (method.includes("upi") || method.includes("gpay") || method.includes("paytm")) {
+      return "UPI / Bank";
+    }
+    if (method.includes("card")) return "Card Settlement";
+    if (method.includes("bank")) return "Bank";
+    return "Cash / Bank";
+  }
+  function hospitalLedgerLine(entry: any) {
+    const entryType = String(entry.entry_type || "");
+    const invoiceDelta = numberValue(entry.invoice_total_delta);
+    const paidDelta = numberValue(entry.paid_amount_delta);
+    const balanceDelta = numberValue(entry.balance_amount_delta);
+    const explicitCredit = numberValue(entry.credit_amount);
+    const explicitDebit = numberValue(entry.debit_amount);
+    const movementAmount = Math.max(
+      Math.abs(explicitCredit),
+      Math.abs(explicitDebit),
+      Math.abs(invoiceDelta),
+      Math.abs(paidDelta),
+      Math.abs(balanceDelta),
+    );
+
+    if (entryType === "invoice_submitted") {
+      const amount = Math.abs(invoiceDelta || balanceDelta || explicitDebit);
+      return {
+        debitAccount: "Accounts Receivable",
+        debitAmount: amount,
+        creditAccount: "Service Revenue",
+        creditAmount: amount,
+      };
+    }
+    if (entryType === "payment_recorded") {
+      const amount = Math.abs(explicitCredit || paidDelta || balanceDelta);
+      return {
+        debitAccount: paymentAccount(entry),
+        debitAmount: amount,
+        creditAccount: "Accounts Receivable",
+        creditAmount: amount,
+      };
+    }
+    if (
+      entryType === "invoice_offer_applied" ||
+      entryType === "discount_applied"
+    ) {
+      const amount = Math.abs(explicitCredit || invoiceDelta || balanceDelta);
+      return {
+        debitAccount: "Discount / Concession",
+        debitAmount: amount,
+        creditAccount: "Accounts Receivable",
+        creditAmount: amount,
+      };
+    }
+    if (entryType === "membership_benefit_applied") {
+      const amount = Math.abs(explicitCredit || invoiceDelta || balanceDelta);
+      return {
+        debitAccount: "Membership Benefit",
+        debitAmount: amount,
+        creditAccount: "Accounts Receivable",
+        creditAmount: amount,
+      };
+    }
+    if (
+      entryType === "invoice_offer_removed" ||
+      entryType === "discount_removed"
+    ) {
+      const amount = Math.abs(explicitDebit || invoiceDelta || balanceDelta);
+      return {
+        debitAccount: "Accounts Receivable",
+        debitAmount: amount,
+        creditAccount: "Discount Reversal",
+        creditAmount: amount,
+      };
+    }
+    if (entryType.includes("refund")) {
+      const amount = Math.abs(explicitDebit || paidDelta || balanceDelta || movementAmount);
+      return {
+        debitAccount: "Refund / Patient Payable",
+        debitAmount: amount,
+        creditAccount: paymentAccount(entry),
+        creditAmount: amount,
+      };
+    }
+    if (balanceDelta > 0 || invoiceDelta > 0 || explicitDebit > 0) {
+      const amount = Math.abs(explicitDebit || invoiceDelta || balanceDelta);
+      return {
+        debitAccount: "Accounts Receivable",
+        debitAmount: amount,
+        creditAccount: "Adjustment Income",
+        creditAmount: amount,
+      };
+    }
+    if (balanceDelta < 0 || invoiceDelta < 0 || explicitCredit > 0) {
+      const amount = Math.abs(explicitCredit || invoiceDelta || balanceDelta);
+      return {
+        debitAccount: "Adjustment / Write-off",
+        debitAmount: amount,
+        creditAccount: "Accounts Receivable",
+        creditAmount: amount,
+      };
+    }
+    return {
+      debitAccount: "-",
+      debitAmount: 0,
+      creditAccount: "-",
+      creditAmount: 0,
+    };
+  }
   const financialLedgerEntries = ledgerEntries.filter(
     (entry: any) =>
       entry.entry_type !== "credit_note_issued" &&
@@ -380,11 +494,18 @@ export function InvoiceDetailPage({
     .reduce(
       (running: any, entry: any) => {
         const next = {
-          invoiceTotal:
+          invoiceTotal: Math.max(
+            0,
             running.invoiceTotal + numberValue(entry.invoice_total_delta),
-          paidAmount: running.paidAmount + numberValue(entry.paid_amount_delta),
-          balanceAmount:
+          ),
+          paidAmount: Math.max(
+            0,
+            running.paidAmount + numberValue(entry.paid_amount_delta),
+          ),
+          balanceAmount: Math.max(
+            0,
             running.balanceAmount + numberValue(entry.balance_amount_delta),
+          ),
         };
         ledgerRunningById.set(entry.id, next);
         return next;
@@ -1387,10 +1508,12 @@ export function InvoiceDetailPage({
           {canReviewAnyAdjustment && (
             <div className="mt-5 rounded-lg border border-slate-200">
               <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <h4 className="card-title font-bold">Billing Ledger</h4>
+                <h4 className="card-title font-bold">
+                  Hospital Accounting Ledger
+                </h4>
                 <p className="card-desc text-slate-500">
-                  Invoice lifecycle is tracked for audit. Credit and debit show
-                  only payment, refund, or membership benefit movement.
+                  Company point-of-view journal view for this invoice. Debits
+                  and credits show the hospital accounts affected by each event.
                 </p>
               </div>
               <div className="overflow-auto">
@@ -1400,7 +1523,7 @@ export function InvoiceDetailPage({
                   </p>
                 )}
                 {financialLedgerEntries.length > 0 && (
-                  <table className="w-full min-w-[1040px] text-left text-xs">
+                  <table className="w-full min-w-[1220px] text-left text-xs">
                     <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
                       <tr>
                         <th className="whitespace-nowrap px-4 py-3">
@@ -1410,11 +1533,17 @@ export function InvoiceDetailPage({
                           Activity
                         </th>
                         <th className="whitespace-nowrap px-4 py-3">User</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Credit
+                        <th className="whitespace-nowrap px-4 py-3">
+                          Debit Account
                         </th>
                         <th className="whitespace-nowrap px-4 py-3 text-right">
                           Debit
+                        </th>
+                        <th className="whitespace-nowrap px-4 py-3">
+                          Credit Account
+                        </th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right">
+                          Credit
                         </th>
                         <th className="whitespace-nowrap px-4 py-3 text-right">
                           Bill Amount
@@ -1435,8 +1564,7 @@ export function InvoiceDetailPage({
                           paidAmount: 0,
                           balanceAmount: 0,
                         };
-                        const creditAmount = ledgerCreditAmount(entry);
-                        const debitAmount = ledgerDebitAmount(entry);
+                        const line = hospitalLedgerLine(entry);
                         return (
                           <tr
                             key={entry.id}
@@ -1453,15 +1581,21 @@ export function InvoiceDetailPage({
                             <td className="px-4 py-3 font-semibold text-slate-700">
                               {entry.actor_user_name || "Unknown user"}
                             </td>
-                            <td
-                              className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(creditAmount, "credit")}`}
-                            >
-                              {signedMoney(creditAmount, "credit")}
+                            <td className="px-4 py-3 font-semibold text-slate-700">
+                              {line.debitAccount}
                             </td>
                             <td
-                              className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(debitAmount, "debit")}`}
+                              className={`px-4 py-3 text-right font-black tabular-nums ${line.debitAmount > 0 ? "text-rose-700" : "text-slate-500"}`}
                             >
-                              {signedMoney(debitAmount, "debit")}
+                              {money(line.debitAmount)}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-700">
+                              {line.creditAccount}
+                            </td>
+                            <td
+                              className={`px-4 py-3 text-right font-black tabular-nums ${line.creditAmount > 0 ? "text-emerald-700" : "text-slate-500"}`}
+                            >
+                              {money(line.creditAmount)}
                             </td>
                             <td className="px-4 py-3 text-right font-black tabular-nums text-slate-700">
                               {money(running.invoiceTotal)}

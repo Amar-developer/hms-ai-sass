@@ -544,30 +544,6 @@ cat /etc/nginx/conf.d/*.conf | grep server_name
 cat /etc/nginx/conf.d/frappe-bench.conf
 ```
 
----
-
-## Dev Live Demo Credentials
-
-Show the login shortcut panel only on development/demo deployments:
-
-```bash
-cd ~/medizinhub-hms
-
-# Dev/demo server only
-printf '\nNEXT_PUBLIC_SHOW_DEMO_CREDENTIALS=true\n' >> .env
-
-sudo docker compose build frontend
-sudo docker compose up -d frontend
-```
-
-For production, keep this unset or false:
-
-```bash
-NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS=false
-```
-
----
-
 ## ⚠️ Commands to NEVER Run on Production
 
 ```bash

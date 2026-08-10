@@ -42,6 +42,7 @@ import {
 } from "./api";
 import { DataTable } from "@/app/components/common/DataTable";
 import { Column } from "@/utils/types";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 const MAX_REPORT_DOCUMENTS = 5;
 
@@ -546,17 +547,20 @@ export function Lab({
         const p: any = patientMap.get(o.patient_id);
 
         return (
-          <div className="flex items-center gap-2">
-            <span>
-              {o.patient_name ||
-                p?.name ||
-                publicDisplayValue(o.patient_id, "Patient")}
-            </span>
-            <CopyIdButton
-              value={o.id}
-              label="Lab / Service Order ID"
-              allowed={canCopyIds}
-            />
+          <div>
+            <div className="flex items-center gap-2">
+              <span>
+                {o.patient_name ||
+                  p?.name ||
+                  publicDisplayValue(o.patient_id, "Patient")}
+              </span>
+              <CopyIdButton
+                value={o.id}
+                label="Lab / Service Order ID"
+                allowed={canCopyIds}
+              />
+            </div>
+            <PatientFlagBadges patient={p} className="mt-1" />
           </div>
         );
       },

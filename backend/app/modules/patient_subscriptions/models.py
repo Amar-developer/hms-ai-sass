@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime
 from enum import Enum
 
@@ -42,6 +43,20 @@ class PatientSubscriptionPlan(SQLModel, table=True):
     updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
+
+    @property
+    def free_lab_tests(self) -> int:
+        try:
+            return len(json.loads(self.free_lab_test_ids_json or "[]"))
+        except (TypeError, ValueError):
+            return 0
+
+    @property
+    def free_medicines(self) -> int:
+        try:
+            return len(json.loads(self.free_medicine_ids_json or "[]"))
+        except (TypeError, ValueError):
+            return 0
 
 
 class PatientSubscriptionEnrollment(SQLModel, table=True):

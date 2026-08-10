@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import { ApiSession, uploadAssetUrl } from "@/lib/api";
 import { clinicalRecordsWithUniqueItems, displayPatientGender, fmtDate, patientDisplayMobile, uniqueClinicalRecords } from "../helpers";
 import { MembershipEnrollForm } from "../forms/PatientForms";
@@ -7,7 +9,15 @@ import {
   isMembershipPlanInvoice,
 } from "@/features/billing/helpers";
 import { StatusBadge } from "./StatusBadge";
-import { Card, StatusToast,Badge,Button } from "@/app/components/common/ui";
+import {
+  ActionButton,
+  Badge,
+  Button,
+  Card,
+  Input,
+  StatusToast,
+} from "@/app/components/common/ui";
+import { FormField } from "@/app/components/FormElements";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { Info } from "@/app/components/common/Info";
 import { Empty } from "@/app/components/common/Empty";
@@ -22,6 +32,10 @@ import {
 import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
 import { DataTable } from "@/app/components/common/DataTable";
 import { Column } from "@/utils/types";
+import {
+  PatientFlagBadges,
+  patientValueTierFlags,
+} from "./PatientFlagBadges";
 
 export function PatientDetail({
   apiSession,
@@ -35,6 +49,8 @@ export function PatientDetail({
   membershipPlans,
   membershipEnrollments,
   patientInvoices,
+  patientIntelligence,
+  patientIntelligenceError,
   branches,
   loading,
   message,
@@ -43,6 +59,8 @@ export function PatientDetail({
   onBack,
   onEdit,
   onUploadPhoto,
+  onSaveManualPrescriptionDate,
+  onSendEngagementAction,
   setActive,
 }: any & { apiSession?: ApiSession | null }) {
   const permissionKeys = apiSession?.user?.permissions || [];
@@ -68,6 +86,22 @@ export function PatientDetail({
     "invoices.read",
   ]);
   const canEditPatient = hasAnyPermission(["patients.edit"]);
+  const canSendEngagement = hasAnyPermission(["patient_engagement.send"]);
+  const canManageIntelligence = hasAnyPermission([
+    "patient_intelligence.manage",
+  ]);
+  const [manualPrescriptionDate, setManualPrescriptionDate] = useState("");
+  const [manualPrescriptionNotes, setManualPrescriptionNotes] = useState("");
+  useEffect(() => {
+    setManualPrescriptionDate(
+      String(patientIntelligence?.manual_expected_refill_at || "").slice(0, 10),
+    );
+    setManualPrescriptionNotes(patientIntelligence?.manual_refill_notes || "");
+  }, [
+    patient.id,
+    patientIntelligence?.manual_expected_refill_at,
+    patientIntelligence?.manual_refill_notes,
+  ]);
   const alerts = [
     ...(summary?.critical_alerts || []),
     ...(summary?.allergies || []),
@@ -497,6 +531,171 @@ export function PatientDetail({
           </div>
         )}
       </Card>
+
+      {patientIntelligence && (
+        <DetailSection
+          title="Patient Intelligence"
+          description="Explainable Patient 360 metrics calculated from existing HMS activity."
+          count={patientValueTierFlags(patientIntelligence.flags).length}
+        >
+          <div className="grid gap-3 md:grid-cols-4">
+            <CompactMetric
+              label="Current Tier"
+              value={patientIntelligence.current_tier || "Standard"}
+            />
+            <CompactMetric
+              label="Last Activity"
+              value={fmtDate(patientIntelligence.metrics?.last_activity_at)}
+            />
+            <CompactMetric
+              label="30-day Collected"
+              value={money(patientIntelligence.metrics?.net_collected_30d || 0)}
+            />
+            <CompactMetric
+              label="365-day Collected"
+              value={money(patientIntelligence.metrics?.net_collected_365d || 0)}
+            />
+            <CompactMetric
+              label="Completed Visits"
+              value={patientIntelligence.metrics?.completed_visits || 0}
+            />
+            <CompactMetric
+              label="Lab Orders"
+              value={patientIntelligence.metrics?.lab_order_count || 0}
+            />
+            <CompactMetric
+              label="Pharmacy Dispenses"
+              value={patientIntelligence.metrics?.pharmacy_dispense_count || 0}
+            />
+            <CompactMetric
+              label="Expected Refill"
+              value={fmtDate(patientIntelligence.metrics?.expected_refill_at)}
+            />
+            <CompactMetric
+              label="Active Paid Membership"
+              value={
+                patientIntelligence.metrics?.active_membership ? "Yes" : "No"
+              }
+            />
+          </div>
+
+          <PatientFlagBadges
+            flags={patientIntelligence.flags || []}
+            maxVisible={99}
+            className="mt-4"
+          />
+
+          {canManageIntelligence && (
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div>
+                <h5 className="text-sm font-black text-slate-950">
+                  Monthly Prescription Schedule
+                </h5>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Set this existing patient&apos;s next prescription or medicine
+                  refill date. Tenant-configured intelligence rules decide when
+                  and which personalized WhatsApp reminder is created.
+                </p>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-[220px_1fr_auto] md:items-end">
+                <FormField label="Next Prescription Date">
+                  <Input
+                    type="date"
+                    value={manualPrescriptionDate}
+                    onChange={(event: any) =>
+                      setManualPrescriptionDate(event.target.value)
+                    }
+                  />
+                </FormField>
+                <FormField label="Schedule Notes">
+                  <Input
+                    value={manualPrescriptionNotes}
+                    onChange={(event: any) =>
+                      setManualPrescriptionNotes(event.target.value)
+                    }
+                    placeholder="Optional patient-specific note"
+                  />
+                </FormField>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() =>
+                      onSaveManualPrescriptionDate?.(
+                        manualPrescriptionDate,
+                        manualPrescriptionNotes,
+                      )
+                    }
+                    disabled={loading || !manualPrescriptionDate}
+                  >
+                    Save Date
+                  </Button>
+                  {patientIntelligence.manual_expected_refill_at && (
+                    <ActionButton
+                      tone="danger"
+                      onClick={() =>
+                        onSaveManualPrescriptionDate?.(
+                          "",
+                          manualPrescriptionNotes,
+                        )
+                      }
+                      disabled={loading}
+                    >
+                      Clear
+                    </ActionButton>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(patientIntelligence.engagement_actions || []).length > 0 && (
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <h5 className="text-sm font-black text-slate-950">
+                Recommended Engagement
+              </h5>
+              <div className="mt-2 space-y-2">
+                {patientIntelligence.engagement_actions.map((action: any) => (
+                  <div
+                    key={action.id}
+                    className="flex flex-col justify-between gap-2 rounded-lg bg-white px-3 py-2 sm:flex-row sm:items-center"
+                  >
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        {String(action.action_key).replaceAll("_", " ")}
+                      </p>
+                      <p className="text-xs text-slate-500">{action.reason}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge tone={action.requires_approval ? "amber" : "blue"}>
+                        {action.status}
+                      </Badge>
+                      {canSendEngagement && action.status === "recommended" && (
+                        <Button
+                          onClick={() => onSendEngagementAction?.(action.id)}
+                          disabled={loading}
+                        >
+                          {action.requires_approval ? "Review & Send" : "Send"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </DetailSection>
+      )}
+
+      {!patientIntelligence && patientIntelligenceError && (
+        <DetailSection
+          title="Patient Intelligence"
+          description="Patient 360 metrics and explainable flags could not be loaded."
+          count={0}
+        >
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            {patientIntelligenceError}
+          </div>
+        </DetailSection>
+      )}
 
       {(alerts.length > 0 || risks.length > 0) && (
         <div className="grid gap-5 lg:grid-cols-2">

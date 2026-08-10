@@ -20,6 +20,7 @@ import { SourceReferralFields } from "@/app/components/common/SourceReferralFiel
 import { formatDisplayTime } from "../helpers";
 import { visit_type_options } from "../constants";
 import { PatientIntakeSummary } from "./PatientIntakeSummary";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 function IntakeSuggestionChip({
   value,
@@ -159,6 +160,10 @@ export function AppointmentBookingFlow(props: any) {
                         selectedPatient.guardian_mobile ||
                         "-"}
                     </p>
+                    <PatientFlagBadges
+                      patient={selectedPatient}
+                      className="mt-1"
+                    />
                   </div>
                   <button
                     type="button"
@@ -267,6 +272,10 @@ export function AppointmentBookingFlow(props: any) {
                                 {patient.mobile || "No mobile"}
                                 {patient.area ? ` · ${patient.area}` : ""}
                               </span>
+                              <PatientFlagBadges
+                                patient={patient}
+                                className="mt-1"
+                              />
                             </span>
                             <span className="text-xs font-bold text-blue-600">
                               Select

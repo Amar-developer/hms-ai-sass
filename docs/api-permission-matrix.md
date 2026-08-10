@@ -471,6 +471,22 @@ Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP 
 
 Home-care APIs enforce the `home_care` module entitlement and branch scope for service catalog rows, patient bookings, and actual visit logs. Booking invoice endpoints use the shared billing permission and create invoices from completed visit logs when present, falling back to billable home-care booking items.
 
+## Patient Intelligence and Engagement
+
+| Method | Endpoint | Permission |
+| --- | --- | --- |
+| `GET` | `/api/v1/patient-intelligence/patients/{patient_id}` | `patient_intelligence.read` |
+| `GET` | `/api/v1/patient-intelligence/dashboard` | `patient_intelligence.read` |
+| `PATCH` | `/api/v1/patient-intelligence/patients/{patient_id}/manual-refill` | `patient_intelligence.manage` |
+| `GET` | `/api/v1/patient-intelligence/rules` | `patient_intelligence.rules.manage` |
+| `POST` | `/api/v1/patient-intelligence/rules` | `patient_intelligence.rules.manage` |
+| `PATCH` | `/api/v1/patient-intelligence/rules/{rule_id}` | `patient_intelligence.rules.manage` |
+| `GET` | `/api/v1/patient-intelligence/configuration-options` | `patient_intelligence.rules.manage` |
+| `POST` | `/api/v1/patient-intelligence/adapt-existing-data` | `patient_intelligence.manage` |
+| `POST` | `/api/v1/patient-intelligence/engagement-actions/{action_id}/send` | `patient_engagement.send` |
+
+All endpoints enforce the separate `patient_intelligence` plan entitlement. Existing appointments, payments, lab orders, pharmacy dispenses, home-care visits, and patient memberships remain the source of truth. Intelligence-driven WhatsApp sends additionally require explicit patient opt-in and an enabled approved template flow.
+
 ## Files, Settings, Notifications, and Audit
 
 | Method | Endpoint | Permission |

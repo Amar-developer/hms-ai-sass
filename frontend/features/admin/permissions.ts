@@ -9,6 +9,7 @@ const SECTION_PERMISSION_PREFIXES: Record<string, string[]> = {
   membership: ["patient_subscriptions"],
   files: ["files"],
   settings: ["settings"],
+  "patient-intelligence": ["patient_intelligence"],
   whatsapp: ["communications.whatsapp"],
 };
 

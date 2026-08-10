@@ -17,6 +17,7 @@ import {
 } from "../helpers";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { PatientFlagBadges } from "./PatientFlagBadges";
 
 export function patientLookupLabel(patient: any) {
   if (!patient) return "";
@@ -133,10 +134,15 @@ export function PatientLookupField({
   async function selectPatient(patient: any) {
     let selected = patient;
     if (apiSession && patient?.id) {
-      selected = await apiFetch(
+      const detailed: any = await apiFetch(
         `/patients/${encodeURIComponent(patient.id)}`,
         apiSession,
       ).catch(() => patient);
+      selected = {
+        ...detailed,
+        intelligence_flags:
+          detailed?.intelligence_flags || patient.intelligence_flags || [],
+      };
     }
     onSelect(selected);
     setCreating(false);
@@ -166,6 +172,7 @@ export function PatientLookupField({
                   : ""}
                 {patientDisplayMobile(selectedPatient)}
               </span>
+              <PatientFlagBadges patient={selectedPatient} className="mt-1" />
             </span>
             <button
               type="button"
@@ -250,6 +257,7 @@ export function PatientLookupField({
                             : ""}
                           {patientDisplayMobile(patient)}
                         </span>
+                        <PatientFlagBadges patient={patient} className="mt-1" />
                       </span>
                       <span className="text-xs font-bold text-blue-600">
                         Select

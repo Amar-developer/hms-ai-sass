@@ -352,13 +352,75 @@ describe("WhatsApp integration settings design", () => {
     ]);
   });
 
+  it("deletes a built-in notification template configuration before saving", async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ...savedSettings,
+      enabled: true,
+      template_field_mappings: {
+        appointment_booked_patient: [
+          "recipient_name",
+          "appointment_date",
+          "appointment_time",
+        ],
+      },
+    });
+    render(
+      <WhatsAppIntegrationSettings
+        apiSession={{ tenantId: "tenant-1", user: { id: "admin-1" } }}
+      />,
+    );
+
+    expect(
+      await screen.findByDisplayValue("patient_booking"),
+    ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Delete Patient appointment confirmation",
+      }),
+    );
+    expect(screen.queryByText("Patient appointment confirmation")).toBeNull();
+    expect(screen.queryByDisplayValue("patient_booking")).toBeNull();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ...savedSettings,
+      enabled: true,
+      templates: {
+        ...savedSettings.templates,
+        appointment_booked_patient: "",
+      },
+      localized_templates: {
+        ta: {
+          appointment_booked_patient: "",
+        },
+      },
+      flows: {
+        ...savedSettings.flows,
+        appointment_booked_patient: false,
+      },
+      template_field_mappings: {
+        appointment_booked_patient: [],
+      },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save WhatsApp Settings" }),
+    );
+
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
+    const [, , request] = apiFetchMock.mock.calls[1];
+    const body = JSON.parse(String(request?.body));
+    expect(body.templates.appointment_booked_patient).toBe("");
+    expect(body.localized_templates.ta.appointment_booked_patient).toBe("");
+    expect(body.flows.appointment_booked_patient).toBe(false);
+    expect(body.template_field_mappings.appointment_booked_patient).toEqual([]);
+  });
+
   it("keeps reminder schedules optional and disabled until the reminder flow is enabled", () => {
     render(<WhatsAppIntegrationSettings />);
     fireEvent.click(
       screen.getByRole("switch", { name: "Enable WhatsApp integration" }),
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Show 7 more automatic templates" }),
+      screen.getByRole("button", { name: /Show \d+ more automatic templates/ }),
     );
 
     const reminder = screen.getByRole("switch", {

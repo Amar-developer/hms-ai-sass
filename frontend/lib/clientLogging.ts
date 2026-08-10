@@ -1,5 +1,5 @@
 const API_BASE = (
-  process.env.NEXT_PUBLIC_MEDIZINHUB_API_URL || "http://127.0.0.1:8000/api/v1"
+  process.env.NEXT_PUBLIC_MEDIZINHUB_API_URL || "/api/backend"
 ).replace(/\/$/, "");
 
 type ClientLogSession = {

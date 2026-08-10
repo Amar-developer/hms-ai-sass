@@ -13,7 +13,6 @@ import {
   fetchWithTimeout,
   type ApiSession,
 } from "@/lib/api";
-import { demoUsers, loginPresets } from "@/lib/authPresets";
 import { type LiveSummary, mapAppointment, mapPatient } from "@/lib/liveData";
 import { canOpenModule } from "@/lib/moduleAccess";
 import { fetchPatientReferences } from "@/features/patients/components/PatientSearchSelect";
@@ -684,17 +683,33 @@ export function useAppController() {
     window.addEventListener("unhandledrejection", handleUnhandled);
     window.addEventListener("error", handleWindowError);
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
-    const raw = localStorage.getItem("medizinhub.session");
-    if (raw) {
+    let cancelled = false;
+
+    async function restoreSession() {
+      const raw = localStorage.getItem("medizinhub.session");
+      if (!raw) {
+        if (!cancelled) setInitializing(false);
+        return;
+      }
       try {
         const saved = JSON.parse(raw);
         if (!saved.basePermissions) {
           saved.basePermissions = saved.user?.permissions || [];
         }
-        const workspace = readWorkspace(saved);
+        // Local storage is only a workspace snapshot. Validate the HTTP-only
+        // cookie before mounting authenticated children such as notification
+        // polling, otherwise a stale snapshot creates a burst of 401s.
+        const freshUser = await apiFetch("/auth/me", saved, {
+          suppressErrorReportStatuses: [401],
+          omitAuthorization: true,
+        });
+        if (cancelled) return;
+        const restored = { ...saved, user: freshUser };
+        localStorage.setItem("medizinhub.session", JSON.stringify(restored));
+        const workspace = readWorkspace(restored);
         const restoredActive =
           workspace.active ||
-          primaryWorkspaceSection(saved);
+          primaryWorkspaceSection(restored);
         const restoredBranchId = workspace.branchId || "";
         const restoredDepartmentId =
           workspace.departmentId || defaultDepartment.id;
@@ -704,24 +719,28 @@ export function useAppController() {
         setActive(restoredActive);
         setLiveBranchId(restoredBranchId);
         setDepartmentId(restoredDepartmentId);
-        setApiSession(saved);
+        setApiSession(restored);
         const savedRole =
-          saved.user?.roles?.[0] ||
-          (saved.user?.is_super_admin ? "super_admin" : "tenant_admin");
+          restored.user?.roles?.[0] ||
+          (restored.user?.is_super_admin ? "super_admin" : "tenant_admin");
         setRole(savedRole);
         setAuthenticated(true);
-        loadLiveData(saved, { initial: true }).catch((err: any) => {
+        void loadLiveData(restored, { initial: true }).catch((err: any) => {
           setLiveStatus(
             err.message || "Connected, but live data could not be loaded.",
           );
         });
       } catch {
-        localStorage.removeItem("medizinhub.session");
+        if (!cancelled) clearLocalSession("Session expired. Please sign in again.");
+      } finally {
+        if (!cancelled) setInitializing(false);
       }
     }
-    setInitializing(false);
+
+    void restoreSession();
 
     return () => {
+      cancelled = true;
       console.warn = originalConsoleWarn;
       console.error = originalConsoleError;
       window.removeEventListener("unhandledrejection", handleUnhandled);
@@ -890,6 +909,7 @@ export function useAppController() {
     const session: ApiSession = {
       tenantId,
       email: input.email,
+      accessToken: body.access_token,
       basePermissions: body.user?.permissions || [],
       user: body.user,
     };
@@ -1050,6 +1070,7 @@ export function useAppController() {
   });
   const ctx = {
     clinic,
+    enabledModules,
     branch,
     branchId: effectiveBranchId,
     departmentId,
@@ -1078,11 +1099,7 @@ export function useAppController() {
     authenticated,
     initializing,
     authScreenProps: {
-      role,
-      setRole,
       onLogin: handleLogin,
-      demoUsers,
-      loginPresets,
     },
     shellProps: {
       active,
@@ -1103,7 +1120,6 @@ export function useAppController() {
       doctorScope,
       apiSession,
       role,
-      demoUsers,
       liveStatus,
       showPassword,
       setShowPassword,

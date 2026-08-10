@@ -29,6 +29,7 @@ import { SupplierForm } from "./forms/SupplierForm";
 import { FilesPanel } from "./components/FilesPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { WhatsAppIntegrationSettings } from "./components/WhatsAppIntegrationSettings";
+import { PatientIntelligenceSettings } from "./components/PatientIntelligenceSettings";
 import {
   BRANCH_COLUMNS,
   DEPARTMENT_COLUMNS,
@@ -1027,6 +1028,19 @@ export function TenantAdmin({
           downloadMonthlyReport={actions.downloadMonthlyReport}
         />
       )}
+      {section === "patient-intelligence" &&
+        clinic?.modules?.includes("patient_intelligence") && (
+          <PatientIntelligenceSettings apiSession={apiSession} />
+        )}
+      {section === "patient-intelligence" &&
+        !clinic?.modules?.includes("patient_intelligence") && (
+          <Card>
+            <h3 className="card-title font-bold">Patient Intelligence</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              This module is not enabled by the tenant&apos;s active subscription.
+            </p>
+          </Card>
+        )}
       {section === "whatsapp" && whatsappModuleEnabled && (
         <WhatsAppIntegrationSettings apiSession={apiSession} />
       )}

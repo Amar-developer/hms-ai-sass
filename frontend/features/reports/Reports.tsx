@@ -1540,6 +1540,7 @@ export function Reports({
           patient?.full_name ||
           invoice.patient_name ||
           publicDisplayValue(invoice.patient_id),
+        patientReference: patient,
         staff: invoiceDoctorStaffName(invoice),
         invoiceIds: new Set([invoice.id]),
         totalAmount: reportedInvoiceTotal(invoice),

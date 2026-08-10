@@ -14,6 +14,7 @@
 | Payment Collection | Payment workflow | Cash, credit card, debit card, UPI, GPay, Paytm, partial payments, refunds |
 | Doctor Fee & Settlement | Doctor revenue model | Fixed fee, percentage split, visit-type fee, monthly settlement |
 | Patient Memberships | Patient subscription benefits | Membership plans, enrollments, free consultations, lab/pharmacy discounts, benefit preview, invoice benefit application |
+| Patient Intelligence & Engagement | Subscription-entitled Patient 360 plugin | Existing-data metrics, configurable spend and active-paid-membership value rules, explainable multi-flags, recurrence detection, unified timeline, and consent-aware WhatsApp recommendations |
 | Lab & Diagnostics | Test workflow | Orders, sample collection, results, reports, doctor visibility |
 | Pharmacy | Medicine workflow | Prescription issue, medicine inventory, substitutes, stock alerts |
 | IP Admission | Hospital inpatient flow | Admission, Aadhaar capture, admission proof upload, bed, ward, treatment, discharge, package billing |

@@ -56,6 +56,12 @@ PATIENT_SUBSCRIPTIONS_CREATE = "patient_subscriptions.create"
 PATIENT_SUBSCRIPTIONS_READ = "patient_subscriptions.read"
 PATIENT_SUBSCRIPTIONS_EDIT = "patient_subscriptions.edit"
 PATIENT_SUBSCRIPTIONS_DELETE = "patient_subscriptions.delete"
+PATIENT_INTELLIGENCE_READ = "patient_intelligence.read"
+PATIENT_INTELLIGENCE_MANAGE = "patient_intelligence.manage"
+PATIENT_INTELLIGENCE_RULES_MANAGE = "patient_intelligence.rules.manage"
+PATIENT_ENGAGEMENT_READ = "patient_engagement.read"
+PATIENT_ENGAGEMENT_APPROVE = "patient_engagement.approve"
+PATIENT_ENGAGEMENT_SEND = "patient_engagement.send"
 APPOINTMENTS_MANAGE = "appointments.manage"
 APPOINTMENTS_CREATE = "appointments.create"
 APPOINTMENTS_READ = "appointments.read"
@@ -217,6 +223,12 @@ PERMISSION_CATALOG = [
     PATIENT_SUBSCRIPTIONS_READ,
     PATIENT_SUBSCRIPTIONS_EDIT,
     PATIENT_SUBSCRIPTIONS_DELETE,
+    PATIENT_INTELLIGENCE_READ,
+    PATIENT_INTELLIGENCE_MANAGE,
+    PATIENT_INTELLIGENCE_RULES_MANAGE,
+    PATIENT_ENGAGEMENT_READ,
+    PATIENT_ENGAGEMENT_APPROVE,
+    PATIENT_ENGAGEMENT_SEND,
     APPOINTMENTS_MANAGE,
     APPOINTMENTS_CREATE,
     APPOINTMENTS_READ,
@@ -341,6 +353,9 @@ PERMISSION_MODULE_LABELS = {
     "scheduling": "Doctor Scheduling",
     "patients": "EMR / Patient Management",
     "patient_subscriptions": "Patient Membership",
+    "patient_intelligence": "Patient Intelligence",
+    "patient_intelligence.rules": "Patient Intelligence Rules",
+    "patient_engagement": "Patient Engagement",
     "appointments": "Appointments",
     "queue": "Token Queue",
     "consultations": "Doctor Workspace & Consultations",

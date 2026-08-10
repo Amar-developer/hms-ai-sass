@@ -17,6 +17,20 @@ WhatsAppFlowKey = Literal[
     "prescription_ready_patient",
     "follow_up_advice_patient",
     "appointment_reminder_patient",
+    "medicine_refill_patient",
+    "membership_renewal_patient",
+    "patient_reengagement",
+    "home_care_booking_patient",
+    "home_care_visit_patient",
+    "home_visit_booking_patient",
+    "home_visit_reminder_patient",
+    "ip_admission_patient",
+    "ip_discharge_patient",
+    "physiotherapy_case_patient",
+    "physiotherapy_session_patient",
+    "pharmacy_dispense_patient",
+    "service_invoice_patient",
+    "service_follow_up_patient",
 ]
 
 WhatsAppLanguage = Literal[
@@ -46,6 +60,20 @@ class WhatsAppTemplateSettings(BaseModel):
     prescription_ready_patient: str = Field(default="", max_length=160)
     follow_up_advice_patient: str = Field(default="", max_length=160)
     appointment_reminder_patient: str = Field(default="", max_length=160)
+    medicine_refill_patient: str = Field(default="", max_length=160)
+    membership_renewal_patient: str = Field(default="", max_length=160)
+    patient_reengagement: str = Field(default="", max_length=160)
+    home_care_booking_patient: str = Field(default="", max_length=160)
+    home_care_visit_patient: str = Field(default="", max_length=160)
+    home_visit_booking_patient: str = Field(default="", max_length=160)
+    home_visit_reminder_patient: str = Field(default="", max_length=160)
+    ip_admission_patient: str = Field(default="", max_length=160)
+    ip_discharge_patient: str = Field(default="", max_length=160)
+    physiotherapy_case_patient: str = Field(default="", max_length=160)
+    physiotherapy_session_patient: str = Field(default="", max_length=160)
+    pharmacy_dispense_patient: str = Field(default="", max_length=160)
+    service_invoice_patient: str = Field(default="", max_length=160)
+    service_follow_up_patient: str = Field(default="", max_length=160)
 
     @field_validator("*", mode="before")
     @classmethod
@@ -65,6 +93,20 @@ class WhatsAppFlowSettings(BaseModel):
     prescription_ready_patient: bool = False
     follow_up_advice_patient: bool = False
     appointment_reminder_patient: bool = False
+    medicine_refill_patient: bool = False
+    membership_renewal_patient: bool = False
+    patient_reengagement: bool = False
+    home_care_booking_patient: bool = False
+    home_care_visit_patient: bool = False
+    home_visit_booking_patient: bool = False
+    home_visit_reminder_patient: bool = False
+    ip_admission_patient: bool = False
+    ip_discharge_patient: bool = False
+    physiotherapy_case_patient: bool = False
+    physiotherapy_session_patient: bool = False
+    pharmacy_dispense_patient: bool = False
+    service_invoice_patient: bool = False
+    service_follow_up_patient: bool = False
 
 
 class WhatsAppCustomTemplateSettings(BaseModel):

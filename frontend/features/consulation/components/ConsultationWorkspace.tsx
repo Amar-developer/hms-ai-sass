@@ -29,6 +29,7 @@ import {
   vitalFields,
 } from "../constants";
 import { useConsultationWorkspaceData } from "../api";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 function safeFilename(value: unknown) {
   return String(value || "")
@@ -480,6 +481,7 @@ export function ConsultationWorkspace(props: any) {
                 <p className="font-bold">
                   {patient?.name || selected?.patient || "-"}
                 </p>
+                <PatientFlagBadges patient={patient} className="mt-1" />
               </button>
               <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs text-slate-500">Age / Gender</p>

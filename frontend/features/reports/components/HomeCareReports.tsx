@@ -3,6 +3,7 @@ import CollapsibleReportSection from "./CollapsibleReportSection";
 import { HomeCareReportsProps } from "../types";
 import { rowDate } from "../helpers";
 import { DataTable } from "@/app/components/common/DataTable";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 
 
@@ -41,7 +42,12 @@ const HomeCareReports = ({
     {
       key: "patient",
       header: "Patient",
-      render: (row: any) => <b>{row.patient}</b>,
+      render: (row: any) => (
+        <div>
+          <b>{row.patient}</b>
+          <PatientFlagBadges patient={row.patientReference} className="mt-1" />
+        </div>
+      ),
       width:'120px'
     },
     {

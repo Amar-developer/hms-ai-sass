@@ -26,6 +26,7 @@ import { NotificationWidget } from "./components/NotificationWidget";
 import { Skeleton } from "@/app/components/common/loader/Skeleton";
 import { useDashboardData } from "./api";
 import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
+import { PatientIntelligenceDashboard } from "./components/PatientIntelligenceDashboard";
 
 export function Dashboard({
   scopedAppointments,
@@ -36,7 +37,24 @@ export function Dashboard({
   enabled,
   apiSession,
   branchId,
+  clinic,
 }: any) {
+  const intelligencePermissions = apiSession?.user?.permissions || [];
+  const canReadIntelligence =
+    intelligencePermissions.includes("*") ||
+    intelligencePermissions.some((permission: string) =>
+      [
+        "patient_intelligence.read",
+        "patient_intelligence.manage",
+        "patient_intelligence.rules.manage",
+      ].includes(permission),
+    );
+  const intelligenceEnabled = Boolean(
+    clinic?.modules?.includes("patient_intelligence") && canReadIntelligence,
+  );
+  const [dashboardTab, setDashboardTab] = useState<"overview" | "intelligence">(
+    "overview",
+  );
   const { livePractitioners } = usePractitionersQuery(apiSession);
   const now = new Date();
   const today = [
@@ -222,76 +240,106 @@ export function Dashboard({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-4">
-        {cards.map(
-          ({
-            title,
-            value,
-            detail,
-            icon: Icon,
-            target,
-            loading: cardLoading,
-          }: any) => (
-            <button
-              key={title}
-              type="button"
-              onClick={() => setActive?.(target)}
-              className="rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-            >
-              <div className="flex items-center mb-3 h-10">
-                <Icon className="text-slate-500 mr-2" />
-                <p className="md:text-[10px] lg:text-sm text-slate-500 font-bold  ">
-                  {title}
+      {intelligenceEnabled && (
+        <div className="flex w-fit gap-1 rounded-lg border border-slate-200 bg-white p-1">
+          <button
+            type="button"
+            onClick={() => setDashboardTab("overview")}
+            className={`rounded-md px-4 py-2 text-sm font-bold ${dashboardTab === "overview" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+          >
+            Operations Overview
+          </button>
+          <button
+            type="button"
+            onClick={() => setDashboardTab("intelligence")}
+            className={`rounded-md px-4 py-2 text-sm font-bold ${dashboardTab === "intelligence" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+          >
+            Patient Intelligence
+          </button>
+        </div>
+      )}
+      {dashboardTab === "intelligence" && intelligenceEnabled ? (
+        <PatientIntelligenceDashboard
+          apiSession={apiSession}
+          branchId={branchId}
+          setActive={setActive}
+        />
+      ) : (
+        <div className="space-y-6">
+          <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-4">
+            {cards.map(
+              ({
+                title,
+                value,
+                detail,
+                icon: Icon,
+                target,
+                loading: cardLoading,
+              }: any) => (
+                <button
+                  key={title}
+                  type="button"
+                  onClick={() => setActive?.(target)}
+                  className="rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+                >
+                  <div className="mb-3 flex h-10 items-center">
+                    <Icon className="mr-2 text-slate-500" />
+                    <p className="font-bold text-slate-500 md:text-[10px] lg:text-sm">
+                      {title}
+                    </p>
+                  </div>
+                  {cardLoading ? (
+                    <Skeleton className="mt-1 h-7 w-24" />
+                  ) : (
+                    <p className="mt-1 text-xl font-bold lg:text-2xl">{value}</p>
+                  )}
+                  {cardLoading ? (
+                    <Skeleton className="mt-2 h-4 w-32" />
+                  ) : (
+                    <p className="mt-2 h-5 text-[10px] font-semibold text-slate-500">
+                      {detail}
+                    </p>
+                  )}
+                </button>
+              ),
+            )}
+          </div>
+          <NotificationWidget apiSession={apiSession} setActive={setActive} />
+          <Card>
+            <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+              <div>
+                <h3 className="card-title font-bold">
+                  Tenant Operations Analysis
+                </h3>
+                <p className="card-desc text-slate-500">
+                  Today workload, collections, queue pressure, and module usage.
                 </p>
               </div>
-              {cardLoading ? (
-                <Skeleton className="mt-1 h-7 w-24" />
-              ) : (
-                <p className="mt-1 text-xl lg:text-2xl font-bold">{value}</p>
-              )}
-              {cardLoading ? (
-                <Skeleton className="mt-2 h-4 w-32" />
-              ) : (
-                <p className="mt-2 text-[10px] font-semibold text-slate-500 h-5">
-                  {detail}
-                </p>
-              )}
-            </button>
-          ),
-        )}
-      </div>
-      <NotificationWidget apiSession={apiSession} setActive={setActive} />
-      <Card>
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-          <div>
-            <h3 className="card-title font-bold">Tenant Operations Analysis</h3>
-            <p className="card-desc text-slate-500">
-              Today workload, collections, queue pressure, and module usage.
-            </p>
-          </div>
-          <Badge tone="blue" className="normal-badge">
-            Tenant Admin Only
-          </Badge>
+              <Badge tone="blue" className="normal-badge">
+                Tenant Admin Only
+              </Badge>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <Insight label="Booked Today" value={todayAppointments.length} />
+              <Insight label="Completed Today" value={completedToday.length} />
+              <Insight label="Waiting Queue" value={activeQueue.length} />
+              <Insight
+                label="Invoices This Month"
+                value={activeMonthlyInvoices.length}
+              />
+              <Insight
+                label="Membership Savings"
+                value={rupees(membershipSavings)}
+              />
+              <Insight
+                label="Membership Purchases"
+                value={membershipPurchaseInvoices.length}
+              />
+            </div>
+          </Card>
+          <QuickAccess enabled={enabled} setActive={setActive} />
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <Insight label="Booked Today" value={todayAppointments.length} />
-          <Insight label="Completed Today" value={completedToday.length} />
-          <Insight label="Waiting Queue" value={activeQueue.length} />
-          <Insight
-            label="Invoices This Month"
-            value={activeMonthlyInvoices.length}
-          />
-          <Insight
-            label="Membership Savings"
-            value={rupees(membershipSavings)}
-          />
-          <Insight
-            label="Membership Purchases"
-            value={membershipPurchaseInvoices.length}
-          />
-        </div>
-      </Card>
-      <QuickAccess enabled={enabled} setActive={setActive} />
+      )}
     </div>
   );
 }

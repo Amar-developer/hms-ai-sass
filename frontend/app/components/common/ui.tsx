@@ -707,11 +707,13 @@ export function SuggestionInput({
 export function Select({
   className = "rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 md:text-base lg:text-sm",
   children,
+  value,
   ...props
 }: any) {
   return (
     <select
       {...props}
+      value={value ?? ""}
       className={`w-full border border-slate-200 bg-white outline-none focus:border-slate-500 ${className}`}
     >
       {children}
@@ -851,8 +853,20 @@ export function SearchableSelect<T = string>({
         }
         className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:text-sm"
       >
-        <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
-          {capitalizeFirst(displayLabel) || placeholder}
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
+            {capitalizeFirst(displayLabel) || placeholder}
+          </span>
+          {selected?.badges?.slice(0, 1).map((badge) => (
+            <span
+              key={badge.label}
+              title={badge.title}
+              style={badge.style}
+              className={`hidden shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-bold leading-none sm:inline-flex ${badge.className || "border-slate-300 bg-slate-100 text-slate-700"}`}
+            >
+              {badge.label}
+            </span>
+          ))}
         </span>
 
         <ChevronDown
@@ -935,6 +949,25 @@ export function SearchableSelect<T = string>({
                   {option.sublabel && (
                     <span className="block truncate text-xs text-slate-500">
                       {option.sublabel}
+                    </span>
+                  )}
+                  {Boolean(option.badges?.length) && (
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {option.badges?.slice(0, 3).map((badge) => (
+                        <span
+                          key={badge.label}
+                          title={badge.title}
+                          style={badge.style}
+                          className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-bold leading-none ${badge.className || "border-slate-300 bg-slate-100 text-slate-700"}`}
+                        >
+                          {badge.label}
+                        </span>
+                      ))}
+                      {(option.badges?.length || 0) > 3 && (
+                        <span className="inline-flex rounded-full border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-bold leading-none text-slate-600">
+                          +{(option.badges?.length || 0) - 3}
+                        </span>
+                      )}
                     </span>
                   )}
                 </button>

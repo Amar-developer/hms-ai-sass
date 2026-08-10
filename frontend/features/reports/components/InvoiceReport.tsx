@@ -9,6 +9,7 @@ import {
 import { Pagination } from "@/app/components/common/Pagination";
 import { InvoiceProps } from "../types";
 import { DataTable } from "@/app/components/common/DataTable";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 
 
@@ -113,12 +114,15 @@ const InvoiceReport = ({
       const patient = patientById.get(row.patient_id);
 
       return (
-        <b>
-          {patient?.name ||
-            patient?.full_name ||
-            row.patient_name ||
-            publicDisplayValue(row.patient_id)}
-        </b>
+        <div>
+          <b>
+            {patient?.name ||
+              patient?.full_name ||
+              row.patient_name ||
+              publicDisplayValue(row.patient_id)}
+          </b>
+          <PatientFlagBadges patient={patient} className="mt-1" />
+        </div>
       );
     },
   },

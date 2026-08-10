@@ -74,6 +74,7 @@ def _masked_secret(last_four: str | None) -> str | None:
 
 def _read(row: TenantIntegrationPlugin | None) -> WhatsAppIntegrationRead:
     config = {**DEFAULT_CONFIG, **(decode_config(row.config_json) if row else {})}
+    saved_field_mappings = config.get("template_field_mappings") or {}
     return WhatsAppIntegrationRead(
         enabled=bool(row and row.enabled),
         api_url=str(config.get("api_url") or ""),
@@ -104,8 +105,9 @@ def _read(row: TenantIntegrationPlugin | None) -> WhatsAppIntegrationRead:
         flows=WhatsAppFlowSettings.model_validate(config.get("flows") or {}),
         custom_templates=config.get("custom_templates") or [],
         template_field_mappings={
-            flow_key: (config.get("template_field_mappings") or {}).get(flow_key)
-            or default_field_order(flow_key)
+            flow_key: saved_field_mappings[flow_key]
+            if flow_key in saved_field_mappings
+            else default_field_order(flow_key)
             for flow_key in FLOW_FIELD_CATALOG
         },
         # Serialize the *merged* catalog (curated fields first, then every

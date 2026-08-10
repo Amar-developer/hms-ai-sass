@@ -21,6 +21,7 @@ import { RowActions } from "@/features/admin/components/RowActions";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { DataTable } from "@/app/components/common/DataTable";
 import { Column } from "@/utils/types";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 export function BookingsList({
   bookings,
@@ -91,9 +92,12 @@ export function BookingsList({
       render: (booking: any) => {
         const patient: any = patientMap.get(booking.patient_id);
         return (
-          <span className="text-sm">
-            {capitalizeFirst(booking.patient_name || patientName(patient))}
-          </span>
+          <div>
+            <span className="text-sm">
+              {capitalizeFirst(booking.patient_name || patientName(patient))}
+            </span>
+            <PatientFlagBadges patient={patient} className="mt-1" />
+          </div>
         );
       },
     },

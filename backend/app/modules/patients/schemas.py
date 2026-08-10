@@ -134,6 +134,18 @@ class PatientAlertRead(PatientAlertCreate):
     created_at: datetime
 
 
+class PatientIntelligenceFlagCompact(BaseModel):
+    flag_key: str
+    category: str
+    severity: str
+    explanation: str | None = None
+    label: str
+    background_color: str
+    text_color: str
+    border_color: str
+    priority: int
+
+
 class PatientSearchResult(BaseModel):
     id: str
     tenant_id: str
@@ -161,6 +173,9 @@ class PatientSearchResult(BaseModel):
 
     subscription_plan_name: str | None = None
     subscription_status: str | None = None
+    intelligence_flags: list[PatientIntelligenceFlagCompact] = Field(
+        default_factory=list
+    )
 
 
 class PatientDuplicateCandidate(PatientSearchResult):

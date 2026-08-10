@@ -10,6 +10,12 @@ export type SearchableOption = {
   value: string;
   label: string;
   sublabel?: string;
+  badges?: Array<{
+    label: string;
+    title?: string;
+    className?: string;
+    style?: React.CSSProperties;
+  }>;
 };
 
 export type SearchableSelectProps<T = string> = {

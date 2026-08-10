@@ -3,6 +3,7 @@ import { Badge } from "@/app/components/common/ui";
 import { displayPatientGender, patientDisplayMobile } from "../helpers";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { PatientFlagBadges } from "./PatientFlagBadges";
 
 export function PatientRow({
   row,
@@ -47,6 +48,7 @@ export function PatientRow({
           <p className="mt-0.5 text-sm  font-medium text-slate-500">
             {row.patient_number}
           </p>
+          <PatientFlagBadges patient={row} className="mt-1.5" maxVisible={3} />
         </div>
         <div className="min-w-0">
           {/* <p className="text-[11px] font-bold uppercase text-slate-400 xl:hidden">

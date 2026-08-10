@@ -378,6 +378,11 @@ def cancel_invoice(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Invoice already cancelled"
         )
+    if invoice.status in {InvoiceStatus.REFUNDED, InvoiceStatus.PARTIALLY_REFUNDED}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Refunded invoices are already closed and cannot be cancelled",
+        )
     if money_value(invoice.paid_amount) > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

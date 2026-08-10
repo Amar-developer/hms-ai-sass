@@ -20,6 +20,7 @@ from app.api.v1.observability import router as observability_router
 from app.api.v1.communications import router as communications_router
 from app.api.v1.patients import router as patients_router
 from app.api.v1.patient_subscriptions import router as patient_subscriptions_router
+from app.api.v1.patient_intelligence import router as patient_intelligence_router
 from app.api.v1.pharmacy import router as pharmacy_router
 from app.api.v1.physiotherapy import router as physiotherapy_router
 from app.api.v1.practitioners import router as practitioners_router
@@ -42,6 +43,7 @@ api_router.include_router(audit_router, tags=["Audit"])
 api_router.include_router(activity_router, tags=["Activity"])
 api_router.include_router(patients_router, tags=["patients"])
 api_router.include_router(patient_subscriptions_router, tags=["patient-subscriptions"])
+api_router.include_router(patient_intelligence_router, tags=["patient-intelligence"])
 api_router.include_router(practitioners_router, tags=["practitioners"])
 api_router.include_router(appointments_router, tags=["appointments"])
 api_router.include_router(queue_router, tags=["queue"])

@@ -29,6 +29,7 @@ import {
   useIpAdmissionsQuery,
 } from "./api";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 
 
@@ -425,6 +426,11 @@ export function IPAdmission({
                       row.patient ||
                       row.patient_id}
                   </div>
+                  <PatientFlagBadges
+                    patient={p}
+                    className="mt-1"
+                    inverse={selectedAdmission?.id === row.id}
+                  />
                   <div
                     className={`mt-1 line-clamp-2 text-sm ${selectedAdmission?.id === row.id ? "text-slate-300" : "text-slate-500"}`}
                   >

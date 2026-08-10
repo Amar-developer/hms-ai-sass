@@ -8,47 +8,21 @@ import { Eye, EyeOff, HeartPulse, Lock, ShieldCheck } from "lucide-react";
 import { Button, Card, Field, Input } from "@/app/components/common/ui";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
-type DemoUser = readonly [string, string, string];
-
-export function AuthScreen({
-  role,
-  setRole,
-  onLogin,
-  demoUsers,
-  loginPresets,
-}: any) {
-  const showDemoCredentials =
-    process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true" ||
-    process.env.NODE_ENV !== "production";
-  const preset = loginPresets[role] || loginPresets.tenant_admin;
+export function AuthScreen({ onLogin }: { onLogin: (data: AuthFormValues) => Promise<void> }) {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm<AuthFormValues>({
     resolver: zodResolver(authSchema),
     defaultValues: {
-      email: showDemoCredentials ? preset.email : "",
-      password: showDemoCredentials ? preset.password : "",
+      email: "",
+      password: "",
     },
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  function fillDemo(id: string) {
-    const next = loginPresets[id] || loginPresets.tenant_admin;
-    setRole(id);
-    setValue("email", next.email, {
-      shouldValidate: true,
-    });
-    setValue("password", next.password, {
-      shouldValidate: true,
-    });
-    setError("");
-  }
 
   const submit = async (data: AuthFormValues) => {
     setError("");
@@ -174,39 +148,6 @@ export function AuthScreen({
               </Button>
             </form>
 
-            {showDemoCredentials && (
-              <div className="mt-6 border-t border-slate-200 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowDemo(!showDemo)}
-                  className="text-sm font-bold text-slate-600 hover:text-slate-950"
-                >
-                  {showDemo ? "Hide demo credentials" : "Use demo credentials"}
-                </button>
-                {showDemo && (
-                  <div className="mt-3 grid gap-2">
-                    {demoUsers.map(([id, label, description]: DemoUser) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => fillDemo(id)}
-                        className=" rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border border-slate-200 bg-slate-50 p-3 text-left hover:bg-white"
-                      >
-                        <span className="font-bold text-slate-800">
-                          {label}
-                        </span>
-                        <span className="ml-2 text-xs text-slate-500">
-                          {description}
-                        </span>
-                        <span className="mt-1 block text-xs text-slate-500">
-                          {loginPresets[id].email}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </Card>
         </section>
       </div>

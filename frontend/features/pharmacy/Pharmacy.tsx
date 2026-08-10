@@ -38,6 +38,7 @@ import {
   usePharmacyWorkspace,
 } from "./api";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 const pageSize = 10;
 
@@ -634,17 +635,20 @@ export function Pharmacy({
                       </p>
                     </td>
                     <td className="text-xs">
-                      <div className="flex items-center gap-2">
-                        <span>
-                          {issue.patient_name ||
-                            p?.name ||
-                            publicDisplayValue(issue.patient_id, "Patient")}
-                        </span>
-                        <CopyIdButton
-                          value={issue.id}
-                          label="Pharmacy Issue ID"
-                          allowed={canCopyIds}
-                        />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span>
+                            {issue.patient_name ||
+                              p?.name ||
+                              publicDisplayValue(issue.patient_id, "Patient")}
+                          </span>
+                          <CopyIdButton
+                            value={issue.id}
+                            label="Pharmacy Issue ID"
+                            allowed={canCopyIds}
+                          />
+                        </div>
+                        <PatientFlagBadges patient={p} className="mt-1" />
                       </div>
                     </td>
                     <td>

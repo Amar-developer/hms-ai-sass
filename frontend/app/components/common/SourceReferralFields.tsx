@@ -13,6 +13,10 @@ import {
   patientPickerLabel,
 } from "@/features/patients/helpers";
 import type { ApiSession } from "@/lib/api";
+import {
+  patientFlagBadgeData,
+  patientValueTierFlags,
+} from "@/features/patients/components/PatientFlagBadges";
 
 export const ACQUISITION_SOURCE_OPTIONS = [
   { value: "direct", label: "Direct" },
@@ -65,6 +69,9 @@ export function SourceReferralFields({
       value: String(patient.id),
       label: patientPickerLabel(patient),
       item: patient,
+      badges: patientValueTierFlags(patient.intelligence_flags).map(
+        patientFlagBadgeData,
+      ),
     }));
   }, [patients, searchResults]);
 

@@ -17,6 +17,7 @@ import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Skeleton } from "@/app/components/common/loader/Skeleton";
 import { useIpAdmissionsQuery } from "@/features/ip/api";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 import {
   usePhysiotherapyActions,
   usePhysiotherapyCaseDetail,
@@ -233,6 +234,11 @@ export function Physiotherapy({
                     className={`rounded-lg p-4 text-left ${active ? "bg-slate-900 text-white" : "bg-slate-50"}`}
                   >
                     <b>{row.patient_name || patientName(patient)}</b>
+                    <PatientFlagBadges
+                      patient={patient}
+                      className="mt-1"
+                      inverse={active}
+                    />
                     <p
                       className={`text-sm ${active ? "text-slate-300" : "text-slate-500"}`}
                     >

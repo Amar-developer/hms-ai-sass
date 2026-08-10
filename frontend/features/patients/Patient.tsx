@@ -29,10 +29,13 @@ import { patient_status_options } from "./constants";
 import { useQueryClient } from "@tanstack/react-query";
 import { getTenantBranches } from "@/features/tenants/api/tenantReferenceQueries";
 import { FilterSection } from "@/app/components/common/FilterSection";
+import { canReadPatientLinkedModule } from "./patientModuleAccess";
 
 type PatientProps = {
   apiSession: ApiSession | null;
   branchId?: string;
+  enabledModules?: string[];
+  isInitialLoading?: boolean;
   loadLiveData?: (session: ApiSession) => void | Promise<unknown>;
   setActive?: (page: string) => void;
   setPatients?: (updater: (prev: any[]) => any[]) => void;
@@ -42,6 +45,8 @@ const pageSize = 10;
 export function Patient({
   apiSession,
   branchId,
+  enabledModules,
+  isInitialLoading = false,
   loadLiveData,
   setActive,
   setPatients,
@@ -59,6 +64,16 @@ export function Patient({
       userPermissions.includes("*") ||
       keys.some((key) => userPermissions.includes(key)),
     );
+  const canReadIp = canReadPatientLinkedModule(
+    apiSession,
+    enabledModules,
+    "ip",
+  );
+  const canReadPhysiotherapy = canReadPatientLinkedModule(
+    apiSession,
+    enabledModules,
+    "physiotherapy",
+  );
   const canCreatePatient = hasPermission("patients.write", "patients.create");
   const canEditPatient = hasPermission("patients.edit");
   const canDeletePatient = hasPermission("patients.delete");
@@ -77,6 +92,8 @@ export function Patient({
   const [membershipPlans, setMembershipPlans] = useState<any[]>([]);
   const [membershipEnrollments, setMembershipEnrollments] = useState<any[]>([]);
   const [patientInvoices, setPatientInvoices] = useState<any[]>([]);
+  const [patientIntelligence, setPatientIntelligence] = useState<any>(null);
+  const [patientIntelligenceError, setPatientIntelligenceError] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [gender, setGender] = useState("all");
@@ -172,6 +189,8 @@ export function Patient({
     setPatientIpAdmissions([]);
     setMembershipEnrollments([]);
     setPatientInvoices([]);
+    setPatientIntelligence(null);
+    setPatientIntelligenceError("");
     try {
       const [
         detail,
@@ -184,6 +203,7 @@ export function Patient({
         planRows,
         enrollmentRows,
         invoiceRows,
+        intelligenceData,
       ] = await Promise.all([
         apiFetch(`/patients/${id}`, scopedSession),
         apiFetch(`/patients/${id}/summary`, scopedSession),
@@ -198,14 +218,20 @@ export function Patient({
           `/pharmacy/issues?patient_id=${id}&limit=50`,
           scopedSession,
         ).catch(() => []),
-        apiFetch(
-          `/physiotherapy/cases?patient_id=${id}&limit=50`,
-          scopedSession,
-        ).catch(() => []),
-        apiFetch(
-          `/ip/admissions?patient_id=${id}&limit=50`,
-          scopedSession,
-        ).catch(() => []),
+        canReadPhysiotherapy
+          ? apiFetch(
+              `/physiotherapy/cases?patient_id=${id}&limit=50`,
+              scopedSession,
+              { suppressErrorReportStatuses: [402, 403, 404] },
+            ).catch(() => [])
+          : Promise.resolve([]),
+        canReadIp
+          ? apiFetch(
+              `/ip/admissions?patient_id=${id}&limit=50`,
+              scopedSession,
+              { suppressErrorReportStatuses: [402, 403, 404] },
+            ).catch(() => [])
+          : Promise.resolve([]),
         apiFetch(
           "/patient-subscriptions/plans?include_inactive=true",
           scopedSession,
@@ -216,6 +242,14 @@ export function Patient({
         ).catch(() => []),
         apiFetch(`/billing/invoices?patient_id=${id}`, scopedSession).catch(
           () => [],
+        ),
+        apiFetch(`/patient-intelligence/patients/${id}`, scopedSession).catch(
+          (err: any) => {
+            setPatientIntelligenceError(
+              err?.message || "Patient Intelligence could not be loaded.",
+            );
+            return null;
+          },
         ),
       ]);
       setSelectedDetail(detail);
@@ -230,6 +264,7 @@ export function Patient({
         Array.isArray(enrollmentRows) ? enrollmentRows : [],
       );
       setPatientInvoices(Array.isArray(invoiceRows) ? invoiceRows : []);
+      setPatientIntelligence(intelligenceData);
     } catch (err: any) {
       setMessage(err.message || "Could not load patient details.");
     } finally {
@@ -321,6 +356,7 @@ export function Patient({
   // to fetch" for "finished loading, found nothing" and bounce prematurely.
   const detailFetchInFlightRef = useRef(false);
   useEffect(() => {
+    if (isInitialLoading) return;
     if ((view !== "detail" && view !== "edit") || !selectedId) return;
     if (selectedDetail?.id === selectedId) return;
     detailFetchInFlightRef.current = true;
@@ -328,7 +364,7 @@ export function Patient({
       detailFetchInFlightRef.current = false;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selectedId, selectedDetail?.id]);
+  }, [view, selectedId, selectedDetail?.id, isInitialLoading]);
 
   // Bounce back to the list if a direct/bookmarked detail or edit link no
   // longer resolves to a real patient, but only once loading has finished.
@@ -471,6 +507,73 @@ export function Patient({
       setMessage("Photo uploaded.");
     } catch (err: any) {
       setMessage(err.message || "Could not upload photo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendEngagementAction(actionId: string) {
+    if (!scopedSession || !actionId) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await apiFetch(
+        `/patient-intelligence/engagement-actions/${actionId}/send`,
+        scopedSession,
+        { method: "POST" },
+      );
+      setPatientIntelligence((previous: any) => ({
+        ...previous,
+        engagement_actions: (previous?.engagement_actions || []).map(
+          (action: any) =>
+            action.id === actionId
+              ? {
+                  ...action,
+                  status: result.status || "queued",
+                  notification_event_id: result.notification_event_id,
+                }
+              : action,
+        ),
+      }));
+      setMessage("Personalized WhatsApp message queued.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not queue the WhatsApp message.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveManualPrescriptionDate(
+    expectedRefillOn: string,
+    notes: string,
+  ) {
+    if (!scopedSession || !selectedId) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await apiFetch(
+        `/patient-intelligence/patients/${selectedId}/manual-refill`,
+        scopedSession,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            expected_refill_on: expectedRefillOn || null,
+            notes: notes || null,
+          }),
+        },
+      );
+      const intelligenceData = await apiFetch(
+        `/patient-intelligence/patients/${selectedId}`,
+        scopedSession,
+      );
+      setPatientIntelligence(intelligenceData);
+      setMessage(
+        expectedRefillOn
+          ? "Monthly prescription date saved and intelligence rules recalculated."
+          : "Manual monthly prescription date cleared.",
+      );
+    } catch (err: any) {
+      setMessage(err.message || "Could not save the monthly prescription date.");
     } finally {
       setBusy(false);
     }
@@ -631,6 +734,8 @@ export function Patient({
         membershipPlans={membershipPlans}
         membershipEnrollments={membershipEnrollments}
         patientInvoices={patientInvoices}
+        patientIntelligence={patientIntelligence}
+        patientIntelligenceError={patientIntelligenceError}
         branches={branches}
         loading={busy}
         message={message}
@@ -639,6 +744,8 @@ export function Patient({
         onBack={() => open("list")}
         onEdit={() => openPatientEdit(selected.id)}
         onUploadPhoto={uploadPhoto}
+        onSaveManualPrescriptionDate={saveManualPrescriptionDate}
+        onSendEngagementAction={sendEngagementAction}
         setActive={setActive}
       />
     );

@@ -5,6 +5,7 @@ import { publicDisplayValue } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
 import type { Column } from "@/utils/types";
 import { appointmentStatusInfo, formatDisplayTime } from "./helpers";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 export function getAppointmentColumns({
   canCopyIds,
@@ -29,14 +30,20 @@ export function getAppointmentColumns({
       header: "Patient",
       width:'160px',
       render: (appointment: any) => (
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold break-all">
-            {appointment.patient}
-          </p>
-          <CopyIdButton
-            value={appointment.id}
-            label="Appointment ID"
-            allowed={canCopyIds}
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold break-all">
+              {appointment.patient}
+            </p>
+            <CopyIdButton
+              value={appointment.id}
+              label="Appointment ID"
+              allowed={canCopyIds}
+            />
+          </div>
+          <PatientFlagBadges
+            patient={patientMap.get(appointment.patientId)}
+            className="mt-1"
           />
         </div>
       ),

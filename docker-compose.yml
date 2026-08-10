@@ -74,7 +74,6 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8080/api/v1}
-        NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-false}
         APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
         BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
         BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
@@ -86,7 +85,6 @@ services:
         condition: service_healthy
     environment:
       NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8080/api/v1}
-      NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-false}
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s

@@ -213,6 +213,53 @@ def test_service_persists_and_replaces_masked_credential(test_engine, monkeypatc
         )
 
 
+def test_service_preserves_deleted_builtin_template_field_mapping(
+    test_engine, monkeypatch
+):
+    monkeypatch.setattr(
+        whatsapp_service,
+        "_enforce_entitlement",
+        lambda _session, _tenant_id: None,
+    )
+    monkeypatch.setattr(
+        whatsapp_service,
+        "read_whatsapp_usage",
+        lambda _session, *, tenant_id: None,
+    )
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Deleted Builtin Template Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        actor = User(
+            tenant_id=tenant.id,
+            name="Template Admin",
+            email="template-admin@example.com",
+            user_type="tenant_admin",
+        )
+        session.add(actor)
+        session.commit()
+        session.refresh(actor)
+
+        payload = enabled_payload()
+        payload["templates"]["appointment_booked_patient"] = ""
+        payload["localized_templates"]["hi"]["appointment_booked_patient"] = ""
+        payload["flows"]["appointment_booked_patient"] = False
+        payload["template_field_mappings"] = {"appointment_booked_patient": []}
+
+        saved = whatsapp_service.update_whatsapp_integration(
+            session,
+            tenant_id=tenant.id,
+            payload=WhatsAppIntegrationUpdate.model_validate(payload),
+            actor=actor,
+        )
+
+        assert saved.templates.appointment_booked_patient == ""
+        assert saved.localized_templates["hi"].appointment_booked_patient == ""
+        assert saved.flows.appointment_booked_patient is False
+        assert saved.template_field_mappings["appointment_booked_patient"] == []
+
+
 def test_service_sends_test_with_decrypted_key_and_safe_audit(test_engine, monkeypatch):
     monkeypatch.setattr(
         whatsapp_service,
