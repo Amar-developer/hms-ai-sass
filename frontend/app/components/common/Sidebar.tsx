@@ -105,6 +105,7 @@ export function Sidebar(props: SidebarProps) {
 
     setPopupMenu(menu);
   };
+
   return (
     <aside
       className={`

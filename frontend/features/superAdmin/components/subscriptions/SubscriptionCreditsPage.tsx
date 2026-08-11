@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Card, Input, Select } from "@/app/components/common/ui";
+import { Button, Card, Input, SearchableSelect, Select } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { Empty } from "@/app/components/common/Empty";
 import { Info } from "@/app/components/common/Info";
@@ -20,11 +20,11 @@ export function SubscriptionCreditsPage({
 }: any) {
   return (
     <div className="space-y-5">
-      <Card>
+      <Card className="mt-3">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
-            <h3 className="text-lg font-bold">Additional Credits</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="card-title font-bold">Additional Credits</h3>
+            <p className="card-desc text-slate-500">
               Add temporary patient credits and review tenant credit usage and
               SaaS invoices.
             </p>
@@ -32,24 +32,29 @@ export function SubscriptionCreditsPage({
           <button
             type="button"
             onClick={back}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="close-button"
           >
             Back to Subscriptions
           </button>
         </div>
-        <form
-          onSubmit={addCredits}
-          className="mt-5 grid gap-3 md:grid-cols-2"
-        >
+        <form onSubmit={addCredits} className="mt-5 grid gap-3 md:grid-cols-2">
           <TenantPicker
             tenants={tenants}
             selectedId={selectedId}
             setSelectedId={setSelectedId}
           />
           <FormField label="Credit Type">
-            <Select name="creditType" defaultValue="patients">
-              <option value="patients">Patients</option>
-            </Select>
+            <SearchableSelect
+              name="creditType"
+              searchable={false}
+              value="patients"
+              options={[
+                {
+                  label: "Patients",
+                  value: "patients",
+                },
+              ]}
+            />
           </FormField>
           <FormField label="Quantity">
             <Input
@@ -79,16 +84,16 @@ export function SubscriptionCreditsPage({
             </FormField>
           </div>
           <div className="flex flex-wrap gap-2 md:col-span-2">
-            <Button disabled={loading || !selectedId}>
+            <Button disabled={loading || !selectedId} className='save-button'>
               {loading ? "Adding..." : "Add Credits"}
             </Button>
-            <button
+            <Button
               type="button"
               onClick={back}
-              className="rounded-2xl border px-4 py-3 text-sm font-bold"
+              className="close-button bg-slate-100 text-slate-900"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Card>

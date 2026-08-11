@@ -182,7 +182,7 @@ class AuthService:
     ) -> LoginResult:
         email = normalize_email(payload.email)
         rate_limit_cache = _enforce_login_rate_limit(email, client_ip)
-
+        print(self, "self")
         try:
             if payload.tenant_id:
                 user = find_user_by_login(self.session, email, payload.tenant_id)

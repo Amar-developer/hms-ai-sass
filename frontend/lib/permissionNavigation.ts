@@ -29,6 +29,7 @@ const NAV_PERMISSION_PREFIXES: Record<string, string[]> = {
   billing: ["billing", "invoices", "payments", "settlements"],
   subscriptions: ["patient_subscriptions"],
   reports: ["reports", "audit", "subscriptions.reports"],
+  expense: ["expense", "expenses", "expense_"],
   error_logs: ["error_logs"],
 };
 

@@ -11,6 +11,7 @@ CORE_HMS_MODULES = [
     "queue",
     "consultations",
     "billing_basic",
+    "expense",
 ]
 
 FULL_HMS_MODULES = [

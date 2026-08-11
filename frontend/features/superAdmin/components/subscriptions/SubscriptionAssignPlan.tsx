@@ -15,7 +15,7 @@ export function SubscriptionAssignPlan({
   back,
 }: any) {
   return (
-    <Card>
+    <Card className="mt-3">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="text-base lg:text-lg font-bold">Assign / Upgrade Tenant Plan</h3>

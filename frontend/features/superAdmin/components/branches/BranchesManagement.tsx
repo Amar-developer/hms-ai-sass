@@ -56,7 +56,7 @@ export function BranchesManagement({
     {
       key: "name",
       header: "Branch",
-      width:'250px',
+      width: "250px",
       render: (branch: any) => {
         const locked =
           branch.is_template_locked || branch.source_template_branch_id;
@@ -84,7 +84,7 @@ export function BranchesManagement({
     {
       key: "code",
       header: "Code",
-      width:'150px',
+      width: "150px",
       render: (branch: any) => (
         <span className="text-xs lg:text-sm">{branch.code}</span>
       ),
@@ -92,8 +92,8 @@ export function BranchesManagement({
     {
       key: "is_active",
       header: "Status",
-      width:'180px',
-      className:'text-center',
+      width: "180px",
+      className: "text-center",
       render: (branch: any) => (
         <Badge
           tone={branch.is_active ? "green" : "red"}
@@ -107,7 +107,7 @@ export function BranchesManagement({
     {
       key: "updated_at",
       header: "Modified",
-      width:'180px',
+      width: "180px",
       render: (branch: any) => (
         <span className="text-xs lg:text-sm">
           {formatDate(branch.updated_at || branch.created_at)}
@@ -171,38 +171,39 @@ export function BranchesManagement({
   ];
 
   return (
-    <Card>
-      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div>
-          <h3 className="card-title font-bold">Branches</h3>
-          <p className="card-desc text-slate-500">
-            {selected?.is_primary
-              ? "Primary tenant branches are reusable templates. Assign them to clinics to avoid duplicate setup."
-              : "Manage tenant branches used by appointments, users, billing, lab, pharmacy, and reports."}
-          </p>
+    <div className="mt-3">
+      <Card>
+        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+          <div>
+            <h3 className="card-title font-bold">Branches</h3>
+            <p className="card-desc text-slate-500">
+              {selected?.is_primary
+                ? "Primary tenant branches are reusable templates. Assign them to clinics to avoid duplicate setup."
+                : "Manage tenant branches used by appointments, users, billing, lab, pharmacy, and reports."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
+            <CreateActionButton
+              label="Create Branch"
+              onClick={() => setSection("branchCreate")}
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
-          <CreateActionButton
-            label="Create Branch"
-            onClick={() => setSection("branchCreate")}
+        <div className="mt-4 grid gap-1 md:grid-cols-3">
+          <FormField label="Search">
+            <Input
+              value={query}
+              onChange={(e: any) => setQuery(e.target.value)}
+              placeholder="Search branch name, code, area, city, status"
+            />
+          </FormField>
+          <TenantPicker
+            tenants={tenants}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
           />
         </div>
-      </div>
-      <div className="mt-4 grid gap-1 md:grid-cols-3">
-        <FormField label="Search">
-          <Input
-            value={query}
-            onChange={(e: any) => setQuery(e.target.value)}
-            placeholder="Search branch name, code, area, city, status"
-          />
-        </FormField>
-        <TenantPicker
-          tenants={tenants}
-          selectedId={selectedId}
-          setSelectedId={setSelectedId}
-        />
-      </div>
         <div className="mt-4 rounded-2xl border border-slate-200">
           {busy && rows.length === 0 ? (
             <TableSkeleton />
@@ -218,13 +219,14 @@ export function BranchesManagement({
             />
           )}
         </div>
-      <Pagination
-        page={safePage}
-        totalPages={totalPages}
-        total={filtered.length}
-        pageSize={pageSize}
-        onPage={setPage}
-      />
-    </Card>
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          total={filtered.length}
+          pageSize={pageSize}
+          onPage={setPage}
+        />
+      </Card>
+    </div>
   );
 }

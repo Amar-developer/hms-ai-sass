@@ -31,6 +31,7 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { Column } from "@/utils/types";
 import { DataTable } from "@/app/components/common/DataTable";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 
 export function SubscriptionManagement({
   apiSession,
@@ -61,6 +62,7 @@ export function SubscriptionManagement({
   const [revenue, setRevenue] = useState<any>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [planStatusConfirm, setPlanStatusConfirm] = useState<any>(null);
   const catalogPlans = catalogSubscriptionPlans(plans);
   const activePlans = catalogPlans.filter((plan: any) => plan.is_active);
   const selectedTenant = tenants.find(
@@ -602,7 +604,7 @@ export function SubscriptionManagement({
       key: "modules",
       header: "Modules",
       width: "150px",
-      className:'text-center',
+      className: "text-center",
       render: (plan: any) => (
         <Badge
           tone="slate"
@@ -616,7 +618,7 @@ export function SubscriptionManagement({
       key: "status",
       header: "Status",
       width: "150px",
-      className:'text-center',
+      className: "text-center",
       render: (plan: any) => (
         <Badge
           tone={plan.is_active ? "green" : "slate"}
@@ -630,7 +632,7 @@ export function SubscriptionManagement({
       key: "actions",
       header: "Actions",
       width: "120px",
-      className:'text-center',
+      className: "text-center",
       disableRowClick: true,
       render: (plan: any) => {
         const actions = [
@@ -647,7 +649,7 @@ export function SubscriptionManagement({
           },
           {
             label: plan.is_active ? "Deactivate" : "Activate",
-            onClick: () => changePlanStatus(plan),
+            onClick: () => setPlanStatusConfirm(plan),
           },
         ];
 
@@ -656,17 +658,14 @@ export function SubscriptionManagement({
             className="flex justify-end"
             onClick={(e) => e.stopPropagation()}
           >
-            <RowActions
-              actions={actions}
-              className="right-10 -bottom-5"
-            />
+            <RowActions actions={actions} className="right-10 -bottom-5 w-28" />
           </div>
         );
       },
     },
   ];
   return (
-    <div className="space-y-5">
+    <div className="mt-3">
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
@@ -681,18 +680,18 @@ export function SubscriptionManagement({
               label="Create Custom Plan"
               onClick={() => openSubscriptionView("createPlan")}
             />
-            <div className="flex justify-between lg:justify-around w-full">
+            <div className="flex justify-between gap-2 w-full">
               <button
                 type="button"
                 onClick={() => openSubscriptionView("assign")}
-                className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+                className="close-button"
               >
                 Assign / Upgrade
               </button>
               <button
                 type="button"
                 onClick={() => openSubscriptionView("credits")}
-                className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+                className="close-button"
               >
                 Additional Credits
               </button>
@@ -708,7 +707,7 @@ export function SubscriptionManagement({
           </div>
         )}
       </Card>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-4 mt-3">
         <Info
           label="Active Subscriptions"
           value={revenue?.total_active_subscriptions ?? "-"}
@@ -726,122 +725,126 @@ export function SubscriptionManagement({
           value={`₹${revenue?.pending_invoice_amount ?? 0}`}
         />
       </div>
-      <Card>
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-          <div>
-            <h4 className="card-title font-bold">Subscriptions</h4>
-            <p className=" card-desc text-slate-500">
-              Compact tenant subscription list. Open details for IDs, notes, and
-              module information.
-            </p>
+      <div className="mt-3">
+        <Card>
+          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+            <div>
+              <h4 className="card-title font-bold">Subscriptions</h4>
+              <p className=" card-desc text-slate-500">
+                Compact tenant subscription list. Open details for IDs, notes,
+                and module information.
+              </p>
+            </div>
+            <Badge tone="blue" className="normal-badge">
+              {filtered.length} records
+            </Badge>
           </div>
-          <Badge tone="blue" className="normal-badge">
-            {filtered.length} records
-          </Badge>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <FormField label="Tenant / Plan">
-            <Input
-              value={filters.tenant}
-              onChange={(e: any) =>
-                setFilters({ ...filters, tenant: e.target.value })
-              }
-              placeholder="Search tenant or plan"
-            />
-          </FormField>
-          <FormField label="Plan">
-            <Select
-              value={filters.plan}
-              onChange={(e: any) =>
-                setFilters({ ...filters, plan: e.target.value })
-              }
-            >
-              <option value="all">All plans</option>
-              {catalogPlans.map((plan: any) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Status">
-            <Select
-              value={filters.status}
-              onChange={(e: any) =>
-                setFilters({ ...filters, status: e.target.value })
-              }
-            >
-              <option value="all">All status</option>
-              <option value="active">Active</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="expired">Expired</option>
-              <option value="cancelled">Cancelled</option>
-            </Select>
-          </FormField>
-          <FormField label="From">
-            <Input
-              type="date"
-              value={filters.fromDate}
-              onChange={(e: any) =>
-                setFilters({ ...filters, fromDate: e.target.value })
-              }
-            />
-          </FormField>
-          <FormField label="To">
-            <Input
-              type="date"
-              value={filters.toDate}
-              onChange={(e: any) =>
-                setFilters({ ...filters, toDate: e.target.value })
-              }
-            />
-          </FormField>
-        </div>
-        <div className="mt-4 rounded-2xl border border-slate-200">
-          <DataTable
-            columns={subscriptionColumns}
-            data={rows}
-            emptyMessage={
-              loading
-                ? "Loading subscriptions..."
-                : "No subscriptions match your search."
-            }
-          />
-        </div>
-        <Pagination
-          page={safePage}
-          totalPages={totalPages}
-          total={filtered.length}
-          pageSize={pageSize}
-          onPage={setPage}
-        />
-      </Card>
-      <Card>
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-          <div>
-            <h4 className="card-title font-bold">Plan Catalog</h4>
-            <p className="card-desc text-slate-500">
-              Reusable DB-backed SaaS plan catalog. Module lists and IDs live in
-              details.
-            </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <FormField label="Tenant / Plan">
+              <Input
+                value={filters.tenant}
+                onChange={(e: any) =>
+                  setFilters({ ...filters, tenant: e.target.value })
+                }
+                placeholder="Search tenant or plan"
+              />
+            </FormField>
+            <FormField label="Plan">
+              <Select
+                value={filters.plan}
+                onChange={(e: any) =>
+                  setFilters({ ...filters, plan: e.target.value })
+                }
+              >
+                <option value="all">All plans</option>
+                {catalogPlans.map((plan: any) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField label="Status">
+              <Select
+                value={filters.status}
+                onChange={(e: any) =>
+                  setFilters({ ...filters, status: e.target.value })
+                }
+              >
+                <option value="all">All status</option>
+                <option value="active">Active</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="expired">Expired</option>
+                <option value="cancelled">Cancelled</option>
+              </Select>
+            </FormField>
+            <FormField label="From">
+              <Input
+                type="date"
+                value={filters.fromDate}
+                onChange={(e: any) =>
+                  setFilters({ ...filters, fromDate: e.target.value })
+                }
+              />
+            </FormField>
+            <FormField label="To">
+              <Input
+                type="date"
+                value={filters.toDate}
+                onChange={(e: any) =>
+                  setFilters({ ...filters, toDate: e.target.value })
+                }
+              />
+            </FormField>
           </div>
-          <Badge
-            tone="blue"
-            className="px-2 py-2 rounded-lg md:w-[15%] lg:w-[10%] text-center"
-          >
-            {catalogPlans.length} plans
-          </Badge>
-        </div>
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-          <div className="min-w-[900px]">
+          <div className="mt-4 rounded-2xl border border-slate-200">
             <DataTable
-              columns={planColumns}
-              data={catalogPlans}
-              emptyMessage="No subscription plans found."
+              columns={subscriptionColumns}
+              data={rows}
+              emptyMessage={
+                loading
+                  ? "Loading subscriptions..."
+                  : "No subscriptions match your search."
+              }
             />
           </div>
-        </div>
-      </Card>
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            total={filtered.length}
+            pageSize={pageSize}
+            onPage={setPage}
+          />
+        </Card>
+      </div>
+      <div className="mt-3">
+        <Card>
+          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+            <div>
+              <h4 className="card-title font-bold">Plan Catalog</h4>
+              <p className="card-desc text-slate-500">
+                Reusable DB-backed SaaS plan catalog. Module lists and IDs live
+                in details.
+              </p>
+            </div>
+            <Badge
+              tone="blue"
+              className="px-2 py-2 rounded-lg md:w-[15%] lg:w-[10%] text-center"
+            >
+              {catalogPlans.length} plans
+            </Badge>
+          </div>
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+            <div className="min-w-[900px]">
+              <DataTable
+                columns={planColumns}
+                data={catalogPlans}
+                emptyMessage="No subscription plans found."
+              />
+            </div>
+          </div>
+        </Card>
+      </div>
       {detailSubscription && (
         <SubscriptionDetailModal
           subscription={detailSubscription}
@@ -866,6 +869,25 @@ export function SubscriptionManagement({
             setEditingPlan(detailPlan);
             setDetailPlan(null);
             openSubscriptionView("editPlan");
+          }}
+        />
+      )}
+      {planStatusConfirm && (
+        <ConfirmModal
+          busy={loading}
+          title={
+            planStatusConfirm.is_active ? "Deactivate Plan" : "Activate Plan"
+          }
+          message={`${
+            planStatusConfirm.is_active ? "Deactivate" : "Activate"
+          } ${planStatusConfirm.name}?`}
+          confirmLabel={
+            planStatusConfirm.is_active ? "Yes, Deactivate" : "Yes, Activate"
+          }
+          onCancel={() => setPlanStatusConfirm(null)}
+          onConfirm={async () => {
+            await changePlanStatus(planStatusConfirm);
+            setPlanStatusConfirm(null);
           }}
         />
       )}

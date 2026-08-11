@@ -163,6 +163,11 @@ DISCOUNTS_CREATE = "discounts.create"
 DISCOUNTS_READ = "discounts.read"
 DISCOUNTS_EDIT = "discounts.edit"
 DISCOUNTS_DELETE = "discounts.delete"
+EXPENSES_MANAGE = "expenses.manage"
+EXPENSES_CREATE = "expenses.create"
+EXPENSES_READ = "expenses.read"
+EXPENSES_APPROVE = "expenses.approve"
+EXPENSES_DELETE = "expenses.delete"
 
 PERMISSION_CATALOG = [
     PLATFORM_TENANTS_MANAGE,
@@ -330,6 +335,11 @@ PERMISSION_CATALOG = [
     DISCOUNTS_READ,
     DISCOUNTS_EDIT,
     DISCOUNTS_DELETE,
+    EXPENSES_MANAGE,
+    EXPENSES_CREATE,
+    EXPENSES_READ,
+    EXPENSES_APPROVE,
+    EXPENSES_DELETE,
 ]
 
 
@@ -385,4 +395,5 @@ PERMISSION_MODULE_LABELS = {
     "reports.revenue": "Revenue Reports",
     "tax": "Tax",
     "discounts": "Discounts & Offers",
+    "expenses": "Expenses",
 }

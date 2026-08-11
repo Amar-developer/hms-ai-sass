@@ -510,6 +510,15 @@ All endpoints enforce the separate `patient_intelligence` plan entitlement. Exis
 | `GET` | `/api/v1/settings` | `settings.manage` or `settings.read` |
 | `GET` | `/api/v1/settings/resolve` | Any of `settings.manage`, `settings.read`, `billing.manage`, `invoices.read`, `payments.manage` |
 | `GET` | `/api/v1/settings/bundle` | `settings.manage` or `settings.read` |
+| `GET` | `/api/v1/expenses` | `expenses.manage` or `expenses.read` |
+| `GET` | `/api/v1/expenses/subcategories/recent` | `expenses.manage`, `expenses.create`, or `expenses.read` |
+| `GET` | `/api/v1/expenses/{expense_id}` | `expenses.manage` or `expenses.read` |
+| `POST` | `/api/v1/expenses` | `expenses.manage` or `expenses.create` |
+| `PATCH` | `/api/v1/expenses/{expense_id}` | `expenses.manage` or `expenses.create` |
+| `POST` | `/api/v1/expenses/{expense_id}/receipt` | `expenses.manage` or `expenses.create` |
+| `POST` | `/api/v1/expenses/{expense_id}/approve` | `expenses.approve` |
+| `POST` | `/api/v1/expenses/{expense_id}/reject` | `expenses.approve` |
+| `POST` | `/api/v1/expenses/{expense_id}/reimburse` | `expenses.manage` |
 | `POST` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications/in-app` | Authenticated tenant user; current user's inbox only |

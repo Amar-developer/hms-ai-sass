@@ -8,6 +8,7 @@ from app.api.v1.client_logs import (
     router as error_logs_router,
 )
 from app.api.v1.consultations import router as consultations_router
+from app.api.v1.expenses import router as expenses_router
 from app.api.v1.health import router as health_router
 from app.api.v1.files import router as files_router
 from app.api.v1.home_care import router as home_care_router
@@ -59,3 +60,4 @@ api_router.include_router(settings_router, tags=["Settings"])
 api_router.include_router(notifications_router, tags=["Notifications"])
 api_router.include_router(observability_router, tags=["Observability"])
 api_router.include_router(communications_router, tags=["Communications"])
+api_router.include_router(expenses_router, tags=["expenses"])

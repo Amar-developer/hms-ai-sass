@@ -624,12 +624,6 @@ export function useSuperAdminActions({
 
   async function suspendTenant(tenant: any) {
     if (!apiSession || !tenant || tenant.is_primary) return;
-    if (
-      !window.confirm(
-        `Deactivate tenant ${tenant.name}? This suspends access and keeps tenant records for audit and compliance.`,
-      )
-    )
-      return;
     setBusy(true);
     setMessage("");
     try {
@@ -647,6 +641,7 @@ export function useSuperAdminActions({
       setMessage(err.message || "Could not deactivate tenant.");
     } finally {
       setBusy(false);
+      setConfirmAction(null);
     }
   }
 

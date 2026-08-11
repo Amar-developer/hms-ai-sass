@@ -7,8 +7,8 @@ import { Info } from "@/app/components/common/Info";
 export function PlanDetailModal({ plan, onClose, onEdit }: any) {
   const modules = (plan.enabled_modules || []).filter(Boolean);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-3xl">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4 ">
+      <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto scrollbar-thin">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
           <div>
             <h3 className="text-xs lg:text-lg font-bold">Plan Details</h3>

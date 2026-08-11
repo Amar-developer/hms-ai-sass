@@ -116,9 +116,7 @@ export function PatientSubscriptions({
   const editingPlan =
     view === "edit" ? plans.find((plan: any) => plan.id === selectedId) : null;
   const detailPlan =
-    view === "view"
-      ? plans.find((plan: any) => plan.id === selectedId)
-      : null;
+    view === "view" ? plans.find((plan: any) => plan.id === selectedId) : null;
 
   // Populate the edit-form working state once per target plan, not on
   // every render — editingPlan is re-derived from `plans` each render, but
@@ -150,8 +148,7 @@ export function PatientSubscriptions({
   // longer resolves to a real plan, but only once loading has actually
   // finished — otherwise this fires while `plans` is still empty.
   useEffect(() => {
-    if ((view !== "edit" && view !== "view") || !selectedId || loading)
-      return;
+    if ((view !== "edit" && view !== "view") || !selectedId || loading) return;
     if (!plans.some((plan: any) => plan.id === selectedId)) {
       goTo("list", "", { replace: true });
     }
@@ -180,8 +177,8 @@ export function PatientSubscriptions({
   const hasPermission = (...keys: string[]) =>
     Boolean(
       apiSession?.user?.is_super_admin ||
-        userPermissions.includes("*") ||
-        keys.some((key) => userPermissions.includes(key)),
+      userPermissions.includes("*") ||
+      keys.some((key) => userPermissions.includes(key)),
     );
   const canDeletePlans =
     canDeleteMembershipPlans(apiSession?.user) ||
@@ -518,9 +515,6 @@ export function PatientSubscriptions({
                               plan={plan}
                               activeEnrollmentCount={activeEnrollmentCount}
                               busy={busy}
-                              confirmDelete={confirmDelete}
-                              setConfirmDelete={setConfirmDelete}
-                              deletePlan={deletePlan}
                               requestDeletePlan={requestDeletePlan}
                               startEdit={startEdit}
                               togglePlanActive={togglePlanActive}
@@ -543,14 +537,16 @@ export function PatientSubscriptions({
               onPage={setPlanPage}
             />
           </Card>
-          <ActiveEnrollmentsTable
-            rows={activeEnrollments}
-            patientMap={patientMap}
-            canManage={canDeletePlans}
-            busy={busy}
-            onUpdate={updateEnrollment}
-            onCancel={requestCancelEnrollment}
-          />
+          <div className="mt-3">
+            <ActiveEnrollmentsTable
+              rows={activeEnrollments}
+              patientMap={patientMap}
+              canManage={canDeletePlans}
+              busy={busy}
+              onUpdate={updateEnrollment}
+              onCancel={requestCancelEnrollment}
+            />
+          </div>
           <QueuedEnrollmentsTable
             rows={queuedEnrollments}
             patientMap={patientMap}
@@ -569,6 +565,23 @@ export function PatientSubscriptions({
           onConfirm={() => cancelEnrollmentAndClose(confirm)}
         />
       )}
+      {confirmDelete &&
+        (() => {
+          const planToDelete = plans.find(
+            (plan: any) => plan.id === confirmDelete,
+          );
+          if (!planToDelete) return null;
+          return (
+            <ConfirmModal
+              title="Deactivate Plan"
+              message={`Deactivate ${planToDelete.name}? Existing patient records are kept and the plan can be reactivated later.`}
+              confirmLabel="Yes, Deactivate"
+              busy={busy === `delete-${planToDelete.id}`}
+              onCancel={() => setConfirmDelete("")}
+              onConfirm={() => deletePlan(planToDelete.id)}
+            />
+          );
+        })()}
     </div>
   );
 }

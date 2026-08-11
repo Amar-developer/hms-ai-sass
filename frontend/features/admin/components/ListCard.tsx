@@ -97,7 +97,7 @@ export function ListCard({
               {columns.map((column: any) => (
                 <th
                   key={column.label}
-                  className="whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase text-slate-500"
+                  className={`whitespace-nowrap px-4 py-3 ${column.label =='Status'?'text-center':'text-left'} text-sm font-bold uppercase text-slate-500`}
                 >
                   {column.label}
                 </th>

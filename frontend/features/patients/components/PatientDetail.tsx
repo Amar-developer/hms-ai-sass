@@ -472,7 +472,7 @@ export function PatientDetail({
             >
               Back to Patients
             </button>
-            {canEditPatient && <Button onClick={onEdit}>Edit Patient</Button>}
+            {canEditPatient && <Button onClick={onEdit} className='close-button bg-slate-900'>Edit Patient</Button>}
           </div>
         </div>
         <StatusToast message={message} onClose={onMessageClose} />

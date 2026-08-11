@@ -122,7 +122,7 @@ export function ActiveEnrollmentsTable({
   const columns = [
     {
       key: "index",
-      header: "#",
+      header: "S.No",
       width: "80px",
       render: (_row: any, index: number) => (
         <span className="font-semibold text-slate-500 text-xs lg:text-sm">
@@ -236,7 +236,7 @@ export function ActiveEnrollmentsTable({
     columns.push({
       key: "actions",
       header: "Actions",
-      width: "150px",
+      width: "100px",
       cellClassName: "text-center",
       disableRowClick: true,
       render: (row: any) => {
@@ -270,6 +270,7 @@ export function ActiveEnrollmentsTable({
                       },
                     ]
               }
+              className="right-10 -bottom-5"
             />
           </div>
         );

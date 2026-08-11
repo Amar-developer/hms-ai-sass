@@ -14,7 +14,7 @@ export function SubscriptionTable({ title, rows, columns }: any) {
     <Card>
       <div className="flex items-center justify-between gap-3">
         <h4 className="font-bold">{title}</h4>
-        <Badge tone="blue">{rows.length}</Badge>
+        <Badge tone="blue" className="normal-badge">{rows.length}</Badge>
       </div>
       <div className="mt-4 space-y-3">
         {rows.length === 0 && (

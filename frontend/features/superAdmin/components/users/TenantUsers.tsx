@@ -232,96 +232,98 @@ export function TenantUsers({
   ];
 
   return (
-    <Card>
-      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div>
-          <div className="flex ">
-            <h3 className="card-title font-bold mr-3">Users</h3>
-            <Badge tone="blue" className="table-status">
-              {filtered.length} users
-            </Badge>
+    <div className="mt-3">
+      <Card>
+        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+          <div>
+            <div className="flex ">
+              <h3 className="card-title font-bold mr-3">Users</h3>
+              <Badge tone="blue" className="table-status">
+                {filtered.length} users
+              </Badge>
+            </div>
+            <p className="card-desc text-slate-500">
+              Create, edit, activate/deactivate, and search tenant users.
+            </p>
           </div>
-          <p className="card-desc text-slate-500">
-            Create, edit, activate/deactivate, and search tenant users.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
-          <CreateActionButton
-            label="Create User"
-            onClick={() => setSection("userCreate")}
-          />
-        </div>
-      </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
-        <TenantPicker
-          tenants={tenants}
-          selectedId={selectedId}
-          setSelectedId={setSelectedId}
-        />
-        <FormField label="User">
-          <Input
-            value={filters.query}
-            onChange={(e: any) => updateFilter("query", e.target.value)}
-            placeholder="Name, email, mobile, type"
-          />
-        </FormField>
-        <FormField label="Status">
-          <SearchableSelect
-            value={filters.status}
-            onChange={(value: any) => updateFilter("status", value)}
-            options={status_options}
-            searchable={false}
-          />
-        </FormField>
-
-        <FormField label="Date field">
-          <SearchableSelect
-            value={filters.dateField}
-            onChange={(value) => updateFilter("dateField", value)}
-            options={dateFieldOptions}
-            searchable={false}
-          />
-        </FormField>
-        <FormField label="From">
-          <Input
-            type="date"
-            value={filters.fromDate}
-            onChange={(e: any) => updateFilter("fromDate", e.target.value)}
-          />
-        </FormField>
-        <FormField label="To">
-          <Input
-            type="date"
-            value={filters.toDate}
-            onChange={(e: any) => updateFilter("toDate", e.target.value)}
-          />
-        </FormField>
-      </div>
-      <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-2xl border border-slate-200 ">
-        <div className="min-w-[1000px]">
-          {busy && rows.length === 0 ? (
-            <TableSkeleton />
-          ) : (
-            <DataTable
-              columns={userColumns}
-              data={rows}
-              emptyMessage="No users match your search."
-              onRowClick={(user) => {
-                setSelectedUserId(user.id);
-                setSection("userEdit");
-              }}
+          <div className="flex items-center gap-2">
+            {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
+            <CreateActionButton
+              label="Create User"
+              onClick={() => setSection("userCreate")}
             />
-          )}
+          </div>
         </div>
-      </div>
-      <Pagination
-        page={safePage}
-        totalPages={totalPages}
-        total={filtered.length}
-        pageSize={pageSize}
-        onPage={setPage}
-      />
-    </Card>
+        <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
+          <TenantPicker
+            tenants={tenants}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
+          />
+          <FormField label="User">
+            <Input
+              value={filters.query}
+              onChange={(e: any) => updateFilter("query", e.target.value)}
+              placeholder="Name, email, mobile, type"
+            />
+          </FormField>
+          <FormField label="Status">
+            <SearchableSelect
+              value={filters.status}
+              onChange={(value: any) => updateFilter("status", value)}
+              options={status_options}
+              searchable={false}
+            />
+          </FormField>
+
+          <FormField label="Date field">
+            <SearchableSelect
+              value={filters.dateField}
+              onChange={(value) => updateFilter("dateField", value)}
+              options={dateFieldOptions}
+              searchable={false}
+            />
+          </FormField>
+          <FormField label="From">
+            <Input
+              type="date"
+              value={filters.fromDate}
+              onChange={(e: any) => updateFilter("fromDate", e.target.value)}
+            />
+          </FormField>
+          <FormField label="To">
+            <Input
+              type="date"
+              value={filters.toDate}
+              onChange={(e: any) => updateFilter("toDate", e.target.value)}
+            />
+          </FormField>
+        </div>
+        <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-2xl border border-slate-200 ">
+          <div className="min-w-[1000px]">
+            {busy && rows.length === 0 ? (
+              <TableSkeleton />
+            ) : (
+              <DataTable
+                columns={userColumns}
+                data={rows}
+                emptyMessage="No users match your search."
+                onRowClick={(user) => {
+                  setSelectedUserId(user.id);
+                  setSection("userEdit");
+                }}
+              />
+            )}
+          </div>
+        </div>
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          total={filtered.length}
+          pageSize={pageSize}
+          onPage={setPage}
+        />
+      </Card>
+    </div>
   );
 }

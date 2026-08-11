@@ -403,7 +403,7 @@ export function TenantBranchSettings({
           </div>
           <Badge
             tone="blue"
-            className="rounded-lg px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm"
+            className="normal-badge"
           >
             Tenant scoped
           </Badge>

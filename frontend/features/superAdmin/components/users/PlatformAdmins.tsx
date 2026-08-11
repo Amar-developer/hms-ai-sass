@@ -104,7 +104,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
 
   return (
     <div className="space-y-5">
-      <Card>
+      <Card className="mt-3">
         <h3 className="card-title font-bold">Add Root Super Admin</h3>
         <p className="card-desc mt-1 text-slate-500">
           Creates a root-level platform owner under the primary tenant. The

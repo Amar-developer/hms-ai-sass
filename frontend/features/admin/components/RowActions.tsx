@@ -2,15 +2,30 @@ import { useEffect, useRef, useState } from "react";
 import { RowActionsProps } from "../types";
 import { MoreHorizontal } from "lucide-react";
 
+const MENU_ITEM_HEIGHT = 32;
+const MENU_VERTICAL_PADDING = 16;
+
 export function RowActions({
   actions,
   width = "w-24",
   className,
 }: RowActionsProps) {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const visibleActions = actions.filter((action) => !action.hidden);
+
+  function toggleOpen() {
+    if (!open && triggerRef.current) {
+      const estimatedMenuHeight =
+        visibleActions.length * MENU_ITEM_HEIGHT + MENU_VERTICAL_PADDING;
+      const spaceBelow =
+        window.innerHeight - triggerRef.current.getBoundingClientRect().bottom;
+      setOpenUpward(spaceBelow < estimatedMenuHeight);
+    }
+    setOpen((prev) => !prev);
+  }
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -50,7 +65,7 @@ export function RowActions({
         aria-label="Open actions"
         aria-expanded={open}
         aria-haspopup="menu"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggleOpen}
         className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100"
       >
         <MoreHorizontal className="h-5 w-5" />
@@ -60,6 +75,11 @@ export function RowActions({
         <div
           role="menu"
           className={`absolute z-[1000] ${width} rounded-lg border bg-white py-1 shadow-lg ${className ?? "right-0 top-full mt-1"}`}
+          style={
+            openUpward
+              ? { top: "auto", bottom: "18%", marginTop: 0, marginBottom: 4 }
+              : { bottom: "auto", top: "18%", marginBottom: 0, marginTop: 4 }
+          }
         >
           {visibleActions.map((action) => (
             <button

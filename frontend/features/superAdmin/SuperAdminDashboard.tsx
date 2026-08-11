@@ -78,6 +78,9 @@ export function SuperAdminDashboard({
     router.push(superAdminPath(nextSection, pendingIds.current));
   }
   const [confirmAction, setConfirmAction] = useState<any>(null);
+  function requestSuspendTenant(tenant: any) {
+    setConfirmAction({ kind: "delete", entity: "tenant", tenant });
+  }
   const [tenantSuccess, setTenantSuccess] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
 
@@ -305,7 +308,7 @@ export function SuperAdminDashboard({
     );
 
   return (
-    <div className="min-w-0 space-y-5">
+    <div className="min-w-0 ">
       <Card className="rounded-lg">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
@@ -357,7 +360,7 @@ export function SuperAdminDashboard({
           apiSession={apiSession}
           canCopyIds={canCopyIds}
           busy={data.busy}
-          suspendTenant={actions.suspendTenant}
+          suspendTenant={requestSuspendTenant}
           onRefresh={data.reload}
         />
       )}
@@ -374,7 +377,7 @@ export function SuperAdminDashboard({
           subscriptions={data.tenantSubscriptions}
           busy={data.busy}
           updateTenant={(e: any) => actions.updateTenant(e, selected)}
-          suspendTenant={actions.suspendTenant}
+          suspendTenant={requestSuspendTenant}
           back={() => changeSection("tenants")}
         />
       )}
@@ -652,8 +655,21 @@ export function SuperAdminDashboard({
         <ConfirmModal
           action={confirmAction}
           busy={data.busy}
+          title={
+            confirmAction.entity === "tenant" ? "Deactivate Tenant" : undefined
+          }
+          message={
+            confirmAction.entity === "tenant"
+              ? `Deactivate tenant ${confirmAction.tenant?.name}? This suspends access and keeps tenant records for audit and compliance.`
+              : undefined
+          }
+          confirmLabel={
+            confirmAction.entity === "tenant" ? "Yes, Deactivate" : undefined
+          }
           onCancel={() => setConfirmAction(null)}
           onConfirm={() => {
+            if (confirmAction.entity === "tenant")
+              return actions.suspendTenant(confirmAction.tenant);
             if (confirmAction.entity === "branch")
               return confirmAction.kind === "delete"
                 ? actions.deleteEntity("branches", confirmAction.branch)

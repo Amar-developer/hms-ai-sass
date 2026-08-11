@@ -708,12 +708,16 @@ export function Select({
   className = "rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 md:text-base lg:text-sm",
   children,
   value,
+  onChange,
   ...props
 }: any) {
+  const controlledProps =
+    value !== undefined ? { value, onChange } : { defaultValue: value };
+
   return (
     <select
       {...props}
-      value={value ?? ""}
+      {...controlledProps}
       className={`w-full border border-slate-200 bg-white outline-none focus:border-slate-500 ${className}`}
     >
       {children}

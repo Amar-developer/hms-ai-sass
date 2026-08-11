@@ -60,7 +60,7 @@ export function UserRow({
       </td>
 
       <td className="px-4 py-3 whitespace-nowrap">
-        <Badge tone={user.is_active ? "green" : "red"} className="rounded-full">
+        <Badge tone={user.is_active ? "green" : "red"} className="normal-badge">
           {user.is_active ? "Active" : "Inactive"}
         </Badge>
       </td>
@@ -149,7 +149,7 @@ export function RoleRow({
       <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={role.is_active ? "green" : "red"}
-          className="rounded-full px-2 py-[2px] text-[10px]"
+          className="normal-badge"
         >
           {role.is_active ? "Active" : "Inactive"}
         </Badge>

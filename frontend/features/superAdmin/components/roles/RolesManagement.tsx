@@ -110,7 +110,8 @@ export function RolesManagement({
   };
 
   return (
-    <Card>
+  <div className="mt-3">
+      <Card>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex">
@@ -280,7 +281,7 @@ export function RolesManagement({
                     {formatDate(role.updated_at)}
                   </span>
                   <RowActions
-                    className="right-24 -bottom-5"
+                    className="right-24 -bottom-14 w-28"
                     actions={[
                       {
                         label: "Edit",
@@ -333,6 +334,7 @@ export function RolesManagement({
         pageSize={pageSize}
         onPage={setPage}
       />
-    </Card>
+    </Card>s
+  </div>
   );
 }

@@ -239,7 +239,7 @@ export function WhatsAppDeliveryQueue({
     },
     {
       key: "created_at",
-      header: "Created / next action",
+      header: "Created",
       render: (item) => (
         <>
           <p>{dateTime(item.created_at)}</p>
