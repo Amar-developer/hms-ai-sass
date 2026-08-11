@@ -11,6 +11,7 @@ import {
   formatMoney,
   formatDiscountPercentage,
   formatPercentage,
+  invoicePatientDueAmount,
 } from "./helpers";
 
 describe("billing precision formatting", () => {
@@ -201,5 +202,35 @@ describe("invoice source classification", () => {
 
   it("does not relabel a direct invoice as Membership", () => {
     expect(invoiceSource({}).label).toBe("Direct");
+  });
+});
+
+describe("invoice patient due amount", () => {
+  it("does not show refunded money as patient due", () => {
+    expect(
+      invoicePatientDueAmount({
+        status: "partially_refunded",
+        total_amount: 350,
+        paid_amount: 15,
+        balance_amount: 335,
+      }),
+    ).toBe(0);
+    expect(
+      invoicePatientDueAmount({
+        status: "refunded",
+        total_amount: 350,
+        paid_amount: 0,
+        balance_amount: 350,
+      }),
+    ).toBe(0);
+  });
+
+  it("keeps normal issued and partially paid balances as patient due", () => {
+    expect(invoicePatientDueAmount({ status: "issued", balance_amount: 335 })).toBe(
+      335,
+    );
+    expect(
+      invoicePatientDueAmount({ status: "partially_paid", balance_amount: 20 }),
+    ).toBe(20);
   });
 });

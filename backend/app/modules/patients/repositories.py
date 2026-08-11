@@ -8,7 +8,12 @@ from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionPlan,
 )
-from app.modules.patients.models import Patient, PatientAlert, PatientStatus
+from app.modules.patients.models import (
+    Patient,
+    PatientAlert,
+    PatientFamilyRelationship,
+    PatientStatus,
+)
 
 
 class PatientRepository:
@@ -204,8 +209,6 @@ class PatientRepository:
                 Patient.full_name,
                 Patient.mobile,
                 Patient.alternate_mobile,
-                Patient.guardian_name,
-                Patient.guardian_mobile,
                 Patient.area,
                 Patient.address,
             )
@@ -275,6 +278,63 @@ class PatientAlertRepository:
                 )
             ).all()
         )
+
+
+class PatientFamilyRelationshipRepository:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def add(self, relationship: PatientFamilyRelationship) -> PatientFamilyRelationship:
+        self.session.add(relationship)
+        return relationship
+
+    def get_for_tenant(
+        self, tenant_id: str, relationship_id: str
+    ) -> PatientFamilyRelationship | None:
+        row = self.session.get(PatientFamilyRelationship, relationship_id)
+        if not row or row.tenant_id != tenant_id:
+            return None
+        return row
+
+    def existing_pair(
+        self, *, tenant_id: str, patient_id: str, related_patient_id: str
+    ) -> PatientFamilyRelationship | None:
+        return self.session.exec(
+            select(PatientFamilyRelationship).where(
+                PatientFamilyRelationship.tenant_id == tenant_id,
+                PatientFamilyRelationship.patient_id == patient_id,
+                PatientFamilyRelationship.related_patient_id == related_patient_id,
+            )
+        ).first()
+
+    def active_for_patient(
+        self, *, tenant_id: str, patient_id: str
+    ) -> list[PatientFamilyRelationship]:
+        return list(
+            self.session.exec(
+                select(PatientFamilyRelationship)
+                .where(
+                    PatientFamilyRelationship.tenant_id == tenant_id,
+                    PatientFamilyRelationship.is_active == True,  # noqa: E712
+                    or_(
+                        PatientFamilyRelationship.patient_id == patient_id,
+                        PatientFamilyRelationship.related_patient_id == patient_id,
+                    ),
+                )
+                .order_by(PatientFamilyRelationship.created_at)
+            ).all()
+        )
+
+    def active_related_patient_ids(
+        self, *, tenant_id: str, patient_id: str
+    ) -> list[str]:
+        related_ids: list[str] = []
+        for row in self.active_for_patient(tenant_id=tenant_id, patient_id=patient_id):
+            if row.patient_id == patient_id:
+                related_ids.append(row.related_patient_id)
+            elif row.related_patient_id == patient_id:
+                related_ids.append(row.patient_id)
+        return list(dict.fromkeys(related_ids))
 
 
 class PatientSubscriptionReadRepository:

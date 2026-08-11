@@ -15,6 +15,8 @@ from app.modules.patients.schemas import (
     PatientAlertRead,
     PatientCreate,
     PatientDuplicateCandidate,
+    PatientFamilyRelationshipCreate,
+    PatientFamilyRelationshipRead,
     PatientRead,
     PatientSearchResult,
     PatientSummary,
@@ -252,6 +254,61 @@ def list_patient_alerts(
 ) -> list[PatientAlert]:
     return PatientService(session).list_alerts(
         tenant_id=tenant_id, patient_id=patient_id
+    )
+
+
+@router.get(
+    "/{patient_id}/family-relationships",
+    response_model=list[PatientFamilyRelationshipRead],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
+def list_patient_family_relationships(
+    patient_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+) -> list[PatientFamilyRelationshipRead]:
+    return PatientService(session).list_family_relationships(
+        tenant_id=tenant_id, patient_id=patient_id
+    )
+
+
+@router.post(
+    "/{patient_id}/family-relationships",
+    response_model=PatientFamilyRelationshipRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission(permissions.PATIENTS_EDIT))],
+)
+def create_patient_family_relationship(
+    patient_id: str,
+    payload: PatientFamilyRelationshipCreate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_permission(permissions.PATIENTS_EDIT)),
+    session: Session = Depends(get_session),
+) -> PatientFamilyRelationshipRead:
+    return PatientService(session).create_family_relationship(
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.delete(
+    "/{patient_id}/family-relationships/{relationship_id}",
+    dependencies=[Depends(require_permission(permissions.PATIENTS_EDIT))],
+)
+def delete_patient_family_relationship(
+    patient_id: str,
+    relationship_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_permission(permissions.PATIENTS_EDIT)),
+    session: Session = Depends(get_session),
+) -> dict[str, bool | str]:
+    return PatientService(session).delete_family_relationship(
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        relationship_id=relationship_id,
+        actor=current_user,
     )
 
 

@@ -66,7 +66,12 @@ from app.modules.notifications.models import (
     NotificationEvent,
     ProductAnnouncement,
 )
-from app.modules.patients.models import Patient, PatientAlert, PatientContact
+from app.modules.patients.models import (
+    Patient,
+    PatientAlert,
+    PatientContact,
+    PatientFamilyRelationship,
+)
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionPlan,
@@ -174,6 +179,7 @@ __all__ = [
     "Patient",
     "PatientAlert",
     "PatientContact",
+    "PatientFamilyRelationship",
     "PatientSubscriptionEnrollment",
     "PatientSubscriptionPlan",
     "PatientEngagementAction",

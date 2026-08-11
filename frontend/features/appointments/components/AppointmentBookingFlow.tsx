@@ -156,9 +156,7 @@ export function AppointmentBookingFlow(props: any) {
                         ? `${selectedPatient.patient_number} · `
                         : ""}
                       {selectedPatient.mobile || "No mobile"} ·{" "}
-                      {selectedPatient.area ||
-                        selectedPatient.guardian_mobile ||
-                        "-"}
+                      {selectedPatient.area || "-"}
                     </p>
                     <PatientFlagBadges
                       patient={selectedPatient}

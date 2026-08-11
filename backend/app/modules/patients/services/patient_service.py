@@ -20,14 +20,21 @@ from app.modules.patients.models import (
     AlertType,
     Patient,
     PatientAlert,
+    PatientFamilyRelationship,
     PatientStatus,
 )
-from app.modules.patients.repositories import PatientAlertRepository, PatientRepository
+from app.modules.patients.repositories import (
+    PatientAlertRepository,
+    PatientFamilyRelationshipRepository,
+    PatientRepository,
+)
 from app.modules.patients.schemas import (
     PatientAlertCreate,
     PatientAlertRead,
     PatientCreate,
     PatientDuplicateCandidate,
+    PatientFamilyRelationshipCreate,
+    PatientFamilyRelationshipRead,
     PatientRead,
     PatientSearchResult,
     PatientSummary,
@@ -46,6 +53,7 @@ class PatientService:
         self.session = session
         self.patients = PatientRepository(session)
         self.alerts = PatientAlertRepository(session)
+        self.family = PatientFamilyRelationshipRepository(session)
 
     def _get_or_404(self, tenant_id: str, patient_id: str) -> Patient:
         patient = self.patients.get_for_tenant(tenant_id, patient_id)
@@ -69,7 +77,7 @@ class PatientService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
-                    "Primary mobile number and alternate phone number must be "
+                    "Primary mobile number and secondary mobile number must be "
                     "different."
                 ),
             )
@@ -83,8 +91,9 @@ class PatientService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail=(
                         "Mobile number is already used as the primary mobile "
-                        "number for another patient. Use Alternate Phone Number "
-                        "for a shared family contact."
+                        "number for another patient. Use Secondary Mobile "
+                        "Number only when this is the patient's own secondary "
+                        "contact number."
                     ),
                 )
 
@@ -413,6 +422,141 @@ class PatientService:
         return self.alerts.active_for_patient(
             tenant_id=tenant_id, patient_id=patient_id
         )
+
+    def _read_family_relationship(
+        self, row: PatientFamilyRelationship, owner_patient_id: str
+    ) -> PatientFamilyRelationshipRead:
+        related_patient_id = (
+            row.related_patient_id
+            if row.patient_id == owner_patient_id
+            else row.patient_id
+        )
+        related = self.patients.get_for_tenant(row.tenant_id, related_patient_id)
+        return PatientFamilyRelationshipRead(
+            id=row.id,
+            tenant_id=row.tenant_id,
+            patient_id=owner_patient_id,
+            related_patient_id=related_patient_id,
+            related_patient_name=related.full_name if related else None,
+            related_patient_number=related.patient_number if related else None,
+            relationship=row.relationship,
+            notes=row.notes,
+            is_active=row.is_active,
+            created_by_user_id=row.created_by_user_id,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    def list_family_relationships(
+        self, *, tenant_id: str, patient_id: str
+    ) -> list[PatientFamilyRelationshipRead]:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        self._get_or_404(tenant_id, patient_id)
+        return [
+            self._read_family_relationship(row, patient_id)
+            for row in self.family.active_for_patient(
+                tenant_id=tenant_id, patient_id=patient_id
+            )
+        ]
+
+    def create_family_relationship(
+        self,
+        *,
+        tenant_id: str,
+        patient_id: str,
+        payload: PatientFamilyRelationshipCreate,
+        actor: User,
+    ) -> PatientFamilyRelationshipRead:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        patient = self._get_or_404(tenant_id, patient_id)
+        related = self._get_or_404(tenant_id, payload.related_patient_id)
+        if patient.id == related.id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="A patient cannot be linked as their own family member",
+            )
+        existing = self.family.existing_pair(
+            tenant_id=tenant_id,
+            patient_id=patient.id,
+            related_patient_id=related.id,
+        ) or self.family.existing_pair(
+            tenant_id=tenant_id,
+            patient_id=related.id,
+            related_patient_id=patient.id,
+        )
+        if existing:
+            if not existing.is_active:
+                existing.is_active = True
+                existing.relationship = payload.relationship
+                existing.notes = payload.notes
+                existing.updated_at = now_utc()
+                self.session.add(existing)
+                row = existing
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Family relationship already exists",
+                )
+        else:
+            row = PatientFamilyRelationship.model_validate(
+                payload,
+                update={
+                    "tenant_id": tenant_id,
+                    "patient_id": patient.id,
+                    "related_patient_id": related.id,
+                    "created_by_user_id": actor.id,
+                },
+            )
+            self.family.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+        record_audit_event(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=patient.branch_id,
+            actor_user_id=actor.id,
+            action="patient.family_relationship.created",
+            resource_type="patient_family_relationship",
+            resource_id=row.id,
+            purpose="patient_family_membership_sharing",
+        )
+        return self._read_family_relationship(row, patient.id)
+
+    def delete_family_relationship(
+        self,
+        *,
+        tenant_id: str,
+        patient_id: str,
+        relationship_id: str,
+        actor: User,
+    ) -> dict[str, bool | str]:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        patient = self._get_or_404(tenant_id, patient_id)
+        row = self.family.get_for_tenant(tenant_id, relationship_id)
+        if (
+            not row
+            or not row.is_active
+            or patient.id not in {row.patient_id, row.related_patient_id}
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Family relationship not found",
+            )
+        row.is_active = False
+        row.updated_at = now_utc()
+        self.session.add(row)
+        self.session.commit()
+        record_audit_event(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=patient.branch_id,
+            actor_user_id=actor.id,
+            action="patient.family_relationship.deleted",
+            resource_type="patient_family_relationship",
+            resource_id=row.id,
+            purpose="patient_family_membership_sharing",
+        )
+        return {"deleted": True, "relationship_id": row.id}
 
     def get_summary(self, *, tenant_id: str, patient_id: str) -> PatientSummary:
         enforce_entitlement(self.session, tenant_id, "patients")

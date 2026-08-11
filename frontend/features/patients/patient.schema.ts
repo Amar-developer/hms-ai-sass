@@ -19,7 +19,7 @@ export const patientSchema = z
       .string()
       .regex(
         /^[6-9]\d{9}$/,
-        "Alternate phone number must be exactly 10 digits and start with 6, 7, 8 or 9",
+        "Secondary mobile number must be exactly 10 digits and start with 6, 7, 8 or 9",
       )
       .optional()
       .or(z.literal("")),
@@ -36,14 +36,6 @@ export const patientSchema = z
     dateOfBirth: z.string().optional(),
 
     ageYears: z.string().min(1, "Age is required"),
-
-    guardianName: z.string().optional(),
-
-    guardianMobile: z
-      .string()
-      .regex(/^\d{10}$/, "Guardian mobile must be exactly 10 digits")
-      .optional()
-      .or(z.literal("")),
 
     email: z
       .string()
@@ -87,7 +79,7 @@ export const patientSchema = z
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["mobile"],
-        message: "Mobile number or alternate mobile number is required",
+        message: "Primary or secondary mobile number is required",
       });
     }
 
@@ -97,7 +89,7 @@ export const patientSchema = z
         code: z.ZodIssueCode.custom,
         path: ["alternateMobile"],
         message:
-          "Alternate phone number must be different from the primary mobile number",
+          "Secondary mobile number must be different from the primary mobile number",
       });
     }
   });

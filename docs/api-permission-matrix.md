@@ -190,6 +190,9 @@ Secondary tenant admins keep the existing tenant-scoped screens and APIs. They c
 | `DELETE` | `/api/v1/patients/{patient_id}` | `patients.delete` | Soft delete by deactivating patient audit |
 | `POST` | `/api/v1/patients/{patient_id}/alerts` | `patients.write` | Creates alert audit |
 | `GET` | `/api/v1/patients/{patient_id}/alerts` | `patients.read` | Alert list |
+| `GET` | `/api/v1/patients/{patient_id}/family-relationships` | `patients.read` | Lists linked family patients used for shared membership benefits |
+| `POST` | `/api/v1/patients/{patient_id}/family-relationships` | `patients.edit` | Links an existing patient as a family member |
+| `DELETE` | `/api/v1/patients/{patient_id}/family-relationships/{relationship_id}` | `patients.edit` | Deactivates a family relationship link |
 | `POST` | `/api/v1/patients/{patient_id}/photo` | `patients.edit` | Uploads or replaces patient photo/document reference |
 | `GET` | `/api/v1/patients/{patient_id}/summary` | `patients.read` | Records patient history viewed audit |
 

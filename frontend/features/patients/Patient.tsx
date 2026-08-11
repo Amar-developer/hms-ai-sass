@@ -92,6 +92,7 @@ export function Patient({
   const [membershipPlans, setMembershipPlans] = useState<any[]>([]);
   const [membershipEnrollments, setMembershipEnrollments] = useState<any[]>([]);
   const [patientInvoices, setPatientInvoices] = useState<any[]>([]);
+  const [familyRelationships, setFamilyRelationships] = useState<any[]>([]);
   const [patientIntelligence, setPatientIntelligence] = useState<any>(null);
   const [patientIntelligenceError, setPatientIntelligenceError] = useState("");
   const [query, setQuery] = useState("");
@@ -189,6 +190,7 @@ export function Patient({
     setPatientIpAdmissions([]);
     setMembershipEnrollments([]);
     setPatientInvoices([]);
+    setFamilyRelationships([]);
     setPatientIntelligence(null);
     setPatientIntelligenceError("");
     try {
@@ -203,6 +205,7 @@ export function Patient({
         planRows,
         enrollmentRows,
         invoiceRows,
+        familyRows,
         intelligenceData,
       ] = await Promise.all([
         apiFetch(`/patients/${id}`, scopedSession),
@@ -243,6 +246,9 @@ export function Patient({
         apiFetch(`/billing/invoices?patient_id=${id}`, scopedSession).catch(
           () => [],
         ),
+        apiFetch(`/patients/${id}/family-relationships`, scopedSession).catch(
+          () => [],
+        ),
         apiFetch(`/patient-intelligence/patients/${id}`, scopedSession).catch(
           (err: any) => {
             setPatientIntelligenceError(
@@ -264,6 +270,7 @@ export function Patient({
         Array.isArray(enrollmentRows) ? enrollmentRows : [],
       );
       setPatientInvoices(Array.isArray(invoiceRows) ? invoiceRows : []);
+      setFamilyRelationships(Array.isArray(familyRows) ? familyRows : []);
       setPatientIntelligence(intelligenceData);
     } catch (err: any) {
       setMessage(err.message || "Could not load patient details.");
@@ -418,8 +425,6 @@ export function Patient({
           gender: data.gender || "unknown",
           date_of_birth: data.dateOfBirth || null,
           age_years: data.ageYears ? Number(data.ageYears) : null,
-          guardian_name: data.guardianName || null,
-          guardian_mobile: data.guardianMobile || null,
           area: data.area || null,
           address: data.address || null,
           blood_group: data.bloodGroup || null,
@@ -459,8 +464,6 @@ export function Patient({
           gender: data.gender || "unknown",
           date_of_birth: data.dateOfBirth || null,
           age_years: data.ageYears ? Number(data.ageYears) : null,
-          guardian_name: data.guardianName || null,
-          guardian_mobile: data.guardianMobile || null,
           area: data.area || null,
           address: data.address || null,
           blood_group: data.bloodGroup || null,
@@ -670,6 +673,53 @@ export function Patient({
     }
   }
 
+  async function createFamilyRelationship(data: any) {
+    if (!scopedSession || !selectedId) return false;
+    if (!data.relatedPatientId) {
+      setMessage("Enter the existing family patient ID.");
+      return false;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      await apiFetch(`/patients/${selectedId}/family-relationships`, scopedSession, {
+        method: "POST",
+        body: JSON.stringify({
+          related_patient_id: data.relatedPatientId,
+          relationship: data.relationship || "family",
+          notes: data.notes || null,
+        }),
+      });
+      await loadPatientDetail(selectedId);
+      setMessage("Family relationship linked. Membership benefits can now be shared.");
+      return true;
+    } catch (err: any) {
+      setMessage(err.message || "Could not link family relationship.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteFamilyRelationship(relationshipId: string) {
+    if (!scopedSession || !selectedId || !relationshipId) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await apiFetch(
+        `/patients/${selectedId}/family-relationships/${relationshipId}`,
+        scopedSession,
+        { method: "DELETE" },
+      );
+      await loadPatientDetail(selectedId);
+      setMessage("Family relationship removed.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not remove family relationship.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!apiSession)
     return (
       <Card>
@@ -723,7 +773,7 @@ export function Patient({
   if (view === "detail" && selected)
     return (
       <PatientDetail
-        apiSession={apiSession}
+        apiSession={scopedSession}
         patient={selected}
         summary={summary}
         patientIpAdmissions={patientIpAdmissions}
@@ -734,6 +784,7 @@ export function Patient({
         membershipPlans={membershipPlans}
         membershipEnrollments={membershipEnrollments}
         patientInvoices={patientInvoices}
+        familyRelationships={familyRelationships}
         patientIntelligence={patientIntelligence}
         patientIntelligenceError={patientIntelligenceError}
         branches={branches}
@@ -741,6 +792,8 @@ export function Patient({
         message={message}
         onMessageClose={() => setMessage("")}
         onEnrollMembership={enrollMembership}
+        onCreateFamilyRelationship={createFamilyRelationship}
+        onDeleteFamilyRelationship={deleteFamilyRelationship}
         onBack={() => open("list")}
         onEdit={() => openPatientEdit(selected.id)}
         onUploadPhoto={uploadPhoto}

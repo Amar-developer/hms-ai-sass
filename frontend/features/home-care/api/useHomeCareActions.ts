@@ -60,8 +60,6 @@ export function useHomeCareActions({
         mobile: data.mobile || null,
         alternate_mobile: data.alternateMobile || null,
         email: data.email || null,
-        guardian_name: data.guardianName || null,
-        guardian_mobile: data.guardianMobile || null,
         area: data.area || null,
         address: data.address || null,
         blood_group: data.bloodGroup || null,

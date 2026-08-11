@@ -4,7 +4,7 @@ from app.modules.appointments.models import Appointment
 from app.modules.billing.models import CreditNote, Invoice
 from app.modules.consultations.models import Consultation
 from app.modules.lab.models import LabOrder
-from app.modules.patients.contact import patient_contact_numbers
+from app.modules.patients.contact import patient_whatsapp_numbers
 from app.modules.patients.models import Patient, WhatsAppConsentStatus
 from app.infrastructure.integrations.adapters.messaging.http_template import (
     normalize_mobile_number,
@@ -70,7 +70,11 @@ def patient_allows_engagement_whatsapp(patient: Patient | None) -> bool:
 def patient_notification_destination(
     patient: Patient | None, default_country_code: str
 ) -> str | None:
-    """The one number to message, in primary → alternate → guardian order.
+    """The one number to message.
+
+    Priority is primary mobile → alternate/secondary mobile → legacy guardian
+    mobile. Alternate mobile is not a family relationship; family recipients
+    are modelled separately through patient family relationship links.
 
     Returns as soon as a number normalizes, so a patient who has several
     numbers on file still receives a single copy of each message rather than
@@ -78,7 +82,7 @@ def patient_notification_destination(
     """
     if not patient:
         return None
-    for value in patient_contact_numbers(patient):
+    for value in patient_whatsapp_numbers(patient):
         try:
             return normalize_mobile_number(value, default_country_code)
         except ValueError:

@@ -35,6 +35,7 @@ from app.modules.patient_subscriptions.service import (
     sync_free_item_usage_from_invoices,
 )
 from app.modules.tenants.models import Department, Tenant
+from app.modules.patients.models import PatientFamilyRelationship
 
 
 def test_queued_membership_dates_follow_current_plan_and_actual_activation(
@@ -129,6 +130,80 @@ def test_queued_membership_dates_follow_current_plan_and_actual_activation(
         assert promoted.starts_on == today
         assert promoted.activated_on == today
         assert promoted.ends_on == today + timedelta(days=59)
+
+
+def test_family_patient_can_use_primary_patient_membership_pool(test_engine):
+    today = date.today()
+    tenant_id = "tenant_family_membership"
+    branch_id = "branch_family_membership"
+    primary_patient_id = "patient_family_primary"
+    family_patient_id = "patient_family_child"
+    with Session(test_engine) as session:
+        plan = PatientSubscriptionPlan(
+            id="ptplan_family_shared",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            name="Family Care Plan",
+            duration_days=30,
+            free_consultations=1,
+        )
+        enrollment = PatientSubscriptionEnrollment(
+            id="ptsub_family_shared",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=primary_patient_id,
+            plan_id=plan.id,
+            starts_on=today,
+            activated_on=today,
+            ends_on=today + timedelta(days=29),
+            status=PatientSubscriptionEnrollmentStatus.ACTIVE,
+        )
+        relationship = PatientFamilyRelationship(
+            id="pfam_shared",
+            tenant_id=tenant_id,
+            patient_id=primary_patient_id,
+            related_patient_id=family_patient_id,
+            relationship="child",
+        )
+        session.add(plan)
+        session.add(enrollment)
+        session.add(relationship)
+        session.commit()
+
+        active = active_patient_enrollment(
+            session,
+            tenant_id=tenant_id,
+            patient_id=family_patient_id,
+        )
+
+        assert active is not None
+        shared_enrollment, shared_plan = active
+        assert shared_enrollment.id == enrollment.id
+        assert shared_plan.id == plan.id
+
+        preview = benefit_preview(
+            plan=shared_plan,
+            enrollment=shared_enrollment,
+            service_type="consultation",
+            item_ids=[],
+            subtotal_amount=500,
+            session=session,
+        )
+        assert preview["discount_amount"] == 500
+
+        shared_enrollment.used_consultations += 1
+        session.add(shared_enrollment)
+        session.commit()
+        exhausted = benefit_preview(
+            plan=shared_plan,
+            enrollment=shared_enrollment,
+            service_type="consultation",
+            item_ids=[],
+            subtotal_amount=500,
+            session=session,
+        )
+        assert exhausted["discount_amount"] == 0
+        assert exhausted["reason"] == "No free consultations remaining"
 
 
 def test_patient_membership_respects_activation_delay(test_engine):

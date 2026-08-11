@@ -66,10 +66,6 @@ export function PatientForm({
             ),
           )
         : String(patientField(patient, "age_years", "ageYears") || ""),
-      guardianName:
-        patientField(patient, "guardian_name", "guardianName") || "",
-      guardianMobile:
-        patientField(patient, "guardian_mobile", "guardianMobile") || "",
       alternateMobile:
         patientField(patient, "alternate_mobile", "alternateMobile") || "",
       email: patientField(patient, "email") || "",
@@ -152,10 +148,6 @@ export function PatientForm({
             ),
           )
         : String(patientField(patient, "age_years", "ageYears") || ""),
-      guardianName:
-        patientField(patient, "guardian_name", "guardianName") || "",
-      guardianMobile:
-        patientField(patient, "guardian_mobile", "guardianMobile") || "",
       alternateMobile:
         patientField(patient, "alternate_mobile", "alternateMobile") || "",
       email: patientField(patient, "email") || "",
@@ -379,19 +371,7 @@ export function PatientForm({
 
           <FormError error={errors.ageYears?.message} />
         </FormField>
-        <FormField label="Guardian Name">
-          <Input
-            {...register("guardianName")}
-            placeholder="Enter guardian name"
-          />
-        </FormField>
-        <FormField label="Guardian Mobile">
-          <Input
-            {...register("guardianMobile")}
-            placeholder="Enter guardian mobile"
-          />
-        </FormField>
-        <FormField label="Alternate Phone Number">
+        <FormField label="Secondary Mobile Number">
           <Input
             type="text"
             inputMode="numeric"
@@ -401,13 +381,14 @@ export function PatientForm({
                 e.target.value = e.target.value.replace(/\D/g, "");
               },
             })}
-            placeholder="Enter shared family contact number"
+            placeholder="Enter secondary patient mobile number"
           />
 
           <FormError error={errors.alternateMobile?.message} />
 
           <p className="mt-1 text-[11px] text-slate-500">
-            A family member&apos;s existing mobile number can be used here.
+            Use this only as this patient&apos;s secondary contact number. Family
+            benefit sharing is configured in Family Relationships.
           </p>
         </FormField>
         <FormField label="Email">

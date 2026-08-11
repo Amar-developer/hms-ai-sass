@@ -90,17 +90,16 @@ npm run quality
 
 `npm run quality` (and the pre-push hook) cover backend lint, backend unit
 tests, frontend unit tests, typecheck, and build — but **not** E2E. Backend
-E2E (`backend/e2e/`) and frontend E2E (Playwright, `frontend/e2e/`) only run
-in GitHub Actions unless you run them yourself, which is why an E2E-only
-regression can pass every local check and still fail in CI.
+E2E (`backend/e2e/`) runs in CI unless skipped by cache. Frontend E2E
+(Playwright, `frontend/e2e/`) is manual-only to avoid flaky browser quality
+gates and Actions-minute burn.
 
-Before pushing a branch touching booking, billing, queue, or consultation
-flows — or any change likely to affect E2E — run everything CI runs, in one
-command:
+Before pushing, run the automatic CI gates in one command:
 
 ```bash
-bash scripts/verify_all.sh          # everything, same order as CI
-bash scripts/verify_all.sh --fast   # skip both E2E suites, quick iteration
+bash scripts/verify_all.sh                 # automatic CI gates
+bash scripts/verify_all.sh --fast          # skip backend E2E, quick iteration
+bash scripts/verify_all.sh --frontend-e2e  # also run manual Playwright E2E
 ```
 
 One-time setup (see `backend/README.md`):

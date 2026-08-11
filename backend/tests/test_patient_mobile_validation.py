@@ -25,10 +25,10 @@ def test_mobile_validation_blocks_normalized_duplicate_primary(test_engine):
             )
 
     assert blocked.value.status_code == 409
-    assert "Alternate Phone Number" in blocked.value.detail
+    assert "Secondary Mobile Number" in blocked.value.detail
 
 
-def test_mobile_validation_allows_shared_alternate_and_tenant_reuse(test_engine):
+def test_mobile_validation_allows_secondary_and_tenant_reuse(test_engine):
     with Session(test_engine) as session:
         session.add(
             Patient(
@@ -64,7 +64,7 @@ def test_mobile_validation_blocks_same_number_on_one_patient(test_engine):
 
     assert blocked.value.status_code == 422
     assert blocked.value.detail == (
-        "Primary mobile number and alternate phone number must be different."
+        "Primary mobile number and secondary mobile number must be different."
     )
 
 
