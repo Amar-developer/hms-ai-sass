@@ -112,7 +112,8 @@ def test_primary_mobile_is_unique_but_can_be_reused_as_alternate(
     assert duplicate_primary.status_code == 409
     assert duplicate_primary.json()["detail"] == (
         "Mobile number is already used as the primary mobile number for another "
-        "patient. Use Alternate Phone Number for a shared family contact."
+        "patient. Use Secondary Mobile Number only when this is the patient's own "
+        "secondary contact number."
     )
     assert shared_alternate.status_code == 201
     assert shared_alternate.json()["mobile"] is None
@@ -134,7 +135,7 @@ def test_patient_cannot_use_same_primary_and_alternate_number(client: TestClient
 
     assert response.status_code == 422
     assert response.json()["detail"] == (
-        "Primary mobile number and alternate phone number must be different."
+        "Primary mobile number and secondary mobile number must be different."
     )
 
 
@@ -170,7 +171,7 @@ def test_patient_update_enforces_primary_mobile_rules(client: TestClient):
     assert unchanged_primary.status_code == 200
 
 
-def test_patient_search_matches_name_mobile_guardian_and_area(client: TestClient):
+def test_patient_search_matches_name_mobile_secondary_and_area(client: TestClient):
     tenant = create_tenant(client)
     create_patient(client, tenant["id"], full_name="Ravi Kumar", area="Adyar")
     create_patient(
@@ -188,7 +189,7 @@ def test_patient_search_matches_name_mobile_guardian_and_area(client: TestClient
         "/api/v1/patients?q=adyar",
         headers={"X-Tenant-ID": tenant["id"]},
     )
-    by_guardian = client.get(
+    by_legacy_guardian = client.get(
         "/api/v1/patients?q=suresh",
         headers={"X-Tenant-ID": tenant["id"]},
     )
@@ -203,8 +204,8 @@ def test_patient_search_matches_name_mobile_guardian_and_area(client: TestClient
 
     assert by_area.status_code == 200
     assert [row["full_name"] for row in by_area.json()] == ["Ravi Kumar"]
-    assert by_guardian.status_code == 200
-    assert [row["full_name"] for row in by_guardian.json()] == ["Meena Sharma"]
+    assert by_legacy_guardian.status_code == 200
+    assert by_legacy_guardian.json() == []
     assert by_alternate_mobile.status_code == 200
     assert [row["full_name"] for row in by_alternate_mobile.json()] == ["Meena Sharma"]
     assert by_address.status_code == 200
@@ -459,12 +460,13 @@ def test_patient_view_and_summary_write_audit_events(client: TestClient):
     assert "patient.summary.viewed" in actions
 
 
-def test_patient_contact_falls_back_primary_then_alternate_then_guardian():
+def test_patient_contact_uses_only_patient_owned_numbers_for_display():
     from types import SimpleNamespace
 
     from app.modules.patients.contact import (
         patient_contact_mobile,
         patient_contact_numbers,
+        patient_whatsapp_numbers,
     )
 
     def patient(mobile="", alternate="", guardian=""):
@@ -475,21 +477,25 @@ def test_patient_contact_falls_back_primary_then_alternate_then_guardian():
         )
 
     assert patient_contact_mobile(patient(mobile="111")) == "111"
-    # No primary: fall through to the alternate, then the guardian.
+    # No primary: fall through to the secondary/alternate patient number.
     assert patient_contact_mobile(patient(alternate="222")) == "222"
-    assert patient_contact_mobile(patient(guardian="333")) == "333"
     assert patient_contact_mobile(patient(alternate="222", guardian="333")) == "222"
+    # Guardian is legacy-only and must not become the display/contact number.
+    assert patient_contact_mobile(patient(guardian="333")) is None
     # Blank strings must not count as a usable number.
     assert patient_contact_mobile(patient(mobile="   ", alternate="222")) == "222"
     assert patient_contact_mobile(patient()) is None
     assert patient_contact_mobile(None) is None
 
-    # Priority order is preserved, and a number repeated across fields is
-    # listed once so the patient is never messaged twice.
-    assert patient_contact_numbers(
+    assert patient_contact_numbers(patient(mobile="111", alternate="222")) == [
+        "111",
+        "222",
+    ]
+    assert patient_contact_numbers(patient(mobile="111", alternate="111")) == ["111"]
+    # WhatsApp still has a legacy guardian fallback after primary/secondary.
+    assert patient_whatsapp_numbers(
         patient(mobile="111", alternate="222", guardian="333")
     ) == ["111", "222", "333"]
-    assert patient_contact_numbers(patient(mobile="111", alternate="111")) == ["111"]
 
 
 def test_whatsapp_destination_uses_one_number_per_patient():
@@ -514,7 +520,7 @@ def test_whatsapp_destination_uses_one_number_per_patient():
         )
         == "+919876500040"
     )
-    # Guardian is used when it is the only number on file.
+    # Guardian is legacy fallback when it is the only number on file.
     assert (
         patient_notification_destination(patient(guardian="9876500042"), "+91")
         == "+919876500042"

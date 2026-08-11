@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { ApiSession, uploadAssetUrl } from "@/lib/api";
+import { ApiSession, apiFetch, uploadAssetUrl } from "@/lib/api";
 import { clinicalRecordsWithUniqueItems, displayPatientGender, fmtDate, patientDisplayMobile, uniqueClinicalRecords } from "../helpers";
 import { MembershipEnrollForm } from "../forms/PatientForms";
 import { CompactMetric } from "./CompactMetric";
 import {
+  invoicePatientDueAmount,
   invoiceSource,
   isMembershipPlanInvoice,
 } from "@/features/billing/helpers";
@@ -15,6 +16,7 @@ import {
   Button,
   Card,
   Input,
+  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
@@ -37,6 +39,20 @@ import {
   patientValueTierFlags,
 } from "./PatientFlagBadges";
 
+const familyRelationshipOptions = [
+  { value: "father", label: "Father" },
+  { value: "mother", label: "Mother" },
+  { value: "son", label: "Son" },
+  { value: "daughter", label: "Daughter" },
+  { value: "spouse", label: "Spouse" },
+  { value: "brother", label: "Brother" },
+  { value: "sister", label: "Sister" },
+  { value: "grandfather", label: "Grandfather" },
+  { value: "grandmother", label: "Grandmother" },
+  { value: "guardian", label: "Guardian" },
+  { value: "other_family", label: "Other Family" },
+];
+
 export function PatientDetail({
   apiSession,
   patient,
@@ -49,6 +65,7 @@ export function PatientDetail({
   membershipPlans,
   membershipEnrollments,
   patientInvoices,
+  familyRelationships = [],
   patientIntelligence,
   patientIntelligenceError,
   branches,
@@ -56,6 +73,8 @@ export function PatientDetail({
   message,
   onMessageClose,
   onEnrollMembership,
+  onCreateFamilyRelationship,
+  onDeleteFamilyRelationship,
   onBack,
   onEdit,
   onUploadPhoto,
@@ -92,6 +111,49 @@ export function PatientDetail({
   ]);
   const [manualPrescriptionDate, setManualPrescriptionDate] = useState("");
   const [manualPrescriptionNotes, setManualPrescriptionNotes] = useState("");
+  const [familyPatientId, setFamilyPatientId] = useState("");
+  const [familyRelationship, setFamilyRelationship] = useState("father");
+  const [familyNotes, setFamilyNotes] = useState("");
+  const [familyPatientOptions, setFamilyPatientOptions] = useState<any[]>([]);
+  const [familyPatientSearchLoading, setFamilyPatientSearchLoading] =
+    useState(false);
+
+  async function searchFamilyPatients(query = "") {
+    if (!apiSession) return;
+    setFamilyPatientSearchLoading(true);
+    try {
+      const params = new URLSearchParams({
+        limit: "25",
+        active_only: "true",
+      });
+      if (query.trim()) params.set("q", query.trim());
+      const rows = await apiFetch(`/patients?${params.toString()}`, apiSession);
+      const linkedIds = new Set(
+        familyRelationships.map((row: any) => row.related_patient_id),
+      );
+      setFamilyPatientOptions(
+        (Array.isArray(rows) ? rows : [])
+          .filter((row: any) => row.id !== patient.id && !linkedIds.has(row.id))
+          .map((row: any) => ({
+            value: row.id,
+            label: row.full_name || row.patient_number || row.id,
+            sublabel: `${row.patient_number || row.id}${row.contact_mobile || row.mobile ? ` · ${row.contact_mobile || row.mobile}` : ""}`,
+          })),
+      );
+    } catch {
+      setFamilyPatientOptions([]);
+    } finally {
+      setFamilyPatientSearchLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    setFamilyPatientId("");
+    setFamilyRelationship("father");
+    setFamilyNotes("");
+    searchFamilyPatients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient.id, familyRelationships.length, apiSession?.tenantId]);
   useEffect(() => {
     setManualPrescriptionDate(
       String(patientIntelligence?.manual_expected_refill_at || "").slice(0, 10),
@@ -210,7 +272,7 @@ export function PatientDetail({
     0,
   );
   const totalDue = patientInvoices.reduce(
-    (sum: number, invoice: any) => sum + Number(invoice.balance_amount || 0),
+    (sum: number, invoice: any) => sum + invoicePatientDueAmount(invoice),
     0,
   );
 
@@ -342,7 +404,7 @@ export function PatientDetail({
       key: "balance_amount",
       header: "Due",
       cellClassName: "text-left",
-      render: (row) => money(row.balance_amount),
+      render: (row) => money(invoicePatientDueAmount(row)),
     },
   ];
 
@@ -422,8 +484,10 @@ export function PatientDetail({
           <Info title="Blood Group" value={patient.blood_group || "-"} />
           <Info title="Mobile" value={patient.mobile || "-"} />
           <Info title="Address" value={patient.address || "-"} />
-          <Info title="Guardian" value={patient.guardian_name || "-"} />
-          <Info title="Alternate Mobile" value={patient.alternate_mobile || "-"} />
+          <Info
+            title="Secondary Mobile"
+            value={patient.alternate_mobile || "-"}
+          />
           <Info
             title="WhatsApp Preference"
             value={String(patient.whatsapp_consent_status || "not_recorded")
@@ -530,6 +594,110 @@ export function PatientDetail({
             </div>
           </div>
         )}
+        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h5 className="text-sm font-black text-slate-950">
+                Family Relationships
+              </h5>
+              <p className="text-xs font-semibold text-slate-500">
+                Link existing patients so one membership benefit pool can be
+                used by any linked family member.
+              </p>
+            </div>
+            <Badge tone="slate" className="normal-badge">
+              {familyRelationships.length} linked
+            </Badge>
+          </div>
+
+          {canEditPatient && (
+            <div className="mt-3 grid gap-3 md:grid-cols-[1.2fr_180px_1fr_auto] md:items-end">
+              <FormField label="Family Patient">
+                <SearchableSelect
+                  value={familyPatientId}
+                  onChange={setFamilyPatientId}
+                  options={familyPatientOptions}
+                  loading={familyPatientSearchLoading}
+                  onSearchChange={searchFamilyPatients}
+                  placeholder="Search patient by name, ID, or mobile"
+                  searchPlaceholder="Search existing patients..."
+                  emptyText="No matching patient found."
+                />
+              </FormField>
+              <FormField label="Relationship">
+                <SearchableSelect
+                  value={familyRelationship}
+                  onChange={setFamilyRelationship}
+                  options={familyRelationshipOptions}
+                  searchable={false}
+                  placeholder="Select relationship"
+                />
+              </FormField>
+              <FormField label="Notes">
+                <Input
+                  value={familyNotes}
+                  onChange={(event: any) => setFamilyNotes(event.target.value)}
+                  placeholder="Optional note"
+                />
+              </FormField>
+              <Button
+                disabled={loading || !familyPatientId.trim()}
+                onClick={async () => {
+                  const ok = await onCreateFamilyRelationship?.({
+                    relatedPatientId: familyPatientId.trim(),
+                    relationship: familyRelationship.trim() || "family",
+                    notes: familyNotes.trim(),
+                  });
+                  if (ok) {
+                    setFamilyPatientId("");
+                    setFamilyRelationship("father");
+                    setFamilyNotes("");
+                    searchFamilyPatients();
+                  }
+                }}
+              >
+                Link Family
+              </Button>
+            </div>
+          )}
+
+          <div className="mt-3 space-y-2">
+            {familyRelationships.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-500">
+                No family relationships linked yet.
+              </p>
+            ) : (
+              familyRelationships.map((row: any) => (
+                <div
+                  key={row.id}
+                  className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="text-sm font-black text-slate-950">
+                      {row.related_patient_name || row.related_patient_id}
+                    </p>
+                    <p className="text-xs font-semibold text-slate-500">
+                      {row.related_patient_number || row.related_patient_id} ·{" "}
+                      {row.relationship || "family"}
+                    </p>
+                    {row.notes && (
+                      <p className="mt-1 text-xs text-slate-500">{row.notes}</p>
+                    )}
+                  </div>
+                  {canEditPatient && (
+                    <ActionButton
+                      tone="neutral"
+                      disabled={loading}
+                      onClick={() => onDeleteFamilyRelationship?.(row.id)}
+                    >
+                      Remove
+                    </ActionButton>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </Card>
 
       {patientIntelligence && (
@@ -917,14 +1085,13 @@ export function PatientDetail({
               )}
               {resolvedMembershipEnrollments.map((row: any) => {
                 const invoice = purchaseInvoiceFor(row);
-                const due = Number(
-                  invoice?.balance_amount ??
-                    Math.max(
+                const due = invoice
+                  ? invoicePatientDueAmount(invoice)
+                  : Math.max(
                       Number(row.plan?.price_amount || 0) -
                         Number(row.paid_amount || 0),
                       0,
-                    ),
-                );
+                    );
                 const clickable = Boolean(invoice?.id);
                 return (
                   <div

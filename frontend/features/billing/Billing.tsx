@@ -16,6 +16,7 @@ import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
 import {
   formatInvoiceDate,
+  invoicePatientDueAmount,
   invoiceSource,
   invoiceSourceOptions,
 } from "./helpers";
@@ -572,7 +573,7 @@ export function Billing({
       key: "due",
       header: "Due",
       width: "100px",
-      render: (invoice) => money(invoice.balance_amount),
+      render: (invoice) => money(invoicePatientDueAmount(invoice)),
     },
     {
       key: "actions",

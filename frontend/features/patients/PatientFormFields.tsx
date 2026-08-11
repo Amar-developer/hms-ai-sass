@@ -163,25 +163,7 @@ export function PatientFormFields({
           placeholder="Age"
         />
       </Field>
-      <Field label="Guardian Name">
-        <Input
-          name="guardianName"
-          defaultValue={patientField(patient, "guardian_name", "guardianName")}
-          placeholder="Enter guardian name"
-        />
-      </Field>
-      <Field label="Guardian Mobile">
-        <Input
-          name="guardianMobile"
-          defaultValue={patientField(
-            patient,
-            "guardian_mobile",
-            "guardianMobile",
-          )}
-          placeholder="Enter guardian mobile"
-        />
-      </Field>
-      <Field label="Alternate Phone Number">
+      <Field label="Secondary Mobile Number">
         <Input
           name="alternateMobile"
           inputMode="numeric"
@@ -191,7 +173,7 @@ export function PatientFormFields({
             "alternate_mobile",
             "alternateMobile",
           )}
-          placeholder="Enter shared family contact number"
+          placeholder="Enter secondary patient mobile number"
 
         />
       </Field>

@@ -9,8 +9,6 @@ const validPatient = {
   gender: "unknown",
   dateOfBirth: "",
   ageYears: "20",
-  guardianName: "",
-  guardianMobile: "",
   alternateMobile: "",
   email: "",
   area: "",
@@ -23,7 +21,7 @@ const validPatient = {
 };
 
 describe("patientSchema mobile validation", () => {
-  it("allows a patient without a primary mobile to use a shared alternate", () => {
+  it("allows a patient without a primary mobile to use a secondary mobile", () => {
     const result = patientSchema.safeParse({
       ...validPatient,
       mobile: "",
@@ -44,7 +42,7 @@ describe("patientSchema mobile validation", () => {
       expect.objectContaining({
         path: ["alternateMobile"],
         message:
-          "Alternate phone number must be different from the primary mobile number",
+          "Secondary mobile number must be different from the primary mobile number",
       }),
     );
   });

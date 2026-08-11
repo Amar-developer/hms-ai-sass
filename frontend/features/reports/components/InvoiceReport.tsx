@@ -10,6 +10,7 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { InvoiceProps } from "../types";
 import { DataTable } from "@/app/components/common/DataTable";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
+import { invoicePatientDueAmount } from "@/features/billing/helpers";
 
 
 
@@ -50,7 +51,7 @@ const InvoiceReport = ({
     (totals: any, row: any) => {
       totals.total += reportedInvoiceTotal(row);
       totals.paid += numberValue(row.paid_amount);
-      totals.due += numberValue(row.balance_amount);
+      totals.due += invoicePatientDueAmount(row);
       totals.adminDiscount += approvedDiscountUsage(row);
       totals.offerDiscount += offerDiscountUsage(row);
       totals.membershipBenefit += numberValue(
@@ -170,7 +171,7 @@ const InvoiceReport = ({
     key: "balance_amount",
     header: "Amount Due",
     width:'90px',
-    render: (row: any) => moneyOrDash(row.balance_amount),
+    render: (row: any) => moneyOrDash(invoicePatientDueAmount(row)),
   },
   {
     key: "approved_discount_amount",

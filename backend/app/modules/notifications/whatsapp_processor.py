@@ -765,7 +765,7 @@ def _delivery_recipient(session: Session, event: NotificationEvent) -> str:
     )
     if not recipient:
         raise NotificationCancelled(
-            "The patient does not have a valid primary or alternate mobile number."
+            "The patient does not have a valid primary, secondary, or legacy guardian mobile number."
         )
     return recipient
 

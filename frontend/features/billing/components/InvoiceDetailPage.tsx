@@ -4,6 +4,7 @@ import {
   formatPercentage,
   invoiceDiscountParts,
   invoiceHasAppliedMembershipBenefit,
+  invoicePatientDueAmount,
   invoiceItemPriceBreakdown,
   invoiceLinkedRecord,
   invoiceMembershipLabel,
@@ -187,7 +188,7 @@ export function InvoiceDetailPage({
         : offerBenefit?.reason || "No Offer & Discount Applied";
   const taxableAmount = numberValue(invoice.taxable_amount);
   const taxAmount = numberValue(invoice.tax_amount);
-  const balanceDue = numberValue(invoice.balance_amount);
+  const balanceDue = invoicePatientDueAmount(invoice);
   const invoiceDelivery = detail.invoice_delivery || {};
   const invoiceDeliveries = Array.isArray(detail.invoice_deliveries)
     ? detail.invoice_deliveries
@@ -973,9 +974,9 @@ export function InvoiceDetailPage({
                   />
                   <BillLine
                     label="Balance due"
-                    value={money(invoice.balance_amount)}
+                    value={money(balanceDue)}
                     strong
-                    danger={numberValue(invoice.balance_amount) > 0}
+                    danger={balanceDue > 0}
                   />
                 </div>
                 <div className="">

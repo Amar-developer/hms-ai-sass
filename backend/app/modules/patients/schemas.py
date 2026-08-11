@@ -113,8 +113,7 @@ class PatientRead(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def contact_mobile(self) -> str | None:
-        """Primary, else alternate, else guardian - the number the UI should
-        display and messaging will actually use."""
+        """Primary, else secondary/alternate patient-owned mobile."""
         return patient_contact_mobile(self)
 
 
@@ -132,6 +131,27 @@ class PatientAlertRead(PatientAlertCreate):
     patient_id: str
     is_active: bool
     created_at: datetime
+
+
+class PatientFamilyRelationshipCreate(BaseModel):
+    related_patient_id: str
+    relationship: str = Field(default="family", min_length=1, max_length=80)
+    notes: str | None = Field(default=None, max_length=300)
+
+
+class PatientFamilyRelationshipRead(BaseModel):
+    id: str
+    tenant_id: str
+    patient_id: str
+    related_patient_id: str
+    related_patient_name: str | None = None
+    related_patient_number: str | None = None
+    relationship: str
+    notes: str | None = None
+    is_active: bool
+    created_by_user_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class PatientIntelligenceFlagCompact(BaseModel):
@@ -168,7 +188,7 @@ class PatientSearchResult(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def contact_mobile(self) -> str | None:
-        """Primary, else alternate, else guardian."""
+        """Primary, else secondary/alternate patient-owned mobile."""
         return patient_contact_mobile(self)
 
     subscription_plan_name: str | None = None

@@ -661,12 +661,12 @@ def test_duplicate_patient_detection_blocks_exact_registration(client: TestClien
     assert (
         duplicate_create.json()["detail"]
         == "Mobile number is already used as the primary mobile number for "
-        "another patient. Use Alternate Phone Number for a shared family "
-        "contact."
+        "another patient. Use Secondary Mobile Number only when this is the "
+        "patient's own secondary contact number."
     )
 
 
-def test_patient_registration_requires_shared_family_number_as_alternate(
+def test_patient_registration_allows_secondary_number_without_family_link(
     client: TestClient,
 ):
     tenant = create_tenant(client)

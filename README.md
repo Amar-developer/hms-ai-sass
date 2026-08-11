@@ -40,14 +40,14 @@ npm run hooks:install
 
 The pre-push hook only runs backend lint, backend unit tests, frontend unit
 tests, typecheck, and build. It does **not** run backend E2E or frontend
-Playwright E2E — those only run in GitHub Actions unless you run them
-yourself, which is why an E2E-only bug can pass every local check and still
-fail in CI. To catch that locally before pushing, run everything CI runs
-with one command, from the repo root:
+Playwright E2E. Frontend Playwright E2E is manual-only; backend E2E still runs
+in CI. To catch the automatic CI gates locally before pushing, run this from
+the repo root:
 
 ```bash
-bash scripts/verify_all.sh          # everything, same order as CI
-bash scripts/verify_all.sh --fast   # skip both E2E suites, for quick iteration
+bash scripts/verify_all.sh                 # automatic CI gates
+bash scripts/verify_all.sh --fast          # skip backend E2E, for quick iteration
+bash scripts/verify_all.sh --frontend-e2e  # also run manual Playwright E2E
 ```
 
 One-time setup this needs (see [backend/README.md](./backend/README.md)):
@@ -89,8 +89,8 @@ npm run build
 ```
 
 `npm run quality` does **not** run E2E — use `bash scripts/verify_all.sh`
-above for that. The individual E2E commands it wraps, if you want to run
-one on its own:
+above for the automatic CI gates. The individual E2E commands, if you want to
+run one on its own:
 
 ```bash
 npm run test:e2e               # frontend, chromium only, @critical
@@ -101,10 +101,8 @@ bash ../backend/scripts/run_backend_e2e.sh   # backend, live API suite
 
 GitHub Actions runs the same main checks on pull requests and pushes to
 `main`, `master`, and `develop`. It also runs the PostgreSQL-backed live
-backend and frontend E2E suites. Pull requests run the critical Chromium
-browser suite. The nightly workflow runs the 21 extended Chromium tests plus
-the critical Firefox and WebKit tests. A manual workflow can run the complete
-suite in all three browsers.
+backend E2E suite. Frontend Playwright E2E is not automatic; run the manual
+`Frontend E2E Cross Browser` workflow when browser coverage is needed.
 
 ```bash
 bash backend/scripts/run_backend_e2e.sh

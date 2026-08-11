@@ -57,6 +57,13 @@ def _aware(value: datetime | None) -> datetime | None:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+def _utc_sort_datetime(value: datetime | None) -> datetime:
+    aware = _aware(value)
+    if aware is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    return aware.astimezone(timezone.utc)
+
+
 def _date_at_utc(value: date) -> datetime:
     return datetime.combine(value, time.min, tzinfo=timezone.utc)
 
@@ -844,7 +851,11 @@ def recommend_actions(
             action.updated_at = now
             session.add(action)
     session.flush()
-    return sorted(existing.values(), key=lambda row: row.created_at, reverse=True)
+    return sorted(
+        existing.values(),
+        key=lambda row: _utc_sort_datetime(row.created_at),
+        reverse=True,
+    )
 
 
 def queue_automatic_engagement_actions(

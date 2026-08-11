@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from enum import Enum
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from app.modules.tenants.models import new_id, now_utc
@@ -80,6 +81,28 @@ class PatientContact(SQLModel, table=True):
     relationship: str | None = Field(default=None, max_length=80)
     is_primary: bool = Field(default=False)
     created_at: datetime = Field(default_factory=now_utc)
+
+
+class PatientFamilyRelationship(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "patient_id",
+            "related_patient_id",
+            name="uq_patient_family_relationship_pair",
+        ),
+    )
+
+    id: str = Field(default_factory=lambda: new_id("pfam"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    patient_id: str = Field(index=True, foreign_key="patient.id")
+    related_patient_id: str = Field(index=True, foreign_key="patient.id")
+    relationship: str = Field(default="family", max_length=80)
+    notes: str | None = Field(default=None, max_length=300)
+    is_active: bool = Field(default=True, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+    updated_at: datetime = Field(default_factory=now_utc)
 
 
 class PatientAlert(SQLModel, table=True):

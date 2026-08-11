@@ -11,7 +11,9 @@ from app.modules.patient_intelligence.service import (
     refresh_patient_intelligence,
 )
 from app.modules.patient_intelligence.models import (
+    EngagementActionStatus,
     IntelligenceFlagCategory,
+    PatientEngagementAction,
     PatientIntelligencePatientSetting,
     PatientIntelligenceRule,
     PatientMetricSnapshot,
@@ -180,6 +182,69 @@ def test_refresh_is_idempotent_for_flags_and_actions(test_engine):
         assert {action.id for action in first.engagement_actions} == {
             action.id for action in second.engagement_actions
         }
+
+
+def test_refresh_sorts_engagement_actions_with_mixed_datetime_awareness(test_engine):
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        rule = _rule(
+            session,
+            tenant.id,
+            rule_key="mixed_datetime_followup",
+            name="Mixed datetime follow-up",
+            flag_key="MIXED_DATETIME_FOLLOWUP",
+            metric_key="days_since_activity",
+            operator="gte",
+            threshold=Decimal("0"),
+            action_enabled=True,
+            action_key="mixed_datetime_action",
+            action_channel="whatsapp",
+            action_template_key="patient_reengagement",
+            action_requires_approval=True,
+        )
+        session.add(
+            PatientEngagementAction(
+                tenant_id=tenant.id,
+                patient_id=patient.id,
+                source_flag_id=None,
+                action_key="legacy_naive_action",
+                channel="whatsapp",
+                template_key="patient_reengagement",
+                status=EngagementActionStatus.RECOMMENDED,
+                requires_approval=True,
+                personalization_json="{}",
+                reason="Legacy row with naive timestamp",
+                dedupe_key=f"legacy-naive-{patient.id}",
+                created_at=datetime(2026, 8, 11, 9, 0, 0),
+            )
+        )
+        session.add(
+            PatientEngagementAction(
+                tenant_id=tenant.id,
+                patient_id=patient.id,
+                source_flag_id=None,
+                action_key="aware_action",
+                channel="whatsapp",
+                template_key="patient_reengagement",
+                status=EngagementActionStatus.RECOMMENDED,
+                requires_approval=True,
+                personalization_json="{}",
+                reason="Aware timestamp row",
+                dedupe_key=f"aware-{patient.id}",
+                created_at=datetime(2026, 8, 11, 10, 0, 0, tzinfo=timezone.utc),
+            )
+        )
+        session.commit()
+
+        result = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        action_keys = [action.action_key for action in result.engagement_actions]
+        assert "legacy_naive_action" in action_keys
+        assert "aware_action" in action_keys
+        assert "mixed_datetime_action" in action_keys
+        assert rule.id
 
 
 def test_highest_configured_value_tier_wins(test_engine):

@@ -75,6 +75,14 @@ export function numberValue(value: any) {
   return Number(value || 0);
 }
 
+export function invoicePatientDueAmount(invoice: any) {
+  const status = String(invoice?.status || "").toLowerCase();
+  if (["cancelled", "refunded", "partially_refunded"].includes(status)) {
+    return 0;
+  }
+  return Math.max(numberValue(invoice?.balance_amount), 0);
+}
+
 export function invoiceDiscountParts(invoice: any) {
   const discount = numberValue(invoice.discount_amount);
   const membership = numberValue(invoice.membership_discount_amount);
