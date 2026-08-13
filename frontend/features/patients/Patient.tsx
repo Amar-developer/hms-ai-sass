@@ -23,6 +23,13 @@ import {
   type PatientListFilters,
 } from "./api";
 import { getPatientColumns } from "./Column";
+import {
+  fetchPatientIntelligence,
+  sendPatientEngagementAction,
+  updateManualLabSchedule,
+  updateManualRefillSchedule,
+} from "@/features/patient_intelligence/api/patientIntelligence.api";
+import type { AppNavigationTarget } from "@/lib/navigationTarget";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -30,7 +37,7 @@ type PatientProps = {
   enabledModules?: string[];
   isInitialLoading?: boolean;
   loadLiveData?: (session: ApiSession) => void | Promise<unknown>;
-  setActive?: (page: string) => void;
+  setActive?: (page: AppNavigationTarget) => void;
   setPatients?: (updater: (prev: any[]) => any[]) => void;
 };
 
@@ -484,7 +491,7 @@ export function Patient({
             <button
               type="button"
               onClick={() => open("create")}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
+              className="primary-action shrink-0 gap-2 px-5 py-3 text-xs shadow-sm"
             >
               <Plus size={16} />
               Create Patient

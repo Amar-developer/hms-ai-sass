@@ -134,6 +134,13 @@ class ConsultationTemplateCreate(BaseModel):
     created_by_user_id: UserId | None = None
 
 
+class ConsultationTemplateUpdate(BaseModel):
+    department_id: DepartmentId | None = None
+    name: str | None = Field(default=None, min_length=2, max_length=180)
+    template_type: str | None = Field(default=None, max_length=80)
+    content: dict | None = None
+
+
 class ConsultationTemplateRead(BaseModel):
     id: str
     tenant_id: str

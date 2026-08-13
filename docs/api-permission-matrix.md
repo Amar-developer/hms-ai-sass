@@ -268,6 +268,8 @@ Appointment APIs enforce the `appointments` module entitlement. Queue APIs enfor
 | `GET` | `/api/v1/consultations/clinical-templates` | `consultations.read` |
 | `GET` | `/api/v1/consultations` | `consultations.read` |
 | `POST` | `/api/v1/consultations/clinical-templates` | `consultations.write` |
+| `PATCH` | `/api/v1/consultations/clinical-templates/{template_id}` | `consultations.write` or `consultations.edit` |
+| `DELETE` | `/api/v1/consultations/clinical-templates/{template_id}` | `consultations.write` or `consultations.edit`; soft deactivates the template |
 | `GET` | `/api/v1/consultations/by-department/{department_id}/clinical-templates` | `consultations.read` |
 | `GET` | `/api/v1/consultations/{consultation_id}` | `consultations.read` |
 | `PATCH` | `/api/v1/consultations/{consultation_id}` | `consultations.write` |

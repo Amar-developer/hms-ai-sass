@@ -66,7 +66,7 @@ export function ListCard({
             <button
               type="button"
               onClick={onCreate}
-              className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-xs bg-slate-900 font-bold text-white"
+              className="primary-action gap-2 px-4 py-3 text-xs"
             >
               <Plus size={16} />
               {createLabel}

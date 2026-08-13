@@ -27,9 +27,11 @@ import { activeTenantOptions } from "@/utils/helper";
 import { useNavigationSkeleton } from "@/app/components/common/loader/useNavigationSkeleton";
 import { ModuleSkeleton } from "@/app/components/common/loader/ModuleSkeleton";
 import { BreadcrumbBarSkeleton } from "@/app/components/common/loader/BreadcrumbBarSkeleton";
+import type { AppNavigationTarget } from "@/lib/navigationTarget";
+import { opdAppointmentPath } from "@/features/opd/routing";
 
 type ShellChromeValue = {
-  navigatePage: (target: string | { id: string; section?: string }) => void;
+  navigatePage: (target: AppNavigationTarget) => void;
   activePage: string;
   enabled: (id: string) => boolean;
   nav: any;
@@ -123,11 +125,16 @@ export function AppShell({
   }, [visibleNav.map(([id]: any) => id).join(","), canAccessErrorLogs]);
   const routeSegment =
     pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
+  const legacyOPDRoute = ["appointments", "consultation"].includes(
+    routeSegment,
+  );
+  const effectiveRouteSegment =
+    routeSegment === "doctor" ? "queue" : legacyOPDRoute ? "opd" : routeSegment;
   const resolvedActivePage =
-    routeSegment === "error_logs" && canAccessErrorLogs
-      ? routeSegment
-      : visibleNav.some(([id]: any) => id === routeSegment)
-        ? routeSegment
+    effectiveRouteSegment === "error_logs" && canAccessErrorLogs
+      ? effectiveRouteSegment
+      : visibleNav.some(([id]: any) => id === effectiveRouteSegment)
+        ? effectiveRouteSegment
         : canAccessPlatformWorkspace
           ? "superadmin"
           : visibleNav[0]?.[0] || "dashboard";
@@ -349,9 +356,22 @@ export function AppShell({
     "ip",
     "physiotherapy",
   ].includes(activePage);
-  function navigatePage(target: string | { id: string; section?: string }) {
-    const id = typeof target === "string" ? target : target.id;
+  function navigatePage(target: AppNavigationTarget) {
+    const requestedId = typeof target === "string" ? target : target.id;
     const section = typeof target === "string" ? undefined : target.section;
+    const appointmentId =
+      typeof target === "string" ? undefined : target.appointmentId;
+
+    const legacyOPDPath: Record<string, string> = {
+      appointments: "/opd/appointments",
+      consultation: "/opd",
+    };
+    const id =
+      requestedId === "doctor"
+        ? "queue"
+        : legacyOPDPath[requestedId]
+          ? "opd"
+          : requestedId;
 
     if (!id) return;
 
@@ -376,29 +396,44 @@ export function AppShell({
       }
     }
 
-    if (id === activePage) return;
+    const destinationPath =
+      id === "opd" && appointmentId
+        ? opdAppointmentPath(appointmentId)
+        : requestedId === "doctor"
+          ? "/queue"
+          : legacyOPDPath[requestedId] ||
+          (id === "admin"
+            ? `/admin/${tenantAdminSection}`
+            : id === "reports"
+              ? `/reports/${reportsSection}`
+              : id === "superadmin"
+                ? superAdminPath(superAdminSection)
+                : `/${id}`);
+
+    if (id === activePage && pathname === destinationPath) return;
 
     setPendingPage(id);
     setActive(id);
-    router.push(
-      id === "admin"
-        ? `/admin/${tenantAdminSection}`
-        : id === "reports"
-          ? `/reports/${reportsSection}`
-          : id === "superadmin"
-            ? superAdminPath(superAdminSection)
-            : `/${id}`,
-    );
+    router.push(destinationPath);
   }
 
   // Permission/entitlement gating can make the pathname's module unavailable
   // (e.g. after a role/tenant switch) — redirect to the computed fallback
   // rather than silently rendering a different module under a stale URL.
   useEffect(() => {
-    if (resolvedActivePage !== routeSegment) {
+    if (routeSegment === "doctor" && resolvedActivePage === "queue") {
+      router.replace("/queue");
+    } else if (legacyOPDRoute && resolvedActivePage === "opd") {
+      const legacyDestination = pathname.startsWith("/appointments/new")
+        ? "/opd/new"
+        : routeSegment === "appointments"
+          ? "/opd/appointments"
+          : "/opd";
+      router.replace(legacyDestination);
+    } else if (resolvedActivePage !== routeSegment) {
       router.replace(`/${resolvedActivePage}`);
     }
-  }, [resolvedActivePage, routeSegment, router]);
+  }, [legacyOPDRoute, pathname, resolvedActivePage, routeSegment, router]);
 
   useEffect(() => {
     setPendingPage("");
@@ -480,7 +515,7 @@ export function AppShell({
       {!isDesktop && (
         <div
           className={`
-    fixed left-0 top-0 z-40 h-screen bg-white border-r border-slate-200
+    fixed left-0 top-0 z-40 h-screen border-r border-slate-200 bg-white
     transition-all duration-300
 
     md:w-14
@@ -525,7 +560,7 @@ export function AppShell({
       )}
       <div className="h-full lg:flex">
         <aside
-          className={`scrollbar-hidden hidden h-screen md:w-64 lg:w-64  shrink-0 overflow-y-auto overflow-x-hidden border-r border-slate-200 bg-white p-2 px-0 lg:block`}
+          className={`scrollbar-hidden hidden h-screen shrink-0 overflow-y-auto overflow-x-hidden border-r border-slate-200 bg-white p-2 px-0 md:w-64 lg:block lg:w-64`}
         >
           {/* Desktop view */}
           {isDesktop && (
@@ -565,7 +600,7 @@ export function AppShell({
               />
             </div>
           )}
-          <div className="mt-4 rounded-lg bg-slate-50 p-4 text-xs leading-5 text-slate-500">
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             <b className="text-slate-900">
               {canAccessPlatformWorkspace ? "Platform Access" : clinic.type}
             </b>
@@ -633,16 +668,16 @@ export function AppShell({
           {showNavigationSkeleton ? (
             <BreadcrumbBarSkeleton />
           ) : (
-            <div className="bg-white px-4 py-2 lg:px-6">
-            <div className="flex min-w-0 flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
+            <div className="border-b border-slate-100 bg-white px-4 py-1 lg:px-5">
+            <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-2">
                 {/* Back / Forward group */}
-                <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
                   <button
                     type="button"
                     onClick={() => router.back()}
                     title="Previous page"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
                   >
                     <ArrowLeft size={14} />
                   </button>
@@ -650,14 +685,14 @@ export function AppShell({
                     type="button"
                     onClick={() => router.forward()}
                     title="Forward"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
                   >
                     <ArrowRight size={14} />
                   </button>
                 </div>
 
                 {/* Divider */}
-                <span className="h-5 w-px bg-slate-200" />
+                <span className="h-4 w-px bg-slate-200" />
 
                 {/* Breadcrumb */}
                 <div className="flex min-w-0 items-center gap-2">
@@ -667,7 +702,7 @@ export function AppShell({
                     disabled={
                       activePage === "dashboard" || !enabled("dashboard")
                     }
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
                   >
                     <Home size={14} /> Dashboard
                   </button>
@@ -675,7 +710,7 @@ export function AppShell({
                   {activePage !== "dashboard" && (
                     <>
                       <span className="text-slate-300">/</span>
-                      <span className="truncate text-xs font-bold text-slate-900">
+                      <span className="truncate text-[11px] font-bold text-slate-900">
                         {activeNavLabel}
                       </span>
                     </>
@@ -684,7 +719,7 @@ export function AppShell({
                   {activeSectionLabel && (
                     <>
                       <span className="hidden text-slate-300 sm:inline">/</span>
-                      <span className="hidden truncate text-xs text-slate-500 sm:inline">
+                      <span className="hidden truncate text-[11px] text-slate-500 sm:inline">
                         {activeSectionLabel}
                       </span>
                     </>
@@ -770,7 +805,7 @@ export function BrandBlock({
   return (
     <div className="flex items-center gap-3">
       <div
-        className={`${compact ? "rounded-xl p-2" : "rounded-2xl p-3"} bg-slate-900 text-white`}
+        className={`${compact ? "rounded-xl p-2" : "rounded-2xl p-3"} bg-brand text-brand-fg`}
       >
         <HeartPulse size={compact ? 20 : 24} />
       </div>

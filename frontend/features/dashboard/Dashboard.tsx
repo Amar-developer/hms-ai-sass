@@ -189,7 +189,7 @@ export function Dashboard({
       value: todayAppointments.length,
       detail: `${completedToday.length} completed today`,
       icon: CalendarDays,
-      target: "appointments",
+      target: "opd",
     },
     {
       title: "Patients Created Today",

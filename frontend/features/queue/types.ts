@@ -1,4 +1,5 @@
 import { ApiSession } from "@/lib/api";
+import type { AppNavigationTarget } from "@/lib/navigationTarget";
 
 export type TokenQueueProps = {
   apiSession: ApiSession | null;
@@ -7,7 +8,7 @@ export type TokenQueueProps = {
   patients: any[];
   departmentId: string;
   doctorScope?: any;
-  setActive?: (page: string) => void;
+  setActive?: (page: AppNavigationTarget) => void;
 };
 
 export type QueueAction = "call" | "skip" | "requeue" | "cancel";

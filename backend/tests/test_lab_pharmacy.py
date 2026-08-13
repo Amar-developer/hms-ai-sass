@@ -277,6 +277,25 @@ def test_local_available_medicines_applies_requested_page(monkeypatch):
     assert captured["offset"] == 20
 
 
+def test_external_medicine_catalog_is_disabled_without_url(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.modules.pharmacy.services import catalog as pharmacy_catalog
+
+    monkeypatch.setattr(
+        pharmacy_catalog,
+        "get_settings",
+        lambda: SimpleNamespace(medicine_graphql_url=""),
+    )
+
+    assert (
+        pharmacy_catalog.external_medicine_items_enabled(
+            object(), "tenant_local_catalog"
+        )
+        is False
+    )
+
+
 def setup_lab_pharmacy_tenant(client):
     tenant = client.post(
         "/api/v1/tenants", json={"name": "Diagnostics Pharmacy Clinic"}

@@ -20,8 +20,6 @@ type UseConsultationActionsParams = {
   labReferralSummary: () => string;
   medicineRows: string;
   prescription: string;
-  scanNeeded: boolean;
-  scanTests: string;
   remarks: string;
   treatmentType: string;
   notes: string;
@@ -69,8 +67,6 @@ export function useConsultationActions({
   labReferralSummary,
   medicineRows,
   prescription,
-  scanNeeded,
-  scanTests,
   remarks,
   treatmentType,
   notes,
@@ -245,9 +241,6 @@ export function useConsultationActions({
       labNeeded,
       labTests,
       labAmount: labNeeded ? labTests.split(",").length * 350 : 0,
-      scanNeeded,
-      scanTests,
-      scanAmount: scanNeeded ? scanTests.split(",").length * 900 : 0,
       referDoctor,
       referDoctorId: referralDoctor?.id,
       referDoctorName: referralDoctor?.name,
@@ -297,7 +290,6 @@ export function useConsultationActions({
       await consulationApi.updateConsultation(apiSession as ApiSession, consultationId, {
         prescription_text: medicineRows || prescription,
         lab_referral_text: labText || null,
-        scan_referral_text: scanNeeded ? scanTests : null,
         follow_up_advice: remarks,
         patient_remarks: remarks,
         ...consultationDraftPayload(),
@@ -329,7 +321,6 @@ export function useConsultationActions({
       !hasComplaints ? "complaints" : "",
       !hasDiagnosis ? "diagnosis" : "",
       !notes.trim() ? "doctor notes" : "",
-      scanNeeded && !scanTests.trim() ? "scan / diagnostic" : "",
       referDoctor && !referDoctorId ? "recommended doctor" : "",
     ].filter(Boolean);
     if (missingFields.length > 0) {
@@ -350,7 +341,6 @@ export function useConsultationActions({
       await consulationApi.updateConsultation(apiSession as ApiSession, consultationId, {
         prescription_text: medicineRows || prescription,
         lab_referral_text: labText || null,
-        scan_referral_text: scanNeeded ? scanTests : null,
         follow_up_advice: remarks,
         patient_remarks: remarks,
         ...draftPayload,

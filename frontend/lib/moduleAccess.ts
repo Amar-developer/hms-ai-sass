@@ -10,7 +10,7 @@ export function canOpenModule(
       ? "patient_subscriptions"
       : id === "billing"
         ? "billing_basic"
-        : id === "doctor" || id === "consultation"
+        : id === "opd"
           ? "consultations"
           : id;
   const moduleEnabled =
@@ -19,8 +19,9 @@ export function canOpenModule(
     (id === "billing" &&
       (isModuleEnabled(clinic, "billing_advanced") ||
         isModuleEnabled(clinic, "billing"))) ||
-    ((id === "doctor" || id === "consultation") &&
-      isModuleEnabled(clinic, "consultation"));
+    (id === "opd" &&
+      (isModuleEnabled(clinic, "consultation") ||
+        isModuleEnabled(clinic, "appointments")));
   return (
     roleAllowedModules.includes(id) &&
     (id === "dashboard" ||

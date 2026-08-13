@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  ActionButton,
   Badge,
   Card,
   Input,
@@ -12,22 +13,29 @@ import { FormField } from "@/app/components/FormElements";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
-import { invoiceSourceOptions } from "./helpers";
+import {
+  formatInvoiceDate,
+  invoicePatientDueAmount,
+  invoiceSource,
+  invoiceSourceOptions,
+} from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
-import { money } from "@/utils/helper";
-import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
+import { capitalizeFirst, money } from "@/utils/helper";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 import { status_options } from "./contants";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { useBillingActions, useBillingReports, usePaymentMethods } from "./api";
-import {
-  fetchInvoicePage,
-  fetchPendingConsultationInvoicePage,
-} from "./api/billing.api";
+import { fetchInvoicePage } from "./api/billing.api";
+import { Column } from "@/utils/types";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getConsultationPendingColumns, getInvoiceColumns } from "./Column";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 export function Billing({
   apiSession,
@@ -65,14 +73,6 @@ export function Billing({
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [invoiceListLoading, setInvoiceListLoading] = useState(false);
   const invoiceLoadSequence = useRef(0);
-  const [pendingConsultationRows, setPendingConsultationRows] = useState<any[]>(
-    [],
-  );
-  const [pendingConsultationTotal, setPendingConsultationTotal] = useState(0);
-  const [pendingConsultationPage, setPendingConsultationPage] = useState(1);
-  const [pendingConsultationLoading, setPendingConsultationLoading] =
-    useState(false);
-  const pendingConsultationLoadSequence = useRef(0);
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
     Boolean(
@@ -80,11 +80,6 @@ export function Billing({
       userPermissions.includes("*") ||
       keys.some((key) => userPermissions.includes(key)),
     );
-  const canCreateInvoices = hasPermission(
-    "billing.manage",
-    "billing.create",
-    "invoices.create",
-  );
   const canViewRevenueSummary = hasPermission(
     "billing.manage",
     "reports.revenue.read",
@@ -139,53 +134,6 @@ export function Billing({
     }
   }
 
-  async function loadPendingConsultationPage(
-    nextPage = pendingConsultationPage,
-  ) {
-    if (!apiSession) return;
-    const requestSequence = ++pendingConsultationLoadSequence.current;
-    const params = new URLSearchParams({
-      limit: String(pageSize),
-      offset: String((nextPage - 1) * pageSize),
-    });
-    if (branchId) params.set("branch_id", branchId);
-    setPendingConsultationLoading(true);
-    try {
-      const result = await fetchPendingConsultationInvoicePage(
-        apiSession,
-        params,
-      );
-      if (requestSequence !== pendingConsultationLoadSequence.current) return;
-      const rows = Array.isArray(result?.items) ? result.items : [];
-      setPendingConsultationRows(
-        rows.map((row: any) => ({
-          id: row.appointment_id,
-          consultationId: row.consultation_id,
-          branchId: row.branch_id,
-          patientId: row.patient_id,
-          patient: row.patient_name,
-          doctorId: row.practitioner_id,
-          doctor: row.practitioner_name || "Unassigned",
-          token: row.token_number,
-          appointmentDate: row.appointment_date,
-          appointmentTime: row.appointment_time,
-          consultationSignedAt: row.consultation_signed_at,
-          consultationCreatedAt: row.consultation_created_at,
-        })),
-      );
-      setPendingConsultationTotal(Number(result?.total || 0));
-    } catch (err: any) {
-      if (requestSequence !== pendingConsultationLoadSequence.current) return;
-      setMessage(
-        err.message || "Could not load pending consultation invoices.",
-      );
-    } finally {
-      if (requestSequence === pendingConsultationLoadSequence.current) {
-        setPendingConsultationLoading(false);
-      }
-    }
-  }
-
   const { invoicePaymentOptions, defaultPaymentMethod } =
     usePaymentMethods(apiSession);
 
@@ -214,7 +162,6 @@ export function Billing({
     setDetail,
     supplierOptions,
     detailLoading,
-    generateInvoice,
     sendInvoice,
     regenerateInvoiceDocument: regenerateInvoiceDocumentAction,
     openInvoiceDetail,
@@ -231,10 +178,7 @@ export function Billing({
     submitRequestAction: runRequestAction,
     finalizeSettlement,
   } = useBillingActions(apiSession, {
-    loadLiveData,
     refreshInvoices: () => loadInvoicePage(page),
-    refreshPendingConsultations: () =>
-      loadPendingConsultationPage(pendingConsultationPage),
     loadReports,
     setSettlement,
     branchId,
@@ -245,15 +189,6 @@ export function Billing({
   const safePage = Math.min(page, totalPages);
   const invoicePageRows = invoices;
 
-  const signedReady = pendingConsultationRows;
-  const pendingConsultationTotalPages = Math.max(
-    1,
-    Math.ceil(pendingConsultationTotal / pageSize),
-  );
-  const safePendingConsultationPage = Math.min(
-    pendingConsultationPage,
-    pendingConsultationTotalPages,
-  );
   const payableSettlement = Number(
     settlement?.payable_settlement_amount ??
       settlement?.doctor_share_paid_basis ??
@@ -282,23 +217,6 @@ export function Billing({
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
-  useEffect(() => {
-    setPendingConsultationPage(1);
-  }, [apiSession?.tenantId, branchId]);
-  useEffect(() => {
-    if (pendingConsultationPage !== safePendingConsultationPage) {
-      setPendingConsultationPage(safePendingConsultationPage);
-    }
-  }, [pendingConsultationPage, safePendingConsultationPage]);
-  useEffect(() => {
-    if (!apiSession || !canCreateInvoices) return;
-    void loadPendingConsultationPage(pendingConsultationPage);
-  }, [
-    apiSession?.tenantId,
-    branchId,
-    canCreateInvoices,
-    pendingConsultationPage,
-  ]);
   useEffect(() => {
     if (!apiSession) return;
     const timer = window.setTimeout(() => {
@@ -346,7 +264,6 @@ export function Billing({
       await Promise.all([
         loadLiveData(apiSession),
         loadInvoicePage(page),
-        loadPendingConsultationPage(pendingConsultationPage),
         loadReports(true),
       ]);
       setMessage("Invoices refreshed.");
@@ -440,18 +357,147 @@ export function Billing({
     await collectSplitPaymentAction(invoice, rows, defaultPaymentMethod);
   }
 
-  const invoiceColumns = getInvoiceColumns({
-    safePage,
-    patientMap,
-    canCopyIds,
-    openInvoiceDetail,
-    detailLoading,
-  });
+  const invoiceColumns: Column<any>[] = [
+    {
+      key: "index",
+      header: "S.No",
+      width: "60px",
+      render: (_, index) => (safePage - 1) * pageSize + index + 1,
+      cellClassName: "font-semibold text-slate-500 text-center",
+    },
+    {
+      key: "invoice_number",
+      header: "Invoice",
+      width: "200px",
+      render: (invoice) => (
+        <>
+          <div className="flex items-center gap-2">
+            <b>{invoice.invoice_number}</b>
+            <CopyIdButton
+              value={invoice.id}
+              label="Invoice ID"
+              allowed={canCopyIds}
+            />
+          </div>
+          <p className="mt-1 text-sm font-semibold text-slate-400">
+            {formatInvoiceDate(invoice)}
+          </p>
+        </>
+      ),
+    },
+    {
+      key: "invoice_date",
+      className: "text-center",
+      header: "Date",
+      width: "100px",
+      render: (invoice) => (
+        <>
+          <p className="text-sm ">{formatInvoiceDate(invoice)}</p>
+        </>
+      ),
+    },
+    {
+      key: "source",
+      header: "Source",
+      width: "160px",
+      className: "text-center",
+      render: (invoice) => {
+        const source = invoiceSource(invoice);
 
-  const consulationPendingColumns = getConsultationPendingColumns({
-    busy,
-    generateInvoice,
-  });
+        return (
+          <Badge
+            tone={source.tone as any}
+            className="table-status text-xs text-center "
+          >
+            {source.label}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "patient",
+      header: "Patient",
+      width: "120px",
+      render: (invoice) => {
+        const p: any = patientMap.get(invoice.patient_id);
+
+        return (
+          <div>
+            {capitalizeFirst(invoice.patient_name || p?.name || p?.full_name || "Patient")}
+            <PatientFlagBadges patient={p} className="mt-1" />
+          </div>
+        );
+      },
+      cellClassName: "font-medium",
+    },
+    {
+      key: "status",
+      header: "Status",
+      className: "text-center",
+      width: "120px",
+      render: (invoice) => (
+        <Badge
+          tone={
+            invoice.status === "paid"
+              ? "green"
+              : invoice.status === "partially_refunded" ||
+                  invoice.status === "refunded"
+                ? "blue"
+                : invoice.status === "partially_paid"
+                  ? "amber"
+                  : invoice.status == "cancelled"
+                    ? "red"
+                    : "slate"
+          }
+          className="table-status text-xs text-center"
+        >
+          {capitalizeFirst(
+            invoice.status === "partially_paid"
+              ? "Partially Paid"
+              : invoice.status === "partially_refunded"
+                ? "Partially Refunded"
+                : invoice.status,
+          )}
+        </Badge>
+      ),
+    },
+    {
+      key: "total_amount",
+      header: "Total",
+      width: "100px",
+      render: (invoice) => money(invoice.total_amount),
+      cellClassName: "font-semibold tabular-nums",
+    },
+    {
+      key: "paid_amount",
+      header: "Paid",
+      width: "100px",
+      render: (invoice) => money(invoice.paid_amount),
+      cellClassName: "tabular-nums",
+    },
+    {
+      key: "due",
+      header: "Due",
+      width: "100px",
+      render: (invoice) => money(invoicePatientDueAmount(invoice)),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      width: "120px",
+      disableRowClick: true,
+      render: (invoice) => (
+        <ActionButton
+          onClick={() => openInvoiceDetail(invoice)}
+          disabled={detailLoading === invoice.id}
+        >
+          <ButtonLoader loading={detailLoading === invoice.id}>
+            {detailLoading === invoice.id ? "Loading..." : "View"}
+          </ButtonLoader>
+        </ActionButton>
+      ),
+    },
+  ];
 
   if (!apiSession) {
     return (
@@ -744,37 +790,6 @@ export function Billing({
             </Card>
           )}
         </div>
-      )}
-
-      {canCreateInvoices && (
-        <Card className="mt-3">
-          <h3 className="card-title font-bold">
-            Pending Consultation Invoices
-          </h3>
-          <p className="card-desc text-slate-500">
-            Reception can generate the consultation-fee invoice after the doctor
-            signs the consultation. Lab, pharmacy, IP, and physiotherapy each
-            have their own invoices created by those modules.
-          </p>
-          <StatusToast message={message} onClose={() => setMessage("")} />
-          <div className="mt-4">
-            <DataTable
-              columns={consulationPendingColumns}
-              data={signedReady}
-              emptyMessage={
-                pendingConsultationLoading
-                  ? "Loading pending consultation invoices..."
-                  : "All completed consultations already have invoices."
-              }
-            />
-            <Pagination
-              page={safePendingConsultationPage}
-              totalPages={pendingConsultationTotalPages}
-              total={pendingConsultationTotal}
-              onPage={setPendingConsultationPage}
-            />
-          </div>
-        </Card>
       )}
 
       <Card className="mt-3">

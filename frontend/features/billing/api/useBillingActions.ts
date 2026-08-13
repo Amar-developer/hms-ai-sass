@@ -15,7 +15,6 @@ import {
   removeInvoiceOffer,
   createInvoiceAdjustmentRequest,
   createInvoiceCreditNote,
-  createInvoiceFromConsultation,
   createInvoicePayment,
   executeInvoiceAdjustmentRequest,
   fetchInvoiceDelivery,
@@ -37,9 +36,7 @@ const MAX_INVOICE_PDF_UPLOAD_BYTES = 5 * 1024 * 1024;
 export function useBillingActions(
   session: ApiSession | null | undefined,
   options: {
-    loadLiveData: (session: ApiSession) => Promise<void>;
     refreshInvoices: () => Promise<void>;
-    refreshPendingConsultations: () => Promise<void>;
     loadReports: () => Promise<void>;
     setSettlement: (value: any) => void;
     branchId?: string;
@@ -47,9 +44,7 @@ export function useBillingActions(
 ) {
   const queryClient = useQueryClient();
   const {
-    loadLiveData,
     refreshInvoices,
-    refreshPendingConsultations,
     loadReports,
     setSettlement,
     branchId,
@@ -139,32 +134,6 @@ export function useBillingActions(
       setMessage(err.message || "Could not load invoice details.");
     } finally {
       setDetailLoading("");
-    }
-  }
-
-  async function generateInvoice(a: any) {
-    if (!session) return;
-    setBusy(a.id);
-    setMessage("");
-    try {
-      const row = await createInvoiceFromConsultation(session, {
-        consultation_id: a.consultationId,
-        created_by_user_id: session.user?.id,
-      });
-      await Promise.all([
-        loadLiveData(session),
-        refreshInvoices(),
-        refreshPendingConsultations(),
-        loadReports(),
-      ]);
-      setDetail(row);
-      setMessage(
-        `Invoice ${row.invoice?.invoice_number || ""} generated for ${a.patient}.`,
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not generate invoice.");
-    } finally {
-      setBusy("");
     }
   }
 
@@ -636,7 +605,6 @@ export function useBillingActions(
     setDetail,
     supplierOptions,
     detailLoading,
-    generateInvoice,
     sendInvoice,
     regenerateInvoiceDocument,
     openInvoiceDetail,

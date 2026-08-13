@@ -343,7 +343,7 @@ export function Doctors({
             <button
               type="button"
               onClick={() => open("create")}
-              className="inline-flex items-center justify-center gap-2 rounded-lg lg:w-full bg-slate-900 px-4 py-3 text-xs  font-bold text-white"
+              className="primary-action gap-2 px-4 py-3 text-xs lg:w-full"
             >
               <Plus size={16} />
               Create Doctor

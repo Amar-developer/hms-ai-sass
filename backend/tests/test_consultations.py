@@ -119,6 +119,14 @@ def test_structured_consultation_rows_templates_and_signed_immutability(
             "content": {"complaints": ["Fever"], "diagnoses": ["Viral fever"]},
         },
     )
+    updated_template = client.patch(
+        f"/api/v1/consultations/clinical-templates/{template.json()['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "name": "Updated Fever Template",
+            "content": {"complaints": ["High fever"], "diagnoses": ["Viral fever"]},
+        },
+    )
     detail = client.get(
         f"/api/v1/consultations/{consultation.json()['id']}",
         headers={"X-Tenant-ID": tenant_id},
@@ -140,8 +148,24 @@ def test_structured_consultation_rows_templates_and_signed_immutability(
     assert detail.json()["medicines"][0]["medicine_name"] == "Paracetamol"
     assert template.status_code == 201
     assert template.json()["content"]["diagnoses"] == ["Viral fever"]
+    assert updated_template.status_code == 200
+    assert updated_template.json()["name"] == "Updated Fever Template"
+    assert updated_template.json()["content"]["complaints"] == ["High fever"]
     assert signed.json()["status"] == "signed"
     assert locked_update.status_code == 409
+
+    deleted_template = client.delete(
+        f"/api/v1/consultations/clinical-templates/{template.json()['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+    listed_templates = client.get(
+        "/api/v1/consultations/clinical-templates?department_id=general",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+    assert deleted_template.status_code == 200
+    assert deleted_template.json()["is_active"] is False
+    assert listed_templates.status_code == 200
+    assert template.json()["id"] not in {row["id"] for row in listed_templates.json()}
 
 
 def test_sign_requires_clinical_content(client: TestClient):

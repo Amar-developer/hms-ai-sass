@@ -49,7 +49,8 @@ export type Action = {
 export type RowActionsProps = {
   actions: Action[];
   className?: string;
-  width?:string
+  width?: string;
+  portal?: boolean;
 };
 
 export type Role = {

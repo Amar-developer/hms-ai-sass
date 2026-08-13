@@ -395,7 +395,7 @@ const Header = ({
               type="button"
               onClick={sendEmailReport}
               disabled={sendBusy}
-              className="inline-flex items-center gap-2 py-2 px-2 lg:px-4 lg:py-3 rounded-lg bg-slate-900 font-bold text-white disabled:bg-slate-300"
+              className="primary-action gap-2 px-2 py-2 lg:px-4 lg:py-3"
             >
               <Mail size={15} />
               <ButtonLoader loading={sendBusy}>

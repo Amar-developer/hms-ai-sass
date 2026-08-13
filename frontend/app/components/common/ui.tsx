@@ -874,7 +874,6 @@ export function SearchableSelect<T = string>({
       <button
         type="button"
         disabled={disabled}
-        aria-required={required || undefined}
         aria-invalid={Boolean(error) || undefined}
         onClick={() =>
           setOpen((current) => {
@@ -1025,7 +1024,7 @@ export function Button({
   return (
     <button
       {...props}
-      className={`rounded-lg bg-brand ${className} font-bold text-brand-fg disabled:bg-slate-300`}
+      className={`rounded-lg bg-brand ${className} font-bold text-brand-fg transition hover:bg-brand-hover disabled:bg-slate-300`}
     >
       {children}
     </button>

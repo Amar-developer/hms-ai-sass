@@ -1225,6 +1225,8 @@ export function InvoiceDetailPage({
                   })}
                   data={financialLedgerEntries}
                   emptyMessage="No financial ledger entries recorded yet."
+                  tableClassName="min-w-[1480px]"
+                  rowClassName="odd:bg-white even:bg-slate-50/40 hover:bg-emerald-50/30"
                 />
               </div>
             </div>

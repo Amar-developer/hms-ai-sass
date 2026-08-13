@@ -1,8 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ApiSession } from "@/lib/api";
 import * as consulationApi from "./consulation.api";
+
+const EMPTY_CATALOG: any[] = [];
+
+function stableCatalog(value: any[]) {
+  return Array.isArray(value) && value.length ? value : EMPTY_CATALOG;
+}
+
+function catalogSignature(value: any[]) {
+  if (!Array.isArray(value) || value.length === 0) return "";
+  return value
+    .map((row: any) =>
+      [
+        row?.id,
+        row?.slug,
+        row?.item_name,
+        row?.name,
+        row?.strength,
+        row?.code,
+      ]
+        .filter(Boolean)
+        .join(":"),
+    )
+    .join("|");
+}
 
 type UseConsultationWorkspaceDataParams = {
   apiSession: ApiSession | null | undefined;
@@ -17,7 +41,7 @@ type UseConsultationWorkspaceDataParams = {
 /**
  * Owns the consultation workspace's own data needs, separate from the
  * dashboard-level catalogs it's seeded with: live medicine/lab search as
- * the doctor types, the popular-items suggestion strip, and the patient's
+ * the doctor types and the patient's
  * printable ID number when the parent hasn't loaded it yet.
  */
 export function useConsultationWorkspaceData({
@@ -29,36 +53,39 @@ export function useConsultationWorkspaceData({
   medicineSearch,
   labSearch,
 }: UseConsultationWorkspaceDataParams) {
+  const apiSessionRef = useRef(apiSession);
+  apiSessionRef.current = apiSession;
+  const tenantId = apiSession?.tenantId;
+  const accessToken = apiSession?.accessToken;
+  const medicineCatalogSignature = catalogSignature(medicineCatalog);
+  const labCatalogSignature = catalogSignature(labCatalog);
   const [availableMedicineCatalog, setAvailableMedicineCatalog] = useState<
     any[]
-  >(medicineCatalog);
+  >(stableCatalog(medicineCatalog));
   const [medicineCatalogLoading, setMedicineCatalogLoading] = useState(false);
   const [medicineCatalogError, setMedicineCatalogError] = useState("");
   const [availableLabCatalog, setAvailableLabCatalog] = useState<any[]>(
-    Array.isArray(labCatalog) ? labCatalog : [],
+    stableCatalog(labCatalog),
   );
   const [externalLabLoading, setExternalLabLoading] = useState(false);
   const [externalLabError, setExternalLabError] = useState("");
-  const [popularMedicines, setPopularMedicines] = useState<any[]>([]);
-  const [popularLabTests, setPopularLabTests] = useState<any[]>([]);
   const [patientNumberFallback, setPatientNumberFallback] = useState("");
 
   useEffect(() => {
-    setAvailableMedicineCatalog(
-      Array.isArray(medicineCatalog) ? medicineCatalog : [],
-    );
-  }, [medicineCatalog]);
+    setAvailableMedicineCatalog(stableCatalog(medicineCatalog));
+  }, [medicineCatalogSignature]);
 
   useEffect(() => {
-    setAvailableLabCatalog(Array.isArray(labCatalog) ? labCatalog : []);
-  }, [labCatalog]);
+    setAvailableLabCatalog(stableCatalog(labCatalog));
+  }, [labCatalogSignature]);
 
   useEffect(() => {
     setPatientNumberFallback("");
-    if (!apiSession || !patient?.id || patient?.patient_number) return;
+    const session = apiSessionRef.current;
+    if (!session || !patient?.id || patient?.patient_number) return;
     let alive = true;
     consulationApi
-      .getPatient(apiSession, patient.id)
+      .getPatient(session, patient.id)
       .then((detail: any) => {
         if (alive) setPatientNumberFallback(detail?.patient_number || "");
       })
@@ -66,18 +93,17 @@ export function useConsultationWorkspaceData({
     return () => {
       alive = false;
     };
-  }, [patient?.id, patient?.patient_number, apiSession?.tenantId]);
+  }, [patient?.id, patient?.patient_number, tenantId, accessToken]);
 
   useEffect(() => {
-    if (!apiSession?.tenantId) {
+    const session = apiSessionRef.current;
+    if (!session?.tenantId) {
       setAvailableMedicineCatalog([]);
       return;
     }
     const search = medicineSearch.trim();
     if (search.length < 2) {
-      setAvailableMedicineCatalog(
-        Array.isArray(medicineCatalog) ? medicineCatalog : [],
-      );
+      setAvailableMedicineCatalog(stableCatalog(medicineCatalog));
       setMedicineCatalogLoading(false);
       setMedicineCatalogError("");
       return;
@@ -90,7 +116,7 @@ export function useConsultationWorkspaceData({
         setMedicineCatalogError("");
         try {
           const rows = await consulationApi.listAvailableMedicines(
-            apiSession,
+            session,
             search,
             controller.signal,
           );
@@ -115,10 +141,11 @@ export function useConsultationWorkspaceData({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [apiSession, apiSession?.tenantId, medicineSearch]);
+  }, [tenantId, accessToken, medicineSearch, medicineCatalogSignature]);
 
   useEffect(() => {
-    if (!apiSession?.tenantId) {
+    const session = apiSessionRef.current;
+    if (!session?.tenantId) {
       setAvailableLabCatalog([]);
       return;
     }
@@ -129,7 +156,7 @@ export function useConsultationWorkspaceData({
         setExternalLabLoading(true);
         setExternalLabError("");
         try {
-          const rows = await consulationApi.listAvailableLabTests(apiSession, {
+          const rows = await consulationApi.listAvailableLabTests(session, {
             branchId,
             search: search || undefined,
           });
@@ -151,35 +178,7 @@ export function useConsultationWorkspaceData({
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [apiSession, apiSession?.tenantId, branchId, labSearch]);
-
-  useEffect(() => {
-    if (!apiSession?.tenantId) {
-      setPopularMedicines([]);
-      setPopularLabTests([]);
-      return;
-    }
-    let alive = true;
-    (async () => {
-      try {
-        const [meds, labs] = await Promise.all([
-          consulationApi.listPopularMedicines(apiSession).catch(() => []),
-          consulationApi.listPopularLabTests(apiSession).catch(() => []),
-        ]);
-        if (!alive) return;
-        setPopularMedicines(Array.isArray(meds) ? meds : []);
-        setPopularLabTests(Array.isArray(labs) ? labs : []);
-      } catch {
-        if (alive) {
-          setPopularMedicines([]);
-          setPopularLabTests([]);
-        }
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [apiSession, apiSession?.tenantId]);
+  }, [tenantId, accessToken, branchId, labSearch, labCatalogSignature]);
 
   return {
     availableMedicineCatalog,
@@ -188,8 +187,6 @@ export function useConsultationWorkspaceData({
     availableLabCatalog,
     externalLabLoading,
     externalLabError,
-    popularMedicines,
-    popularLabTests,
     patientNumberFallback,
   };
 }

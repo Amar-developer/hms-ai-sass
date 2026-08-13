@@ -112,6 +112,50 @@ describe("NotificationCenter", () => {
     });
   });
 
+  it("opens an appointment notification at the exact OPD visit", async () => {
+    mockedApiFetch.mockImplementation(async (path: string) => {
+      if (path === "/health") return { version: "1.0.0" };
+      if (path.startsWith("/notifications/in-app?")) {
+        return {
+          items: [
+            {
+              id: "notification_appointment",
+              event_type: "appointment.updated",
+              category: "appointment",
+              priority: "normal",
+              title: "Appointment updated",
+              message: "The appointment is ready.",
+              action_module: "appointments",
+              resource_type: "appointment",
+              resource_id: "appointment_42",
+              is_read: true,
+              created_at: new Date().toISOString(),
+            },
+          ],
+          total: 1,
+          unread_count: 0,
+        };
+      }
+      return {};
+    });
+    const navigatePage = vi.fn();
+    render(
+      <NotificationCenter apiSession={session} navigatePage={navigatePage} />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "0 unread notifications" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Appointment updated/i }),
+    );
+
+    expect(navigatePage).toHaveBeenCalledWith({
+      id: "opd",
+      appointmentId: "appointment_42",
+    });
+  });
+
   it("opens from the header and closes through reusable outside-click behavior", async () => {
     render(
       <NotificationCenter apiSession={session} navigatePage={vi.fn()} />,

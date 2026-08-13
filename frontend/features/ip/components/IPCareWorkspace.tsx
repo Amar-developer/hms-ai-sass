@@ -659,7 +659,7 @@ export function IPCareWorkspace({
                   type="button"
                   disabled={closed || !latestConsent || busy === "consent sign"}
                   onClick={() => signConsentEntry(latestConsent.id)}
-                  className="bg-emerald-700"
+                  className="bg-brand hover:bg-brand-hover"
                 >
                   <ButtonLoader loading={busy === "consent sign"}>
                     {busy === "consent sign" ? "Signing..." : "Mark Signed"}
@@ -722,7 +722,7 @@ export function IPCareWorkspace({
                     closed || !latestDischarge || busy === "discharge finalize"
                   }
                   onClick={() => finalizeDischargeEntry(latestDischarge.id)}
-                  className="bg-emerald-700"
+                  className="bg-brand hover:bg-brand-hover"
                 >
                   <ButtonLoader loading={busy === "discharge finalize"}>
                     {closed

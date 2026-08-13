@@ -629,6 +629,8 @@ export default async function globalSetup() {
     invoiceId: invoiceDetail.invoice.id,
     invoiceNumber: invoiceDetail.invoice.invoice_number,
     membershipPlanId: membershipPlan.id,
+    medicineName: medicine.name,
+    labTestName: labTest.name,
     errorLogId: errors.items[0].id,
     errorRoute: `/api/v1${missingPath}`,
     actors: {

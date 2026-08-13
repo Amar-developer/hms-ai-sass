@@ -6,9 +6,8 @@
 | --- | --- | --- |
 | Tenant & Branch | SaaS customer structure | Tenant, branches, departments, rooms, working hours |
 | Patient Master | Patient identity and profile | Registration, demographics, guardian, contacts, duplicate detection |
-| Appointment | Booking engine | OP, IP, online, home visit, walk-in, follow-up, cancellation |
-| Queue & Token | Waiting management | Normal/emergency queue, requeue, no-show, voice calling, display screen |
-| Doctor Workspace | Consultation | Patient 360, diagnosis, notes, prescription, lab/scan referral, follow-up |
+| OPD Workspace | Unified booking-to-invoice workflow | Appointment booking, doctor schedule, patient worklist, queue state, consultation, doctor/department clinical templates, medicines, lab/services, doctor referrals, follow-up, signed-record addendums, and direct consultation invoicing |
+| Queue & Token | Waiting management | Normal/emergency queue, requeue, no-show, voice calling, display screen, and direct OPD visit handoff |
 | EMR / Patient History | Clinical memory | Immutable visits, timeline, allergies, chronic conditions, summaries |
 | Billing & Invoice | Revenue capture | Consultation billing, lab/pharmacy/procedure invoice, UPI/payment links |
 | Payment Collection | Payment workflow | Cash, credit card, debit card, UPI, GPay, Paytm, partial payments, refunds |

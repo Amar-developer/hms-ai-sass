@@ -41,4 +41,21 @@ describe("notificationTarget", () => {
       }),
     ).toBe("consultation");
   });
+
+  it("routes appointment notifications into the unified OPD module", () => {
+    expect(
+      notificationDestination({
+        event_type: "appointment.updated",
+        resource_type: "appointment",
+        action_module: "appointments",
+      }),
+    ).toBe("appointments");
+    expect(
+      notificationDestination({
+        event_type: "comment.mentioned",
+        resource_type: "appointment",
+        action_module: "appointments",
+      }),
+    ).toBe("opd");
+  });
 });

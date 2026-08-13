@@ -14,6 +14,7 @@ from app.modules.consultations.schemas import (
     ConsultationSignRequest,
     ConsultationTemplateCreate,
     ConsultationTemplateRead,
+    ConsultationTemplateUpdate,
     ConsultationUpdate,
 )
 from app.modules.consultations.services.query_service import ConsultationQueryService
@@ -73,6 +74,21 @@ def list_consultations(
         appointment_id=appointment_id,
         branch_id=branch_id,
         actor=current_user,
+    )
+
+
+@router.get(
+    "/clinical-templates",
+    response_model=list[ConsultationTemplateRead],
+    dependencies=[Depends(require_permission(permissions.CONSULTATIONS_READ))],
+)
+def list_clinical_templates(
+    tenant_id: str = Depends(require_tenant_id),
+    department_id: str | None = None,
+    session: Session = Depends(get_session),
+) -> list[ConsultationTemplateRead]:
+    return ClinicalTemplateService(session).list_clinical_templates(
+        tenant_id=tenant_id, department_id=department_id
     )
 
 
@@ -221,16 +237,47 @@ def create_clinical_template(
     )
 
 
-@router.get(
-    "/clinical-templates",
-    response_model=list[ConsultationTemplateRead],
-    dependencies=[Depends(require_permission(permissions.CONSULTATIONS_READ))],
+@router.patch(
+    "/clinical-templates/{template_id}",
+    response_model=ConsultationTemplateRead,
 )
-def list_clinical_templates(
+def update_clinical_template(
+    template_id: str,
+    payload: ConsultationTemplateUpdate,
     tenant_id: str = Depends(require_tenant_id),
-    department_id: str | None = None,
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_EDIT,
+        )
+    ),
     session: Session = Depends(get_session),
-) -> list[ConsultationTemplateRead]:
-    return ClinicalTemplateService(session).list_clinical_templates(
-        tenant_id=tenant_id, department_id=department_id
+) -> ConsultationTemplateRead:
+    return ClinicalTemplateService(session).update_clinical_template(
+        tenant_id=tenant_id,
+        template_id=template_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.delete(
+    "/clinical-templates/{template_id}",
+    response_model=ConsultationTemplateRead,
+)
+def delete_clinical_template(
+    template_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_EDIT,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> ConsultationTemplateRead:
+    return ClinicalTemplateService(session).delete_clinical_template(
+        tenant_id=tenant_id,
+        template_id=template_id,
+        actor=current_user,
     )

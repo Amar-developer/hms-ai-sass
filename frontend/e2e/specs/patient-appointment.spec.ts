@@ -98,7 +98,7 @@ test.describe("patient and appointment workflow", () => {
 
     await page.goto("/");
     await selectBranch(page, seed.branchName);
-    await openModule(page, "Appointments");
+    await openModule(page, "OPD Workspace");
     await page.getByRole("button", { name: /New Appointment/ }).click();
     await page
       .getByPlaceholder("Search patient name, mobile, or patient ID")

@@ -53,7 +53,11 @@ def find_catalog_medicine(
 
 
 def external_medicine_items_enabled(session: Session, tenant_id: str) -> bool:
-    return True
+    # The external catalog is optional. When its URL is intentionally blank
+    # (local development, E2E, or a clinic without the integration), search
+    # must fall back to the tenant's own MedicineCatalog rows instead of
+    # selecting a client that can only return HTTP 503.
+    return bool((get_settings().medicine_graphql_url or "").strip())
 
 
 def medicine_graphql_client() -> GraphQLCatalogClient:

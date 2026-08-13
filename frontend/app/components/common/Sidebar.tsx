@@ -109,7 +109,7 @@ export function Sidebar(props: SidebarProps) {
   return (
     <aside
       className={`
-    h-screen shrink-0 overflow-y-auto border-r border-slate-200 bg-white px-2 py-2
+    app-sidebar h-screen shrink-0 overflow-y-auto border-r border-slate-200 bg-white px-2 py-2 text-slate-900
     hidden md:block
     transition-all duration-300 scrollbar-hidden
     ${props.tabletCollapsed ? "md:w-18" : "md:w-64"}
@@ -154,8 +154,8 @@ export function Sidebar(props: SidebarProps) {
                       !props.superAdminSettingsOpen,
                     );
                   }}
-                  className={`relative flex w-full items-center rounded-2xl py-3
-                    ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}
+                  className={`relative flex w-full items-center rounded-xl py-3 transition
+                    ${isActive ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-3 text-slate-900 hover:bg-slate-50"}
                   ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 >
                   <Icon size={18} />
@@ -174,7 +174,7 @@ export function Sidebar(props: SidebarProps) {
                 {props.tabletCollapsed && popupMenu === "superadmin" && (
                   <div
                     ref={popupRef}
-                    className="fixed z-[9999] w-56 rounded-xl border bg-white shadow-xl p-2"
+                    className="fixed z-[9999] w-56 rounded-xl border bg-white p-2 text-slate-900 shadow-xl"
                     style={{
                       top: popupPosition.top,
                       left: popupPosition.left,
@@ -220,7 +220,7 @@ export function Sidebar(props: SidebarProps) {
                                 section: sectionId,
                               });
                             }}
-                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs${props.superAdminSection == sectionId ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full font-bold" : "py-3"}`}
+                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs ${props.superAdminSection == sectionId ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-3 text-slate-500 hover:bg-slate-50"}`}
                           >
                             <SectionIcon size={15} />
                             {!props.tabletCollapsed && (
@@ -260,7 +260,7 @@ export function Sidebar(props: SidebarProps) {
                       !props.tenantAdminSettingsOpen,
                     );
                   }}
-                  className={`relative flex w-full items-center rounded-2xl ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}
+                  className={`relative flex w-full items-center rounded-xl transition ${isActive ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-3 text-slate-900 hover:bg-slate-50"}
 ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 >
                   <Settings size={22} />
@@ -280,7 +280,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 {props.tabletCollapsed && popupMenu === "admin" && (
                   <div
                     ref={popupRef}
-                    className="fixed z-[9999] w-56 rounded-xl border bg-white shadow-xl p-2"
+                    className="fixed z-[9999] w-56 rounded-xl border bg-white p-2 text-slate-900 shadow-xl"
                     style={{
                       top: popupPosition.top,
                       left: popupPosition.left,
@@ -297,7 +297,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                             });
                             setPopupMenu(null);
                           }}
-                          className={`flex w-full text-xs justify-start items-start gap-3 px-2 py-2 ${props.tenantAdminSection == sectionId ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}`}
+                          className={`flex w-full items-start justify-start gap-3 px-2 py-2 text-xs ${props.tenantAdminSection == sectionId ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-3"}`}
                         >
                           <SectionIcon size={15} />
                           {sectionLabel}
@@ -327,7 +327,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                             }}
                             className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                               props.tenantAdminSection === sectionId
-                                ? "bg-slate-100 text-slate-950"
+                                ? "bg-brand text-brand-fg"
                                 : "text-slate-500 hover:bg-slate-50"
                             }`}
                           >
@@ -375,11 +375,11 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                       props.setReportsSection("metrix");
                     }
                   }}
-                  className={`flex w-full items-center rounded-2xl py-3
+                  className={`flex w-full items-center rounded-xl py-3 transition
     ${
       isActive
-        ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full"
-        : "py-3"
+        ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"
+        : "py-3 text-slate-900 hover:bg-slate-50"
     }
     ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}
   `}
@@ -400,7 +400,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 {props.tabletCollapsed && popupMenu === "reports" && (
                   <div
                     ref={popupRef}
-                    className="fixed z-[9999] w-56 rounded-xl border bg-white shadow-xl p-2"
+                    className="fixed z-[9999] w-56 rounded-xl border bg-white p-2 text-slate-900 shadow-xl"
                     style={{
                       top: popupPosition.top,
                       left: popupPosition.left,
@@ -417,7 +417,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                             });
                             setPopupMenu(null);
                           }}
-                          className={`flex w-full items-center gap-3 px-2 py-2 text-xs ${props.reportSection == sectionId ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}`}
+                          className={`flex w-full items-center gap-3 px-2 py-2 text-xs ${props.reportSection == sectionId ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-3"}`}
                         >
                           <SectionIcon size={15} />
                           {sectionLabel}
@@ -441,7 +441,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                           }}
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                             props.reportsSection == sectionId
-                              ? "bg-slate-100 text-slate-950"
+                              ? "bg-brand text-brand-fg"
                               : "text-slate-500 hover:bg-slate-50"
                           }`}
                         >
@@ -471,13 +471,13 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                   showModuleBadge(label, e);
                 }
               }}
-              className={`flex w-full items-center rounded-2xl md:py-3  lg:py-2
-${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : ""}`}
+              className={`flex w-full items-center rounded-xl transition md:py-3 lg:py-2
+${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${isActive ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "text-slate-900 hover:bg-slate-50"}`}
             >
               <Icon size={22} title={label} />
               {!props.tabletCollapsed && (
                 <span
-                  className={`truncate text-xs ${isActive ? "font-bold bg-slate-900 text-white w-full text-left  rounded-full" : ""}`}
+                  className={`truncate text-xs ${isActive ? "w-full text-left font-bold text-brand-fg" : ""}`}
                 >
                   {label}
                 </span>

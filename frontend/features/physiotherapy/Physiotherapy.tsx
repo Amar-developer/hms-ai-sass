@@ -192,10 +192,10 @@ export function Physiotherapy({
               <button
                 type="button"
                 onClick={() => navigate("op")}
-                className="rounded-lg bg-slate-900 p-4 text-left text-white"
+                className="rounded-lg bg-brand p-4 text-left text-brand-fg transition hover:bg-brand-hover"
               >
                 <b className="table-data">New OP Physio</b>
-                <p className="mt-1 table-data text-slate-300">
+                <p className="mt-1 table-data text-emerald-100">
                   Pain, sports injury, arthritis, outpatient rehab.
                 </p>
               </button>

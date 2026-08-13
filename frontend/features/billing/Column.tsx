@@ -596,14 +596,25 @@ export function getHospitalLedgerColumns({
     {
       key: "created_at",
       header: "Date & Time",
-      cellClassName: "whitespace-nowrap font-semibold text-slate-700",
-      render: (entry: any) => displayDateTime(entry.created_at),
+      width: "150px",
+      cellClassName: "align-top font-semibold text-slate-700",
+      render: (entry: any) => {
+        const [date, time] = displayDateTime(entry.created_at).split(", ");
+        return (
+          <span className="block leading-5">
+            <span className="block whitespace-nowrap font-bold text-slate-900">{date}</span>
+            <span className="block whitespace-nowrap text-xs font-medium text-slate-500">{time}</span>
+          </span>
+        );
+      },
     },
     {
       key: "entry_type",
       header: "Activity",
+      width: "145px",
+      cellClassName: "align-top",
       render: (entry: any) => (
-        <span className="font-bold capitalize text-slate-950">
+        <span className="block break-words font-bold leading-5 text-slate-950">
           {humanizeOptionLabel(entry.entry_type)}
         </span>
       ),
@@ -611,20 +622,29 @@ export function getHospitalLedgerColumns({
     {
       key: "actor",
       header: "User",
-      cellClassName: "whitespace-nowrap font-semibold text-slate-700",
-      render: (entry: any) => entry.actor_user_name || "Unknown user",
+      width: "170px",
+      cellClassName: "align-top font-semibold text-slate-700",
+      render: (entry: any) => (
+        <span className="block break-words leading-5" title={entry.actor_user_name || "Unknown user"}>
+          {entry.actor_user_name || "Unknown user"}
+        </span>
+      ),
     },
     {
       key: "debit_account",
       header: "Debit Account",
-      cellClassName: "whitespace-nowrap font-semibold text-slate-700",
-      render: (entry: any) => hospitalLedgerLine(entry).debitAccount,
+      width: "180px",
+      cellClassName: "align-top font-semibold text-slate-700",
+      render: (entry: any) => (
+        <span className="block break-words leading-5">{hospitalLedgerLine(entry).debitAccount}</span>
+      ),
     },
     {
       key: "debit",
       header: "Debit",
+      width: "100px",
       className: "text-right",
-      cellClassName: "whitespace-nowrap text-right",
+      cellClassName: "whitespace-nowrap text-right align-top",
       render: (entry: any) => {
         const line = hospitalLedgerLine(entry);
         return (
@@ -641,14 +661,18 @@ export function getHospitalLedgerColumns({
     {
       key: "credit_account",
       header: "Credit Account",
-      cellClassName: "whitespace-nowrap font-semibold text-slate-700",
-      render: (entry: any) => hospitalLedgerLine(entry).creditAccount,
+      width: "180px",
+      cellClassName: "align-top font-semibold text-slate-700",
+      render: (entry: any) => (
+        <span className="block break-words leading-5">{hospitalLedgerLine(entry).creditAccount}</span>
+      ),
     },
     {
       key: "credit",
       header: "Credit",
+      width: "100px",
       className: "text-right",
-      cellClassName: "whitespace-nowrap text-right",
+      cellClassName: "whitespace-nowrap text-right align-top",
       render: (entry: any) => {
         const line = hospitalLedgerLine(entry);
         return (
@@ -665,9 +689,10 @@ export function getHospitalLedgerColumns({
     {
       key: "bill_amount",
       header: "Bill Amount",
+      width: "115px",
       className: "text-right",
       cellClassName:
-        "whitespace-nowrap text-right font-black tabular-nums text-slate-700",
+        "whitespace-nowrap text-right align-top font-black tabular-nums text-slate-700",
       render: (entry: any) =>
         money(
           (ledgerRunningById.get(entry.id) || { invoiceTotal: 0 })
@@ -677,9 +702,10 @@ export function getHospitalLedgerColumns({
     {
       key: "paid",
       header: "Paid",
+      width: "90px",
       className: "text-right",
       cellClassName:
-        "whitespace-nowrap text-right font-black tabular-nums text-slate-700",
+        "whitespace-nowrap text-right align-top font-black tabular-nums text-slate-700",
       render: (entry: any) =>
         money(
           (ledgerRunningById.get(entry.id) || { paidAmount: 0 }).paidAmount,
@@ -688,9 +714,10 @@ export function getHospitalLedgerColumns({
     {
       key: "balance",
       header: "Balance",
+      width: "105px",
       className: "text-right",
       cellClassName:
-        "whitespace-nowrap text-right font-black tabular-nums text-slate-700",
+        "whitespace-nowrap text-right align-top font-black tabular-nums text-slate-700",
       render: (entry: any) =>
         money(
           (ledgerRunningById.get(entry.id) || { balanceAmount: 0 })
@@ -700,6 +727,8 @@ export function getHospitalLedgerColumns({
     {
       key: "status",
       header: "Status",
+      width: "110px",
+      cellClassName: "align-top",
       render: (entry: any) => (
         <Badge
           tone={entry.status_after === "cancelled" ? "amber" : "slate"}

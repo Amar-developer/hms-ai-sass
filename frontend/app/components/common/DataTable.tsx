@@ -10,6 +10,8 @@ export function DataTable<T>({
   data,
   emptyMessage = "No data found",
   className,
+  tableClassName,
+  rowClassName,
   onRowClick,
   footer,
   paginate = false,
@@ -44,7 +46,7 @@ export function DataTable<T>({
     <div className={className}>
       <div className="overflow-auto  rounded-lg border">
         <table
-          className={`w-full min-w-[920px] table-fixed text-left text-sm ${className ?? ""}`}
+          className={`w-full min-w-[920px] table-fixed text-left text-sm ${tableClassName ?? ""}`}
         >
         <thead className="bg-slate-50 text-xs uppercase text-slate-500">
           <tr>
@@ -101,7 +103,13 @@ export function DataTable<T>({
             <tr
               key={index}
               onClick={() => onRowClick?.(row)}
-              className={onRowClick ? "cursor-pointer hover:bg-slate-50" : ""}
+              className={`transition-colors ${
+                onRowClick ? "cursor-pointer hover:bg-slate-50" : ""
+              } ${
+                typeof rowClassName === "function"
+                  ? rowClassName(row, rowOffset + index)
+                  : rowClassName ?? ""
+              }`}
             >
               {columns.map((column) => (
                 <td

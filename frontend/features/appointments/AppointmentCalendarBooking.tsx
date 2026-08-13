@@ -39,6 +39,8 @@ export function AppointmentCalendarBooking(props: Props) {
     setActive,
     isInitialLoading,
     mode = "list",
+    routeBase = "/appointments",
+    onOpenAppointment,
   } = props;
   const router = useRouter();
   // Only the top-level mode is a route (/appointments vs /appointments/new).
@@ -46,7 +48,13 @@ export function AppointmentCalendarBooking(props: Props) {
   // sub-form and "success" is a post-submit confirmation, so a direct link
   // to either without the in-progress form data would render a broken screen.
   const setMode = (next: "list" | "book") =>
-    router.push(next === "book" ? "/appointments/new" : "/appointments");
+    router.push(
+      next === "book"
+        ? `${routeBase}/new`
+        : routeBase === "/appointments"
+          ? routeBase
+          : `${routeBase}/appointments`,
+    );
   const [offlinePatients, setOfflinePatients] = useState<any[]>([]);
   const { patients: referencedPatients, patientMap } =
     usePatientReferencesQuery(
@@ -234,13 +242,6 @@ export function AppointmentCalendarBooking(props: Props) {
 
   function openConsultation(appointment: any) {
     if (!appointment?.id || isSuperAdmin) return;
-    sessionStorage.setItem(
-      "medizinhub.consultationAppointmentId",
-      appointment.id,
-    );
-    const doctorId = appointment.doctorId || appointment.practitioner_id;
-    if (doctorId)
-      sessionStorage.setItem("medizinhub.consultationDoctorId", doctorId);
     // Align the shared department context with this appointment so the
     // consultation page keeps the selection (a department mismatch makes the
     // workspace drop it and show "No appointment selected").
@@ -248,6 +249,17 @@ export function AppointmentCalendarBooking(props: Props) {
       appointment.departmentId || appointment.department_id;
     if (appointmentDepartmentId && appointmentDepartmentId !== departmentId)
       setDepartmentId(appointmentDepartmentId);
+    if (onOpenAppointment) {
+      onOpenAppointment(appointment.id);
+      return;
+    }
+    sessionStorage.setItem(
+      "medizinhub.consultationAppointmentId",
+      appointment.id,
+    );
+    const doctorId = appointment.doctorId || appointment.practitioner_id;
+    if (doctorId)
+      sessionStorage.setItem("medizinhub.consultationDoctorId", doctorId);
     setActive?.("consultation");
   }
 
@@ -548,6 +560,7 @@ export function AppointmentCalendarBooking(props: Props) {
     apiSession,
     refreshAppointmentList,
     setMessage,
+    onRescheduled: onOpenAppointment,
   });
 
   const normalizedDepartmentOptions = departmentOptions.map((d: any) => ({
@@ -631,6 +644,12 @@ export function AppointmentCalendarBooking(props: Props) {
         bookAppointment={bookAppointment}
         booked={booked}
         printTokenSlip={printTokenSlip}
+        openBookedAppointment={() => {
+          const appointmentId = booked?.appointment?.id;
+          if (!appointmentId) return;
+          if (onOpenAppointment) onOpenAppointment(appointmentId);
+          else openConsultation(booked.appointment);
+        }}
       />
     );
   }
@@ -658,6 +677,7 @@ export function AppointmentCalendarBooking(props: Props) {
       rescheduleBusy={rescheduleBusy}
       saveReschedule={saveReschedule}
       openBooking={openBooking}
+      showBookingAction={routeBase === "/appointments"}
       platformTenantId={platformTenantId}
       setPlatformTenantId={setPlatformTenantId}
       platformTenants={platformTenants}

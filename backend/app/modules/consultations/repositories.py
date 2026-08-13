@@ -198,6 +198,14 @@ class ClinicalTemplateRepository:
         self.session.add(template)
         return template
 
+    def get_for_tenant(
+        self, *, tenant_id: str, template_id: str
+    ) -> ClinicalTemplate | None:
+        template = self.session.get(ClinicalTemplate, template_id)
+        if not template or template.tenant_id != tenant_id:
+            return None
+        return template
+
     def list_active_for_department(
         self, *, tenant_id: str, department_id: str
     ) -> list[ClinicalTemplate]:

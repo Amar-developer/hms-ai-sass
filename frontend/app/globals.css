@@ -8,12 +8,12 @@
 /*
  * Global theme tokens. Change a value here and every component that uses the
  * matching semantic Tailwind color (bg-success-soft, text-danger-fg, bg-brand, …)
- * updates across the whole app. Brand stays near-black slate.
+ * updates across the whole app. Emerald is the primary clinical action color.
  */
 :root {
   /* Brand / primary */
-  --brand: #0f172a;          /* slate-900 */
-  --brand-hover: #1e293b;    /* slate-800 */
+  --brand: #047857;          /* emerald-700 */
+  --brand-hover: #065f46;    /* emerald-800 */
   --brand-fg: #ffffff;
 
   /* Success */
@@ -79,7 +79,21 @@
 
 @layer components {
   .save-button {
-    @apply rounded-lg px-4 py-2 lg:px-4 lg:py-2.5 md:text-sm lg:text-xs
+    @apply rounded-lg bg-brand px-4 py-2 text-brand-fg hover:bg-brand-hover lg:px-4 lg:py-2.5 md:text-sm lg:text-xs
+  }
+}
+
+@layer components {
+  .primary-action {
+    @apply inline-flex items-center justify-center rounded-lg bg-brand px-4 font-bold text-brand-fg transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-slate-300;
+  }
+
+  .secondary-action {
+    @apply inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 font-bold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:text-slate-300;
+  }
+
+  .danger-action {
+    @apply inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-4 font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-300;
   }
 }
 

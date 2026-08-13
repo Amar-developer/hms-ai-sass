@@ -2,6 +2,14 @@
 
 import { useEffect, useState } from "react";
 import {
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+} from "lucide-react";
+import {
+  Badge,
   Card,
   Input,
   RefreshButton,
@@ -15,6 +23,7 @@ import { TokenQueueProps } from "./types";
 import {
   dateKey,
   isActiveQueueAppointment,
+  isStatus,
   sortByQueuePosition,
   todayKey,
 } from "./helpers";
@@ -28,7 +37,7 @@ import { useAppointmentsQuery } from "@/features/appointments/api/useAppointment
 import { call_language_options, display_mode_options } from "./constants";
 import { DataTable } from "@/app/components/common/DataTable";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
-import { getTokenQueueColumns } from "./Column";
+import { RowActions } from "../admin/components/RowActions";
 
 export function TokenQueue({
   apiSession,
@@ -74,16 +83,14 @@ export function TokenQueue({
     displayMode,
     queueRevision,
   );
-  const queue = sortByQueuePosition(
-    sortQueue(
-      scopedAppointments.filter((appointment: any) => {
+  const selectedDateAppointments = scopedAppointments.filter(
+    (appointment: any) => {
         if (
           dateKey(
             appointment.appointmentDate || appointment.appointment_date,
           ) !== selectedDate
         )
           return false;
-        if (!isActiveQueueAppointment(appointment)) return false;
         if (doctorScope?.practitionerId) {
           return (
             appointment.doctorId === doctorScope.practitionerId ||
@@ -97,9 +104,37 @@ export function TokenQueue({
         )
           return false;
         return true;
-      }),
-    ),
+      },
   );
+  const queue = sortByQueuePosition(
+    sortQueue(selectedDateAppointments.filter(isActiveQueueAppointment)),
+  );
+  const isCancelled = (appointment: any) =>
+    [
+      appointment.queueStatus,
+      appointment.queue_status,
+      appointment.status,
+      appointment.consultationStatus,
+      appointment.consultation_status,
+    ].some((value) =>
+      ["cancelled", "canceled", "no_show"].includes(
+        String(value || "").trim().toLowerCase().replaceAll(" ", "_"),
+      ),
+    );
+  const dayRows = selectedDateAppointments.filter(
+    (appointment: any) => !isCancelled(appointment),
+  );
+  const waitingCount = queue.filter((appointment: any) =>
+    ["waiting", "in_queue", "requeued"].includes(
+      String(appointment.queueStatus || appointment.queue_status || "")
+        .trim()
+        .toLowerCase()
+        .replaceAll(" ", "_"),
+    ),
+  ).length;
+  const completedCount = dayRows.filter(
+    (appointment: any) => !isActiveQueueAppointment(appointment),
+  ).length;
   const patientMap = new Map(
     (patients || []).map((patient: any) => [String(patient.id), patient]),
   );
@@ -142,14 +177,7 @@ export function TokenQueue({
 
   function openConsultation(appointment: any) {
     if (!appointment?.id) return;
-    sessionStorage.setItem(
-      "medizinhub.consultationAppointmentId",
-      appointment.id,
-    );
-    const doctorId = appointment.doctorId || appointment.practitioner_id;
-    if (doctorId)
-      sessionStorage.setItem("medizinhub.consultationDoctorId", doctorId);
-    setActive?.("consultation");
+    setActive?.({ id: "opd", appointmentId: appointment.id });
   }
 
   const queueEntryIds = queue
@@ -163,18 +191,153 @@ export function TokenQueue({
     setActive?.("patients");
   }
 
-  const queueColumns = getTokenQueueColumns({
-    openConsultation,
-    patientMap,
-    transition,
-    busyId,
-    openPatient,
-  });
+  const queueColumns = [
+    {
+      key: "token",
+      header: "Token",
+      width: "130px",
+      render: (appointment: any) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openConsultation(appointment);
+          }}
+          className="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-50"
+        >
+          {appointment.token}
+        </button>
+      ),
+      cellClassName: "font-bold",
+      disableRowClick: true,
+    },
+
+    {
+      key: "patient",
+      header: "Patient",
+      width: "150px",
+      render: (appointment: any) => (
+        <div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              openConsultation(appointment);
+            }}
+            className="text-left text-xs font-semibold hover:underline"
+          >
+            {appointment.patient}
+          </button>
+          <PatientFlagBadges
+            patient={patientMap.get(
+              String(appointment.patientId || appointment.patient_id),
+            )}
+            className="mt-1"
+          />
+        </div>
+      ),
+      disableRowClick: true,
+    },
+
+    {
+      key: "doctor",
+      header: "Doctor",
+      width: "150px",
+      render: (appointment: any) => (
+        <span className="text-xs">{appointment.doctor}</span>
+      ),
+    },
+
+    {
+      key: "queueStatus",
+      header: "Queue Status",
+      width: "170px",
+      className: "text-center",
+      cellClassName: "text-center",
+      render: (appointment: any) => (
+        <Badge
+          tone={
+            appointment.tokenType === "Emergency"
+              ? "red"
+              : isStatus(appointment, "waiting")
+                ? "amber"
+                : isStatus(appointment, "called") ||
+                    isStatus(appointment, "in_consultation")
+                  ? "blue"
+                  : "slate"
+          }
+          className="inline-flex rounded-full px-3 py-1.5 text-xs"
+        >
+          {humanizeOptionLabel(appointment.queueStatus)}
+        </Badge>
+      ),
+    },
+
+    {
+      key: "actions",
+      header: "Actions",
+      width: "190px",
+      className: "text-center",
+      disableRowClick: true,
+
+      render: (appointment: any) => (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => openConsultation(appointment)}
+            className="primary-action h-9 gap-2 px-3 text-xs"
+          >
+            Open Visit
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+          <RowActions
+            width="w-24"
+            portal
+            actions={[
+            {
+              label: "Patient",
+              onClick: () => openPatient(appointment),
+            },
+            {
+              label: "Call",
+              disabled:
+                busyId === appointment.id ||
+                isStatus(appointment, "in_consultation"),
+              onClick: () => transition(appointment, "call"),
+            },
+
+            {
+              label: "Skip",
+              disabled:
+                busyId === appointment.id || isStatus(appointment, "skipped"),
+              onClick: () => transition(appointment, "skip"),
+            },
+
+            {
+              label: "Requeue",
+              disabled:
+                busyId === appointment.id || isStatus(appointment, "requeued"),
+              onClick: () => transition(appointment, "requeue"),
+            },
+
+            {
+              label: "Cancel",
+              danger: true,
+              disabled:
+                busyId === appointment.id || isStatus(appointment, "cancelled"),
+              onClick: () => transition(appointment, "cancel"),
+            },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <Card>
-      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div className="flex items-end lg:items-center gap-2">
+    <Card className="p-4">
+      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 xl:flex-row xl:items-end">
+        <div className="flex items-center gap-2">
           <div>
             <h3 className="card-title font-bold">
               Patient Queue & Token Priority
@@ -189,10 +352,7 @@ export function TokenQueue({
             {apiSession ? <RefreshButton onRefresh={() => refetch()} /> : null}
           </div>
         </div>
-        <div
-          className="grid gap-2 md:grid-cols-[1.6fr_1.7fr_1.5fr_2fr]
-         lg:grid-cols-[1.6fr_1.7fr_1.5fr_2fr]"
-        >
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[160px_180px_160px_auto] xl:items-end">
           <FormField label="Date">
             <Input
               type="date"
@@ -229,7 +389,7 @@ export function TokenQueue({
               type="button"
               onClick={() => setShowCancelModal(true)}
               disabled={busyId === "end-of-day" || queue.length === 0}
-              className="cancel-button border-red-100 bg-white table-xs font-bold text-red-600 hover:bg-red-50 disabled:text-slate-300"
+              className="danger-action h-10 whitespace-nowrap text-xs"
             >
               <ButtonLoader loading={busyId === "end-of-day"}>
                 {busyId === "end-of-day" ? "Closing..." : "Cancel Remaining"}
@@ -239,7 +399,36 @@ export function TokenQueue({
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-4 grid gap-3 sm:grid-cols-4 lg:grid-cols-5">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Today", dayRows.length, CalendarDays, "bg-blue-50 text-blue-700"],
+          ["Open", queue.length, ClipboardList, "bg-violet-50 text-violet-700"],
+          ["Waiting", waitingCount, Clock3, "bg-amber-50 text-amber-700"],
+          ["Completed", completedCount, CheckCircle2, "bg-emerald-50 text-emerald-700"],
+        ].map(([label, value, Icon, tone]: any) => (
+          <div key={label} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
+            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${tone}`}>
+              <Icon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p>
+              <p className="mt-0.5 text-2xl font-black leading-none text-slate-950">{value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-black text-slate-950">Live Token Board</h4>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Select a token to open the consultation workspace.
+          </p>
+        </div>
+        <Badge tone="green" className="rounded-full px-3 py-1.5 text-[10px]">
+          {visibleQueue.length} active
+        </Badge>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
         {displayLoading &&
           Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-[72px] w-full rounded-lg" />
@@ -253,11 +442,12 @@ export function TokenQueue({
                   key={item.id}
                   type="button"
                   onClick={() => openConsultation(appointment)}
-                  className="rounded-lg bg-slate-900 p-3 text-left text-white transition hover:bg-slate-800"
+                  className="rounded-xl bg-brand p-4 text-left text-brand-fg shadow-sm transition hover:bg-brand-hover"
                 >
-                  <p className="text-xl font-black  flex justify-between items-center">
-                    <span className=" w-1/2">{item.token_number || item.token}</span> <span className="p-1">-</span>
-                    <span className="mt-1 p-1   text-center w-1/2 text-sm font-semibold text-white mb-1">
+                  <p className="flex items-center gap-2 text-lg font-black">
+                    <span className="shrink-0">{item.token_number || item.token}</span>
+                    <span className="text-emerald-200">·</span>
+                    <span className="min-w-0 truncate text-sm font-semibold text-white">
                       {appointment.patient ||
                         publicDisplayValue(item.patient_id, "Patient")}
                     </span>
@@ -274,7 +464,7 @@ export function TokenQueue({
                     inverse
                   />
 
-                  <p className="mt-1 truncate text-xs text-slate-300">
+                  <p className="mt-2 truncate text-xs text-emerald-100">
                     {appointment.doctor || "Doctor"} ·{" "}
                     {humanizeOptionLabel(
                       appointment.queueStatus || item.status,
@@ -284,6 +474,17 @@ export function TokenQueue({
               );
             },
           )}
+      </div>
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-black text-slate-950">Queue List</h4>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Open a visit directly or use more actions to call, skip, requeue, or cancel.
+          </p>
+        </div>
+        <span className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-700">
+          {visibleQueue.length} {visibleQueue.length === 1 ? "token" : "tokens"}
+        </span>
       </div>
       <div className="mt-3">
         <DataTable

@@ -289,18 +289,8 @@ export function PatientDetail({
   );
 
   function openConsultation(c: any) {
-    if (!c?.appointment_id || typeof window === "undefined") return;
-    sessionStorage.setItem(
-      "medizinhub.consultationAppointmentId",
-      c.appointment_id,
-    );
-    if (c.practitioner_id) {
-      sessionStorage.setItem(
-        "medizinhub.consultationDoctorId",
-        c.practitioner_id,
-      );
-    }
-    setActive?.("consultation");
+    if (!c?.appointment_id) return;
+    setActive?.({ id: "opd", appointmentId: c.appointment_id });
   }
 
   function openInvoice(invoice: any) {
@@ -484,7 +474,7 @@ export function PatientDetail({
             >
               Back to Patients
             </button>
-            {canEditPatient && <Button onClick={onEdit} className='close-button bg-slate-900'>Edit Patient</Button>}
+            {canEditPatient && <Button onClick={onEdit} className="close-button">Edit Patient</Button>}
           </div>
         </div>
         <StatusToast message={message} onClose={onMessageClose} />

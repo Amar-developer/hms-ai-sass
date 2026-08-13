@@ -23,14 +23,14 @@ export function BrandBlock({
           setTabletCollapsed(!tabletCollapsed);
           // setSidebarOpen(!sideBarOpen)
         }}
-        className="rounded-lg bg-slate-900 p-3 text-white"
+        className="rounded-lg bg-brand p-3 text-brand-fg transition hover:bg-brand-hover"
       >
         <HeartPulse size={24} />
       </button>
 
       {!tabletCollapsed && (
         <div className="min-w-0">
-          <h1 className="text-sm font-bold">MedizinHub HMS</h1>
+          <h1 className="text-sm font-bold text-slate-950">MedizinHub HMS</h1>
           <p className="truncate text-xs text-slate-500">
             Healthcare Workspace
           </p>

@@ -28,6 +28,7 @@ export function AppointmentList(props: any) {
     rescheduleBusy,
     saveReschedule,
     openBooking,
+    showBookingAction = true,
     platformTenantId,
     setPlatformTenantId,
     platformTenants,
@@ -172,15 +173,17 @@ export function AppointmentList(props: any) {
               : "Row based OP appointment view with patient, mobile, medical department, doctor, date, and consultation status."}
           </p>
         </div>
-        <Button
-          onClick={openBooking}
-          className="flex items-center justify-between rounded-lg gap-2 w-40 lg:w-44 text-xs  px-3 py-2 lg:px-4 lg:py-3"
-        >
-          <div className="flex justify-center">
-            <CalendarPlus size={16} />
-            <p className="pl-2">New Appointment </p>
-          </div>
-        </Button>
+        {showBookingAction && (
+          <Button
+            onClick={openBooking}
+            className="flex items-center justify-between rounded-lg gap-2 w-40 lg:w-44 text-xs px-3 py-2 lg:px-4 lg:py-3"
+          >
+            <div className="flex justify-center">
+              <CalendarPlus size={16} />
+              <p className="pl-2">New Appointment</p>
+            </div>
+          </Button>
+        )}
       </div>
       <div className={`mt-4 grid gap-3  $`}>
         <FilterSection

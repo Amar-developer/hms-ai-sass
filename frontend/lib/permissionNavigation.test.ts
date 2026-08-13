@@ -19,7 +19,7 @@ describe("navigationModulesForPermissions", () => {
 
     expect(modules).toEqual(
       expect.arrayContaining([
-        "appointments",
+        "opd",
         "patients",
         "pharmacy",
         "billing",
@@ -34,7 +34,7 @@ describe("navigationModulesForPermissions", () => {
       "patients.create",
     ]);
 
-    expect(modules).toContain("appointments");
+    expect(modules).toContain("opd");
     expect(modules).toContain("patients");
     expect(modules).not.toContain("lab");
     expect(modules).not.toContain("billing");
@@ -101,7 +101,12 @@ describe("navigationModulesForPermissions", () => {
     const modules = navigationModulesForPermissions(["*"]);
 
     expect(modules).toEqual(
-      expect.arrayContaining(["dashboard", "appointments", "billing", "reports"]),
+      expect.arrayContaining([
+        "dashboard",
+        "opd",
+        "billing",
+        "reports",
+      ]),
     );
   });
 });

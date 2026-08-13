@@ -212,7 +212,7 @@ export function BenefitPicker({
             <button
               type="button"
               onClick={() => add(`new:${query.trim()}`)}
-              className="mt-2 w-full rounded-lg bg-slate-900 px-3 py-2 text-left text-sm font-bold text-white"
+              className="mt-2 w-full rounded-lg bg-brand px-3 py-2 text-left text-sm font-bold text-brand-fg transition hover:bg-brand-hover"
             >
               Add new {kind}: {query.trim()}
             </button>

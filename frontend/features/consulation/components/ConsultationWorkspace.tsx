@@ -6,7 +6,6 @@ import {
   Select,
   Input,
   Button,
-  Badge,
   SearchableSelect,
 } from "@/app/components/common/ui";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
@@ -23,11 +22,7 @@ import PrescriptionDocument, {
   type PrescriptionReferral,
 } from "./PrescriptionDocument";
 import { exportPrescriptionPdf } from "../exportPrescriptionPdf";
-import {
-  COMPLAINT_SUGGESTIONS,
-  treatment_type_options,
-  vitalFields,
-} from "../constants";
+import { treatment_type_options, vitalFields } from "../constants";
 import { useConsultationWorkspaceData } from "../api";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
@@ -81,6 +76,7 @@ export function ConsultationWorkspace(props: any) {
     selected,
     patient,
     templates,
+    applyClinicalTemplate,
     setComplaints,
     complaints,
     setDiagnosisRows,
@@ -107,15 +103,12 @@ export function ConsultationWorkspace(props: any) {
     setMedicineDuration,
     medicineInstructions,
     setMedicineInstructions,
-    addMedicineSuggestion,
     addMedicineFromText,
     referralRows,
     referralItems,
     removeReferralItem,
     labNeeded,
     setLabNeeded,
-    admissionNeeded,
-    setAdmissionNeeded,
     labTests,
     setLabTests,
     labCatalog,
@@ -126,13 +119,7 @@ export function ConsultationWorkspace(props: any) {
     setLabPriority,
     labInstructions,
     setLabInstructions,
-    addLabSuggestion,
     addLabFromText,
-    scanNeeded,
-    setScanNeeded,
-    scanTests,
-    setScanTests,
-    scanCatalog,
     referDoctor,
     setReferDoctor,
     referDoctorId,
@@ -155,7 +142,8 @@ export function ConsultationWorkspace(props: any) {
     cancelAppointment,
     openPatientDetails,
     callNextInWorkspace,
-    setActive,
+    nextPatient,
+    onOpenConsultationInvoices,
   } = props;
   const [medicineDraftName, setMedicineDraftName] = useState("");
   const [labDraftName, setLabDraftName] = useState("");
@@ -163,6 +151,7 @@ export function ConsultationWorkspace(props: any) {
   const [labAddAttempted, setLabAddAttempted] = useState(false);
   const [showPrescriptionPrint, setShowPrescriptionPrint] = useState(false);
   const [isExportingPrescription, setIsExportingPrescription] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   // The `patient` prop can arrive without `patient_number` (e.g. it hasn't
   // finished loading in the parent yet). The workspace data hook fetches it
   // directly so the printed Patient ID always matches the same
@@ -175,8 +164,6 @@ export function ConsultationWorkspace(props: any) {
     availableLabCatalog,
     externalLabLoading,
     externalLabError,
-    popularMedicines,
-    popularLabTests,
     patientNumberFallback,
   } = useConsultationWorkspaceData({
     apiSession,
@@ -205,9 +192,6 @@ export function ConsultationWorkspace(props: any) {
           .filter(Boolean)
           .join(" | "),
       })),
-    ...(scanNeeded && scanTests
-      ? [{ label: "Scan / Diagnostic", value: scanTests }]
-      : []),
     ...(referDoctor && selectedReferralDoctor
       ? [
           {
@@ -215,9 +199,6 @@ export function ConsultationWorkspace(props: any) {
             value: `${selectedReferralDoctor.name}${selectedReferralDoctor.specialty ? ` - ${selectedReferralDoctor.specialty}` : ""}`,
           },
         ]
-      : []),
-    ...(admissionNeeded
-      ? [{ label: "IP Admission", value: "Recommended" }]
       : []),
   ];
 
@@ -301,32 +282,30 @@ export function ConsultationWorkspace(props: any) {
     cancelledStatuses.includes(selectedQueueStatus);
   const queueActionDisabled = Boolean(busy || queueActionsLocked);
   const activeMedicineCatalog = availableMedicineCatalog;
-  const medicineOptions = activeMedicineCatalog.map((medicine: any) => ({
-    value: medicine.id || medicine.slug || medicine.name,
-    label: medicine.item_name || medicine.name,
-    item: medicine,
-  }));
+  const medicineOptions =
+    medicineDraftName.trim().length >= 2
+      ? activeMedicineCatalog.map((medicine: any) => ({
+          value: medicine.id || medicine.slug || medicine.name,
+          label: medicine.item_name || medicine.name,
+          item: medicine,
+        }))
+      : [];
   const selectedMedicine = activeMedicineCatalog.find(
     (medicine: any) =>
       (medicine.id || medicine.slug || medicine.name) === selectedMedicineId,
   );
   const activeLabCatalog = availableLabCatalog;
-  const labOptions = activeLabCatalog.map((test: any) => ({
-    value: test.id || test.slug || test.name,
-    label: test.item_name || test.name,
-    item: test,
-  }));
+  const labOptions =
+    labDraftName.trim().length >= 2
+      ? activeLabCatalog.map((test: any) => ({
+          value: test.id || test.slug || test.name,
+          label: test.item_name || test.name,
+          item: test,
+        }))
+      : [];
   const selectedLabTest = activeLabCatalog.find(
     (test: any) => (test.id || test.slug || test.name) === selectedLabTestId,
   );
-  // Suggestion tags prefer the most-used items from prescription/referral
-  // history; fall back to the catalog when there is no history yet.
-  const medicineSuggestions = popularMedicines.length
-    ? popularMedicines
-    : activeMedicineCatalog.slice(0, 8);
-  const labSuggestions = popularLabTests.length
-    ? popularLabTests
-    : activeLabCatalog.slice(0, 8);
   function addDraftMedicine() {
     const name =
       selectedMedicine?.item_name ||
@@ -412,54 +391,60 @@ export function ConsultationWorkspace(props: any) {
     labAddAttempted && !String(labPriority || "").trim()
       ? "Priority is required."
       : undefined;
-  const scanError =
-    validationAttempted && scanNeeded && !String(scanTests || "").trim()
-      ? "Scan or diagnostic name is required."
-      : undefined;
   const referralDoctorError =
     validationAttempted && referDoctor && !referDoctorId
       ? "Recommended doctor is required."
       : undefined;
+  const availableTemplates = templates.filter((template: any) => {
+    const templateDoctorId = template?.content?.doctor_id;
+    return !templateDoctorId || String(templateDoctorId) === String(doctor?.id);
+  });
   return (
     <>
-      <Card>
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-          <div>
+      <Card className="p-4">
+        <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-3 md:flex-row md:items-center">
+          <div className="min-w-0">
             <h3 className="card-title font-bold">Consultation Workspace</h3>
-            <p className="card-desc text-slate-500">
-              Structured vitals, complaints, diagnosis, prescription, follow-up
-              and addendums.
-            </p>
-            <p className="mt-1 text-xs font-semibold text-slate-500">
-              <span className="text-red-500">*</span> Required to complete the
-              consultation.
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <button
+                type="button"
+                onClick={() => openPatientDetails?.()}
+                className="truncate text-left text-sm font-black text-teal-800 hover:underline"
+              >
+                {patient?.name || patient?.full_name || selected?.patient || "Patient"}
+              </button>
+              <PatientFlagBadges patient={patient} />
+              <span className="text-[11px] font-medium text-slate-500">
+                {patient?.patient_number || selected?.patient_number || "No patient ID"}
+                {patient?.age_years != null || patient?.age != null
+                  ? ` · ${patient.age_years ?? patient.age} yrs`
+                  : ""}
+                {patient?.gender
+                  ? ` · ${displayPatientGender(patient.gender)}`
+                  : ""}
+                {selected?.token ? ` · Token ${selected.token}` : ""}
+              </span>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2 md:flex-wrap lg:flex-nowrap">
-            <button
-              onClick={() => setActive?.("doctor")}
-              className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Back
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => selected && callPatient(selected)}
               disabled={queueActionDisabled}
-              className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-3 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Call
             </button>
             <button
               onClick={() => requeuePatient("after2")}
               disabled={queueActionDisabled}
-              className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-3 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Requeue
             </button>
             <button
               onClick={cancelAppointment}
               disabled={queueActionDisabled}
-              className="close-button font-bold text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg border border-red-200 bg-white px-3 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel Appointment
             </button>
@@ -470,76 +455,38 @@ export function ConsultationWorkspace(props: any) {
             No appointment selected.
           </div>
         ) : (
-          <div className="mt-5 space-y-5">
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <button
-                type="button"
-                onClick={() => openPatientDetails?.()}
-                className="rounded-lg bg-slate-50 p-4 text-left transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-              >
-                <p className="text-xs text-slate-500">Patient</p>
-                <p className="font-bold">
-                  {patient?.name || selected?.patient || "-"}
-                </p>
-                <PatientFlagBadges patient={patient} className="mt-1" />
-              </button>
-              <div className="rounded-lg bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">Age / Gender</p>
-                <p className="font-bold">
-                  {patient?.age_years ?? patient?.age ?? "-"} /{" "}
-                  {displayPatientGender(patient?.gender)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">Visit Type</p>
-                <p className="font-bold capitalize">
-                  {(selected?.visitType || "OP").toLowerCase()}
-                </p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {selected?.isBillable === false
-                    ? "Free"
-                    : selected?.customFeeAmount != null
-                      ? `Charge ₹${Number(selected.customFeeAmount).toLocaleString("en-IN")}`
-                      : "As per fee rule"}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => openPatientDetails?.()}
-                className="rounded-lg bg-slate-50 p-4 text-left transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-              >
-                <p className="text-xs text-slate-500">More</p>
-                <p className="font-bold text-slate-900 underline underline-offset-2">
-                  Patient Details →
-                </p>
-              </button>
-            </div>
+          <div className="mt-4 space-y-4">
             <fieldset
               disabled={signed}
-              className={`m-0 min-w-0 space-y-5 border-0 p-0 ${signed ? "opacity-75" : ""}`}
+              className={`m-0 min-w-0 space-y-4 border-0 p-0 ${signed ? "opacity-75" : ""}`}
             >
-              {templates.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {templates.map((template: any) => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      onClick={() => {
-                        setComplaints(
-                          (template.content?.complaints || []).join("\n") ||
-                            complaints,
-                        );
-                        setDiagnosisRows(
-                          (template.content?.diagnoses || [])
-                            .map((x: string) => `${x} | primary`)
-                            .join("\n") || diagnosisRows,
-                        );
-                      }}
-                      className="rounded-lg border px-3 py-2 text-xs font-bold"
-                    >
-                      {template.name}
-                    </button>
-                  ))}
+              {availableTemplates.length > 0 && (
+                <div className="flex flex-col gap-2 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 sm:flex-row sm:items-end">
+                  <FormField label="Clinical Template" className="min-w-0 flex-1">
+                    <SearchableSelect
+                      value={selectedTemplateId}
+                      onChange={setSelectedTemplateId}
+                      options={availableTemplates.map((template: any) => ({
+                        value: template.id,
+                        label: template.name,
+                      }))}
+                      placeholder="Select a template"
+                      searchable={availableTemplates.length > 8}
+                    />
+                  </FormField>
+                  <button
+                    type="button"
+                    disabled={!selectedTemplateId}
+                    onClick={() => {
+                      const template = availableTemplates.find(
+                        (row: any) => row.id === selectedTemplateId,
+                      );
+                      if (template) applyClinicalTemplate(template);
+                    }}
+                    className="h-10 whitespace-nowrap rounded-lg bg-brand px-4 text-xs font-bold text-brand-fg hover:bg-brand-hover disabled:bg-slate-300"
+                  >
+                    Apply Template
+                  </button>
                 </div>
               )}
               <div className="grid gap-3 md:grid-cols-2">
@@ -568,16 +515,16 @@ export function ConsultationWorkspace(props: any) {
                   />
                 </FormField>
               </div>
-              <div className="rounded-lg bg-slate-50 p-4">
+              <div>
                 <div className="mb-3 flex flex-col justify-between gap-1 sm:flex-row sm:items-center">
-                  <p className="text-xs font-bold uppercase text-slate-700">
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-700">
                     Vital Signs
                   </p>
                   <p className="text-xs font-semibold text-slate-400">
                     Saved with this consultation and printed on prescription.
                   </p>
                 </div>
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {vitalFields.map((field) => (
                     <FormField key={field.key} label={field.label}>
                       <Input
@@ -617,37 +564,6 @@ export function ConsultationWorkspace(props: any) {
                     placeholder="Fever | 2 days | medium"
                   />
 
-                  {/* Suggestions – show at least 5 */}
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {COMPLAINT_SUGGESTIONS.slice(0, 8).map((suggestion) => {
-                      const alreadyAdded = complaints
-                        .split("\n")
-                        .map((line) => line.trim())
-                        .includes(suggestion);
-
-                      return (
-                        <button
-                          key={suggestion}
-                          type="button"
-                          disabled={alreadyAdded}
-                          onClick={() => {
-                            setComplaints((prev: string) =>
-                              prev.trim()
-                                ? `${prev.trim()}\n${suggestion}`
-                                : suggestion,
-                            );
-                          }}
-                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition ${
-                            alreadyAdded
-                              ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
-                              : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                          }`}
-                        >
-                          {suggestion}
-                        </button>
-                      );
-                    })}
-                  </div>
                 </FormField>
                 <FormField label="Diagnosis" required error={diagnosisError}>
                   <textarea
@@ -680,8 +596,12 @@ export function ConsultationWorkspace(props: any) {
               </FormField>
 
               {/* Medicine */}
-              <div className="rounded-lg bg-slate-50 p-4">
-                <div className="grid gap-3 lg:grid-cols-[1.35fr_.8fr_.7fr_.7fr_.9fr_auto] lg:items-start">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="mb-3">
+                  <p className="text-sm font-black text-slate-900">Medicines</p>
+                  <p className="text-xs text-slate-500">Add dosage instructions, then review the prescription list.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.45fr)_minmax(90px,.7fr)_minmax(105px,.8fr)_minmax(95px,.7fr)_minmax(115px,.9fr)_auto] xl:items-start">
                   <FormField
                     label="Medicine"
                     required
@@ -810,34 +730,11 @@ export function ConsultationWorkspace(props: any) {
                   </FormField>
                   <Button
                     type="button"
-                    className="save-button md:w-[50%] lg:mt-[23px] lg:w-full"
+                    className="inline-flex h-10 items-center justify-center self-end whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover sm:w-fit xl:mt-[23px] xl:w-full xl:self-start"
                     onClick={addDraftMedicine}
                   >
                     Add
                   </Button>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {medicineSuggestions.map((medicine: any) => (
-                    <button
-                      key={medicine.id || medicine.slug || medicine.name}
-                      type="button"
-                      onClick={() => {
-                        // Fill the search field only — the doctor reviews/edits
-                        // dosage, frequency, duration and instructions before
-                        // clicking Add, instead of a suggestion silently adding
-                        // a row with whatever defaults were left in the form.
-                        setSelectedMedicineId(medicine.id || "");
-                        setMedicineDraftName(
-                          medicine.item_name || medicine.name || "",
-                        );
-                        if (medicine.strength)
-                          setMedicineDosage(medicine.strength);
-                      }}
-                      className="rounded-lg border bg-white px-3 py-2 text-xs font-bold"
-                    >
-                      {medicine.item_name || medicine.name}
-                    </button>
-                  ))}
                 </div>
                 <div className="mt-4">
                   <FormField
@@ -909,8 +806,12 @@ export function ConsultationWorkspace(props: any) {
               </div>
               {/* Lab Service */}
               <div className="grid gap-3">
-                <div className="rounded-lg bg-slate-50 p-4">
-                  <div className="mt-3 grid gap-2 md:grid-cols-[2fr_1fr_1.5fr_auto] md:items-start">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="mb-3">
+                    <p className="text-sm font-black text-slate-900">Lab &amp; Services</p>
+                    <p className="text-xs text-slate-500">Add required investigations or clinical services.</p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(240px,2fr)_minmax(140px,1fr)_auto] xl:items-start">
                     <FormField
                       label="Lab/Service"
                       required
@@ -976,51 +877,22 @@ export function ConsultationWorkspace(props: any) {
                         required
                       />
                     </FormField>
-                    <FormField label="Instructions">
-                      <Input
-                        value={labInstructions}
-                        onChange={(e: any) =>
-                          setLabInstructions(e.target.value)
-                        }
-                        placeholder="Instructions"
-                      />
-                    </FormField>
                     <Button
                       type="button"
-                      className="save-button md:mt-[23px]"
+                      className="inline-flex h-10 items-center justify-center self-end whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover sm:w-fit xl:mt-[23px] xl:self-start"
                       onClick={addDraftLabTest}
                     >
                       Add Lab Test
                     </Button>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {labSuggestions.map((l: any) => (
-                      <button
-                        key={l.id || l.slug || l.name}
-                        type="button"
-                        onClick={() => {
-                          // Fill the search field only — the doctor picks
-                          // priority (routine/urgent/STAT) and instructions
-                          // before clicking Add Lab Test.
-                          setSelectedLabTestId(l.id || "");
-                          setLabDraftName(l.item_name || l.name || "");
-                        }}
-                        className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700"
-                      >
-                        {l.item_name || l.name}
-                      </button>
-                    ))}
-                  </div>
-
                   <div className="mt-4">
                     <FormField label="Lab & Service">
                       <div className="scrollbar-hidden max-h-[292px] overflow-auto rounded-lg border border-slate-200 bg-white">
-                        <table className="w-full min-w-[620px] border-collapse text-left text-sm">
+                        <table className="w-full min-w-[520px] border-collapse text-left text-sm">
                           <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
                             <tr>
                               <th className="px-3 py-2.5">Lab / Service</th>
                               <th className="px-3 py-2.5">Priority</th>
-                              <th className="px-3 py-2.5">Instructions</th>
                               <th className="px-3 py-2.5 text-right">Action</th>
                             </tr>
                           </thead>
@@ -1040,9 +912,6 @@ export function ConsultationWorkspace(props: any) {
                                     <td className="px-3 py-2.5 capitalize">
                                       {item.priority || "routine"}
                                     </td>
-                                    <td className="px-3 py-2.5">
-                                      {item.instructions || "-"}
-                                    </td>
                                     <td className="px-3 py-2.5 text-right">
                                       <button
                                         type="button"
@@ -1060,7 +929,7 @@ export function ConsultationWorkspace(props: any) {
                             ) : (
                               <tr>
                                 <td
-                                  colSpan={4}
+                                  colSpan={3}
                                   className="px-3 py-5 text-center text-slate-500"
                                 >
                                   No lab tests added yet.
@@ -1073,39 +942,8 @@ export function ConsultationWorkspace(props: any) {
                     </FormField>
                   </div>
                 </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-lg bg-slate-50 p-4">
-                    <label className="flex items-center gap-3 font-bold">
-                      <input
-                        type="checkbox"
-                        checked={scanNeeded}
-                        onChange={(e: any) => setScanNeeded(e.target.checked)}
-                      />{" "}
-                      Scan referral
-                    </label>
-                    {scanNeeded && (
-                      <FormField
-                        label="Scan / Diagnostic"
-                        required
-                        error={scanError}
-                        className={scanError ? "[&_input]:border-red-400" : ""}
-                      >
-                        <Input
-                          required
-                          aria-invalid={Boolean(scanError) || undefined}
-                          value={scanTests}
-                          onChange={(e: any) => setScanTests(e.target.value)}
-                          placeholder="X-Ray, ECG, Ultrasound"
-                        />
-                      </FormField>
-                    )}
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {scanCatalog.map((s: any) => (
-                        <Badge key={s.id}>{s.name}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded-lg bg-slate-50 p-4">
+                <div className="grid gap-3">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <label className="flex items-center gap-3 font-bold">
                       <input
                         type="checkbox"
@@ -1137,18 +975,6 @@ export function ConsultationWorkspace(props: any) {
                       />
                     )}
                   </div>
-                  <div className="rounded-lg bg-slate-50 p-4">
-                    <label className="flex items-center gap-3 font-bold">
-                      <input
-                        type="checkbox"
-                        checked={admissionNeeded}
-                        onChange={(e: any) =>
-                          setAdmissionNeeded(e.target.checked)
-                        }
-                      />
-                      <span>Refer for IP Admission</span>
-                    </label>
-                  </div>
                 </div>
               </div>
             </fieldset>
@@ -1160,13 +986,16 @@ export function ConsultationWorkspace(props: any) {
                       Completed consultation
                     </p>
                     <p className="text-sm text-emerald-700">
-                      Billing can generate the consultation invoice from the
-                      Invoices page.
+                      The signed record is ready for direct invoice generation.
                     </p>
                   </div>
-                  <Badge tone="green" className="normal-badge">
-                    Ready for billing
-                  </Badge>
+                  <Button
+                    type="button"
+                    onClick={onOpenConsultationInvoices}
+                    className="inline-flex h-9 items-center justify-center whitespace-nowrap bg-brand px-4 py-0 text-xs hover:bg-brand-hover"
+                  >
+                    Generate Invoice
+                  </Button>
                 </div>
                 <FormField
                   label="Completed Record Addendum"
@@ -1211,12 +1040,12 @@ export function ConsultationWorkspace(props: any) {
                 ) : null}
               </div>
             )}
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
               <Button
                 type="button"
                 onClick={apiSession ? saveBackendDraft : markDone}
                 disabled={busy || selected?.consultationStatus === "signed"}
-                className="save-button"
+                className="inline-flex h-10 items-center justify-center whitespace-nowrap border border-emerald-200 !bg-white px-4 py-0 text-xs !text-emerald-800 hover:!bg-emerald-50 disabled:!bg-slate-300 disabled:!text-white"
               >
                 <ButtonLoader loading={busy}>
                   {apiSession
@@ -1231,7 +1060,7 @@ export function ConsultationWorkspace(props: any) {
                   type="button"
                   onClick={signBackendConsultation}
                   disabled={busy || selected?.consultationStatus === "signed"}
-                  className="save-button bg-emerald-700"
+                  className="inline-flex h-10 items-center justify-center whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover"
                 >
                   <ButtonLoader loading={busy}>
                     {busy ? "Signing..." : "Complete"}
@@ -1242,22 +1071,25 @@ export function ConsultationWorkspace(props: any) {
                 type="button"
                 onClick={handlePrintPrescription}
                 disabled={isExportingPrescription}
-                className="save-button"
+                className="inline-flex h-10 items-center justify-center whitespace-nowrap border border-emerald-200 !bg-white px-4 py-0 text-xs !text-emerald-800 hover:!bg-emerald-50 disabled:!bg-slate-300 disabled:!text-white"
               >
                 {isExportingPrescription ? "Generating…" : "Print Prescription"}
               </Button>
               <button
                 onClick={() => requeuePatient("end")}
                 disabled={queueActionDisabled}
-                className="close-button"
+                className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-4 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-60"
               >
                 Requeue to End
               </button>
               <button
                 onClick={callNextInWorkspace}
-                className="close-button"
+                disabled={busy || !nextPatient}
+                className="inline-flex h-10 min-w-0 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-4 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-60"
               >
-                Call Next Patient
+                {nextPatient
+                  ? `Call Next: ${nextPatient.token || ""} ${nextPatient.patient || nextPatient.patient_name || "Patient"}`.trim()
+                  : "No Waiting Patient"}
               </button>
             </div>
             {selected?.consultationId && (

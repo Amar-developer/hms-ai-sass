@@ -101,7 +101,7 @@ export const COLORS = [
   "bg-lime-700",
   "bg-green-700",
   "bg-emerald-700",
-  "bg-teal-700",
+  "bg-emerald-700",
   "bg-cyan-700",
   "bg-sky-700",
   "bg-blue-700",

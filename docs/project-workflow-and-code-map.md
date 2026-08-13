@@ -58,12 +58,15 @@ Database:
 | `features/dashboard/Dashboard.tsx` | Dashboard cards and click-through navigation. |
 | `features/platform/SuperAdminDashboard.tsx` | Super admin tenant, users, roles, branches, departments, subscriptions, settings. |
 | `features/admin/TenantAdmin.tsx` | Tenant admin controls for users, roles, branch/department/settings where permitted. |
-| `features/appointments/AppointmentCalendarBooking.tsx` | Appointment creation, calendar/list booking workflow. |
+| `features/opd/OPDWorkspace.tsx` | Unified OPD shell for appointment booking, doctor schedule, patient worklist, and consultation. |
+| `features/opd/visitWorkspaceAdapter.ts` | Normalized appointment-based OPD read model without changing backend records. |
+| `features/appointments/AppointmentCalendarBooking.tsx` | Appointment creation and rescheduling hosted inside OPD Workspace. |
 | `features/queue/TokenQueue.tsx` | Token queue display, call/requeue/workflow links. |
 | `features/patients/Patient.tsx` | Patient/EMR management, registration, patient photo/document behavior. |
 | `features/doctors/Doctors.tsx` | Practitioner/doctor CRUD and branch/department mapping. |
 | `features/scheduling/Scheduling.tsx` | Practitioner schedules and availability. |
-| `features/doctor/DoctorConsultation.tsx` | Doctor dashboard and consultation workspace. |
+| `features/consulation/DoctorConsultation.tsx` | Doctor schedule and consultation state hosted inside OPD Workspace. |
+| `features/opd/components/ClinicalTemplateManager.tsx` | Department/doctor-scoped consultation template creation and listing for complaints, diagnosis, notes, medicines, and lab/services. |
 | `features/ip/IPAdmission.tsx` | IP admission, ward/room/bed selection, Aadhaar/file upload, treatment, MAR, billing, discharge. |
 | `features/lab/Lab.tsx` | Lab catalog, orders, sample/result release. |
 | `features/pharmacy/Pharmacy.tsx` | Pharmacy catalog, purchase, returns, stock, medicine issue. |
@@ -143,11 +146,11 @@ If a module does not have `service.py`, the endpoint file currently owns most bu
 | Platform/Super Admin | `features/platform/SuperAdminDashboard.tsx` | `backend/app/api/v1/tenants.py`, `subscriptions.py`, `identity.py`, `modules.py` | `tenants/models.py`, `subscriptions/models.py`, `identity/models.py` | same module `schemas.py` |
 | Tenant Admin | `features/admin/TenantAdmin.tsx` | `identity.py`, `tenants.py`, `settings.py` | `identity`, `tenants`, `settings` | same module `schemas.py` |
 | Patients/EMR | `features/patients/Patient.tsx` | `patients.py` | `patients/models.py` | `patients/schemas.py` |
-| Appointments | `features/appointments/AppointmentCalendarBooking.tsx` | `appointments.py` | `appointments/models.py` | `appointments/schemas.py` |
+| OPD Appointments | `features/opd/OPDWorkspace.tsx`, `features/appointments/AppointmentCalendarBooking.tsx` | `appointments.py` | `appointments/models.py` | `appointments/schemas.py` |
 | Queue | `features/queue/TokenQueue.tsx` | `queue.py` | `queue/models.py` | `queue` service/models |
 | Doctors/Practitioners | `features/doctors/Doctors.tsx` | `practitioners.py` | `practitioners/models.py` | `practitioners/schemas.py` |
 | Scheduling | `features/scheduling/Scheduling.tsx` | `practitioners.py` | `practitioners/models.py` | `practitioners/schemas.py` |
-| Consultations | `features/doctor/DoctorConsultation.tsx` | `consultations.py` | `consultations/models.py` | `consultations/schemas.py` |
+| OPD Consultations | `features/opd/OPDWorkspace.tsx`, `features/consulation/DoctorConsultation.tsx` | `consultations.py` | `consultations/models.py` | `consultations/schemas.py` |
 | IP Admission | `features/ip/IPAdmission.tsx` | `ip.py` | `ip/models.py` | `ip/schemas.py` |
 | Lab | `features/lab/Lab.tsx` | `lab.py` | `lab/models.py` | `lab/schemas.py` |
 | Pharmacy | `features/pharmacy/Pharmacy.tsx` | `pharmacy.py` | `pharmacy/models.py` | `pharmacy/schemas.py` |
@@ -314,11 +317,12 @@ Super admin tenant switch:
 
 Appointment to consultation:
 
-1. Reception creates appointment.
-2. Queue token can be created/managed.
-3. Doctor opens dashboard/workspace.
-4. Doctor signs consultation.
-5. Billing can generate invoice.
+1. Reception creates the appointment inside `/opd/new` and generates the token.
+2. The success action opens `/opd?appointment=<id>`; queue and Patient EMR use the same direct visit route.
+3. The OPD patient worklist shows waiting, called, in-consultation, and completed states without duplicating appointment data.
+4. The doctor records complaints, vitals, diagnosis, medicines, lab/services, scans, referrals, admission advice, and follow-up.
+5. Drafts remain editable; signing locks the consultation while allowing append-only addendums and prescription output.
+6. Billing can generate the consultation invoice from the signed record.
 
 OP to IP:
 

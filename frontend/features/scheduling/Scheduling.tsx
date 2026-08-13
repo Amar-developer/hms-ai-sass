@@ -388,7 +388,7 @@ export function Scheduling({
           <button
             type="button"
             onClick={() => open("create")}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"
+            className="primary-action gap-2 px-4 py-3 text-xs"
           >
             <Plus size={16} />
             Create Schedule

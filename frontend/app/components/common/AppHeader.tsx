@@ -1,15 +1,15 @@
 import React from "react";
-import { LogOut, KeyRound } from "lucide-react";
+import { ChevronDown, KeyRound, LogOut } from "lucide-react";
 import ProfileRow from "../ProfileRow";
 import { userIcon, userInitials } from "@/utils/helper";
 import { GlobalSearch } from "./GlobalSearch";
 import { SearchableSelect } from "./ui";
-import { FormField } from "../FormElements";
 import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "./CopyIdButton";
 import { NotificationCenter } from "./NotificationCenter";
+import type { AppNavigationTarget } from "@/lib/navigationTarget";
 
 interface AppHeaderProps {
   isSuperAdmin: boolean;
@@ -38,7 +38,7 @@ interface AppHeaderProps {
   handleLogout: any;
   setShowPassword: any;
   setReportsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  navigatePage: (target: string | { id: string; section?: string }) => void;
+  navigatePage: (target: AppNavigationTarget) => void;
 }
 
 const AppHeader = ({
@@ -64,39 +64,33 @@ const AppHeader = ({
   setReportsOpen,
   navigatePage,
 }: AppHeaderProps) => {
+  const [helpOpen, setHelpOpen] = React.useState(false);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const { initials, color } = userIcon(
   apiSession?.user?.name
 );
 
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
-      <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(200px,1.15fr)_minmax(150px,.8fr)_minmax(220px,1fr)_auto] lg:grid-cols-[minmax(260px,1.15fr)_minmax(180px,.8fr)_minmax(280px,1fr)_auto] lg:items-center">
-        <div className="min-w-0">
+    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur lg:px-5">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:grid-cols-[minmax(250px,1fr)_minmax(260px,420px)_minmax(140px,210px)_auto]">
+        <div className="min-w-0 self-center">
           {isSuperAdmin && apiSession ? (
-            <FormField label="Tenant">
-              <SearchableSelect
-                value={clinic?.id || ""}
-                onChange={(value: string) => switchTenant(value)}
-                searchable={false}
-                options={tenantOptions}
-              />
-            </FormField>
+            <SearchableSelect
+              value={clinic?.id || ""}
+              onChange={(value: string) => switchTenant(value)}
+              searchable={false}
+              options={tenantOptions}
+            />
           ) : (
-            <div className="grid h-11 content-center">
-              <span className="text-[10px] font-bold uppercase leading-none text-slate-500">
-                Tenant
-              </span>
-              <h2 className="mt-1 truncate text-lg font-bold leading-tight">
-                {displayClinicName}
-              </h2>
-            </div>
+            <h2 className="whitespace-nowrap text-sm font-black leading-tight text-slate-950 lg:text-base">
+              {displayClinicName}
+            </h2>
           )}
         </div>
-        <FormField label="Search">
+        <div className="order-3 min-w-0 md:order-none">
           <GlobalSearch items={searchItems} />
-        </FormField>
-        <FormField label="Branch">
+        </div>
+        <div className="order-4 min-w-0 md:order-none">
           {canChangeBranch ? (
             <SearchableSelect
               value={branchId}
@@ -109,21 +103,41 @@ const AppHeader = ({
               className="border-0"
             />
           ) : (
-            <span className="truncate">{branchName}</span>
+            <span className="block truncate rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold">
+              {branchName}
+            </span>
           )}
-        </FormField>
+        </div>
 
-        <div className="flex shrink-0 items-start lg:items-center mt-3  gap-2">
+        <div className="flex shrink-0 items-center justify-end gap-1 border-l border-slate-200 pl-2">
           <NotificationCenter
             apiSession={apiSession}
             navigatePage={navigatePage}
             onOpen={() => setProfileOpen(false)}
           />
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setHelpOpen((value) => !value)}
+              className="inline-flex h-9 items-center gap-1 px-2 text-xs font-semibold text-slate-700 hover:text-slate-950"
+              aria-expanded={helpOpen}
+            >
+              Help <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {helpOpen && (
+              <div className="absolute right-0 top-10 z-40 w-64 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl">
+                <p className="font-black text-slate-900">Quick help</p>
+                <p className="mt-2 text-slate-600">Press Ctrl + G to search and open any module.</p>
+                <p className="mt-1 text-slate-600">Use the OPD tabs to move between appointments, consultation, templates, and invoices.</p>
+              </div>
+            )}
+          </div>
+          <span className="h-5 w-px bg-slate-200" />
           <div ref={profileOpenRef} className="relative">
             <button
               type="button"
               onClick={() => setProfileOpen(!profileOpen)}
-              className={`grid h-10 w-10 place-items-center rounded-full bg-slate-900 text-sm font-black text-white ${color}`}
+              className={`grid h-9 w-9 place-items-center rounded-full bg-slate-900 text-xs font-black text-white ${color}`}
               title="Profile"
             >
               {initials}
