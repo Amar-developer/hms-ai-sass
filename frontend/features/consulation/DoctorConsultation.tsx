@@ -1043,7 +1043,7 @@ export function DoctorConsultation({
                     <div className="mb-2 flex justify-between  flex-wrap gap-1">
                       <Badge
                         tone={a.tokenType === "Emergency" ? "red" : "amber"}
-                        className="table-status p-1.5 text-xs"
+                        className="normal-badge p-1.5 text-xs"
                       >
                         {humanizeOptionLabel(a.tokenType)}
                       </Badge>

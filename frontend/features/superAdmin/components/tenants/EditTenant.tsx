@@ -20,7 +20,7 @@ import {
   Select,
 } from "@/app/components/common/ui";
 import { tenantTypes } from "../../constants";
-import { formatTenantType,invoiceLimitLabel,limitLabel } from "../../helpers";
+import { formatTenantType, invoiceLimitLabel, limitLabel } from "../../helpers";
 import { Info } from "@/app/components/common/Info";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
@@ -42,10 +42,10 @@ function TemplateGroup({
   keyField,
 }: any) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
+    <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
+      <div className="flex items-center justify-between gap-1">
         <h5 className="font-bold text-slate-950">{title}</h5>
-        <Badge tone="blue" className="rounded-md px-2 py-1 text-[10px]">
+        <Badge tone="blue" className="rounded-md px-1 py-1 text-[10px] w-1/2">
           {assignedIds.size} assigned
         </Badge>
       </div>
@@ -79,7 +79,7 @@ function TemplateGroup({
               )}
               <span className="min-w-0">
                 <span className="block font-semibold">{template.name}</span>
-                <span className="block break-all text-xs text-slate-500">
+                <span className="block break-all text-[10px] text-slate-500">
                   {template[keyField] || template.id}
                 </span>
                 {assigned && (
@@ -192,9 +192,7 @@ export function EditTenant({
   );
   const assignedBranchCodes = useMemo(
     () =>
-      new Set(
-        (branches || []).map((branch: any) => String(branch.code || "")),
-      ),
+      new Set((branches || []).map((branch: any) => String(branch.code || ""))),
     [branches],
   );
   const moduleNames = (selectedPlan?.enabled_modules || []).map(
@@ -224,51 +222,56 @@ export function EditTenant({
   }
 
   return (
-    <Card className="overflow-hidden border-slate-200 bg-white p-0 shadow-sm">
+    <Card className="overflow-hidden border-slate-200 bg-white p-0 shadow-sm mt-3">
       <div className="border-b border-slate-200 bg-white px-5 py-4 lg:px-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              tone="blue"
-              className="rounded-md px-2 py-1 text-[10px] uppercase"
-            >
-              Tenant Configuration
-            </Badge>
-            <span className="text-xs font-semibold text-slate-500">
-              Billing workspace setup
-            </span>
+              <Badge tone="blue" className="normal-badge">
+                Tenant Configuration
+              </Badge>
+              <span className="text-xs font-semibold text-slate-500">
+                Billing workspace setup
+              </span>
             </div>
             <h3 className="mt-2 text-lg font-black text-slate-950 lg:text-xl">
               Edit {selected.name}
             </h3>
-            <p className="mt-1 text-xs text-slate-500 lg:text-sm">
+            <p className="mt-1 card-desc">
               Review plan, branches, templates, and tenant admin settings.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="grid min-w-[360px] gap-2 sm:grid-cols-3">
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-[10px] font-bold uppercase text-slate-500">Plan</p>
-                <p className="mt-1 truncate text-sm font-black text-slate-950">{selectedPlan?.name || "Not assigned"}</p>
+                <p className="text-[10px] font-bold uppercase text-slate-500">
+                  Plan
+                </p>
+                <p className="mt-1 truncate text-sm font-black text-slate-950">
+                  {selectedPlan?.name || "Not assigned"}
+                </p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-[10px] font-bold uppercase text-slate-500">Branches</p>
-                <p className="mt-1 text-sm font-black text-slate-950">{branchRows.length} configured</p>
+                <p className="text-[10px] font-bold uppercase text-slate-500">
+                  Branches
+                </p>
+                <p className="mt-1 text-sm font-black text-slate-950">
+                  {branchRows.length} configured
+                </p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-[10px] font-bold uppercase text-slate-500">Modules</p>
-                <p className="mt-1 text-sm font-black text-slate-950">{moduleNames.length} included</p>
+                <p className="text-[10px] font-bold uppercase text-slate-500">
+                  Modules
+                </p>
+                <p className="mt-1 text-sm font-black text-slate-950">
+                  {moduleNames.length} included
+                </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={back}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
-            >
-              Back to Tenants
-            </button>
           </div>
+            <button type="button" onClick={back} className="close-button">
+              Back
+            </button>
         </div>
       </div>
 
@@ -356,9 +359,7 @@ export function EditTenant({
 
           <div className="min-h-[470px] px-5 py-5 lg:px-6">
             <div
-              className={
-                section === 0 ? "grid gap-4 md:grid-cols-3" : "hidden"
-              }
+              className={section === 0 ? "grid gap-4 md:grid-cols-3" : "hidden"}
             >
               <Field label="Tenant Name">
                 <Input
@@ -375,7 +376,7 @@ export function EditTenant({
                 />
               </Field>
               <Field label="Tenant Logo">
-                <Input name="logoFile" type="file" accept="image/*" />
+                <Input name="logoFile" type="file" accept="image/*" className='file:text-[10px] file:bg-slate-800 file:text-white file:rounded-md  p-1.5 text-xs'/>
                 {selected.logo_url && (
                   <p className="mt-1 break-all text-xs text-slate-500">
                     {selected.logo_url}
@@ -434,10 +435,7 @@ export function EditTenant({
               </Field>
               <div className="md:col-span-3">
                 <Field label="Address">
-                  <Input
-                    name="address"
-                    defaultValue={selected.address || ""}
-                  />
+                  <Input name="address" defaultValue={selected.address || ""} />
                 </Field>
               </div>
               <div className="md:col-span-3">
@@ -471,8 +469,7 @@ export function EditTenant({
                     label="Current Subscription"
                     value={
                       (plans || []).find(
-                        (plan: any) =>
-                          plan.id === activeSubscription?.plan_id,
+                        (plan: any) => plan.id === activeSubscription?.plan_id,
                       )?.name || "Not assigned"
                     }
                   />
@@ -533,9 +530,7 @@ export function EditTenant({
                         {!branch.id && branchRows.length > 1 && (
                           <button
                             type="button"
-                            onClick={() =>
-                              removeUnsavedBranch(branch._key)
-                            }
+                            onClick={() => removeUnsavedBranch(branch._key)}
                             className="text-xs font-bold text-red-600"
                           >
                             Remove
@@ -562,9 +557,7 @@ export function EditTenant({
                         <Field label="Status">
                           <Select
                             name={`branchActive_${index}`}
-                            defaultValue={String(
-                              branch.is_active !== false,
-                            )}
+                            defaultValue={String(branch.is_active !== false)}
                             disabled={locked}
                           >
                             <option value="true">Active</option>
@@ -619,9 +612,7 @@ export function EditTenant({
                     />
                     <Info
                       label="Patients"
-                      value={limitLabel(
-                        selectedPlan.monthly_patient_limit,
-                      )}
+                      value={limitLabel(selectedPlan.monthly_patient_limit)}
                     />
                     <Info
                       label="Invoices"
@@ -662,11 +653,7 @@ export function EditTenant({
             </div>
 
             <div
-              className={
-                section === 3
-                  ? "grid gap-4 lg:grid-cols-3"
-                  : "hidden"
-              }
+              className={section === 3 ? "grid gap-4 lg:grid-cols-3" : "hidden"}
             >
               <TemplateGroup
                 title="Roles"
@@ -677,7 +664,7 @@ export function EditTenant({
                 keyField="key"
               />
               <TemplateGroup
-                title="Medical Departments"
+                title="Departments"
                 name="departmentTemplateIds"
                 templates={templates?.departments || []}
                 assignedIds={assignedDepartmentTemplateIds}
@@ -731,9 +718,7 @@ export function EditTenant({
                     <Field label="Must Change Password">
                       <Select
                         name="adminMustChangePassword"
-                        defaultValue={String(
-                          tenantAdmin.must_change_password,
-                        )}
+                        defaultValue={String(tenantAdmin.must_change_password)}
                       >
                         <option value="true">Yes</option>
                         <option value="false">No</option>
@@ -812,7 +797,9 @@ export function EditTenant({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setSection((current) => Math.max(0, current - 1))}
+                onClick={() =>
+                  setSection((current) => Math.max(0, current - 1))
+                }
                 disabled={section === 0}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-bold disabled:text-slate-300"
               >
@@ -844,7 +831,7 @@ export function EditTenant({
               </button>
               <Button
                 disabled={busy}
-                className="rounded-lg px-5 py-2.5 text-xs lg:text-sm"
+                className="save-button"
               >
                 <ButtonLoader loading={busy}>
                   {busy ? "Saving..." : "Save All Changes"}

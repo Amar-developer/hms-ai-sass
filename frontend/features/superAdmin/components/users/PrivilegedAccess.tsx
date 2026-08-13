@@ -1,40 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Clock3, ShieldCheck, UserRoundCog } from "lucide-react";
 
-import { Badge, Card, Input } from "@/app/components/common/ui";
+import { Badge, Card, Input,Button } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { apiFetch } from "@/lib/api";
 import { displayDateTime } from "@/utils/helper";
 import { PlatformAdmins } from "./PlatformAdmins";
-
-type Options = {
-  platform_permission_keys: string[];
-  support_permission_keys: string[];
-  maximum_support_duration_minutes: number;
-};
-
-type PrivilegedAccount = {
-  id: string;
-  name: string;
-  email: string;
-  user_type: "platform_admin" | "support_admin";
-  is_active: boolean;
-  permissions?: string[];
-};
-
-type SupportGrant = {
-  id: string;
-  tenant_id: string;
-  tenant_name?: string;
-  user_id: string;
-  user_name?: string;
-  permission_keys: string[];
-  reason: string;
-  expires_at: string;
-  status: "scheduled" | "active" | "expired" | "revoked";
-};
+import {
+  usePrivilegedAccess,
+  type PrivilegedAccount,
+  type SupportGrant,
+} from "../../api/usePrivilegedAccess";
 
 const permissionLabel = (key: string) =>
   key
@@ -86,63 +63,23 @@ export function PrivilegedAccess({
 }: any) {
   const isRoot = Boolean(apiSession?.user?.is_super_admin);
   const isSupport = apiSession?.user?.user_type === "support_admin";
-  const [options, setOptions] = useState<Options>({
-    platform_permission_keys: [],
-    support_permission_keys: [],
-    maximum_support_duration_minutes: 480,
-  });
-  const [accounts, setAccounts] = useState<PrivilegedAccount[]>([]);
-  const [grants, setGrants] = useState<SupportGrant[]>([]);
+  const {
+    options,
+    accounts,
+    grants,
+    editablePermissions,
+    setEditablePermissions,
+    load,
+    createAccount: createAccountRequest,
+    updateAccount: updateAccountRequest,
+    createGrant: createGrantRequest,
+    revokeGrant: revokeGrantRequest,
+  } = usePrivilegedAccess(apiSession, isRoot, setBusy, setMessage);
   const [accountType, setAccountType] = useState<
     "platform_admin" | "support_admin"
   >("platform_admin");
   const [accountPermissions, setAccountPermissions] = useState<string[]>([]);
   const [grantPermissions, setGrantPermissions] = useState<string[]>([]);
-  const [editablePermissions, setEditablePermissions] = useState<
-    Record<string, string[]>
-  >({});
-
-  async function load() {
-    if (!apiSession) return;
-    setBusy(true);
-    try {
-      const [optionRows, grantRows, accountRows] = await Promise.all([
-        apiFetch<Options>("/identity/privileged-access/options", apiSession),
-        apiFetch<SupportGrant[]>(
-          "/identity/support-access-grants",
-          apiSession,
-        ),
-        isRoot
-          ? apiFetch<PrivilegedAccount[]>(
-              "/identity/privileged-accounts",
-              apiSession,
-            )
-          : Promise.resolve<PrivilegedAccount[]>([]),
-      ]);
-      setOptions(optionRows);
-      setGrants(grantRows);
-      if (isRoot) {
-        setAccounts(accountRows);
-        setEditablePermissions(
-          Object.fromEntries(
-            accountRows.map((account) => [
-              account.id,
-              account.permissions || [],
-            ]),
-          ),
-        );
-      }
-    } catch (error: any) {
-      setMessage(error.message || "Could not load privileged access.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiSession?.user?.id]);
 
   const supportAccounts = useMemo(
     () =>
@@ -159,30 +96,20 @@ export function PrivilegedAccess({
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    setBusy(true);
-    try {
-      await apiFetch("/identity/privileged-accounts", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          account_type: accountType,
-          name: data.get("name"),
-          email: data.get("email"),
-          mobile: data.get("mobile") || null,
-          temporary_password: data.get("temporaryPassword"),
-          current_password: data.get("currentPassword"),
-          permission_keys:
-            accountType === "platform_admin" ? accountPermissions : [],
-          reason: data.get("reason"),
-        }),
-      });
+    const created = await createAccountRequest({
+      account_type: accountType,
+      name: data.get("name"),
+      email: data.get("email"),
+      mobile: data.get("mobile") || null,
+      temporary_password: data.get("temporaryPassword"),
+      current_password: data.get("currentPassword"),
+      permission_keys:
+        accountType === "platform_admin" ? accountPermissions : [],
+      reason: data.get("reason"),
+    });
+    if (created) {
       form.reset();
       setAccountPermissions([]);
-      setMessage("Privileged account created.");
-      await load();
-    } catch (error: any) {
-      setMessage(error.message || "Could not create privileged account.");
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -194,58 +121,24 @@ export function PrivilegedAccess({
     if (!currentPassword) return;
     const reason = window.prompt("Enter the access-control reason");
     if (!reason) return;
-    setBusy(true);
-    try {
-      await apiFetch(
-        `/identity/privileged-accounts/${encodeURIComponent(account.id)}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            is_active: isActive,
-            permission_keys:
-              account.user_type === "platform_admin"
-                ? editablePermissions[account.id] || []
-                : undefined,
-            current_password: currentPassword,
-            reason,
-          }),
-        },
-      );
-      setMessage("Privileged account updated.");
-      await load();
-    } catch (error: any) {
-      setMessage(error.message || "Could not update privileged account.");
-    } finally {
-      setBusy(false);
-    }
+    await updateAccountRequest(account, isActive, currentPassword, reason);
   }
 
   async function createGrant(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    setBusy(true);
-    try {
-      await apiFetch("/identity/support-access-grants", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          user_id: data.get("userId"),
-          tenant_id: data.get("tenantId"),
-          permission_keys: grantPermissions,
-          duration_minutes: Number(data.get("durationMinutes")),
-          current_password: data.get("currentPassword"),
-          reason: data.get("reason"),
-        }),
-      });
+    const granted = await createGrantRequest({
+      user_id: data.get("userId"),
+      tenant_id: data.get("tenantId"),
+      permission_keys: grantPermissions,
+      duration_minutes: Number(data.get("durationMinutes")),
+      current_password: data.get("currentPassword"),
+      reason: data.get("reason"),
+    });
+    if (granted) {
       form.reset();
       setGrantPermissions([]);
-      setMessage("Temporary support access granted.");
-      await load();
-    } catch (error: any) {
-      setMessage(error.message || "Could not grant support access.");
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -254,26 +147,7 @@ export function PrivilegedAccess({
     if (!currentPassword) return;
     const reason = window.prompt("Enter the revocation reason");
     if (!reason) return;
-    setBusy(true);
-    try {
-      await apiFetch(
-        `/identity/support-access-grants/${encodeURIComponent(grant.id)}/revoke`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            current_password: currentPassword,
-            reason,
-          }),
-        },
-      );
-      setMessage("Support access revoked.");
-      await load();
-    } catch (error: any) {
-      setMessage(error.message || "Could not revoke support access.");
-    } finally {
-      setBusy(false);
-    }
+    await revokeGrantRequest(grant, currentPassword, reason);
   }
 
   if (isSupport) {
@@ -375,7 +249,7 @@ export function PrivilegedAccess({
             </div>
           )}
           <div className="md:col-span-2 xl:col-span-3">
-            <button className="rounded-lg bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-40" disabled={busy}>Create account</button>
+            <Button className="save-button disabled:opacity-40" disabled={busy}>Create account</Button>
           </div>
         </form>
 
@@ -449,7 +323,7 @@ export function PrivilegedAccess({
             <PermissionGrid values={options.support_permission_keys} selected={grantPermissions} onChange={setGrantPermissions} />
           </div>
           <div className="md:col-span-2 xl:col-span-4">
-            <button className="rounded-lg bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-40" disabled={busy}>Grant temporary access</button>
+            <Button className="save-button disabled:opacity-40" disabled={busy}>Grant temporary access</Button>
           </div>
         </form>
 

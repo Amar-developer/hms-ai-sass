@@ -50,7 +50,7 @@ export function PlanDetailPage({
               <h3 className="text-xl font-bold">{plan.name}</h3>
               <Badge
                 tone={plan.is_active ? "green" : "red"}
-                className="table-status p-2"
+                className="normal-badge p-2"
               >
                 {plan.is_active ? "Active" : "Paused"}
               </Badge>

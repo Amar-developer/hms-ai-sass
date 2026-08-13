@@ -19,7 +19,7 @@ export function CreateRole({
   const [roleName, setRoleName] = useState("");
 
   return (
-    <Card>
+    <Card className="mt-3">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="card-title font-bold">Create Role</h3>
@@ -50,7 +50,7 @@ export function CreateRole({
           />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2">
-          <Button disabled={busy}>
+          <Button disabled={busy} className='save-button'>
             <ButtonLoader loading={busy}>
               {busy ? "Creating..." : "Create Role"}
             </ButtonLoader>
@@ -58,7 +58,7 @@ export function CreateRole({
           <button
             type="button"
             onClick={back}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="close-button"
           >
             Cancel
           </button>

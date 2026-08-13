@@ -251,3 +251,11 @@ export const dateFieldOptions  = [
   { value: "updated_at", label: "Modified date" },
   { value: "created_at", label: "Created date" },
 ];
+
+export const subscriptin_status_options =[
+  { value: "all", label: "All status" },
+  { value: "active", label: "Active" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "expired", label: "Expired" },
+  { value: "cancelled", label: "Cancelled" },
+];

@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { InvoiceDetailPage } from "./InvoiceDetailPage";
@@ -266,9 +272,11 @@ describe("invoice payment summary", () => {
     expect(screen.getByText("Payable (INR)")).toBeTruthy();
     expect(screen.getByText("Rate (INR)")).toBeTruthy();
     expect(screen.queryByText("Amount (INR)")).toBeNull();
-    expect(screen.getAllByRole("columnheader").at(-1)?.textContent).toBe(
-      "Payable (INR)",
-    );
+    const itemsTable = screen.getByText("Rate (INR)").closest("table");
+    expect(
+      within(itemsTable as HTMLElement).getAllByRole("columnheader").at(-1)
+        ?.textContent,
+    ).toBe("Payable (INR)");
     expect(screen.getAllByText("₹200").length).toBeGreaterThan(0);
     expect(screen.getAllByText("₹190").length).toBeGreaterThan(0);
   });

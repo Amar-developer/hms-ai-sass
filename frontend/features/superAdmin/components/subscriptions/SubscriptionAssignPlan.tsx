@@ -27,7 +27,7 @@ export function SubscriptionAssignPlan({
         <button
           type="button"
           onClick={back}
-          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+          className="close-button"
         >
           Back to Subscriptions
         </button>
@@ -82,13 +82,13 @@ export function SubscriptionAssignPlan({
             </div>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button disabled={loading || !selectedId || plans.length === 0}>
+            <Button disabled={loading || !selectedId || plans.length === 0} className='save-button'>
               {loading ? "Assigning..." : "Save Subscription"}
             </Button>
             <button
               type="button"
               onClick={back}
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+              className="close-button"
             >
               Cancel
             </button>

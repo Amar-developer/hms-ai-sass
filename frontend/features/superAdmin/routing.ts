@@ -44,6 +44,8 @@ export function superAdminPath(
   section: string,
   ids: SuperAdminRouteIds = {},
 ): string {
+  console.log(section,'sections')
+  console.log(ids,'ids')
   const detail = (
     segment: string,
     id: string | undefined,

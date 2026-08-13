@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   Badge,
   Button,
@@ -11,21 +11,12 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { apiFetch } from "@/lib/api";
-import {
-  defaultNumberingEntities,
-  numberEntityLabel,
-  parseBankDetails,
-  parseCatalogIntegrations,
-  parseNumberingRules,
-} from "../../constants";
-import {
-  entitlementModules,
-  formatTenantType,
-} from "../../helpers";
+import { defaultNumberingEntities, numberEntityLabel } from "../../constants";
+import { formatTenantType } from "../../helpers";
 import { Empty } from "@/app/components/common/Empty";
 import { Info } from "@/app/components/common/Info";
 import { TenantPicker } from "../shared/TenantPicker";
+import { useTenantBranchSettings } from "../../api";
 
 function CatalogPluginControl({
   title,
@@ -102,121 +93,40 @@ export function TenantBranchSettings({
   modules,
   reloadPlans,
 }: any) {
-  const [subscriptions, setSubscriptions] = useState<any[]>([]);
-  const [selectedModules, setSelectedModules] = useState<string[]>([]);
-  const [settings, setSettings] = useState<any[]>([]);
-  const [numberingRules, setNumberingRules] = useState<any>(
-    parseNumberingRules(null, "SUN"),
+  const {
+    visibleSelected,
+    activePlan,
+    editableModules,
+    selectedModules,
+    numberingRules,
+    catalogIntegrations,
+    bankDetails,
+    settingsMessage,
+    setSettingsMessage,
+    accountsMessage,
+    setAccountsMessage,
+    pluginMessage,
+    setPluginMessage,
+    message,
+    setMessage,
+    loading,
+    settingsLoading,
+    pluginLoading,
+    setNumberRule,
+    setEntityCode,
+    setBankDetail,
+    saveNumberingSettings,
+    setCatalogPlugin,
+    saveCatalogIntegrations,
+    saveBankDetails,
+  } = useTenantBranchSettings(
+    apiSession,
+    selectedId,
+    tenants,
+    selected,
+    plans,
+    modules,
   );
-  const [catalogIntegrations, setCatalogIntegrations] = useState<any>(
-    parseCatalogIntegrations(null),
-  );
-  const [bankDetails, setBankDetails] = useState<any>(parseBankDetails(null));
-  const [settingsMessage, setSettingsMessage] = useState("");
-  const [accountsMessage, setAccountsMessage] = useState("");
-  const [pluginMessage, setPluginMessage] = useState("");
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [settingsLoading, setSettingsLoading] = useState(false);
-  const [pluginLoading, setPluginLoading] = useState(false);
-  const visibleSelected =
-    tenants.find((tenant: any) => tenant.id === selectedId) ||
-    (tenants.some((tenant: any) => tenant.id === selected?.id)
-      ? selected
-      : tenants[0]);
-  const planById = new Map((plans || []).map((plan: any) => [plan.id, plan]));
-  const activeSubscription =
-    subscriptions.find(
-      (item: any) => item.status === "active" || item.is_active,
-    ) || subscriptions[0];
-  const activePlan = activeSubscription
-    ? (planById.get(activeSubscription.plan_id) as any)
-    : null;
-  const editableModules = entitlementModules(modules || []);
-
-  async function loadTenantSubscription() {
-    if (!apiSession || !selectedId) {
-      setSubscriptions([]);
-      setSelectedModules([]);
-      return;
-    }
-    setLoading(true);
-    setMessage("");
-    try {
-      const rows = await apiFetch("/subscription-plans/tenant-subscriptions", {
-        ...apiSession,
-        tenantId: selectedId,
-      });
-      setSubscriptions(rows);
-      const current =
-        rows.find((item: any) => item.status === "active" || item.is_active) ||
-        rows[0];
-      const plan = current
-        ? (plans || []).find((item: any) => item.id === current.plan_id)
-        : null;
-      const enabled = plan?.enabled_modules?.length
-        ? plan.enabled_modules
-        : editableModules
-            .filter((module: any) => module.default_enabled)
-            .map((module: any) => module.entitlement_key);
-      setSelectedModules(enabled);
-    } catch (err: any) {
-      setSubscriptions([]);
-      setSelectedModules(
-        editableModules
-          .filter((module: any) => module.default_enabled)
-          .map((module: any) => module.entitlement_key),
-      );
-      setMessage(err.message || "Could not load tenant modules.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadTenantSettings() {
-    if (!apiSession || !selectedId) {
-      setSettings([]);
-      setNumberingRules(parseNumberingRules(null, "SUN"));
-      setCatalogIntegrations(parseCatalogIntegrations(null));
-      setBankDetails(parseBankDetails(null));
-      return;
-    }
-    setSettingsLoading(true);
-    setSettingsMessage("");
-    try {
-      const rows = await apiFetch("/settings", {
-        ...apiSession,
-        tenantId: selectedId,
-      });
-      setSettings(rows);
-      const find = (key: string) =>
-        rows.find((setting: any) => setting.key === key);
-      setNumberingRules(
-        parseNumberingRules(
-          find("numbering.rules")?.value,
-          find("invoice.prefix")?.value || "SUN",
-        ),
-      );
-      setCatalogIntegrations(
-        parseCatalogIntegrations(find("catalog.integrations")?.value),
-      );
-      const bankRow =
-        rows.find(
-          (setting: any) =>
-            setting.key === "accounts.bank_details" &&
-            setting.scope === "tenant",
-        ) || find("accounts.bank_details");
-      setBankDetails(parseBankDetails(bankRow?.value));
-    } catch (err: any) {
-      setSettings([]);
-      setNumberingRules(parseNumberingRules(null, "SUN"));
-      setCatalogIntegrations(parseCatalogIntegrations(null));
-      setBankDetails(parseBankDetails(null));
-      setSettingsMessage(err.message || "Could not load numbering settings.");
-    } finally {
-      setSettingsLoading(false);
-    }
-  }
 
   useEffect(() => {
     if (!tenants.length) return;
@@ -225,141 +135,9 @@ export function TenantBranchSettings({
     }
   }, [selectedId, setSelectedId, tenants]);
 
-  useEffect(() => {
-    loadTenantSubscription();
-    loadTenantSettings();
-  }, [apiSession?.tenantId, selectedId, plans?.length, modules?.length]);
-
-  function setNumberRule(key: string, value: any) {
-    setNumberingRules({ ...numberingRules, [key]: value });
-  }
-  function setEntityCode(key: string, value: string) {
-    setNumberingRules({
-      ...numberingRules,
-      entities: {
-        ...(numberingRules.entities || {}),
-        [key]: value.toUpperCase(),
-      },
-    });
-  }
-  function setBankDetail(key: string, value: string) {
-    setBankDetails({ ...bankDetails, [key]: value });
-  }
-
-  async function saveNumberingSettings(e: any) {
-    e.preventDefault();
-    if (!apiSession || !visibleSelected) return;
-    setSettingsLoading(true);
-    setSettingsMessage("");
-    try {
-      await Promise.all([
-        apiFetch(
-          "/settings",
-          { ...apiSession, tenantId: visibleSelected.id },
-          {
-            method: "PUT",
-            body: JSON.stringify({
-              scope: "tenant",
-              module: "numbering",
-              key: "numbering.rules",
-              value: numberingRules,
-              actor_user_id: apiSession.user?.id,
-            }),
-          },
-        ),
-        apiFetch(
-          "/settings",
-          { ...apiSession, tenantId: visibleSelected.id },
-          {
-            method: "PUT",
-            body: JSON.stringify({
-              scope: "tenant",
-              module: "invoice",
-              key: "invoice.prefix",
-              value: numberingRules.prefix,
-              actor_user_id: apiSession.user?.id,
-            }),
-          },
-        ),
-      ]);
-      await loadTenantSettings();
-      setSettingsMessage("Document numbering settings saved.");
-    } catch (err: any) {
-      setSettingsMessage(err.message || "Could not save numbering settings.");
-    } finally {
-      setSettingsLoading(false);
-    }
-  }
-  function setCatalogPlugin(key: string, patch: any) {
-    setCatalogIntegrations({
-      ...catalogIntegrations,
-      [key]: { ...(catalogIntegrations[key] || {}), ...patch },
-    });
-  }
-
-  async function saveCatalogIntegrations(e: any) {
-    e.preventDefault();
-    if (!apiSession || !visibleSelected) return;
-    setPluginLoading(true);
-    setPluginMessage("");
-    try {
-      await apiFetch(
-        "/settings",
-        { ...apiSession, tenantId: visibleSelected.id },
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "tenant",
-            module: "integrations",
-            key: "catalog.integrations",
-            value: catalogIntegrations,
-            actor_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      await loadTenantSettings();
-      setPluginMessage("Tenant catalog plugin controls saved.");
-    } catch (err: any) {
-      setPluginMessage(
-        err.message || "Could not save catalog plugin controls.",
-      );
-    } finally {
-      setPluginLoading(false);
-    }
-  }
-
-  async function saveBankDetails(e: any) {
-    e.preventDefault();
-    if (!apiSession || !visibleSelected) return;
-    setSettingsLoading(true);
-    setAccountsMessage("");
-    try {
-      await apiFetch(
-        "/settings",
-        { ...apiSession, tenantId: visibleSelected.id },
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "tenant",
-            module: "accounts",
-            key: "accounts.bank_details",
-            value: bankDetails,
-            actor_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      await loadTenantSettings();
-      setAccountsMessage("Tenant account details saved.");
-    } catch (err: any) {
-      setAccountsMessage(err.message || "Could not save account details.");
-    } finally {
-      setSettingsLoading(false);
-    }
-  }
-
   return (
     <div className="space-y-5">
-      <Card>
+      <Card className="mt-3">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
           <div>
             <h3 className="card-title font-bold">Tenant & Branch Settings</h3>
@@ -470,7 +248,7 @@ export function TenantBranchSettings({
           <div className="mt-5 flex justify-end">
             <Button
               disabled={settingsLoading || !visibleSelected}
-              className="px-4 py-2 text-xs lg:px-5 lg:py-2.5 lg:text-sm"
+              className="save-button"
             >
               {settingsLoading ? "Saving..." : "Save Accounts"}
             </Button>
@@ -490,7 +268,7 @@ export function TenantBranchSettings({
           </div>
           <Badge
             tone="blue"
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            className="normal-badge"
           >
             {settingsLoading ? "Loading" : "Tenant scoped"}
           </Badge>
@@ -539,7 +317,8 @@ export function TenantBranchSettings({
             ))}
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button disabled={settingsLoading || !visibleSelected}>
+            <Button disabled={settingsLoading || !visibleSelected}
+            className='save-button'>
               {settingsLoading ? "Saving..." : "Save Numbering"}
             </Button>
             <span className="text-xs text-slate-500">
@@ -586,7 +365,7 @@ export function TenantBranchSettings({
             onChange={(patch: any) => setCatalogPlugin("medicine_items", patch)}
           />
           <div className="flex flex-wrap items-center gap-3 md:col-span-2">
-            <Button disabled={pluginLoading || !visibleSelected}>
+            <Button disabled={pluginLoading || !visibleSelected} className='save-button'>
               {pluginLoading ? "Saving..." : "Save Plugin Controls"}
             </Button>
             <span className="text-xs text-slate-500">

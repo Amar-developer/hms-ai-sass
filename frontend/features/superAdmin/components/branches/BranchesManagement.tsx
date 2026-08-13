@@ -1,18 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
-import { formatDate } from "../../helpers";
+import {  Card, Input, RefreshButton } from "@/app/components/common/ui";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "@/app/components/common/Empty";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { TenantPicker } from "../shared/TenantPicker";
 import { Pagination } from "@/app/components/common/Pagination";
 import { FormField } from "@/app/components/FormElements";
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
-import { RowActions } from "@/features/admin/components/RowActions";
 import { DataTable } from "@/app/components/common/DataTable";
-import { Column } from "@/utils/types";
+import { getBranchColumns } from "./Column";
 
 export function BranchesManagement({
   tenants,
@@ -52,123 +48,12 @@ export function BranchesManagement({
     setPage(1);
   }, [query, branches.length]);
 
-  const branchColumns: Column<any>[] = [
-    {
-      key: "name",
-      header: "Branch",
-      width: "250px",
-      render: (branch: any) => {
-        const locked =
-          branch.is_template_locked || branch.source_template_branch_id;
-
-        return (
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <b className="text-xs lg:text-sm">{branch.name}</b>
-
-              <CopyIdButton
-                value={branch.id}
-                label="Branch ID"
-                allowed={canCopyIds}
-              />
-
-              {branch.is_global_template && <Badge tone="blue">Global</Badge>}
-
-              {locked && <Badge tone="purple">Locked</Badge>}
-            </div>
-          </div>
-        );
-      },
-    },
-
-    {
-      key: "code",
-      header: "Code",
-      width: "150px",
-      render: (branch: any) => (
-        <span className="text-xs lg:text-sm">{branch.code}</span>
-      ),
-    },
-    {
-      key: "is_active",
-      header: "Status",
-      width: "180px",
-      className: "text-center",
-      render: (branch: any) => (
-        <Badge
-          tone={branch.is_active ? "green" : "red"}
-          className="rounded-full py-1 px-1 text-xs lg:text-sm"
-        >
-          {branch.is_active ? "Active" : "Inactive"}
-        </Badge>
-      ),
-    },
-
-    {
-      key: "updated_at",
-      header: "Modified",
-      width: "180px",
-      render: (branch: any) => (
-        <span className="text-xs lg:text-sm">
-          {formatDate(branch.updated_at || branch.created_at)}
-        </span>
-      ),
-    },
-
-    {
-      key: "actions",
-      header: "Actions",
-      disableRowClick: true,
-      render: (branch: any) => {
-        const locked =
-          branch.is_template_locked || branch.source_template_branch_id;
-
-        const actions = [
-          {
-            label: "Edit",
-            hidden: locked,
-            onClick: () => {
-              setSelectedBranchId(branch.id);
-              setSection("branchEdit");
-            },
-          },
-
-          {
-            label: "Assign",
-            onClick: () => {
-              setSelectedBranchId(branch.id);
-              setSection("branchAssign");
-            },
-          },
-
-          {
-            label: branch.is_active ? "Inactive" : "Active",
-            hidden: locked,
-            onClick: () =>
-              setConfirmAction({
-                entity: "branch",
-                kind: "status",
-                branch,
-              }),
-          },
-
-          {
-            label: "Delete",
-            danger: true,
-            hidden: locked,
-            onClick: () =>
-              setConfirmAction({
-                entity: "branch",
-                kind: "delete",
-                branch,
-              }),
-          },
-        ];
-
-        return <RowActions actions={actions} className="right-5 -bottom-7" />;
-      },
-    },
-  ];
+  const branchColumns = getBranchColumns({
+    canCopyIds,
+    setSelectedBranchId,
+    setSection,
+    setConfirmAction,
+  });
 
   return (
     <div className="mt-3">

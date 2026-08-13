@@ -105,7 +105,7 @@ export function getScheduleColumns({
       render: (row: any) => (
         <Badge
           tone={row.is_active ? "green" : "red"}
-          className="table-status text-sm"
+          className="normal-badge text-sm"
         >
           {row.is_active ? "Active" : "Inactive"}
         </Badge>

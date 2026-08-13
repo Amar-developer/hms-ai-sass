@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { Badge, Card, Input } from "@/app/components/common/ui";
+import { Badge, Card, Input, Button  } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { apiFetch } from "@/lib/api";
 import { displayDateTime } from "@/utils/helper";
@@ -145,14 +145,14 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
             <Input name="reason" minLength={3} required placeholder="Operational continuity" />
           </FormField>
           <div className="md:col-span-2 xl:col-span-3">
-            <button
-              className="rounded-lg bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-50"
+            <Button
+              className="save-button"
               disabled={busy}
             >
               <ButtonLoader loading={busy}>
                 {busy ? "Creating..." : "Create root Super Admin"}
               </ButtonLoader>
-            </button>
+            </Button>
           </div>
         </form>
       </Card>
@@ -166,7 +166,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
             </p>
           </div>
           <button
-            className="rounded-lg border px-3 py-2 font-bold"
+            className="close-button"
             onClick={() => void load()}
             disabled={loading}
           >

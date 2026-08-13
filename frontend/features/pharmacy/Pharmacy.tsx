@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActionButton,
-  Badge,
   Button,
   Card,
   Input,
@@ -14,22 +12,15 @@ import {
 import { FormField, NumberField } from "@/app/components/FormElements";
 import { SearchPicker } from "@/app/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { displayDate, displayDateTime, today } from "@/utils/helper";
+import { today } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
+import { DataTable } from "@/app/components/common/DataTable";
+import { FilterSection } from "@/app/components/common/FilterSection";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
-import {
-  isBilledIssue,
-  isCancelledIssue,
-  isDispensed,
-} from "@/features/pharmacy/helpers";
 import { ConsultPrescriptionModal } from "./components/ConsultPrescriptionModal";
 import { MedicineDetailModal } from "./components/MedicineDetailModal";
 import { PatientSearchSelect } from "../patients/components/PatientSearchSelect";
-import {
-  canCopyDatabaseIds,
-  CopyIdButton,
-} from "@/app/components/common/CopyIdButton";
-import { RowActions } from "../admin/components/RowActions";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import type { PharmacyIssueSummary } from "@/lib/contracts";
 import {
   useAvailableMedicines,
@@ -38,7 +29,7 @@ import {
   usePharmacyWorkspace,
 } from "./api";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
-import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
+import { getPharmacyColumns, getPrescriptionColumns } from "./Column";
 
 const pageSize = 10;
 
@@ -97,6 +88,14 @@ export function Pharmacy({
     useState<PharmacyIssueSummary | null>(null);
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [page, setPage] = useState(1);
+  const [worklistQuery, setWorklistQuery] = useState("");
+  const [worklistFilters, setWorklistFilters] = useState<
+    Record<string, string>
+  >({ source: "all", status: "all" });
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [worklistFromDate, setWorklistFromDate] = useState("");
+  const [worklistToDate, setWorklistToDate] = useState("");
 
   const { issues, issuesLoaded, medicines, batches, suppliers, load } =
     usePharmacyWorkspace(apiSession, branchId, {
@@ -162,15 +161,103 @@ export function Pharmacy({
       ]),
     [issues, localInvoicedIssueIds],
   );
-  const totalPages = Math.max(1, Math.ceil(issues.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const pharmacyPageRows = issues.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
-  );
+  const worklistSourceOptions = useMemo(() => {
+    const set = new Set<string>();
+    issues.forEach((issue: any) => {
+      if (issue.source) set.add(String(issue.source));
+    });
+    return [
+      { value: "all", label: "All Sources" },
+      ...Array.from(set).map((source) => ({
+        value: source,
+        label: humanizeOptionLabel(source),
+      })),
+    ];
+  }, [issues]);
+
+  const worklistStatusOptions = useMemo(() => {
+    const set = new Set<string>();
+    issues.forEach((issue: any) => {
+      if (issue.status) set.add(String(issue.status));
+    });
+    return [
+      { value: "all", label: "All Status" },
+      ...Array.from(set).map((status) => ({
+        value: status,
+        label: humanizeOptionLabel(status),
+      })),
+    ];
+  }, [issues]);
+
+  function onWorklistFilterChange(key: string, value: string) {
+    setWorklistFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
   const { patients, patientMap } = usePatientReferencesQuery(
     apiSession,
     issues.map((issue: any) => issue.patient_id),
+  );
+
+  const filteredIssues = useMemo(() => {
+    const q = worklistQuery.trim().toLowerCase();
+    const min = amountMin.trim() === "" ? null : Number(amountMin);
+    const max = amountMax.trim() === "" ? null : Number(amountMax);
+    const from = worklistFromDate
+      ? new Date(worklistFromDate).getTime()
+      : null;
+    const to = worklistToDate
+      ? new Date(`${worklistToDate}T23:59:59`).getTime()
+      : null;
+
+    return issues.filter((issue: any) => {
+      if (q) {
+        const name = String(
+          issue.patient_name ||
+            (patientMap.get(issue.patient_id) as any)?.name ||
+            "",
+        ).toLowerCase();
+        if (!name.includes(q)) return false;
+      }
+
+      if (worklistFilters.source !== "all") {
+        if (String(issue.source || "") !== worklistFilters.source)
+          return false;
+      }
+
+      if (worklistFilters.status !== "all") {
+        if (String(issue.status || "") !== worklistFilters.status)
+          return false;
+      }
+
+      const amount = Number(issue.amount);
+      if (min !== null && amount < min) return false;
+      if (max !== null && amount > max) return false;
+
+      const createdAt = issue.created_at
+        ? new Date(issue.created_at).getTime()
+        : null;
+      if (from !== null && (createdAt === null || createdAt < from))
+        return false;
+      if (to !== null && (createdAt === null || createdAt > to)) return false;
+
+      return true;
+    });
+  }, [
+    issues,
+    worklistQuery,
+    worklistFilters,
+    amountMin,
+    amountMax,
+    worklistFromDate,
+    worklistToDate,
+    patientMap,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredIssues.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pharmacyPageRows = filteredIssues.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
   );
   useEffect(() => {
     if (!medicineId && medicines[0]?.id) setMedicineId(medicines[0].id);
@@ -182,6 +269,16 @@ export function Pharmacy({
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+  useEffect(() => {
+    setPage(1);
+  }, [
+    worklistQuery,
+    worklistFilters,
+    amountMin,
+    amountMax,
+    worklistFromDate,
+    worklistToDate,
+  ]);
   useEffect(() => {
     if (typeof window !== "undefined")
       localStorage.setItem(
@@ -316,6 +413,39 @@ export function Pharmacy({
       setEditingAmountValue("");
     }
   }
+
+  function isAmountBusy(issue: any) {
+    return busy === `amount-${issue.id}`;
+  }
+
+  const prescriptionColumns = getPrescriptionColumns({
+    busy,
+    canCreatePharmacyIssue,
+    onView: (a: any) => setViewConsult(a),
+    onCreate: (a: any) => createFromConsultation(a),
+    onDismiss: (a: any) =>
+      setDismissedConsultations((ids: string[]) => [...ids, a.consultationId]),
+  });
+
+  const pharmacyColumns = getPharmacyColumns({
+    pageSize,
+    safePage,
+    patientMap,
+    canCopyIds,
+    invoicedIssueIds,
+    editingAmountId,
+    editingAmountValue,
+    setEditingAmountValue,
+    startEditAmount,
+    cancelEditAmount,
+    saveIssueAmount,
+    amountBusy: isAmountBusy,
+    canEditPharmacyIssue,
+    canDispensePharmacyIssue,
+    canBillPharmacyIssue,
+    busy,
+    handleIssueAction,
+  });
 
   if (!apiSession)
     return (
@@ -477,87 +607,16 @@ export function Pharmacy({
       )}
       <Card>
         <h3 className="card-title font-bold">Doctor Prescriptions</h3>
-        <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
-          {(() => {
-            const visible = prescriptionReady.filter(
-              (a: any) => !dismissedConsultations.includes(a.consultationId),
-            );
-            return (
-              <table className="w-full min-w-[900px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Prescription</th>
-                    <th className="px-4 py-3">Patient</th>
-                    <th className="px-4 py-3">Doctor</th>
-                    <th className="px-4 py-3">Date &amp; Time</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {visible.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-5 text-slate-500">
-                        No completed prescriptions ready.
-                      </td>
-                    </tr>
-                  ) : (
-                    visible.slice(0, 6).map((a: any) => (
-                      <tr key={a.id}>
-                        <td className="px-4 py-3 font-bold">
-                          {a.token || "-"}
-                        </td>
-                        <td className="px-4 py-3 font-semibold">{a.patient}</td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {a.doctor && a.doctor !== "Unassigned"
-                            ? a.doctor
-                            : "-"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                          {displayDateTime(
-                            a.consultationSignedAt ||
-                              a.consultationCreatedAt ||
-                              a.appointmentDate,
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end gap-2">
-                            <ActionButton
-                              onClick={() => setViewConsult(a)}
-                              className="close-button"
-                            >
-                              View
-                            </ActionButton>
-                            {canCreatePharmacyIssue && (
-                              <Button
-                                disabled={busy === a.consultationId}
-                                onClick={() => createFromConsultation(a)}
-                                className="rounded-lg px-2 py-2 text-xs lg:px-4"
-                              >
-                                {busy === a.consultationId
-                                  ? "Creating..."
-                                  : "Create Issue"}
-                              </Button>
-                            )}
-                            <ActionButton
-                              onClick={() =>
-                                setDismissedConsultations((ids: string[]) => [
-                                  ...ids,
-                                  a.consultationId,
-                                ])
-                              }
-                              className="close-button"
-                            >
-                              Remove
-                            </ActionButton>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            );
-          })()}
+        <div className="mt-4">
+          <DataTable
+            columns={prescriptionColumns}
+            data={prescriptionReady
+              .filter(
+                (a: any) => !dismissedConsultations.includes(a.consultationId),
+              )
+              .slice(0, 6)}
+            emptyMessage="No completed prescriptions ready."
+          />
         </div>
       </Card>
       <Card>
@@ -565,228 +624,77 @@ export function Pharmacy({
           <h3 className="card-title font-bold">Pharmacy Worklist</h3>
           <RefreshButton onRefresh={load} />
         </div>
-        <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1060px] table-fixed text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="w-[80px] px-4 py-3">#</th>
-                <th className="w-[150px]">Date & Time</th>
-                <th className="w-[150px]">Patient</th>
-                <th className="w-[140px]">Source</th>
-                <th className="w-[150px]">Status</th>
-                <th className="w-[100px]">Amount</th>
-                <th className="w-[80px] pr-4 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {!issuesLoaded && (
-                <tr>
-                  <td colSpan={7} className="p-0">
-                    <TableSkeleton />
-                  </td>
-                </tr>
-              )}
-              {issuesLoaded && issues.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="card-desc px-4 py-4 text-slate-500"
-                  >
-                    No pharmacy issues yet.
-                  </td>
-                </tr>
-              )}
-              {issuesLoaded && pharmacyPageRows.map((issue: any, index: number) => {
-                const p: any = patientMap.get(issue.patient_id);
-                const selected = selectedIssue?.id === issue.id;
-                const dispensed = isDispensed(issue);
-                const cancelled = isCancelledIssue(issue);
-                const invoiced = invoicedIssueIds.has(issue.id);
-                const billed = isBilledIssue(issue) || invoiced;
-                const rowBusy = busy === issue.id;
-                const invoiceBusy = busy === `invoice-${issue.id}`;
-                const amountBusy = busy === `amount-${issue.id}`;
-                const statusLabel = billed
-                  ? "Billed"
-                  : humanizeOptionLabel(issue.status);
-                const statusTone = billed
-                  ? "green"
-                  : dispensed
-                    ? "green"
-                    : cancelled
-                      ? "red"
-                      : "amber";
-                return (
-                  <tr
-                    key={issue.id}
-                    onClick={() => setSelectedIssue(issue)}
-                    className={`cursor-pointer transition hover:bg-slate-50 ${selected ? "bg-slate-50" : ""}`}
-                  >
-                    <td className="px-4 py-4">
-                      <b>{(safePage - 1) * pageSize + index + 1}</b>
-                    </td>
-                    <td>
-                      <b className="text-xs">{displayDate(issue.created_at)}</b>
-                      <p className="text-xs text-slate-500">
-                        {new Date(issue.created_at).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </td>
-                    <td className="text-xs">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span>
-                            {issue.patient_name ||
-                              p?.name ||
-                              publicDisplayValue(issue.patient_id, "Patient")}
-                          </span>
-                          <CopyIdButton
-                            value={issue.id}
-                            label="Pharmacy Issue ID"
-                            allowed={canCopyIds}
-                          />
-                        </div>
-                        <PatientFlagBadges patient={p} className="mt-1" />
-                      </div>
-                    </td>
-                    <td>
-                      <Badge className="table-status w-[70%] text-xs px-2">
-                        {humanizeOptionLabel(issue.source)}
-                      </Badge>
-                    </td>
-                    <td>
-                      <Badge
-                        tone={statusTone as any}
-                        className="table-status w-[60%] text-xs"
-                      >
-                        {statusLabel}
-                      </Badge>
-                    </td>
-                    <td onClick={(event) => event.stopPropagation()}>
-                      {editingAmountId === issue.id ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={0}
-                            autoFocus
-                            value={editingAmountValue}
-                            onChange={(event: any) =>
-                              setEditingAmountValue(event.target.value)
-                            }
-                            onKeyDown={(event: any) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                saveIssueAmount(issue);
-                              }
-                              if (event.key === "Escape") {
-                                event.preventDefault();
-                                cancelEditAmount();
-                              }
-                            }}
-                            className="w-20 rounded-xl border px-2 py-1 text-sm outline-none focus:border-slate-500"
-                          />
-                          <button
-                            type="button"
-                            disabled={amountBusy}
-                            onClick={() => saveIssueAmount(issue)}
-                            className="rounded-xl border px-2 py-1 text-xs font-bold disabled:bg-slate-50 disabled:text-slate-300"
-                          >
-                            {amountBusy ? "Saving" : "Save"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelEditAmount}
-                            className="rounded-xl border px-2 py-1 text-xs font-bold"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <b>₹{issue.amount}</b>
-                          {canEditPharmacyIssue && (
-                            <button
-                              type="button"
-                              disabled={cancelled || billed}
-                              onClick={() => startEditAmount(issue)}
-                              className="rounded-xl border px-2 py-1 text-xs font-bold disabled:bg-slate-50 disabled:text-slate-300"
-                            >
-                              Edit
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td
-                      className="pr-4"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="ml-auto flex justify-center">
-                        <RowActions
-                          className="right-8 top-0"
-                          width="w-48"
-                          actions={[
-                            {
-                              label: "Partial dispense",
-                              hidden: !canDispensePharmacyIssue,
-                              disabled:
-                                dispensed ||
-                                cancelled ||
-                                invoiced ||
-                                rowBusy ||
-                                invoiceBusy,
-                              onClick: () =>
-                                handleIssueAction(issue, "partial"),
-                            },
-                            {
-                              label: "Dispense",
-                              hidden: !canDispensePharmacyIssue,
-                              disabled:
-                                dispensed ||
-                                cancelled ||
-                                invoiced ||
-                                rowBusy ||
-                                invoiceBusy,
-                              onClick: () =>
-                                handleIssueAction(issue, "dispense"),
-                            },
-                            {
-                              label: "Generate invoice",
-                              hidden: invoiced || !canBillPharmacyIssue,
-                              disabled: rowBusy || invoiceBusy,
-                              onClick: () =>
-                                handleIssueAction(issue, "invoice"),
-                            },
-                            {
-                              label: "Cancel order",
-                              hidden: !canDispensePharmacyIssue,
-                              disabled:
-                                dispensed ||
-                                cancelled ||
-                                invoiced ||
-                                rowBusy ||
-                                invoiceBusy,
-                              danger: true,
-                              onClick: () => handleIssueAction(issue, "cancel"),
-                            },
-                          ]}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <FilterSection
+          title="Patient"
+          query={worklistQuery}
+          className="lg:grid-cols-6 xl:grid-cols-6"
+          setQuery={setWorklistQuery}
+          filters={[
+            { key: "source", label: "Source", options: worklistSourceOptions },
+            { key: "status", label: "Status", options: worklistStatusOptions },
+          ]}
+          filterValues={worklistFilters}
+          onFilterChange={onWorklistFilterChange}
+          onReset={() => {
+            setAmountMin("");
+            setAmountMax("");
+            setWorklistFromDate("");
+            setWorklistToDate("");
+          }}
+        >
+          <FormField label="Price Min">
+            <Input
+              type="number"
+              value={amountMin}
+              onChange={(e: any) => setAmountMin(e.target.value)}
+              placeholder="Min amount"
+            />
+          </FormField>
+          <FormField label="Price Max">
+            <Input
+              type="number"
+              value={amountMax}
+              onChange={(e: any) => setAmountMax(e.target.value)}
+              placeholder="Max amount"
+            />
+          </FormField>
+          <FormField label="From">
+            <Input
+              type="date"
+              value={worklistFromDate}
+              onChange={(e: any) => setWorklistFromDate(e.target.value)}
+            />
+          </FormField>
+          <FormField label="To">
+            <Input
+              type="date"
+              value={worklistToDate}
+              onChange={(e: any) => setWorklistToDate(e.target.value)}
+            />
+          </FormField>
+        </FilterSection>
+        <div className="mt-4">
+          {!issuesLoaded ? (
+            <div className="overflow-auto rounded-lg border">
+              <TableSkeleton rows={8} />
+            </div>
+          ) : (
+            <DataTable
+              columns={pharmacyColumns}
+              data={pharmacyPageRows}
+              emptyMessage="No pharmacy issues match your filters."
+              onRowClick={setSelectedIssue}
+            />
+          )}
         </div>
-        <Pagination
-          page={safePage}
-          totalPages={totalPages}
-          total={issues.length}
-          onPage={setPage}
-        />
+        {issuesLoaded && (
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            total={filteredIssues.length}
+            onPage={setPage}
+          />
+        )}
       </Card>
     </div>
   );

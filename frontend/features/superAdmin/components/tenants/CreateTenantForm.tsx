@@ -160,7 +160,7 @@ export function CreateTenantForm({
   const CurrentStepIcon = currentStep.icon;
 
   return (
-    <Card className="overflow-hidden border-slate-200 bg-white p-0 shadow-sm">
+    <Card className="overflow-hidden border-slate-200 bg-white p-0 shadow-sm mt-3">
       <div className="border-b border-slate-200 bg-white px-5 py-4 lg:px-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
@@ -172,10 +172,10 @@ export function CreateTenantForm({
                 Billing workspace provisioning
               </span>
             </div>
-            <h3 className="mt-2 text-lg font-black text-slate-950 lg:text-xl">
+            <h3 className="mt-2 text-base font-black text-slate-950 lg:text-xl">
               New Tenant Onboarding
             </h3>
-            <p className="mt-1 text-xs text-slate-500 lg:text-sm">
+            <p className="mt-1 text-xs text-slate-500 ">
               Configure plan, branches, templates, and the first billing admin account.
             </p>
           </div>

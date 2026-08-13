@@ -6,6 +6,12 @@ export type Column<T> = {
   cellClassName?: string;
   render?: (row: T, index: number) => React.ReactNode;
   disableRowClick?: boolean;
+  sortable?: boolean;
+};
+
+export type SortState = {
+  key: string;
+  dir: "asc" | "desc";
 };
 
 export type DataTableProps<T> = {
@@ -18,4 +24,6 @@ export type DataTableProps<T> = {
   paginate?: boolean;
   pageSize?: number;
   loading?: boolean;
+  sort?: SortState;
+  onSortChange?: (sort: SortState) => void;
 };

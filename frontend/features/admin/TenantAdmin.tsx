@@ -28,7 +28,7 @@ import { DepartmentForm } from "./forms/DepartmentForm";
 import { SupplierForm } from "./forms/SupplierForm";
 import { FilesPanel } from "./components/FilesPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
-import { WhatsAppIntegrationSettings } from "./components/WhatsAppIntegrationSettings";
+  import { WhatsAppIntegrationSettings } from "./whatsapp_integration/WhatsAppIntegrationSettings";
 import { PatientIntelligenceSettings } from "./components/PatientIntelligenceSettings";
 import {
   BRANCH_COLUMNS,

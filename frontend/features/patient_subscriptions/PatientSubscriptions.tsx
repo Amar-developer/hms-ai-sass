@@ -15,15 +15,15 @@ import { ActiveEnrollmentsTable } from "../patients/components/ActiveEnrollments
 import { PlanDetailPage } from "../patients/components/PlanDetailPage";
 import { PlanForm } from "../patients/components/PlanForm";
 import { money } from "@/utils/helper";
-import { PlanTableRow } from "../patients/components/PlanTableRow";
 import { QueuedEnrollmentsTable } from "../patients/components/QueuedEnrollmentsTable";
 import { PatientSearchSelect } from "../patients/components/PatientSearchSelect";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { DataTable } from "@/app/components/common/DataTable";
+import { getPlanColumns } from "./Column";
 import {
   usePatientSubscriptionsActions,
   usePatientSubscriptionsData,
@@ -482,53 +482,22 @@ export function PatientSubscriptions({
                 )}
               </div>
             </div>
-            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
-              {loading && <TableSkeleton />}
-              {!loading && plans.length === 0 && (
-                <p className="p-4 text-sm text-slate-500">
-                  No patient plans yet.
-                </p>
-              )}
-              {!loading && plans.length > 0 && (
-                <div>
-                  <div className="min-w-full overflow-x-auto lg:block">
-                    <table className="min-w-full text-left text-sm">
-                      <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                        <tr className="text-sm">
-                          <th className="px-4 py-3">Plan</th>
-                          <th className="px-4 py-3">Price</th>
-                          <th className="px-4 py-3">Duration</th>
-                          <th className="px-4 py-3">Consults</th>
-                          {/* <th className="px-4 py-3">Scope</th> */}
-                          <th className="px-4 py-3">Status</th>
-                          <th className="px-4 py-3">Enrolled</th>
-                          <th className="px-4 py-3 text-center">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {pagedPlans.map((plan: any) => {
-                          const activeEnrollmentCount =
-                            activeEnrollmentCountByPlan.get(plan.id) || 0;
-                          return (
-                            <PlanTableRow
-                              key={plan.id}
-                              plan={plan}
-                              activeEnrollmentCount={activeEnrollmentCount}
-                              busy={busy}
-                              requestDeletePlan={requestDeletePlan}
-                              startEdit={startEdit}
-                              togglePlanActive={togglePlanActive}
-                              canDeletePlans={canDeletePlans}
-                              canEditPlans={canEditPlans}
-                              openDetail={() => goTo("view", plan.id)}
-                            />
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+            <div className="mt-4">
+              <DataTable
+                columns={getPlanColumns({
+                  activeEnrollmentCountByPlan,
+                  busy,
+                  requestDeletePlan,
+                  startEdit,
+                  togglePlanActive,
+                  canDeletePlans,
+                  canEditPlans,
+                  openDetail: (plan: any) => goTo("view", plan.id),
+                })}
+                data={pagedPlans}
+                loading={loading}
+                emptyMessage="No patient plans yet."
+              />
             </div>
             <Pagination
               page={safePlanPage}

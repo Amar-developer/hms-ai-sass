@@ -178,7 +178,7 @@ export function UserForm({
       : canResetTenantUserPassword(apiSession, user);
 
   return (
-    <Card>
+    <Card className="mt-3">
       <Header
         title={title}
         subtitle={user?.email || "Create tenant-scoped users only."}

@@ -9,7 +9,6 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { NumberField, SelectField } from "@/app/components/FormElements";
-import { humanizeOptionLabel } from "@/lib/options";
 import {
   homeServiceTypes,
   itemTypes,
@@ -22,14 +21,13 @@ import { ItemForm } from "@/features/items/forms/ItemForms";
 import { ItemFormValues, itemSchema } from "@/features/items/items.schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { RowActions } from "../admin/components/RowActions";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { generatedItemCode } from "./helpers";
 import { useItemsActions, useItemsData } from "./api";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { DataTable } from "@/app/components/common/DataTable";
-import { Column } from "@/utils/types";
 import { Pagination } from "@/app/components/common/Pagination";
+import { getItemsColumns } from "./Column";
 
 function itemCodePreview(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -363,96 +361,12 @@ export function Items({ apiSession, branchId }: any) {
     priceBand: filters.priceBand,
   };
 
-  const itemColumns: Column<any>[] = [
-    {
-      key: "type",
-      header: "Type",
-      width: "180px",
-      render: (row: any) => (
-        <p className="text-sm font-bold">{humanizeOptionLabel(row.kind)}</p>
-      ),
-    },
-    {
-      key: "name",
-      header: "Item",
-      width: "180px",
-      render: (row: any) => <b className="text-sm">{row.name}</b>,
-    },
-    {
-      key: "supplier",
-      header: "Supplier",
-      width: "130px",
-      render: (row: any) => <span className="text-sm">{row.supplier}</span>,
-    },
-    {
-      key: "mrp_price",
-      header: "MRP",
-      width: "100px",
-      render: (row: any) => (
-        <span className="text-sm">
-          {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
-        </span>
-      ),
-    },
-    {
-      key: "purchase_price",
-      header: "Purchase",
-      width: "100px",
-      render: (row: any) => (
-        <span className="text-sm">
-          {row.purchase_price === null ? "-" : `₹${row.purchase_price || 0}`}
-        </span>
-      ),
-    },
-    {
-      key: "price",
-      header: "Sale Price",
-      width: "120px",
-      className: "text-center",
-      cellClassName: "text-center",
-      render: (row: any) => (
-        <span className="text-sm">
-          {row.price === null ? "-" : `₹${row.price}`}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      width: "100px",
-      className: "text-right",
-      cellClassName: "text-right",
-      disableRowClick: true,
-      render: (row: any) => (
-        <div className="flex justify-end">
-          <RowActions
-            actions={[
-              {
-                label: "Edit",
-                onClick: () => {
-                  startEdit(row);
-
-                  setTimeout(() => {
-                    containerRef.current?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    });
-                  }, 100);
-                },
-              },
-              {
-                label: busy === `delete-${row.id}` ? "Deleting..." : "Delete",
-                onClick: () => deleteItem(row),
-                disabled: busy === `delete-${row.id}`,
-                danger: true,
-              },
-            ]}
-            className="right-8 -bottom-5"
-          />
-        </div>
-      ),
-    },
-  ];
+  const itemColumns = getItemsColumns({
+    deleteItem,
+    startEdit,
+    containerRef,
+    busy,
+  });
 
   return (
     <div className="space-y-6 scroll-mt-24" ref={containerRef}>

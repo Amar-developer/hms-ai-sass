@@ -47,7 +47,7 @@ export function ScheduleRow({
         {formatDisplayRange(row.start_time, row.end_time)}
       </span>
       <span className="text-sm">{row.slot_minutes} min</span>
-      <Badge tone={row.is_active ? "green" : "red"} className="table-status text-sm">
+      <Badge tone={row.is_active ? "green" : "red"} className="normal-badge text-sm">
         {row.is_active ? "Active" : "Inactive"}
       </Badge>
       <div className="flex justify-center">

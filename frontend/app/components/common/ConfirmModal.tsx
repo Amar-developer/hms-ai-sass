@@ -137,7 +137,7 @@ export function ConfirmModal({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="close-button"
           >
             Cancel
           </button>
@@ -145,6 +145,7 @@ export function ConfirmModal({
             onClick={() =>
               onConfirm({ reason: reason.trim(), amount: amountValue })
             }
+            className='save-button'
             disabled={!canConfirm}
           >
             <ButtonLoader loading={Boolean(busy)}>

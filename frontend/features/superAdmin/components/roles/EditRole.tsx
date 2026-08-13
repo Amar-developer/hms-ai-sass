@@ -19,23 +19,23 @@ export function EditRole({
         <button
           type="button"
           onClick={back}
-          className="mt-4 rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="close-button"
         >
           Back to Roles
         </button>
       </Card>
     );
   return (
-    <Card>
+    <Card className="mt-3">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-lg font-bold">Edit Role</h3>
-          <p className="text-xs lg:text-sm text-slate-500">{role.key}</p>
+          <h3 className="card-title font-bold">Edit Role</h3>
+          <p className="card-desc text-slate-500">{role.key}</p>
         </div>
         <button
           type="button"
           onClick={back}
-          className="rounded-lg border px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm font-bold"
+          className="close-button"
         >
           Back to Roles
         </button>
@@ -46,8 +46,6 @@ export function EditRole({
           <Select
             name="isActive"
             defaultValue={String(role.is_active)}
-            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm
-"
           >
             <option value="true">Active</option>
             <option value="false">Inactive</option>
@@ -62,7 +60,7 @@ export function EditRole({
           />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2">
-          <Button disabled={busy}>
+          <Button disabled={busy} className='save-button'>
             <ButtonLoader loading={busy}>
               {busy ? "Saving..." : "Save Role"}
             </ButtonLoader>
@@ -70,7 +68,7 @@ export function EditRole({
           <button
             type="button"
             onClick={back}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="close-button"
           >
             Cancel
           </button>

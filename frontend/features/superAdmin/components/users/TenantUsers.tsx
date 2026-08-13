@@ -1,27 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Badge,
-  Card,
-  Input,
-  RefreshButton,
-  SearchableSelect,
-} from "@/app/components/common/ui";
-import { formatDate } from "../../helpers";
+import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "@/app/components/common/Empty";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { Pagination } from "@/app/components/common/Pagination";
-import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
-import { UserRoleList } from "./UserRoleList";
 import { dateFieldOptions, status_options } from "../../constants";
-import { RowActions } from "@/features/admin/components/RowActions";
 import { FormField } from "@/app/components/FormElements";
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import {
+  FilterSection,
+  FilterConfig,
+} from "@/app/components/common/FilterSection";
 import { DataTable } from "@/app/components/common/DataTable";
-import { Column } from "@/utils/types";
+import { SortState } from "@/utils/types";
+import { getUserColumns } from "./Column";
+
+const filterConfigs: FilterConfig[] = [
+  {
+    key: "status",
+    label: "Status",
+    options: status_options,
+  },
+  // {
+  //   key: "dateField",
+  //   label: "Date field",
+  //   options: dateFieldOptions,
+  // },
+];
 
 export function TenantUsers({
   tenants,
@@ -42,19 +47,21 @@ export function TenantUsers({
     toDate: "",
     dateField: "updated_at",
   });
-  const [sort, setSort] = useState({ key: "updated_at", dir: "desc" });
+  const [sort, setSort] = useState<SortState>({ key: "updated_at", dir: "desc" });
   const [page, setPage] = useState(1);
   const pageSize = 8;
 
   function updateFilter(key: string, value: string) {
     setFilters({ ...filters, [key]: value });
   }
-  function changeSort(key: string) {
-    setSort(
-      sort.key === key
-        ? { key, dir: sort.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: "asc" },
-    );
+  function resetFilters() {
+    setFilters({
+      query: "",
+      status: "all",
+      fromDate: "",
+      toDate: "",
+      dateField: "updated_at",
+    });
   }
   function rowValue(user: any, key: string) {
     return key === "created_at" || key === "updated_at"
@@ -104,132 +111,12 @@ export function TenantUsers({
     setPage(1);
   }, [filters, sort, users.length]);
 
-  const userColumns: Column<any>[] = [
-    {
-      key: "name",
-      header: "User",
-      width: "180px",
-      render: (user: any) => (
-        <div>
-          <div className="flex items-center gap-2">
-            <b className="text-xs lg:text-sm">{user.name}</b>
-
-            <CopyIdButton
-              value={user.id}
-              label="User ID"
-              allowed={canCopyIds}
-            />
-          </div>
-
-          <p className="text-[10px] lg:text-xs text-slate-500">
-            {user.user_number || "User account"}
-          </p>
-        </div>
-      ),
-    },
-    {
-      key: "email",
-      header: "Email",
-      width: "200px",
-      render: (user: any) => (
-        <span className="break-all text-xs lg:text-sm">{user.email}</span>
-      ),
-    },
-
-    {
-      key: "roles",
-      header: "Roles",
-      width: "150px",
-      className: "text-center",
-      render: (user: any) => <UserRoleList user={user} />,
-    },
-
-    {
-      key: "mobile",
-      header: "Mobile",
-      width: "120px",
-      className: "text-center",
-      render: (user: any) => (
-        <span className="text-xs lg:text-sm">{user.mobile || "-"}</span>
-      ),
-    },
-
-    {
-      key: "is_active",
-      header: "Status",
-      width: "120px",
-      className: "text-center",
-      render: (user: any) => (
-        <Badge
-          tone={user.is_active ? "green" : "red"}
-          className="rounded-full py-1 px-1 text-xs"
-        >
-          {user.is_active ? "Active" : "Inactive"}
-        </Badge>
-      ),
-    },
-
-    {
-      key: "created_at",
-      header: "Created",
-      width: "120px",
-      render: (user: any) => (
-        <span className="text-xs lg:text-sm">
-          {formatDate(user.created_at)}
-        </span>
-      ),
-    },
-
-    {
-      key: "updated_at",
-      header: "Modified",
-      width: "120px",
-      render: (user: any) => (
-        <span className="text-xs lg:text-sm">
-          {formatDate(user.updated_at)}
-        </span>
-      ),
-    },
-
-    {
-      key: "actions",
-      header: "Actions",
-      width: "100px",
-      disableRowClick: true,
-      render: (user: any) => {
-        const actions = [
-          {
-            label: "Edit",
-            onClick: () => {
-              setSelectedUserId(user.id);
-              setSection("userEdit");
-            },
-          },
-          {
-            label: user.is_active ? "Inactive" : "Active",
-            onClick: () =>
-              setConfirmAction({
-                entity: "user",
-                kind: "status",
-                user,
-              }),
-          },
-          {
-            label: "Delete",
-            danger: true,
-            onClick: () =>
-              setConfirmAction({
-                entity: "user",
-                kind: "delete",
-                user,
-              }),
-          },
-        ];
-
-        return <RowActions actions={actions} className="right-16 -bottom-5" />;
-      },
-    },
-  ];
+  const userColumns = getUserColumns({
+    canCopyIds,
+    setSelectedUserId,
+    setSection,
+    setConfirmAction,
+  });
 
   return (
     <div className="mt-3">
@@ -238,7 +125,7 @@ export function TenantUsers({
           <div>
             <div className="flex ">
               <h3 className="card-title font-bold mr-3">Users</h3>
-              <Badge tone="blue" className="table-status">
+              <Badge tone="blue" className="normal-badge">
                 {filtered.length} users
               </Badge>
             </div>
@@ -254,36 +141,22 @@ export function TenantUsers({
             />
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
+        <FilterSection
+          title="User"
+          query={filters.query}
+          setQuery={(value) => updateFilter("query", value)}
+          searchPlaceholder="Name, email, mobile, type"
+          filters={filterConfigs}
+          filterValues={filters}
+          onFilterChange={updateFilter}
+          onReset={resetFilters}
+          className="lg:grid-cols-4 xl:grid-cols-6"
+        >
           <TenantPicker
             tenants={tenants}
             selectedId={selectedId}
             setSelectedId={setSelectedId}
           />
-          <FormField label="User">
-            <Input
-              value={filters.query}
-              onChange={(e: any) => updateFilter("query", e.target.value)}
-              placeholder="Name, email, mobile, type"
-            />
-          </FormField>
-          <FormField label="Status">
-            <SearchableSelect
-              value={filters.status}
-              onChange={(value: any) => updateFilter("status", value)}
-              options={status_options}
-              searchable={false}
-            />
-          </FormField>
-
-          <FormField label="Date field">
-            <SearchableSelect
-              value={filters.dateField}
-              onChange={(value) => updateFilter("dateField", value)}
-              options={dateFieldOptions}
-              searchable={false}
-            />
-          </FormField>
           <FormField label="From">
             <Input
               type="date"
@@ -298,22 +171,21 @@ export function TenantUsers({
               onChange={(e: any) => updateFilter("toDate", e.target.value)}
             />
           </FormField>
-        </div>
+        </FilterSection>
         <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-2xl border border-slate-200 ">
           <div className="min-w-[1000px]">
-            {busy && rows.length === 0 ? (
-              <TableSkeleton />
-            ) : (
-              <DataTable
-                columns={userColumns}
-                data={rows}
-                emptyMessage="No users match your search."
-                onRowClick={(user) => {
-                  setSelectedUserId(user.id);
-                  setSection("userEdit");
-                }}
-              />
-            )}
+            <DataTable
+              columns={userColumns}
+              data={rows}
+              loading={busy && rows.length === 0}
+              emptyMessage="No users match your search."
+              onRowClick={(user) => {
+                setSelectedUserId(user.id);
+                setSection("userEdit");
+              }}
+              sort={sort}
+              onSortChange={setSort}
+            />
           </div>
         </div>
         <Pagination

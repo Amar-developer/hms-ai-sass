@@ -46,7 +46,7 @@
 }
 
 @layer components {
-  .table-status {
+  .normal-badge {
     @apply rounded-full text-xs lg:text-sm py-1 px-1 font-normal;
   }
 }
@@ -122,6 +122,11 @@
 @layer components {
   .normal-badge {
     @apply px-2 py-2 lg:px-2 lg:py-2 text-xs  rounded-lg;
+  }
+}
+@layer components {
+  .normal-label {
+    @apply px-2 py-0.5 text-[10px]  rounded-lg;
   }
 }
 @layer components {

@@ -1,27 +1,44 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Badge,
-  Card,
-  Input,
-  RefreshButton,
-  SearchableSelect,
-} from "@/app/components/common/ui";
+import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import {
   dateFieldOptions,
   tenant_status_options,
   tenantTypes,
 } from "../../constants";
-import { addressText, formatDate, formatTenantType } from "../../helpers";
+import { addressText } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "@/app/components/common/Empty";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
-import { SortButton } from "../shared/SortButton";
 import { Pagination } from "@/app/components/common/Pagination";
-import { RowActions } from "@/features/admin/components/RowActions";
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import {
+  FilterSection,
+  FilterConfig,
+} from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
+import { SortState } from "@/utils/types";
+import { getTenantColumns } from "./Column";
+
+const filterConfigs: FilterConfig[] = [
+  {
+    key: "type",
+    label: "Type",
+    options: [
+      { value: "all", label: "All types" },
+      ...tenantTypes.map(([value, label]) => ({ value, label })),
+    ],
+  },
+  {
+    key: "status",
+    label: "Status",
+    options: tenant_status_options,
+  },
+  // {
+  //   key: "dateField",
+  //   label: "Date field",
+  //   options: dateFieldOptions,
+  // },
+];
 
 export function TenantManagement({
   tenants,
@@ -43,19 +60,23 @@ export function TenantManagement({
     toDate: "",
     dateField: "updated_at",
   });
-  const [sort, setSort] = useState({ key: "updated_at", dir: "desc" });
+  const [sort, setSort] = useState<SortState>({ key: "updated_at", dir: "desc" });
   const [page, setPage] = useState(1);
   const pageSize = 8;
 
   function updateFilter(key: string, value: string) {
     setFilters({ ...filters, [key]: value });
   }
-  function changeSort(key: string) {
-    setSort(
-      sort.key === key
-        ? { key, dir: sort.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: "asc" },
-    );
+  function resetFilters() {
+    setFilters({
+      tenant: "",
+      type: "all",
+      status: "all",
+      contact: "",
+      fromDate: "",
+      toDate: "",
+      dateField: "updated_at",
+    });
   }
   function sortValue(tenant: any, key: string) {
     if (key === "tenant")
@@ -108,6 +129,16 @@ export function TenantManagement({
     setPage(1);
   }, [filters, sort, tenants.length]);
 
+  const tenantColumns = getTenantColumns({
+    setSelectedId,
+    setSection,
+    switchTenant,
+    apiSession,
+    canCopyIds,
+    busy,
+    suspendTenant,
+  });
+
   return (
     <div className="mt-3">
       <Card>
@@ -132,61 +163,30 @@ export function TenantManagement({
             />
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
-          <FormField label="Tenant">
-            <Input
-              value={filters.tenant}
-              onChange={(e: any) => updateFilter("tenant", e.target.value)}
-              placeholder="Tenant name or ID"
-              className="search-filter"
-            />
-          </FormField>
-          <FormField label="Type">
-            <SearchableSelect
-              searchable={false}
-              value={filters.type}
-              onChange={(value) => updateFilter("type", value)}
-              placeholder="All types"
-              options={[
-                { value: "all", label: "All types" },
-                ...tenantTypes.map(([value, label]) => ({
-                  value,
-                  label,
-                })),
-              ]}
-            />
-          </FormField>
-          <FormField label="Status">
-            <SearchableSelect
-              searchable={false}
-              value={filters.status}
-              onChange={(value) => updateFilter("status", value)}
-              placeholder="All status"
-              options={tenant_status_options}
-            />
-          </FormField>
-          <FormField label="Contact">
+        <FilterSection
+          title="Tenant"
+          query={filters.tenant}
+          setQuery={(value) => updateFilter("tenant", value)}
+          searchPlaceholder="Tenant name or ID"
+          filters={filterConfigs}
+          filterValues={filters}
+          onFilterChange={updateFilter}
+          onReset={resetFilters}
+          className="lg:grid-cols-4 xl:grid-cols-6"
+        >
+          {/* <FormField label="Contact">
             <Input
               value={filters.contact}
               onChange={(e: any) => updateFilter("contact", e.target.value)}
               placeholder="Email, phone, address"
               className="search-filter"
             />
-          </FormField>
-          <FormField label="Date field">
-            <SearchableSelect
-              value={filters.dateField}
-              onChange={(value) => updateFilter("dateField", value)}
-              searchable={false}
-              options={dateFieldOptions}
-            />
-          </FormField>
+          </FormField> */}
           <FormField label="From">
             <Input
               type="date"
               value={filters.fromDate}
               onChange={(e: any) => updateFilter("fromDate", e.target.value)}
-              className="date-filter"
             />
           </FormField>
           <FormField label="To">
@@ -194,147 +194,19 @@ export function TenantManagement({
               type="date"
               value={filters.toDate}
               onChange={(e: any) => updateFilter("toDate", e.target.value)}
-              className="date-filter"
             />
           </FormField>
-        </div>
-        <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-          <div className="hidden md:grid grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
-            <SortButton
-              label="Tenant"
-              field="tenant"
+        </FilterSection>
+        <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-2xl border border-slate-200">
+          <div className="min-w-[980px]">
+            <DataTable
+              columns={tenantColumns}
+              data={rows}
+              loading={busy && rows.length === 0}
+              emptyMessage="No tenants match your search."
               sort={sort}
-              onSort={changeSort}
+              onSortChange={setSort}
             />
-            <SortButton
-              label="Type"
-              field="tenant_type"
-              sort={sort}
-              onSort={changeSort}
-            />
-            <SortButton
-              label="Status"
-              field="status"
-              sort={sort}
-              onSort={changeSort}
-              className="text-center"
-            />
-            <SortButton
-              label="Contact"
-              field="contact"
-              sort={sort}
-              onSort={changeSort}
-            />
-            <SortButton
-              label="Created"
-              field="created_at"
-              sort={sort}
-              onSort={changeSort}
-            />
-            <SortButton
-              label="Modified"
-              field="updated_at"
-              sort={sort}
-              onSort={changeSort}
-            />
-            <span className="text-center">Actions</span>
-          </div>
-          <div className="divide-y divide-slate-200">
-            {busy && rows.length === 0 && <TableSkeleton />}
-            {!busy && rows.length === 0 && (
-              <Empty text="No tenants match your search." />
-            )}
-            {rows.map((tenant: any) => {
-              const actions = [
-                {
-                  label: "Edit",
-                  onClick: () => {
-                    setSelectedId(tenant.id);
-                    setSection("tenantEdit");
-                  },
-                },
-                {
-                  label: apiSession.tenantId === tenant.id ? "Opened" : "Open",
-                  onClick: () => switchTenant(tenant.id),
-                  disabled: busy || apiSession.tenantId === tenant.id,
-                },
-                {
-                  label: "Deactivate",
-                  onClick: () => suspendTenant(tenant),
-                  disabled: tenant.is_primary || busy,
-                  danger: true,
-                },
-              ];
-              return (
-                <div
-                  key={tenant.id}
-                  className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_.7fr] md:items-center"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <b className="truncate text-xs md:text-sm">
-                        {tenant.name}
-                      </b>
-                      <CopyIdButton
-                        value={tenant.id}
-                        label="Tenant ID"
-                        allowed={canCopyIds}
-                      />
-                      {tenant.is_primary && (
-                        <Badge tone="blue" className="rounded-xl px-2 py-1">
-                          Primary
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="xl:hidden text-[10px] lg:text-xs font-bold uppercase text-slate-500">
-                      Type:{" "}
-                    </span>
-                    <p className="text-xs lg:text-sm">
-                      {formatTenantType(tenant.tenant_type)}
-                    </p>
-                  </div>
-                  <div>
-                    <Badge
-                      tone={
-                        tenant.status === "active"
-                          ? "green"
-                          : tenant.status === "trial"
-                            ? "amber"
-                            : "red"
-                      }
-                      className="table-status"
-                    >
-                      {tenant.status}
-                    </Badge>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-xs lg:text-sm">
-                      {tenant.email || "-"}
-                    </p>
-                    <p className="text-[10px] lg:text-xs text-slate-500">
-                      {tenant.phone || ""}
-                    </p>
-                  </div>
-                  <div className="text-xs lg:text-sm">
-                    {formatDate(tenant.created_at)}
-                  </div>
-                  <div className="text-xs lg:text-sm">
-                    {formatDate(tenant.updated_at)}
-                  </div>
-                  <div
-                    className="flex justify-center"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <RowActions
-                      actions={actions}
-                      className="right-10 -bottom-5 w-28"
-                    />
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </div>
         <Pagination

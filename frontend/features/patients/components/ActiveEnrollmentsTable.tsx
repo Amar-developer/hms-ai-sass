@@ -225,7 +225,7 @@ export function ActiveEnrollmentsTable({
       header: "Status",
       width: "120px",
       render: (row: any) => (
-        <Badge tone="green" className="table-status w-[60%]">
+        <Badge tone="green" className="normal-badge w-[60%]">
           {row.status}
         </Badge>
       ),

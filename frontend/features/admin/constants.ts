@@ -13,6 +13,7 @@ import {
   Truck,
   Users,
 } from "lucide-react";
+import { WhatsAppFlowKey, WhatsAppLanguage, WhatsAppSettingsDraft } from "./types";
 
 type FileCategoryRule = {
   modules: string[];
@@ -380,3 +381,278 @@ export const branch_status_options = [
     label: "Inactive",
   },
 ];
+
+
+export const flowOptions: Array<{
+  key: WhatsAppFlowKey;
+  label: string;
+  description: string;
+  audience: "patient" | "doctor";
+}> =
+[
+  {
+    key: "appointment_booked_patient",
+    label: "Patient appointment confirmation",
+    description: "Trigger after an appointment is booked successfully.",
+    audience: "patient",
+  },
+  {
+    key: "appointment_booked_doctor",
+    label: "Doctor appointment alert",
+    description: "Notify the assigned doctor about a new booking.",
+    audience: "doctor",
+  },
+  {
+    key: "invoice_paid_patient",
+    label: "Paid invoice receipt",
+    description: "Trigger when an invoice becomes fully paid.",
+    audience: "patient",
+  },
+  {
+    key: "payment_pending_patient",
+    label: "Pending payment update",
+    description: "Trigger after a partial payment leaves a balance.",
+    audience: "patient",
+  },
+  {
+    key: "appointment_cancelled_patient",
+    label: "Patient appointment cancellation",
+    description: "Trigger when a booked appointment is cancelled.",
+    audience: "patient",
+  },
+  {
+    key: "appointment_cancelled_doctor",
+    label: "Doctor appointment cancellation",
+    description: "Notify the assigned doctor when an appointment is cancelled.",
+    audience: "doctor",
+  },
+  {
+    key: "invoice_refunded_patient",
+    label: "Invoice refund confirmation",
+    description: "Trigger after a full or partial payment refund.",
+    audience: "patient",
+  },
+  {
+    key: "lab_report_ready_patient",
+    label: "Lab report ready",
+    description: "Trigger when a lab result is released.",
+    audience: "patient",
+  },
+  {
+    key: "prescription_ready_patient",
+    label: "Prescription ready",
+    description: "Trigger when a consultation with a prescription is signed.",
+    audience: "patient",
+  },
+  {
+    key: "follow_up_advice_patient",
+    label: "Follow-up advice",
+    description: "Trigger when a signed consultation includes follow-up advice.",
+    audience: "patient",
+  },
+  {
+    key: "appointment_reminder_patient",
+    label: "Patient appointment reminder",
+    description: "Send an automatic reminder before an upcoming appointment.",
+    audience: "patient",
+  },
+  {
+    key: "medicine_refill_patient",
+    label: "Medicine refill reminder",
+    description: "Send a consent-aware reminder when a recurring refill is due.",
+    audience: "patient",
+  },
+  {
+    key: "membership_renewal_patient",
+    label: "Membership renewal reminder",
+    description: "Send a reminder before an active patient membership expires.",
+    audience: "patient",
+  },
+  {
+    key: "patient_reengagement",
+    label: "Patient re-engagement",
+    description: "Staff-approved check-in after a no-show or inactivity flag.",
+    audience: "patient",
+  },
+  {
+    key: "home_care_booking_patient",
+    label: "Home care booking confirmation",
+    description: "Trigger after a home care booking is created.",
+    audience: "patient",
+  },
+  {
+    key: "home_care_visit_patient",
+    label: "Home care visit update",
+    description: "Trigger for a scheduled or completed home care visit.",
+    audience: "patient",
+  },
+  {
+    key: "home_visit_booking_patient",
+    label: "Home visit booking confirmation",
+    description: "Trigger after a doctor/staff home visit is booked.",
+    audience: "patient",
+  },
+  {
+    key: "home_visit_reminder_patient",
+    label: "Home visit reminder",
+    description: "Send a reminder before a scheduled home visit.",
+    audience: "patient",
+  },
+  {
+    key: "ip_admission_patient",
+    label: "IP admission confirmation",
+    description: "Trigger when an inpatient admission is created.",
+    audience: "patient",
+  },
+  {
+    key: "ip_discharge_patient",
+    label: "IP discharge summary",
+    description: "Trigger when an inpatient discharge summary is finalized.",
+    audience: "patient",
+  },
+  {
+    key: "physiotherapy_case_patient",
+    label: "Physiotherapy case created",
+    description: "Trigger when a physiotherapy case is opened.",
+    audience: "patient",
+  },
+  {
+    key: "physiotherapy_session_patient",
+    label: "Physiotherapy session update",
+    description: "Trigger for a physiotherapy session or home program update.",
+    audience: "patient",
+  },
+  {
+    key: "pharmacy_dispense_patient",
+    label: "Pharmacy dispense update",
+    description: "Trigger when medicines are dispensed.",
+    audience: "patient",
+  },
+  {
+    key: "service_invoice_patient",
+    label: "Service invoice update",
+    description: "Trigger for healthcare service invoice messages.",
+    audience: "patient",
+  },
+  {
+    key: "service_follow_up_patient",
+    label: "Service follow-up",
+    description: "Trigger for post-service follow-up engagement.",
+    audience: "patient",
+  },
+];
+
+export const MAX_TEMPLATE_PARAMETERS = 10;
+
+export const languageOptions: Array<{ value: WhatsAppLanguage; label: string }> = [
+  { value: "en", label: "English" },
+  { value: "ta", label: "Tamil" },
+];
+
+export const SAMPLE_VALUES_BY_FIELD: Record<string, string> = {
+  recipient_name: "Test Patient",
+  appointment_date: "25 July 2026",
+  appointment_time: "10:30 AM",
+  appointment_status: "booked",
+  appointment_id: "appointment_test_001",
+  appointment_view_url: "https://app.example.com/appointments",
+  expected_date: "25 August 2026",
+  expiry_date: "31 August 2026",
+  invoice_number: "TEST-INV-001",
+  service_description: "Consultation",
+  total_amount: "1000",
+  paid_amount: "500",
+  balance_amount: "500",
+  refund_amount: "500",
+  report_name: "Blood test",
+  clinic_name: "MedizinHub Healthcare Service",
+  report_date: "25 July 2026",
+  consultation_date: "25 July 2026",
+  doctor_name: "Test Doctor",
+  follow_up_advice: "Return after seven days",
+  cancellation_reason: "Schedule change",
+};
+
+
+export const newTemplateInitialState = {
+  name: "",
+  description: "",
+  triggerKey: "appointment_booked_patient" as WhatsAppFlowKey,
+  parameters: [] as string[],
+  englishIdentifier: "",
+  tamilIdentifier: "",
+};
+
+export const initialDraft: WhatsAppSettingsDraft = {
+  enabled: false,
+  apiUrl: "",
+  publicMediaBaseUrl: "",
+  appointmentViewUrl: "",
+  apiKey: "",
+  defaultCountryCode: "+91",
+  timeoutSeconds: 15,
+  maxAttempts: 5,
+  patientNotificationsEnabled: true,
+  doctorNotificationsEnabled: true,
+  appointmentReminder24hEnabled: false,
+  appointmentReminder2hEnabled: false,
+  defaultLanguage: "en",
+  templates: {
+    appointment_booked_patient: "",
+    appointment_booked_doctor: "",
+    invoice_paid_patient: "",
+    payment_pending_patient: "",
+    appointment_cancelled_patient: "",
+    appointment_cancelled_doctor: "",
+    invoice_refunded_patient: "",
+    lab_report_ready_patient: "",
+    prescription_ready_patient: "",
+    follow_up_advice_patient: "",
+    appointment_reminder_patient: "",
+    medicine_refill_patient: "",
+    membership_renewal_patient: "",
+    patient_reengagement: "",
+    home_care_booking_patient: "",
+    home_care_visit_patient: "",
+    home_visit_booking_patient: "",
+    home_visit_reminder_patient: "",
+    ip_admission_patient: "",
+    ip_discharge_patient: "",
+    physiotherapy_case_patient: "",
+    physiotherapy_session_patient: "",
+    pharmacy_dispense_patient: "",
+    service_invoice_patient: "",
+    service_follow_up_patient: "",
+  },
+  localizedTemplates: {},
+  flows: {
+    appointment_booked_patient: true,
+    appointment_booked_doctor: true,
+    invoice_paid_patient: true,
+    payment_pending_patient: false,
+    appointment_cancelled_patient: false,
+    appointment_cancelled_doctor: false,
+    invoice_refunded_patient: false,
+    lab_report_ready_patient: false,
+    prescription_ready_patient: false,
+    follow_up_advice_patient: false,
+    appointment_reminder_patient: false,
+    medicine_refill_patient: false,
+    membership_renewal_patient: false,
+    patient_reengagement: false,
+    home_care_booking_patient: false,
+    home_care_visit_patient: false,
+    home_visit_booking_patient: false,
+    home_visit_reminder_patient: false,
+    ip_admission_patient: false,
+    ip_discharge_patient: false,
+    physiotherapy_case_patient: false,
+    physiotherapy_session_patient: false,
+    pharmacy_dispense_patient: false,
+    service_invoice_patient: false,
+    service_follow_up_patient: false,
+  },
+  customTemplates: [],
+  fieldCatalog: {},
+  templateFieldMappings: {},
+};

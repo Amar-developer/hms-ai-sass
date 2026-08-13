@@ -1216,6 +1216,7 @@ export function ConsultationWorkspace(props: any) {
                 type="button"
                 onClick={apiSession ? saveBackendDraft : markDone}
                 disabled={busy || selected?.consultationStatus === "signed"}
+                className="save-button"
               >
                 <ButtonLoader loading={busy}>
                   {apiSession
@@ -1230,7 +1231,7 @@ export function ConsultationWorkspace(props: any) {
                   type="button"
                   onClick={signBackendConsultation}
                   disabled={busy || selected?.consultationStatus === "signed"}
-                  className="bg-emerald-700 text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
+                  className="save-button bg-emerald-700"
                 >
                   <ButtonLoader loading={busy}>
                     {busy ? "Signing..." : "Complete"}
@@ -1241,20 +1242,20 @@ export function ConsultationWorkspace(props: any) {
                 type="button"
                 onClick={handlePrintPrescription}
                 disabled={isExportingPrescription}
-                className="text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
+                className="save-button"
               >
                 {isExportingPrescription ? "Generating…" : "Print Prescription"}
               </Button>
               <button
                 onClick={() => requeuePatient("end")}
                 disabled={queueActionDisabled}
-                className="rounded-lg border px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                className="close-button"
               >
                 Requeue to End
               </button>
               <button
                 onClick={callNextInWorkspace}
-                className="rounded-lg border px-4 py-3 text-sm font-bold"
+                className="close-button"
               >
                 Call Next Patient
               </button>

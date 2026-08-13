@@ -24,7 +24,7 @@ import { PasswordResetModal } from "./components/shared/PasswordResetModal";
 import { SubscriptionManagement } from "./components/subscriptions/SubscriptionManagement";
 import { TenantBranchSettings } from "./components/subscriptions/TenantBranchSettings";
 import { TenantPicker } from "./components/shared/TenantPicker";
-import { WhatsAppIntegrationSettings } from "@/features/admin/components/WhatsAppIntegrationSettings";
+import { WhatsAppIntegrationSettings } from "../admin/whatsapp_integration/WhatsAppIntegrationSettings";
 import { UserForm } from "@/features/admin/forms/UserForm";
 import { BranchForm } from "@/features/admin/forms/BranchForm";
 import { DepartmentForm } from "@/features/admin/forms/DepartmentForm";
@@ -75,6 +75,7 @@ export function SuperAdminDashboard({
   };
 
   function changeSection(nextSection: string) {
+    console.log('changeSection is called')
     router.push(superAdminPath(nextSection, pendingIds.current));
   }
   const [confirmAction, setConfirmAction] = useState<any>(null);
@@ -261,16 +262,16 @@ export function SuperAdminDashboard({
       },
     };
     const route = detailRoutes[currentSection];
-    console.log("[superadmin-detail-guard]", {
-      currentSection,
-      selectedDetailId,
-      busy: data.busy,
-      tenantAccessLoading: data.tenantAccessLoading,
-      usersCount: data.users.length,
-      userIds: data.users.map((u: any) => u.id),
-      route,
-    });
-    if (route && !route.exists) router.replace(superAdminPath(route.list));
+    // console.log("[superadmin-detail-guard]", {
+    //   currentSection,
+    //   selectedDetailId,
+    //   busy: data.busy,
+    //   tenantAccessLoading: data.tenantAccessLoading,
+    //   usersCount: data.users.length,
+    //   userIds: data.users.map((u: any) => u.id),
+    //   route,
+    // });
+    if (route && !route?.exists) router.replace(superAdminPath(route.list));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     currentSection,
@@ -403,7 +404,7 @@ export function SuperAdminDashboard({
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
-          busy={data.busy}
+          busy={data.busy || data.tenantAccessLoading}
         />
       )}
       {currentSection === "roleCreate" && (
@@ -460,7 +461,7 @@ export function SuperAdminDashboard({
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
-          busy={data.busy}
+          busy={data.busy || data.tenantAccessLoading}
         />
       )}
       {currentSection === "userCreate" && (
@@ -504,7 +505,7 @@ export function SuperAdminDashboard({
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
-          busy={data.busy}
+          busy={data.busy || data.tenantAccessLoading}
         />
       )}
       {currentSection === "departmentCreate" && (
@@ -559,7 +560,7 @@ export function SuperAdminDashboard({
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
-          busy={data.busy}
+          busy={data.busy || data.tenantAccessLoading}
         />
       )}
       {currentSection === "branchCreate" && (
@@ -621,7 +622,7 @@ export function SuperAdminDashboard({
       )}
       {currentSection === "whatsappSettings" && (
         <div className="space-y-5">
-          <Card>
+          <Card className="mt-3">
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
               <TenantPicker
                 tenants={customerTenants}

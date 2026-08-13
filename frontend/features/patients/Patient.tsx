@@ -4,38 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
-import { Empty } from "@/app/components/common/Empty";
 import { Pagination } from "@/app/components/common/Pagination";
-import {
-  Button,
-  Card,
-  Input,
-  RefreshButton,
-  SearchableSelect,
-  StatusToast,
-} from "@/app/components/common/ui";
-import { apiFetch, apiUpload, type ApiSession } from "@/lib/api";
+import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
+import { type ApiSession } from "@/lib/api";
 import { readNotificationTarget } from "@/lib/notificationTarget";
-import { FormField } from "@/app/components/FormElements";
-import { toRow, todayInputValue } from "./helpers";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
 import { PatientDetail } from "./components/PatientDetail";
-import { activeTenantOptions } from "@/utils/helper";
-import { PatientRow } from "./components/PatientRow";
 import { mapPatient } from "@/lib/liveData";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { patient_status_options } from "./constants";
-import { useQueryClient } from "@tanstack/react-query";
-import { getTenantBranches } from "@/features/tenants/api/tenantReferenceQueries";
 import { FilterSection } from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
 import { canReadPatientLinkedModule } from "./patientModuleAccess";
 import {
-  fetchPatientIntelligence,
-  sendPatientEngagementAction,
-  updateManualLabSchedule,
-  updateManualRefillSchedule,
-} from "@/features/patient_intelligence/api/patientIntelligence.api";
+  usePatientListData,
+  usePatientDetailData,
+  usePatientActions,
+  type PatientListFilters,
+} from "./api";
+import { getPatientColumns } from "./Column";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -60,7 +47,6 @@ export function Patient({
   selectedId = "",
 }: PatientProps & { view?: string; selectedId?: string }) {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const userPermissions = apiSession?.user?.permissions || [];
@@ -91,24 +77,7 @@ export function Patient({
         "patient_intelligence.rules.manage",
       ),
   );
-  const [tenants, setTenants] = useState<any[]>([]);
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
-  const [branches, setBranches] = useState<any[]>([]);
-  const [rows, setRows] = useState<any[]>([]);
-  const [totalRows, setTotalRows] = useState(0);
-  const [selectedDetail, setSelectedDetail] = useState<any>(null);
-  const [summary, setSummary] = useState<any>(null);
-  const [consultations, setConsultations] = useState<any[]>([]);
-  const [labOrders, setLabOrders] = useState<any[]>([]);
-  const [pharmacyIssues, setPharmacyIssues] = useState<any[]>([]);
-  const [physioCases, setPhysioCases] = useState<any[]>([]);
-  const [patientIpAdmissions, setPatientIpAdmissions] = useState<any[]>([]);
-  const [membershipPlans, setMembershipPlans] = useState<any[]>([]);
-  const [membershipEnrollments, setMembershipEnrollments] = useState<any[]>([]);
-  const [patientInvoices, setPatientInvoices] = useState<any[]>([]);
-  const [familyRelationships, setFamilyRelationships] = useState<any[]>([]);
-  const [patientIntelligence, setPatientIntelligence] = useState<any>(null);
-  const [patientIntelligenceError, setPatientIntelligenceError] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [gender, setGender] = useState("all");
@@ -121,8 +90,36 @@ export function Patient({
   const [confirm, setConfirm] = useState<any>(null);
   const scopedSession =
     apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
-  const selected =
-    selectedDetail || rows.find((row: any) => row.id === selectedId);
+
+  const { tenants, branches, rows, totalRows, setRows, loadTenants, loadData } =
+    usePatientListData({ apiSession, tenantId, setTenantId, setBusy, setMessage });
+
+  const {
+    selectedDetail,
+    setSelectedDetail,
+    summary,
+    consultations,
+    labOrders,
+    pharmacyIssues,
+    physioCases,
+    patientIpAdmissions,
+    membershipPlans,
+    membershipEnrollments,
+    patientInvoices,
+    familyRelationships,
+    patientIntelligence,
+    setPatientIntelligence,
+    patientIntelligenceError,
+    loadPatientDetail,
+  } = usePatientDetailData({
+    canReadPhysiotherapy,
+    canReadIp,
+    canReadIntelligence,
+    setBusy,
+    setMessage,
+  });
+
+  const selected = selectedDetail || rows.find((row: any) => row.id === selectedId);
 
   function syncSharedPatient(patient: any) {
     if (!setPatients || !patient?.id) return;
@@ -134,163 +131,20 @@ export function Patient({
     );
   }
 
-  async function loadTenants() {
-    if (!apiSession?.user?.is_super_admin) return;
-    const tenantRows = activeTenantOptions(
-      await apiFetch("/tenants", apiSession),
-    );
-    setTenants(tenantRows);
-    if (!tenantId || !tenantRows.some((tenant: any) => tenant.id === tenantId))
-      setTenantId(
-        tenantRows.find((tenant: any) => !tenant.is_primary)?.id ||
-          tenantRows[0]?.id ||
-          apiSession.tenantId,
-      );
-  }
-
-  async function loadData(
-    nextTenantId = tenantId,
-    nextPage = page,
-    filterOverrides: Record<string, string> = {},
+  function refreshPatients(
+    nextTenantId: string = tenantId,
+    nextPage: number = page,
+    overrides: Partial<PatientListFilters> = {},
   ) {
-    if (!apiSession || !nextTenantId) return;
-    setBusy(true);
-    const session = { ...apiSession, tenantId: nextTenantId };
-    try {
-      const filters = {
-        query,
-        status,
-        gender,
-        branchFilter,
-        fromDate,
-        toDate,
-        ...filterOverrides,
-      };
-      const params = new URLSearchParams({
-        limit: String(pageSize),
-        offset: String((nextPage - 1) * pageSize),
-        active_only: "false",
-      });
-      if (filters.query) params.set("q", filters.query);
-      if (filters.status && filters.status !== "all")
-        params.set("status", filters.status);
-      if (filters.gender && filters.gender !== "all")
-        params.set("gender", filters.gender);
-      if (filters.branchFilter && filters.branchFilter !== "all")
-        params.set("branch_id", filters.branchFilter);
-      if (filters.fromDate) params.set("from_date", filters.fromDate);
-      if (filters.toDate) params.set("to_date", filters.toDate);
-      const [branchRows, patientRows] = await Promise.all([
-        getTenantBranches(queryClient, session, nextTenantId).catch(() => []),
-        apiFetch(`/patients/page?${params.toString()}`, session),
-      ]);
-      setBranches(branchRows);
-      setRows(patientRows.items || []);
-      setTotalRows(patientRows.total || 0);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load patients.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function loadPatientDetail(id: string) {
-    if (!scopedSession || !id) return;
-    setBusy(true);
-    setConsultations([]);
-    setLabOrders([]);
-    setPharmacyIssues([]);
-    setPhysioCases([]);
-    setPatientIpAdmissions([]);
-    setMembershipEnrollments([]);
-    setPatientInvoices([]);
-    setFamilyRelationships([]);
-    setPatientIntelligence(null);
-    setPatientIntelligenceError("");
-    try {
-      const [
-        detail,
-        summaryData,
-        consultationRows,
-        labRows,
-        pharmacyRows,
-        physioRows,
-        ipRows,
-        planRows,
-        enrollmentRows,
-        invoiceRows,
-        familyRows,
-        intelligenceData,
-      ] = await Promise.all([
-        apiFetch(`/patients/${id}`, scopedSession),
-        apiFetch(`/patients/${id}/summary`, scopedSession),
-        apiFetch(
-          `/consultations?patient_id=${id}&limit=50`,
-          scopedSession,
-        ).catch(() => []),
-        apiFetch(`/lab/orders?patient_id=${id}&limit=50`, scopedSession).catch(
-          () => [],
-        ),
-        apiFetch(
-          `/pharmacy/issues?patient_id=${id}&limit=50`,
-          scopedSession,
-        ).catch(() => []),
-        canReadPhysiotherapy
-          ? apiFetch(
-              `/physiotherapy/cases?patient_id=${id}&limit=50`,
-              scopedSession,
-              { suppressErrorReportStatuses: [402, 403, 404] },
-            ).catch(() => [])
-          : Promise.resolve([]),
-        canReadIp
-          ? apiFetch(
-              `/ip/admissions?patient_id=${id}&limit=50`,
-              scopedSession,
-              { suppressErrorReportStatuses: [402, 403, 404] },
-            ).catch(() => [])
-          : Promise.resolve([]),
-        apiFetch(
-          "/patient-subscriptions/plans?include_inactive=true",
-          scopedSession,
-        ).catch(() => []),
-        apiFetch(
-          `/patient-subscriptions/enrollments?patient_id=${id}`,
-          scopedSession,
-        ).catch(() => []),
-        apiFetch(`/billing/invoices?patient_id=${id}`, scopedSession).catch(
-          () => [],
-        ),
-        apiFetch(`/patients/${id}/family-relationships`, scopedSession).catch(
-          () => [],
-        ),
-        canReadIntelligence
-          ? fetchPatientIntelligence(scopedSession, id).catch((err: any) => {
-              setPatientIntelligenceError(
-                err?.message || "Patient Intelligence could not be loaded.",
-              );
-              return null;
-            })
-          : Promise.resolve(null),
-      ]);
-      setSelectedDetail(detail);
-      setSummary(summaryData);
-      setConsultations(Array.isArray(consultationRows) ? consultationRows : []);
-      setLabOrders(Array.isArray(labRows) ? labRows : []);
-      setPharmacyIssues(Array.isArray(pharmacyRows) ? pharmacyRows : []);
-      setPhysioCases(Array.isArray(physioRows) ? physioRows : []);
-      setPatientIpAdmissions(Array.isArray(ipRows) ? ipRows : []);
-      setMembershipPlans(Array.isArray(planRows) ? planRows : []);
-      setMembershipEnrollments(
-        Array.isArray(enrollmentRows) ? enrollmentRows : [],
-      );
-      setPatientInvoices(Array.isArray(invoiceRows) ? invoiceRows : []);
-      setFamilyRelationships(Array.isArray(familyRows) ? familyRows : []);
-      setPatientIntelligence(intelligenceData);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load patient details.");
-    } finally {
-      setBusy(false);
-    }
+    return loadData(nextTenantId, nextPage, {
+      query,
+      status,
+      gender,
+      branchFilter,
+      fromDate,
+      toDate,
+      ...overrides,
+    });
   }
 
   useEffect(() => {
@@ -301,7 +155,7 @@ export function Patient({
   useEffect(() => {
     if (apiSession && tenantId) {
       setPage(1);
-      loadData(tenantId, 1);
+      refreshPatients(tenantId, 1);
     }
   }, [apiSession?.email, tenantId]);
 
@@ -315,7 +169,7 @@ export function Patient({
     const timer = window.setTimeout(() => {
       setPage(1);
       setMessage("");
-      loadData(tenantId, 1);
+      refreshPatients(tenantId, 1);
     }, 400);
     return () => window.clearTimeout(timer);
   }, [query]);
@@ -361,14 +215,6 @@ export function Patient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function setPendingMessage(id: string, text: string) {
-    if (typeof window === "undefined") return;
-    sessionStorage.setItem(
-      "medizinhub.patientPendingMessage",
-      JSON.stringify({ id, message: text, at: Date.now() }),
-    );
-  }
-
   // Fetch (or refetch) the full record whenever the URL names a different
   // patient than what's currently cached — covers detail/edit views for
   // both in-app navigation and direct/bookmarked links. The ref bridges the
@@ -381,7 +227,7 @@ export function Patient({
     if ((view !== "detail" && view !== "edit") || !selectedId) return;
     if (selectedDetail?.id === selectedId) return;
     detailFetchInFlightRef.current = true;
-    loadPatientDetail(selectedId).finally(() => {
+    loadPatientDetail(scopedSession, selectedId).finally(() => {
       detailFetchInFlightRef.current = false;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -423,376 +269,37 @@ export function Patient({
     open("edit", id);
   }
 
-  async function createPatient(data: any) {
-    if (!scopedSession) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const created = await apiFetch("/patients", scopedSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: data.branchId || null,
-          full_name: data.fullName,
-          mobile: data.mobile || null,
-          alternate_mobile: data.alternateMobile || null,
-          email: data.email || null,
-          gender: data.gender || "unknown",
-          date_of_birth: data.dateOfBirth || null,
-          age_years: data.ageYears ? Number(data.ageYears) : null,
-          area: data.area || null,
-          address: data.address || null,
-          blood_group: data.bloodGroup || null,
-          whatsapp_consent_status: data.whatsappConsentStatus || "not_recorded",
-          whatsapp_consent_source: data.whatsappConsentSource || null,
-          whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
-          monthly_tracking_enabled: Boolean(data.monthlyTrackingEnabled),
-          monthly_refill_on: data.monthlyTrackingEnabled
-            ? data.monthlyRefillOn || null
-            : null,
-          monthly_refill_notes: data.monthlyTrackingEnabled
-            ? data.monthlyRefillNotes || null
-            : null,
-          monthly_lab_on: data.monthlyTrackingEnabled
-            ? data.monthlyLabOn || null
-            : null,
-          monthly_lab_test_name: data.monthlyTrackingEnabled
-            ? data.monthlyLabTestName || null
-            : null,
-          monthly_lab_notes: data.monthlyTrackingEnabled
-            ? data.monthlyLabNotes || null
-            : null,
-        }),
-      });
-      setRows((previous: any[]) => [
-        toRow(created),
-        ...previous.filter((row: any) => row.id !== created.id),
-      ]);
-      syncSharedPatient(created);
-      await loadData(tenantId);
-      setPendingMessage(created.id, `Patient created: ${created.full_name}`);
-      open("detail", created.id);
-    } catch (err: any) {
-      setMessage(err.message || "Could not create patient.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updatePatient(data: any) {
-    if (!scopedSession || !selectedId) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(`/patients/${selectedId}`, scopedSession, {
-        method: "PATCH",
-        body: JSON.stringify({
-          branch_id: data.branchId || null,
-          full_name: data.fullName,
-          mobile: data.mobile || null,
-          alternate_mobile: data.alternateMobile || null,
-          email: data.email || null,
-          gender: data.gender || "unknown",
-          date_of_birth: data.dateOfBirth || null,
-          age_years: data.ageYears ? Number(data.ageYears) : null,
-          area: data.area || null,
-          address: data.address || null,
-          blood_group: data.bloodGroup || null,
-          status: data.status || "active",
-          whatsapp_consent_status: data.whatsappConsentStatus || "not_recorded",
-          whatsapp_consent_source: data.whatsappConsentSource || null,
-          whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
-          monthly_tracking_enabled: Boolean(data.monthlyTrackingEnabled),
-          monthly_refill_on: data.monthlyTrackingEnabled
-            ? data.monthlyRefillOn || null
-            : null,
-          monthly_refill_notes: data.monthlyTrackingEnabled
-            ? data.monthlyRefillNotes || null
-            : null,
-          monthly_lab_on: data.monthlyTrackingEnabled
-            ? data.monthlyLabOn || null
-            : null,
-          monthly_lab_test_name: data.monthlyTrackingEnabled
-            ? data.monthlyLabTestName || null
-            : null,
-          monthly_lab_notes: data.monthlyTrackingEnabled
-            ? data.monthlyLabNotes || null
-            : null,
-        }),
-      });
-      setRows((previous: any[]) => [
-        toRow(updated),
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-      syncSharedPatient(updated);
-      setSelectedDetail(updated);
-      await loadData(tenantId);
-      setPendingMessage(updated.id, "Patient updated.");
-      open("detail", updated.id);
-    } catch (err: any) {
-      setMessage(err.message || "Could not update patient.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function uploadPhoto(file: File) {
-    if (!scopedSession || !selectedId) return;
-    const fd = new FormData();
-    fd.append("file", file);
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiUpload(
-        `/patients/${selectedId}/photo`,
-        scopedSession,
-        fd,
-      );
-      setSelectedDetail(updated);
-      setRows((previous: any[]) => [
-        toRow(updated),
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-      syncSharedPatient(updated);
-      setMessage("Photo uploaded.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not upload photo.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function sendEngagementAction(actionId: string) {
-    if (!scopedSession || !actionId) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const result = await sendPatientEngagementAction(scopedSession, actionId);
-      setPatientIntelligence((previous: any) => ({
-        ...previous,
-        engagement_actions: (previous?.engagement_actions || []).map(
-          (action: any) =>
-            action.id === actionId
-              ? {
-                  ...action,
-                  status: result.status || "queued",
-                  notification_event_id: result.notification_event_id,
-                }
-              : action,
-        ),
-      }));
-      setMessage("Personalized WhatsApp message queued.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not queue the WhatsApp message.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveManualPrescriptionDate(
-    expectedRefillOn: string,
-    notes: string,
-  ) {
-    if (!scopedSession || !selectedId) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      await updateManualRefillSchedule(
-        scopedSession,
-        selectedId,
-        {
-          expected_refill_on: expectedRefillOn || null,
-          notes: notes || null,
-        },
-      );
-      const intelligenceData = await fetchPatientIntelligence(
-        scopedSession,
-        selectedId,
-      );
-      setPatientIntelligence(intelligenceData);
-      setMessage(
-        expectedRefillOn
-          ? "Monthly prescription date saved and intelligence rules recalculated."
-          : "Manual monthly prescription date cleared.",
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not save the monthly prescription date.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveManualLabDate(
-    expectedLabOn: string,
-    labTestName: string,
-    notes: string,
-  ) {
-    if (!scopedSession || !selectedId) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      await updateManualLabSchedule(
-        scopedSession,
-        selectedId,
-        {
-          expected_lab_on: expectedLabOn || null,
-          lab_test_name: labTestName || null,
-          notes: notes || null,
-        },
-      );
-      const intelligenceData = await fetchPatientIntelligence(
-        scopedSession,
-        selectedId,
-      );
-      setPatientIntelligence(intelligenceData);
-      setMessage(
-        expectedLabOn
-          ? "Monthly lab test date saved and tracking rules recalculated."
-          : "Manual monthly lab test date cleared.",
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not save the monthly lab test date.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function deactivatePatient(row: any) {
-    if (!scopedSession) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      await apiFetch(`/patients/${row.id}`, scopedSession, {
-        method: "DELETE",
-      });
-      setRows((previous: any[]) =>
-        previous.map((item: any) =>
-          item.id === row.id ? { ...item, status: "inactive" } : item,
-        ),
-      );
-      if (setPatients) {
-        setPatients((previous: any[]) =>
-          previous.map((item: any) =>
-            item.id === row.id ? { ...item, status: "inactive" } : item,
-          ),
-        );
-      }
-      if (selectedId === row.id)
-        setSelectedDetail({ ...selectedDetail, status: "inactive" });
-      setMessage("Patient deleted/deactivated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not delete patient.");
-    } finally {
-      setBusy(false);
-      setConfirm(null);
-    }
-  }
-
-  async function activatePatient(row: any) {
-    if (!scopedSession) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(`/patients/${row.id}`, scopedSession, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "active" }),
-      });
-      setRows((previous: any[]) =>
-        previous.map((item: any) =>
-          item.id === row.id ? { ...item, status: updated.status } : item,
-        ),
-      );
-      syncSharedPatient(updated);
-      if (selectedId === row.id) setSelectedDetail(updated);
-      setMessage("Patient activated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not activate patient.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function enrollMembership(data: any) {
-    if (!scopedSession || !selectedId) return false;
-    if (!data.planId) {
-      setMessage("Select membership plan.");
-      return false;
-    }
-    setBusy(true);
-    setMessage("");
-    try {
-      await apiFetch("/patient-subscriptions/enrollments", scopedSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: data.branchId || selected?.branch_id || branchId,
-          patient_id: selectedId,
-          plan_id: data.planId,
-          starts_on: data.startsOn || todayInputValue(),
-          paid_amount:
-            data.paidAmount !== "" ? Number(data.paidAmount) : undefined,
-          payment_method: data.paymentMethod || "cash",
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await Promise.all([
-        loadPatientDetail(selectedId),
-        loadLiveData?.(scopedSession),
-      ]);
-      setMessage("Patient membership enrolled and purchase invoice created.");
-      return true;
-    } catch (err: any) {
-      setMessage(err.message || "Could not enroll membership.");
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createFamilyRelationship(data: any) {
-    if (!scopedSession || !selectedId) return false;
-    if (!data.relatedPatientId) {
-      setMessage("Enter the existing family patient ID.");
-      return false;
-    }
-    setBusy(true);
-    setMessage("");
-    try {
-      await apiFetch(`/patients/${selectedId}/family-relationships`, scopedSession, {
-        method: "POST",
-        body: JSON.stringify({
-          related_patient_id: data.relatedPatientId,
-          relationship: data.relationship || "family",
-          notes: data.notes || null,
-        }),
-      });
-      await loadPatientDetail(selectedId);
-      setMessage("Family relationship linked. Membership benefits can now be shared.");
-      return true;
-    } catch (err: any) {
-      setMessage(err.message || "Could not link family relationship.");
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function deleteFamilyRelationship(relationshipId: string) {
-    if (!scopedSession || !selectedId || !relationshipId) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      await apiFetch(
-        `/patients/${selectedId}/family-relationships/${relationshipId}`,
-        scopedSession,
-        { method: "DELETE" },
-      );
-      await loadPatientDetail(selectedId);
-      setMessage("Family relationship removed.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not remove family relationship.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const {
+    createPatient,
+    updatePatient,
+    uploadPhoto,
+    sendEngagementAction,
+    saveManualPrescriptionDate,
+    saveManualLabDate,
+    deactivatePatient,
+    activatePatient,
+    enrollMembership,
+    createFamilyRelationship,
+    deleteFamilyRelationship,
+  } = usePatientActions({
+    apiSession,
+    scopedSession,
+    selectedId,
+    selected,
+    branchId,
+    setBusy,
+    setMessage,
+    setConfirm,
+    setRows,
+    setSelectedDetail,
+    setPatientIntelligence,
+    loadPatientDetail,
+    syncSharedPatient,
+    setPatients,
+    refreshPatients: () => refreshPatients(tenantId),
+    loadLiveData,
+    openDetail: (id: string) => open("detail", id),
+  });
 
   if (!apiSession)
     return (
@@ -883,6 +390,18 @@ export function Patient({
   const pageRows = rows;
 
   const patientFilters = [
+    ...(isSuperAdmin
+      ? [
+          {
+            key: "tenant",
+            label: "Tenant",
+            options: tenants.map((t: any) => ({
+              value: t.id,
+              label: t.name,
+            })),
+          },
+        ]
+      : []),
     {
       key: "branch",
       label: "Branch",
@@ -902,6 +421,7 @@ export function Patient({
   ];
 
   const filterValues = {
+    tenant: tenantId,
     branch: branchFilter,
     status,
   };
@@ -913,6 +433,11 @@ export function Patient({
     const overrides: Record<string, string> = {};
 
     switch (key) {
+      case "tenant":
+        setTenantId(value);
+        refreshPatients(value, 1, overrides);
+        return;
+
       case "branch":
         setBranchFilter(value);
         overrides.branchFilter = value; // ← force the new value
@@ -924,8 +449,19 @@ export function Patient({
         break;
     }
 
-    loadData(tenantId, 1, overrides);
+    refreshPatients(tenantId, 1, overrides);
   };
+
+  const patientColumns = getPatientColumns({
+    branches,
+    canCopyIds,
+    canEditPatient,
+    canDeletePatient,
+    onView: (id: string) => open("detail", id),
+    onEdit: (id: string) => openPatientEdit(id),
+    onDelete: (row: any) => setConfirm({ row }),
+    onActivate: (row: any) => activatePatient(row),
+  });
 
   return (
     <Card className="">
@@ -941,7 +477,7 @@ export function Patient({
           <RefreshButton
             onRefresh={() => {
               setMessage("");
-              loadData(tenantId);
+              refreshPatients(tenantId);
             }}
           />
           {canCreatePatient && (
@@ -958,39 +494,23 @@ export function Patient({
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 mt-3">
-        <div
-          className={`grid gap-3 ${isSuperAdmin ? "md:grid-cols-3 lg:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "  "}`}
-        >
-          {isSuperAdmin && (
-            <FormField label="Tenant">
-              <SearchableSelect
-                searchable={false}
-                value={tenantId}
-                onChange={setTenantId}
-                options={tenants.map((t: any) => ({
-                  value: t.id,
-                  label: t.name,
-                }))}
-              />
-            </FormField>
-          )}
-
-          <FilterSection
-            title="Patient / Mobile"
-            filters={patientFilters}
-            filterValues={filterValues}
-            className="lg:grid-cols-4"
-            query={query}
-            setQuery={setQuery}
-            onFilterChange={handleFilterChange}
-            onReset={() => {
-              setStatus("all");
-              setGender("all");
-              setBranchFilter("all");
-              setFromDate("");
-              setToDate("");
-              setPage(1);
-              setMessage("");
+      <div>
+        <FilterSection
+          title="Patient / Mobile"
+          filters={patientFilters}
+          filterValues={filterValues}
+          className="lg:grid-cols-4 xl:grid-cols-5"
+          query={query}
+          setQuery={setQuery}
+          onFilterChange={handleFilterChange}
+          onReset={() => {
+            setStatus("all");
+            setGender("all");
+            setBranchFilter("all");
+            setFromDate("");
+            setToDate("");
+            setPage(1);
+            setMessage("");
 
               loadData(tenantId, 1, {
                 query: "",
@@ -1005,42 +525,15 @@ export function Patient({
           </FilterSection>
         </div>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin mt-3">
+      <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin">
         <div className="min-w-[1120px]">
-          <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_.65fr]  lg:grid grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
-            <span className="text-sm">Patient</span>
-            <span className="text-sm">Mobile</span>
-            <span className="text-sm">Branch</span>
-            <span className="text-sm">Gender / Age</span>
-            <span className="text-sm">Plan</span>
-            <span className="text-sm text-center">Status</span>
-            <span className="text-sm text-center">Actions</span>
-          </div>
-          <div className="divide-y divide-slate-200 z-0">
-            {busy && <TableSkeleton />}
-            {!busy && pageRows.length === 0 && (
-              <Empty text="No patients match your search." />
-            )}{" "}
-            {!busy &&
-              pageRows.map((row: any) => (
-                <PatientRow
-                  key={row.id}
-                  row={row}
-                  branches={branches}
-                  canCopyIds={canCopyIds}
-                  onView={() => open("detail", row.id)}
-                  onEdit={
-                    canEditPatient ? () => openPatientEdit(row.id) : undefined
-                  }
-                  onDelete={
-                    canDeletePatient ? () => setConfirm({ row }) : undefined
-                  }
-                  onActivate={
-                    canEditPatient ? () => activatePatient(row) : undefined
-                  }
-                />
-              ))}
-          </div>
+          <DataTable
+            columns={patientColumns}
+            data={pageRows}
+            loading={busy}
+            emptyMessage="No patients match your search."
+            onRowClick={(row: any) => open("detail", row.id)}
+          />
         </div>
       </div>
       <Pagination
@@ -1050,7 +543,7 @@ export function Patient({
         onPage={(nextPage) => {
           setPage(nextPage);
           setMessage("");
-          loadData(tenantId, nextPage);
+          refreshPatients(tenantId, nextPage);
         }}
       />
       {confirm && (

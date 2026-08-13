@@ -2,9 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  ActionButton,
   Badge,
-  Button,
   Card,
   Input,
   RefreshButton,
@@ -14,19 +12,11 @@ import { FormField } from "@/app/components/FormElements";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
-import {
-  formatInvoiceDate,
-  invoicePatientDueAmount,
-  invoiceSource,
-  invoiceSourceOptions,
-} from "./helpers";
+import { invoiceSourceOptions } from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
-import { capitalizeFirst, displayDateTime, money } from "@/utils/helper";
-import {
-  canCopyDatabaseIds,
-  CopyIdButton,
-} from "@/app/components/common/CopyIdButton";
+import { money } from "@/utils/helper";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { status_options } from "./contants";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
@@ -36,9 +26,8 @@ import {
   fetchInvoicePage,
   fetchPendingConsultationInvoicePage,
 } from "./api/billing.api";
-import { Column } from "@/utils/types";
 import { DataTable } from "@/app/components/common/DataTable";
-import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
+import { getConsultationPendingColumns, getInvoiceColumns } from "./Column";
 
 export function Billing({
   apiSession,
@@ -451,195 +440,18 @@ export function Billing({
     await collectSplitPaymentAction(invoice, rows, defaultPaymentMethod);
   }
 
-  const invoiceColumns: Column<any>[] = [
-    {
-      key: "index",
-      header: "S.No",
-      width: "60px",
-      render: (_, index) => (safePage - 1) * pageSize + index + 1,
-      cellClassName: "font-semibold text-slate-500 text-center",
-    },
-    {
-      key: "invoice_number",
-      header: "Invoice",
-      width: "200px",
-      render: (invoice) => (
-        <>
-          <div className="flex items-center gap-2">
-            <b>{invoice.invoice_number}</b>
-            <CopyIdButton
-              value={invoice.id}
-              label="Invoice ID"
-              allowed={canCopyIds}
-            />
-          </div>
-          <p className="mt-1 text-sm font-semibold text-slate-400">
-            {formatInvoiceDate(invoice)}
-          </p>
-        </>
-      ),
-    },
-    {
-      key: "invoice_date",
-      className: "text-center",
-      header: "Date",
-      width: "100px",
-      render: (invoice) => (
-        <>
-          <p className="text-sm ">{formatInvoiceDate(invoice)}</p>
-        </>
-      ),
-    },
-    {
-      key: "source",
-      header: "Source",
-      width: "160px",
-      className: "text-center",
-      render: (invoice) => {
-        const source = invoiceSource(invoice);
+  const invoiceColumns = getInvoiceColumns({
+    safePage,
+    patientMap,
+    canCopyIds,
+    openInvoiceDetail,
+    detailLoading,
+  });
 
-        return (
-          <Badge
-            tone={source.tone as any}
-            className="table-status text-xs text-center "
-          >
-            {source.label}
-          </Badge>
-        );
-      },
-    },
-    {
-      key: "patient",
-      header: "Patient",
-      width: "120px",
-      render: (invoice) => {
-        const p: any = patientMap.get(invoice.patient_id);
-
-        return (
-          <div>
-            {capitalizeFirst(invoice.patient_name || p?.name || p?.full_name || "Patient")}
-            <PatientFlagBadges patient={p} className="mt-1" />
-          </div>
-        );
-      },
-      cellClassName: "font-medium",
-    },
-    {
-      key: "status",
-      header: "Status",
-      className: "text-center",
-      width: "120px",
-      render: (invoice) => (
-        <Badge
-          tone={
-            invoice.status === "paid"
-              ? "green"
-              : invoice.status === "partially_refunded" ||
-                  invoice.status === "refunded"
-                ? "blue"
-                : invoice.status === "partially_paid"
-                  ? "amber"
-                  : invoice.status == "cancelled"
-                    ? "red"
-                    : "slate"
-          }
-          className="table-status text-xs text-center"
-        >
-          {capitalizeFirst(
-            invoice.status === "partially_paid"
-              ? "Partially Paid"
-              : invoice.status === "partially_refunded"
-                ? "Partially Refunded"
-                : invoice.status,
-          )}
-        </Badge>
-      ),
-    },
-    {
-      key: "total_amount",
-      header: "Total",
-      width: "100px",
-      render: (invoice) => money(invoice.total_amount),
-      cellClassName: "font-semibold tabular-nums",
-    },
-    {
-      key: "paid_amount",
-      header: "Paid",
-      width: "100px",
-      render: (invoice) => money(invoice.paid_amount),
-      cellClassName: "tabular-nums",
-    },
-    {
-      key: "due",
-      header: "Due",
-      width: "100px",
-      render: (invoice) => money(invoicePatientDueAmount(invoice)),
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      width: "120px",
-      disableRowClick: true,
-      render: (invoice) => (
-        <ActionButton
-          onClick={() => openInvoiceDetail(invoice)}
-          disabled={detailLoading === invoice.id}
-        >
-          <ButtonLoader loading={detailLoading === invoice.id}>
-            {detailLoading === invoice.id ? "Loading..." : "View"}
-          </ButtonLoader>
-        </ActionButton>
-      ),
-    },
-  ];
-
-  const consulationPendingColumns: Column<any>[] = [
-    {
-      key: "consultation",
-      header: "Consultation",
-      render: (a: any) => <span className="font-bold">{a.token || "-"}</span>,
-    },
-    {
-      key: "patient",
-      header: "Patient",
-      render: (a: any) => <span className="font-semibold">{a.patient}</span>,
-    },
-    {
-      key: "doctor",
-      header: "Doctor",
-      cellClassName: "text-slate-600",
-      render: (a: any) =>
-        a.doctor && a.doctor !== "Unassigned" ? a.doctor : "-",
-    },
-    {
-      key: "date",
-      header: "Date & Time",
-      cellClassName: "whitespace-nowrap text-slate-600",
-      render: (a: any) =>
-        displayDateTime(
-          a.consultationSignedAt ||
-            a.consultationCreatedAt ||
-            a.appointmentDate,
-        ),
-    },
-    {
-      key: "action",
-      header: "Action",
-      cellClassName: "text-right",
-      disableRowClick: true,
-      render: (a: any) => (
-        <Button
-          disabled={busy === a.id}
-          onClick={() => generateInvoice(a)}
-          className="save-button"
-        >
-          <ButtonLoader loading={busy === a.id}>
-            {busy === a.id ? "Generating..." : "Generate Invoice"}
-          </ButtonLoader>
-        </Button>
-      ),
-    },
-  ];
+  const consulationPendingColumns = getConsultationPendingColumns({
+    busy,
+    generateInvoice,
+  });
 
   if (!apiSession) {
     return (
@@ -920,7 +732,7 @@ export function Billing({
                         ? "amber"
                         : "green"
                   }
-                  className="inline w-2/3 rounded-lg text-[11px] table-status lg:text-sm"
+                  className="inline w-2/3 rounded-lg text-[11px] normal-badge lg:text-sm"
                 >
                   {settlementRecovery > 0
                     ? "Recovery due"

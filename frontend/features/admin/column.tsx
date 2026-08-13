@@ -96,3 +96,115 @@ export function getFileColumns({
     },
   ];
 }
+
+interface GetReportJobsColumnProps {
+  safeReportPage: number;
+  pageSize: number;
+  reportBusy: string;
+  resendMonthlyReport: (job: any) => void;
+  downloadMonthlyReport: (job: any) => void;
+}
+export function getReportJobsColumns({
+  safeReportPage,
+  pageSize,
+  reportBusy,
+  resendMonthlyReport,
+  downloadMonthlyReport,
+}: GetReportJobsColumnProps) {
+  return [
+    {
+      key: "job",
+      header: "Job",
+      render: (job: any, index: number) => (
+        <b>Report {(safeReportPage - 1) * pageSize + index + 1}</b>
+      ),
+    },
+    {
+      key: "created_at",
+      header: "Time",
+      render: (job: any) => (
+        <p className="text-xs text-slate-500">
+          {displayDateTime(job.created_at)}
+        </p>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      width: "100px",
+      render: (job: any) => (
+        <Badge
+          tone={
+            job.status === "sent"
+              ? "green"
+              : job.status === "failed"
+                ? "red"
+                : job.status === "running"
+                  ? "blue"
+                  : "amber"
+          }
+          className="normal-badge w-[60%] text-xs"
+        >
+          {humanizeOptionLabel(job.status)}
+        </Badge>
+      ),
+    },
+    {
+      key: "period",
+      header: "Period",
+      render: (job: any) => (
+        <span className="text-xs">
+          {job.period_start} to {job.period_end}
+        </span>
+      ),
+    },
+    {
+      key: "recipients",
+      header: "Recipients",
+      render: (job: any) => (
+        <span className="text-xs truncate">
+          {(job.recipients || []).join(", ")}
+        </span>
+      ),
+    },
+    {
+      key: "result",
+      header: "Result",
+      render: (job: any) => (
+        <div
+          className="truncate w-[100px] text-xs text-slate-500"
+          title={job.failure_reason || job.attachment_filename}
+        >
+          {job.failure_reason || job.attachment_filename || "-"}
+        </div>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      disableRowClick: true,
+      render: (job: any) => (
+        <RowActions
+          actions={[
+            {
+              label:
+                reportBusy === `resend-${job.id}` ? "Sending..." : "Resend",
+              onClick: () => resendMonthlyReport(job),
+              disabled: reportBusy === `resend-${job.id}`,
+            },
+            {
+              label:
+                reportBusy === `download-${job.id}`
+                  ? "Downloading..."
+                  : "Download",
+              onClick: () => downloadMonthlyReport(job),
+              disabled: reportBusy === `download-${job.id}`,
+            },
+          ]}
+          className="right-24 -bottom-3"
+          width="w-24"
+        />
+      ),
+    },
+  ];
+}

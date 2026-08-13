@@ -445,10 +445,11 @@ describe("WhatsApp integration settings design", () => {
       />,
     );
 
-    const languageEditor = await screen.findByDisplayValue(
-      "English (tenant default)",
-    );
-    fireEvent.change(languageEditor, { target: { value: "ta" } });
+    const languageTrigger = await screen.findByRole("button", {
+      name: "English (tenant default)",
+    });
+    fireEvent.click(languageTrigger);
+    fireEvent.click(screen.getByRole("button", { name: "Tamil" }));
 
     expect(
       screen.getByText(/2 enabled templates are missing for this language/i),

@@ -1,19 +1,16 @@
-import { displayDateTime, money } from "@/utils/helper";
+import { money } from "@/utils/helper";
 import {
   claimedDetail,
   formatPercentage,
   invoiceDiscountParts,
   invoiceHasAppliedMembershipBenefit,
   invoicePatientDueAmount,
-  invoiceItemPriceBreakdown,
   invoiceLinkedRecord,
   invoiceMembershipLabel,
   invoiceSource,
   invoiceTaxAdjustedDiscount,
   isMembershipPlanInvoice,
-  itemTypeLabel,
   numberValue,
-  percentLabel,
 } from "../helpers";
 import { useEffect, useState } from "react";
 import { humanizeOptionLabel } from "@/lib/options";
@@ -32,6 +29,13 @@ import {
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { DataTable } from "@/app/components/common/DataTable";
+import {
+  getAdjustmentRequestColumns,
+  getHospitalLedgerColumns,
+  getInvoiceItemColumns,
+  getSettlementHistoryColumns,
+} from "../Column";
 
 export function InvoiceDetailPage({
   detail,
@@ -271,34 +275,6 @@ export function InvoiceDetailPage({
       rows.length > 1 ? rows.filter((_, i) => i !== index) : rows,
     );
   }
-  function signedMoney(
-    value: any,
-    mode: "delta" | "debit" | "credit" = "delta",
-  ) {
-    const amount = numberValue(value);
-    if (amount === 0) return money(0);
-    if (mode === "credit") return `+${money(Math.abs(amount))}`;
-    if (mode === "debit") return `-${money(Math.abs(amount))}`;
-    return `${amount > 0 ? "+" : "-"}${money(Math.abs(amount))}`;
-  }
-  function amountTone(
-    value: any,
-    mode: "delta" | "debit" | "credit" = "delta",
-  ) {
-    const amount = numberValue(value);
-    if (amount === 0) return "text-slate-500";
-    if (mode === "debit" || amount < 0) return "text-rose-700";
-    return "text-emerald-700";
-  }
-  function itemMrp(item: any) {
-    return numberValue(item.mrp_amount);
-  }
-  function itemRate(item: any) {
-    const pricing = invoiceItemPriceBreakdown(item, invoice);
-    return pricing.rateUnit;
-  }
-  const itemTableColSpan =
-    7 + (showItemVendor ? 2 : 0) + (showItemPricing ? 1 : 0);
   const canApproveDiscounts =
     isTenantBillingAdmin || hasPermission("billing.discounts.approve");
   const canManageRefunds =
@@ -655,169 +631,22 @@ export function InvoiceDetailPage({
                   </span>
                 </div>
               </div>
-              <div className="m-3 overflow-x-auto rounded-xl border border-slate-200">
-                <table
-                  className={`w-full border-separate border-spacing-0 text-left text-xs ${showItemVendor || showItemPricing ? "min-w-[980px]" : "min-w-[760px]"}`}
-                >
-                  <thead className="bg-slate-100 text-[11px] font-medium text-slate-500">
-                    <tr>
-                      <th className="w-12 border-r border-slate-200 px-3 py-2 text-center">
-                        No.
-                      </th>
-                      <th className="min-w-52 border-r border-slate-200 px-3 py-2">
-                        Item
-                      </th>
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">
-                        Quantity
-                      </th>
-                      {showItemVendor && (
-                        <th className="min-w-36 border-r border-slate-200 px-3 py-2">
-                          {vendorLabel}
-                        </th>
-                      )}
-                      {showItemVendor && (
-                        <th className="border-r border-slate-200 px-3 py-2 text-right">
-                          {vendorPriceLabel}
-                        </th>
-                      )}
-                      {showItemPricing && (
-                        <th className="border-r border-slate-200 px-3 py-2 text-right">
-                          MRP
-                        </th>
-                      )}
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">
-                        Rate (INR)
-                      </th>
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">
-                        Discount %
-                      </th>
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">
-                        Discount amount
-                      </th>
-                      <th className="px-3 py-2 text-right">Payable (INR)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={itemTableColSpan}
-                          className="border-t border-slate-200 px-4 py-5 text-sm font-semibold text-slate-500"
-                        >
-                          No bill items found.
-                        </td>
-                      </tr>
-                    )}
-                    {items.map((item: any, index: number) => {
-                      const pricing = invoiceItemPriceBreakdown(item, invoice);
-                      const displayDiscount = pricing.effectiveDiscount;
-                      const discountBase =
-                        pricing.mrpTotal > 0
-                          ? pricing.mrpTotal
-                          : pricing.lineAmount;
-                      const itemSupplierOptions =
-                        supplierOptions[item.id] || [];
-                      const vendorName =
-                        item.vendor_name || item.supplier_id || "";
-                      const canPickSupplier =
-                        showSupplierPicker &&
-                        item.item_type === "lab" &&
-                        itemSupplierOptions.length > 0;
-                      const vendorAmount =
-                        numberValue(item.vendor_amount) ||
-                        (canPickSupplier && itemSupplierOptions.length === 1
-                          ? numberValue(itemSupplierOptions[0].buying_price)
-                          : 0);
-                      return (
-                        <tr
-                          key={item.id}
-                          className="align-middle hover:bg-slate-50/70"
-                        >
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-center tabular-nums text-slate-600">
-                            {index + 1}
-                          </td>
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5">
-                            <span
-                              className="block max-w-64 truncate font-bold text-slate-900"
-                              title={
-                                item.description ||
-                                itemTypeLabel(item.item_type)
-                              }
-                            >
-                              {item.description ||
-                                itemTypeLabel(item.item_type)}
-                            </span>
-                          </td>
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-semibold tabular-nums text-slate-700">
-                            {item.quantity}
-                          </td>
-                          {showItemVendor && (
-                            <td className="border-r border-t border-slate-200 px-3 py-2.5">
-                              {canPickSupplier ? (
-                                <SearchableSelect
-                                  value={item.supplier_id || ""}
-                                  onChange={(value) =>
-                                    updateInvoiceItemSupplier?.(
-                                      invoice,
-                                      item,
-                                      value,
-                                    )
-                                  }
-                                  disabled={busy === `supplier-${item.id}`}
-                                  searchable={itemSupplierOptions.length > 8}
-                                  placeholder="No supplier"
-                                  options={[
-                                    {
-                                      value: "",
-                                      label: "No supplier",
-                                    },
-                                    ...itemSupplierOptions.map(
-                                      (supplier: any) => ({
-                                        value: supplier.supplier,
-                                        label: supplier.supplier_name,
-                                        sublabel: money(supplier.buying_price),
-                                      }),
-                                    ),
-                                  ]}
-                                />
-                              ) : (
-                                <span className="font-medium text-slate-800">
-                                  {vendorName || "-"}
-                                </span>
-                              )}
-                            </td>
-                          )}
-                          {showItemVendor && (
-                            <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
-                              {vendorAmount > 0 ? money(vendorAmount) : "-"}
-                            </td>
-                          )}
-                          {showItemPricing && (
-                            <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
-                              {itemMrp(item) > 0 ? money(itemMrp(item)) : "-"}
-                            </td>
-                          )}
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums text-slate-800">
-                            {money(itemRate(item))}
-                          </td>
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
-                            {displayDiscount > 0
-                              ? percentLabel(displayDiscount, discountBase)
-                              : "-"}
-                          </td>
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums text-emerald-700">
-                            {displayDiscount > 0
-                              ? `-${money(displayDiscount)}`
-                              : "-"}
-                          </td>
-                          <td className="border-t border-slate-200 px-3 py-2.5 text-right font-black tabular-nums text-slate-900">
-                            {money(pricing.payableAmount)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="m-3">
+                <DataTable
+                  columns={getInvoiceItemColumns({
+                    invoice,
+                    showItemVendor,
+                    showItemPricing,
+                    vendorLabel,
+                    vendorPriceLabel,
+                    showSupplierPicker,
+                    supplierOptions,
+                    busy,
+                    updateInvoiceItemSupplier,
+                  })}
+                  data={items}
+                  emptyMessage="No bill items found."
+                />
               </div>
               {canRequestDiscountBase ? (
                 <div className="mx-3 mb-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
@@ -1315,57 +1144,11 @@ export function InvoiceDetailPage({
               <h4 className="card-title font-bold">Settlement History</h4>
             </div>
             <div className="overflow-auto">
-              {settlementRows.length === 0 ? (
-                <p className="p-4 table-data text-slate-500">
-                  No payments or credit notes recorded yet.
-                </p>
-              ) : (
-                <table className="w-full min-w-[820px] table-fixed text-left text-xs">
-                  <thead className="bg-slate-50 font-semibold uppercase text-slate-500">
-                    <tr>
-                      <th className="w-[180px] px-4 py-3">Date & Time</th>
-                      <th className="w-[120px] px-3 py-3">Type</th>
-                      <th className="w-[170px] px-3 py-3">Method / No.</th>
-                      <th className="px-3 py-3">Reference / Reason</th>
-                      <th className="w-[120px] px-3 py-3">Status</th>
-                      <th className="w-[130px] px-4 py-3 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {settlementRows.map((row: any) => (
-                      <tr key={row.id} className="align-middle">
-                        <td className="px-4 py-3 font-semibold text-slate-700">
-                          {displayDateTime(row.date)}
-                        </td>
-                        <td className="px-3 py-3 font-semibold text-slate-900">
-                          {row.type}
-                        </td>
-                        <td className="px-3 py-3 capitalize text-slate-700">
-                          {row.method}
-                        </td>
-                        <td
-                          className="truncate px-3 py-3 text-slate-600"
-                          title={row.reference}
-                        >
-                          {row.reference}
-                        </td>
-                        <td className="px-3 py-3">
-                          <Badge tone={row.tone} className="normal-badge">
-                            {humanizeOptionLabel(row.status)}
-                          </Badge>
-                        </td>
-                        <td
-                          className={`px-4 py-3 text-right font-black tabular-nums ${row.informational ? "text-slate-700" : amountTone(row.amount)}`}
-                        >
-                          {row.informational
-                            ? money(row.amount)
-                            : signedMoney(row.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <DataTable
+                columns={getSettlementHistoryColumns()}
+                data={settlementRows}
+                emptyMessage="No payments or credit notes recorded yet."
+              />
             </div>
           </div>
 
@@ -1409,100 +1192,17 @@ export function InvoiceDetailPage({
               </ActionGroup>
             </div>
             <div className="overflow-auto">
-              {adjustmentRequests.length === 0 ? (
-                <p className="p-4 table-data text-slate-500">
-                  No refund or cancellation requests yet.
-                </p>
-              ) : (
-                <table className="w-full min-w-[980px] text-left text-xs">
-                  <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
-                    <tr>
-                      <th className="whitespace-nowrap px-4 py-3">Requested</th>
-                      <th className="whitespace-nowrap px-4 py-3">Type</th>
-                      <th className="whitespace-nowrap px-4 py-3 text-right">
-                        Amount
-                      </th>
-                      <th className="whitespace-nowrap px-4 py-3">Reason</th>
-                      <th className="whitespace-nowrap px-4 py-3">
-                        Requested By
-                      </th>
-                      <th className="whitespace-nowrap px-4 py-3">Status</th>
-                      <th className="whitespace-nowrap px-4 py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {adjustmentRequests.map((row: any) => (
-                      <tr
-                        key={row.id}
-                        className="whitespace-nowrap align-middle"
-                      >
-                        <td className="px-4 py-3 font-semibold text-slate-700">
-                          {displayDateTime(row.created_at)}
-                        </td>
-                        <td className="px-4 py-3 font-bold capitalize">
-                          {humanizeOptionLabel(row.request_type)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-black tabular-nums">
-                          {money(row.amount)}
-                        </td>
-                        <td
-                          className="max-w-[260px] truncate px-4 py-3 font-semibold text-slate-600"
-                          title={row.reason}
-                        >
-                          {row.reason}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-slate-700">
-                          {row.requested_by_user_name || "Unknown user"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge
-                            tone={
-                              row.status === "executed"
-                                ? "green"
-                                : row.status === "rejected"
-                                  ? "red"
-                                  : row.status === "approved"
-                                    ? "blue"
-                                    : "amber"
-                            }
-                            className="normal-badge"
-                          >
-                            {humanizeOptionLabel(row.status)}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          {canDecideAdjustment(row) &&
-                          row.status === "pending" ? (
-                            <ActionGroup>
-                              <ActionButton
-                                onClick={() => approveAdjustment?.(row)}
-                              >
-                                Approve
-                              </ActionButton>
-                              <ActionButton
-                                tone="danger"
-                                onClick={() => rejectAdjustment?.(row)}
-                              >
-                                Reject
-                              </ActionButton>
-                            </ActionGroup>
-                          ) : canDecideAdjustment(row) &&
-                            row.status === "approved" &&
-                            !adjustmentClosed ? (
-                            <ActionButton
-                              onClick={() => executeAdjustment?.(row)}
-                            >
-                              Execute
-                            </ActionButton>
-                          ) : (
-                            <span className="text-slate-400">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <DataTable
+                columns={getAdjustmentRequestColumns({
+                  canDecideAdjustment,
+                  adjustmentClosed,
+                  approveAdjustment,
+                  rejectAdjustment,
+                  executeAdjustment,
+                })}
+                data={adjustmentRequests}
+                emptyMessage="No refund or cancellation requests yet."
+              />
             </div>
           </div>
 
@@ -1518,113 +1218,14 @@ export function InvoiceDetailPage({
                 </p>
               </div>
               <div className="overflow-auto">
-                {financialLedgerEntries.length === 0 && (
-                  <p className="p-4 table-data text-slate-500">
-                    No financial ledger entries recorded yet.
-                  </p>
-                )}
-                {financialLedgerEntries.length > 0 && (
-                  <table className="w-full min-w-[1220px] text-left text-xs">
-                    <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
-                      <tr>
-                        <th className="whitespace-nowrap px-4 py-3">
-                          Date & Time
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3">
-                          Activity
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3">User</th>
-                        <th className="whitespace-nowrap px-4 py-3">
-                          Debit Account
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Debit
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3">
-                          Credit Account
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Credit
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Bill Amount
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Paid
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Balance
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
-                      {financialLedgerEntries.map((entry: any) => {
-                        const running = ledgerRunningById.get(entry.id) || {
-                          invoiceTotal: 0,
-                          paidAmount: 0,
-                          balanceAmount: 0,
-                        };
-                        const line = hospitalLedgerLine(entry);
-                        return (
-                          <tr
-                            key={entry.id}
-                            className="whitespace-nowrap align-middle"
-                          >
-                            <td className="px-4 py-3 font-semibold text-slate-700">
-                              {displayDateTime(entry.created_at)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="font-bold capitalize text-slate-950">
-                                {humanizeOptionLabel(entry.entry_type)}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-slate-700">
-                              {entry.actor_user_name || "Unknown user"}
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-slate-700">
-                              {line.debitAccount}
-                            </td>
-                            <td
-                              className={`px-4 py-3 text-right font-black tabular-nums ${line.debitAmount > 0 ? "text-rose-700" : "text-slate-500"}`}
-                            >
-                              {money(line.debitAmount)}
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-slate-700">
-                              {line.creditAccount}
-                            </td>
-                            <td
-                              className={`px-4 py-3 text-right font-black tabular-nums ${line.creditAmount > 0 ? "text-emerald-700" : "text-slate-500"}`}
-                            >
-                              {money(line.creditAmount)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-black tabular-nums text-slate-700">
-                              {money(running.invoiceTotal)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-black tabular-nums text-slate-700">
-                              {money(running.paidAmount)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-black tabular-nums text-slate-700">
-                              {money(running.balanceAmount)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <Badge
-                                tone={
-                                  entry.status_after === "cancelled"
-                                    ? "amber"
-                                    : "slate"
-                                }
-                                className="normal-badge"
-                              >
-                                {humanizeOptionLabel(entry.status_after)}
-                              </Badge>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
+                <DataTable
+                  columns={getHospitalLedgerColumns({
+                    ledgerRunningById,
+                    hospitalLedgerLine,
+                  })}
+                  data={financialLedgerEntries}
+                  emptyMessage="No financial ledger entries recorded yet."
+                />
               </div>
             </div>
           )}

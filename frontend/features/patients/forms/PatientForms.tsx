@@ -595,7 +595,7 @@ export function PatientForm({
         </section>
 
         <div className="flex flex-wrap gap-2">
-          <Button disabled={busy}>
+          <Button disabled={busy} className='save-button'>
             {busy ? "Saving..." : patient ? "Save Patient" : "Create Patient"}
           </Button>
 
@@ -710,7 +710,7 @@ export function MembershipEnrollForm({
         />
       </FormField>
       <div className="md:col-span-5">
-        <Button disabled={loading || !selectedPlan}>
+        <Button disabled={loading || !selectedPlan} className='save-button'>
           {loading ? "Saving..." : "Enroll & Create Invoice"}
         </Button>
       </div>

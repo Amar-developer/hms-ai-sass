@@ -139,11 +139,15 @@ describe("Super Admin permission catalog", () => {
       />,
     );
 
-    const roleSelect = screen.getByRole("combobox", { name: "Role" });
-    expect(screen.getByRole("option", { name: "Doctor" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Receptionist" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Doctor" }));
+    expect(
+      screen.getAllByRole("button", { name: "Doctor" }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: "Receptionist" }),
+    ).toBeTruthy();
 
-    fireEvent.change(roleSelect, { target: { value: "role_receptionist" } });
+    fireEvent.click(screen.getByRole("button", { name: "Receptionist" }));
     expect(onRoleChange).toHaveBeenCalledWith("role_receptionist");
   });
 });

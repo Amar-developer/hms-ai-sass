@@ -12,6 +12,7 @@ import { RowActions } from "@/features/admin/components/RowActions";
 import { FormField } from "@/app/components/FormElements";
 import { DataTable } from "@/app/components/common/DataTable";
 import { Column } from "@/utils/types";
+import { getDepartmentColumns } from "./Column";
 
 export function DepartmentsManagement({
   tenants,
@@ -48,123 +49,11 @@ export function DepartmentsManagement({
     setPage(1);
   }, [query, departments.length]);
 
-  const departmentColumns: Column<any>[] = [
-    {
-      key: "name",
-      header: "Department",
-      render: (department: any) => {
-        const locked =
-          department.is_template_locked ||
-          department.source_template_department_id;
-
-        return (
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <b className="text-xs lg:text-sm">{department.name}</b>
-
-              {department.is_global_template && (
-                <Badge tone="blue" className="table-status">
-                  Global
-                </Badge>
-              )}
-
-              {locked && (
-                <Badge tone="purple" className="table-status">
-                  Locked
-                </Badge>
-              )}
-            </div>
-          </div>
-        );
-      },
-    },
-
-    {
-      key: "code",
-      header: "Code",
-      render: (department: any) => (
-        <span className="text-xs lg:text-sm">{department.code}</span>
-      ),
-    },
-
-    {
-      key: "is_active",
-      header: "Status",
-      render: (department: any) => (
-        <Badge
-          tone={department.is_active ? "green" : "red"}
-          className="table-status w-[60%]"
-        >
-          {department.is_active ? "Active" : "Inactive"}
-        </Badge>
-      ),
-    },
-
-    {
-      key: "updated_at",
-      header: "Modified",
-      render: (department: any) => (
-        <span className="text-xs lg:text-sm">
-          {displayDate(department.updated_at || department.created_at)}
-        </span>
-      ),
-    },
-
-    {
-      key: "actions",
-      header: "Actions",
-      disableRowClick: true,
-      render: (department: any) => {
-        const locked =
-          department.is_template_locked ||
-          department.source_template_department_id;
-
-        return (
-          <RowActions
-            actions={[
-              {
-                label: "Edit",
-                hidden: locked,
-                onClick: () => {
-                  setSelectedDepartmentId(department.id);
-                  setSection("departmentEdit");
-                },
-              },
-              {
-                label: "Assign",
-                onClick: () => {
-                  setSelectedDepartmentId(department.id);
-                  setSection("departmentAssign");
-                },
-              },
-              {
-                label: department.is_active ? "Inactive" : "Active",
-                hidden: locked,
-                onClick: () =>
-                  setConfirmAction({
-                    entity: "department",
-                    kind: "status",
-                    department,
-                  }),
-              },
-              {
-                label: "Delete",
-                danger: true,
-                hidden: locked,
-                onClick: () =>
-                  setConfirmAction({
-                    entity: "department",
-                    kind: "delete",
-                    department,
-                  }),
-              },
-            ]}
-            className="right-40 -bottom-7"
-          />
-        );
-      },
-    },
-  ];
+  const  departmentColumns = getDepartmentColumns({
+    setSelectedDepartmentId,
+    setSection,
+    setConfirmAction
+  })
 
   return (
     <div className="mt-3">

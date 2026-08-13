@@ -115,7 +115,7 @@ export function getAppointmentColumns({
       render: (appointment: any) => (
         <Badge
           tone={appointmentStatusInfo(appointment).tone}
-          className="table-status text-xs"
+          className="normal-badge text-xs"
         >
           {appointmentStatusInfo(appointment).label}
         </Badge>
@@ -242,7 +242,7 @@ export function getPlatformColumns({
       className: "text-center",
       cellClassName: "text-center",
       render: (row: any) => (
-        <Badge tone={appointmentStatusInfo(row).tone} className="table-status">
+        <Badge tone={appointmentStatusInfo(row).tone} className="normal-badge">
           {appointmentStatusInfo(row).label}
         </Badge>
       ),

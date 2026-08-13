@@ -17,6 +17,8 @@ import {
   isoToDisplayDate,
 } from "@/utils/helper";
 import type { NoticeTone, SearchableSelectProps } from "@/features/admin/types";
+import { Children, isValidElement } from "react";
+
 
 export function Card({
   children,
@@ -39,7 +41,16 @@ export function Badge({
   className = "px-2 py-2  text-xs lg:text-sm flex justify-center items-center",
 }: {
   children: React.ReactNode;
-  tone?: "slate" | "red" | "green" | "blue" | "amber" | "purple" | "orange" |'skyblue' | string;
+  tone?:
+    | "slate"
+    | "red"
+    | "green"
+    | "blue"
+    | "amber"
+    | "purple"
+    | "orange"
+    | "skyblue"
+    | string;
   className?: string;
 }) {
   const m: any = {
@@ -704,24 +715,43 @@ export function SuggestionInput({
   );
 }
 
+
 export function Select({
-  className = "rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 md:text-base lg:text-sm",
+  className = "",
   children,
   value,
+  defaultValue,
   onChange,
+  disabled = false,
+  name,
   ...props
 }: any) {
-  const controlledProps =
-    value !== undefined ? { value, onChange } : { defaultValue: value };
+  const options = Children.toArray(children)
+    .filter(isValidElement)
+    .map((child: any) => ({
+      value: String(child.props.value ?? ""),
+      label: Children.toArray(child.props.children)
+        .map((node: any) =>
+          typeof node === "string" || typeof node === "number"
+            ? String(node)
+            : "",
+        )
+        .join(""),
+    }));
 
   return (
-    <select
+    <SearchableSelect
+      name={name}
+      value={value ?? defaultValue ?? ""}
+      onChange={(nextValue: string) =>
+        onChange?.({ target: { value: nextValue, name } })
+      }
+      options={options}
+      disabled={disabled}
+      searchable={false}
+      className={className}
       {...props}
-      {...controlledProps}
-      className={`w-full border border-slate-200 bg-white outline-none focus:border-slate-500 ${className}`}
-    >
-      {children}
-    </select>
+    />
   );
 }
 
@@ -858,7 +888,9 @@ export function SearchableSelect<T = string>({
         className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:text-sm"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
+          <span
+            className={displayLabel ? "truncate" : "truncate text-slate-400"}
+          >
             {capitalizeFirst(displayLabel) || placeholder}
           </span>
           {selected?.badges?.slice(0, 1).map((badge) => (

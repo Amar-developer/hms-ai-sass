@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize as defaultPageSize } from "@/utils/constants";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
@@ -14,6 +15,8 @@ export function DataTable<T>({
   paginate = false,
   pageSize = defaultPageSize,
   loading = false,
+  sort,
+  onSortChange,
 }: DataTableProps<T>) {
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
@@ -26,6 +29,15 @@ export function DataTable<T>({
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+
+  function handleSort(key: string) {
+    if (!onSortChange) return;
+    onSortChange(
+      sort?.key === key
+        ? { key, dir: sort.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" },
+    );
+  }
 
 
   return (
@@ -42,7 +54,24 @@ export function DataTable<T>({
                 style={column.width ? { width: column.width } : undefined}
                 className={`px-4 py-3 text-sm ${column.className ?? ""}`}
               >
-                {column.header}
+                {column.sortable && onSortChange ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSort(String(column.key))}
+                    className="inline-flex items-center gap-1 font-bold uppercase text-slate-500 hover:text-slate-900"
+                  >
+                    {column.header}
+                    {sort?.key === column.key ? (
+                      sort.dir === "asc" ? (
+                        <ArrowUp size={12} />
+                      ) : (
+                        <ArrowDown size={12} />
+                      )
+                    ) : null}
+                  </button>
+                ) : (
+                  column.header
+                )}
               </th>
             ))}
           </tr>

@@ -84,7 +84,7 @@ export function getExpenseColumns(
       className: "text-center",
       cellClassName: "text-center",
       render: (row: Expense) => (
-        <Badge tone={EXPENSE_STATUS_TONE[row.status]} className="table-status text-sm">
+        <Badge tone={EXPENSE_STATUS_TONE[row.status]} className="normal-badge text-sm">
           {EXPENSE_STATUS_LABEL[row.status]}
         </Badge>
       ),
