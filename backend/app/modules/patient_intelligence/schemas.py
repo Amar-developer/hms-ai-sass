@@ -25,6 +25,8 @@ class IntelligenceRuleBase(BaseModel):
     display_as_patient_badge: bool
     priority: int = Field(ge=0, le=10000)
     exclusive_group: str | None = Field(max_length=100)
+    score_dimension: str | None = Field(default=None, max_length=30)
+    score_weight: Decimal = Field(default=Decimal("0"), ge=0, le=10000)
     required_flag_keys: list[str]
     expires_after_days: int | None = Field(ge=1, le=3650)
     auto_resolve: bool
@@ -57,6 +59,15 @@ class IntelligenceRuleBase(BaseModel):
     def validate_operator(cls, value: str) -> str:
         if value not in {"gte", "gt", "lte", "lt", "eq", "neq", "between"}:
             raise ValueError("Unsupported rule operator")
+        return value
+
+    @field_validator("score_dimension")
+    @classmethod
+    def validate_score_dimension(cls, value: str | None) -> str | None:
+        if value in {None, ""}:
+            return None
+        if value not in {"value", "engagement", "risk", "loyalty"}:
+            raise ValueError("Unsupported score dimension")
         return value
 
     @model_validator(mode="after")
@@ -102,6 +113,8 @@ class IntelligenceRuleUpdate(BaseModel):
     display_as_patient_badge: bool | None = None
     priority: int | None = Field(default=None, ge=0, le=10000)
     exclusive_group: str | None = None
+    score_dimension: str | None = None
+    score_weight: Decimal | None = Field(default=None, ge=0, le=10000)
     required_flag_keys: list[str] | None = None
     expires_after_days: int | None = Field(default=None, ge=1, le=3650)
     auto_resolve: bool | None = None
@@ -136,6 +149,8 @@ class IntelligenceRuleRead(BaseModel):
     display_as_patient_badge: bool
     priority: int
     exclusive_group: str | None
+    score_dimension: str | None
+    score_weight: Decimal
     required_flag_keys: list[str]
     expires_after_days: int | None
     auto_resolve: bool
@@ -148,6 +163,86 @@ class IntelligenceRuleRead(BaseModel):
     action_cooldown_days: int | None
     is_enabled: bool
     version: int
+
+
+class IntelligenceContentBase(BaseModel):
+    content_key: str = Field(min_length=2, max_length=100, pattern=r"^[a-z0-9_]+$")
+    title: str = Field(min_length=2, max_length=180)
+    category: str = Field(default="health_tip", max_length=40)
+    language: str = Field(default="en", min_length=2, max_length=20)
+    audience_flag_key: str | None = Field(
+        default=None, max_length=100, pattern=r"^[A-Z0-9_]+$"
+    )
+    body_text: str = Field(min_length=2, max_length=2000)
+    priority: int = Field(default=100, ge=0, le=10000)
+    is_enabled: bool = True
+
+    @field_validator("category")
+    @classmethod
+    def validate_content_category(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed = {
+            "health_tip",
+            "awareness",
+            "medicine",
+            "lab",
+            "membership",
+            "general",
+        }
+        if normalized not in allowed:
+            raise ValueError("Unsupported content category")
+        return normalized
+
+    @field_validator("language")
+    @classmethod
+    def normalize_language(cls, value: str) -> str:
+        return value.strip().lower().replace("_", "-")
+
+
+class IntelligenceContentCreate(IntelligenceContentBase):
+    pass
+
+
+class IntelligenceContentUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=180)
+    category: str | None = Field(default=None, max_length=40)
+    language: str | None = Field(default=None, min_length=2, max_length=20)
+    audience_flag_key: str | None = Field(
+        default=None, max_length=100, pattern=r"^[A-Z0-9_]+$"
+    )
+    body_text: str | None = Field(default=None, min_length=2, max_length=2000)
+    priority: int | None = Field(default=None, ge=0, le=10000)
+    is_enabled: bool | None = None
+
+    @field_validator("category")
+    @classmethod
+    def validate_content_category(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return IntelligenceContentBase.validate_content_category(value)
+
+    @field_validator("language")
+    @classmethod
+    def normalize_language(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return IntelligenceContentBase.normalize_language(value)
+
+
+class IntelligenceContentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    content_key: str
+    title: str
+    category: str
+    language: str
+    audience_flag_key: str | None
+    body_text: str
+    priority: int
+    is_enabled: bool
+    created_at: datetime
+    updated_at: datetime
 
 
 class MetricSnapshotRead(BaseModel):
@@ -210,11 +305,32 @@ class EngagementActionRead(BaseModel):
     created_at: datetime
 
 
+class BulkEngagementQueueRequest(BaseModel):
+    flag_key: str | None = Field(default=None, max_length=100)
+    category: str | None = Field(default=None, max_length=40)
+    action_key: str | None = Field(default=None, max_length=100)
+    limit: int = Field(default=100, ge=1, le=500)
+    dry_run: bool = False
+
+
+class BulkEngagementQueueRead(BaseModel):
+    matched: int
+    queued: int
+    suppressed: int
+    skipped: int
+    failed: int
+    notification_event_ids: list[str] = Field(default_factory=list)
+
+
 class PatientIntelligenceRead(BaseModel):
     patient_id: str
     current_tier: str | None
+    score_summary: dict[str, Decimal] = Field(default_factory=dict)
     manual_expected_refill_at: datetime | None = None
     manual_refill_notes: str | None = None
+    manual_expected_lab_at: datetime | None = None
+    manual_lab_test_name: str | None = None
+    manual_lab_notes: str | None = None
     metrics: MetricSnapshotRead
     flags: list[IntelligenceFlagRead]
     timeline: list[TimelineItemRead]
@@ -229,6 +345,20 @@ class ManualRefillScheduleUpdate(BaseModel):
 class ManualRefillScheduleRead(BaseModel):
     patient_id: str
     expected_refill_at: datetime | None
+    notes: str | None
+    updated_at: datetime | None
+
+
+class ManualLabScheduleUpdate(BaseModel):
+    expected_lab_on: date | None = None
+    lab_test_name: str | None = Field(default=None, max_length=180)
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class ManualLabScheduleRead(BaseModel):
+    patient_id: str
+    expected_lab_at: datetime | None
+    lab_test_name: str | None
     notes: str | None
     updated_at: datetime | None
 
@@ -254,17 +384,47 @@ class IntelligenceDashboardPatient(BaseModel):
     net_collected_30d: Decimal
     net_collected_365d: Decimal
     completed_visits: int
+    score_summary: dict[str, Decimal] = Field(default_factory=dict)
     active_flag_count: int
     open_engagement_count: int
     expected_refill_at: datetime | None
     manual_expected_refill_at: datetime | None
     manual_refill_notes: str | None
+    manual_expected_lab_at: datetime | None = None
+    manual_lab_test_name: str | None = None
+    manual_lab_notes: str | None = None
+    monthly_reminder_status: str = "not_sent"
+    monthly_reminder_at: datetime | None = None
+    membership_reminder_status: str = "not_sent"
+    membership_reminder_at: datetime | None = None
+    health_tip_status: str = "not_sent"
+    health_tip_at: datetime | None = None
     flags: list[IntelligenceDashboardFlag]
+
+
+class IntelligenceDashboardSegment(BaseModel):
+    flag_key: str
+    label: str
+    category: str
+    severity: str
+    patient_count: int
+    open_engagement_count: int
+    recommended_count: int
+    approved_count: int
+    queued_count: int
+    sent_count: int
+    suppressed_count: int
+    failed_count: int
+    background_color: str | None = None
+    text_color: str | None = None
+    border_color: str | None = None
+    priority: int
 
 
 class IntelligenceDashboardRead(BaseModel):
     summary: dict[str, int]
     badge_distribution: list[dict]
+    segments: list[IntelligenceDashboardSegment] = Field(default_factory=list)
     flag_options: list[dict]
     rows: list[IntelligenceDashboardPatient]
     total: int

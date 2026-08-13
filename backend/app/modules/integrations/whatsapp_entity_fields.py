@@ -362,6 +362,21 @@ FLOW_ENTITIES: dict[str, tuple[str, ...]] = {
         "pharmacy_issue",
         "engagement_action",
     ),
+    "health_tip_patient": (
+        "patient",
+        "clinic",
+        "intelligence",
+        "membership",
+        "membership_plan",
+        "engagement_action",
+    ),
+    "lab_test_reminder_patient": (
+        "patient",
+        "clinic",
+        "intelligence",
+        "lab_order",
+        "engagement_action",
+    ),
     "membership_renewal_patient": (
         "patient",
         "clinic",
@@ -369,6 +384,14 @@ FLOW_ENTITIES: dict[str, tuple[str, ...]] = {
         "membership",
         "membership_plan",
         "invoice",
+        "engagement_action",
+    ),
+    "unused_benefit_patient": (
+        "patient",
+        "clinic",
+        "intelligence",
+        "membership",
+        "membership_plan",
         "engagement_action",
     ),
     "patient_reengagement": (

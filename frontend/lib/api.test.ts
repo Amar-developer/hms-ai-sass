@@ -93,6 +93,13 @@ describe("uploaded asset URL resolution", () => {
 });
 
 describe("api live-data synchronization", () => {
+  it("does not misreport a blocked backend error response as a stopped server", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(apiFetch("/patient-intelligence/patients/patient-one", session))
+      .rejects.toThrow("may have blocked an error response");
+  });
+
   it("expires the local session without recursively reporting a 401", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")

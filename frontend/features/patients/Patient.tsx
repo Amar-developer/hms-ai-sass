@@ -30,6 +30,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getTenantBranches } from "@/features/tenants/api/tenantReferenceQueries";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { canReadPatientLinkedModule } from "./patientModuleAccess";
+import {
+  fetchPatientIntelligence,
+  sendPatientEngagementAction,
+  updateManualLabSchedule,
+  updateManualRefillSchedule,
+} from "@/features/patient_intelligence/api/patientIntelligence.api";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -77,6 +83,14 @@ export function Patient({
   const canCreatePatient = hasPermission("patients.write", "patients.create");
   const canEditPatient = hasPermission("patients.edit");
   const canDeletePatient = hasPermission("patients.delete");
+  const canReadIntelligence = Boolean(
+    (!enabledModules || enabledModules.includes("patient_intelligence")) &&
+      hasPermission(
+        "patient_intelligence.read",
+        "patient_intelligence.manage",
+        "patient_intelligence.rules.manage",
+      ),
+  );
   const [tenants, setTenants] = useState<any[]>([]);
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
   const [branches, setBranches] = useState<any[]>([]);
@@ -249,14 +263,14 @@ export function Patient({
         apiFetch(`/patients/${id}/family-relationships`, scopedSession).catch(
           () => [],
         ),
-        apiFetch(`/patient-intelligence/patients/${id}`, scopedSession).catch(
-          (err: any) => {
-            setPatientIntelligenceError(
-              err?.message || "Patient Intelligence could not be loaded.",
-            );
-            return null;
-          },
-        ),
+        canReadIntelligence
+          ? fetchPatientIntelligence(scopedSession, id).catch((err: any) => {
+              setPatientIntelligenceError(
+                err?.message || "Patient Intelligence could not be loaded.",
+              );
+              return null;
+            })
+          : Promise.resolve(null),
       ]);
       setSelectedDetail(detail);
       setSummary(summaryData);
@@ -431,6 +445,22 @@ export function Patient({
           whatsapp_consent_status: data.whatsappConsentStatus || "not_recorded",
           whatsapp_consent_source: data.whatsappConsentSource || null,
           whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
+          monthly_tracking_enabled: Boolean(data.monthlyTrackingEnabled),
+          monthly_refill_on: data.monthlyTrackingEnabled
+            ? data.monthlyRefillOn || null
+            : null,
+          monthly_refill_notes: data.monthlyTrackingEnabled
+            ? data.monthlyRefillNotes || null
+            : null,
+          monthly_lab_on: data.monthlyTrackingEnabled
+            ? data.monthlyLabOn || null
+            : null,
+          monthly_lab_test_name: data.monthlyTrackingEnabled
+            ? data.monthlyLabTestName || null
+            : null,
+          monthly_lab_notes: data.monthlyTrackingEnabled
+            ? data.monthlyLabNotes || null
+            : null,
         }),
       });
       setRows((previous: any[]) => [
@@ -471,6 +501,22 @@ export function Patient({
           whatsapp_consent_status: data.whatsappConsentStatus || "not_recorded",
           whatsapp_consent_source: data.whatsappConsentSource || null,
           whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
+          monthly_tracking_enabled: Boolean(data.monthlyTrackingEnabled),
+          monthly_refill_on: data.monthlyTrackingEnabled
+            ? data.monthlyRefillOn || null
+            : null,
+          monthly_refill_notes: data.monthlyTrackingEnabled
+            ? data.monthlyRefillNotes || null
+            : null,
+          monthly_lab_on: data.monthlyTrackingEnabled
+            ? data.monthlyLabOn || null
+            : null,
+          monthly_lab_test_name: data.monthlyTrackingEnabled
+            ? data.monthlyLabTestName || null
+            : null,
+          monthly_lab_notes: data.monthlyTrackingEnabled
+            ? data.monthlyLabNotes || null
+            : null,
         }),
       });
       setRows((previous: any[]) => [
@@ -520,11 +566,7 @@ export function Patient({
     setBusy(true);
     setMessage("");
     try {
-      const result = await apiFetch(
-        `/patient-intelligence/engagement-actions/${actionId}/send`,
-        scopedSession,
-        { method: "POST" },
-      );
+      const result = await sendPatientEngagementAction(scopedSession, actionId);
       setPatientIntelligence((previous: any) => ({
         ...previous,
         engagement_actions: (previous?.engagement_actions || []).map(
@@ -554,20 +596,17 @@ export function Patient({
     setBusy(true);
     setMessage("");
     try {
-      await apiFetch(
-        `/patient-intelligence/patients/${selectedId}/manual-refill`,
+      await updateManualRefillSchedule(
         scopedSession,
+        selectedId,
         {
-          method: "PATCH",
-          body: JSON.stringify({
-            expected_refill_on: expectedRefillOn || null,
-            notes: notes || null,
-          }),
+          expected_refill_on: expectedRefillOn || null,
+          notes: notes || null,
         },
       );
-      const intelligenceData = await apiFetch(
-        `/patient-intelligence/patients/${selectedId}`,
+      const intelligenceData = await fetchPatientIntelligence(
         scopedSession,
+        selectedId,
       );
       setPatientIntelligence(intelligenceData);
       setMessage(
@@ -577,6 +616,41 @@ export function Patient({
       );
     } catch (err: any) {
       setMessage(err.message || "Could not save the monthly prescription date.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveManualLabDate(
+    expectedLabOn: string,
+    labTestName: string,
+    notes: string,
+  ) {
+    if (!scopedSession || !selectedId) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await updateManualLabSchedule(
+        scopedSession,
+        selectedId,
+        {
+          expected_lab_on: expectedLabOn || null,
+          lab_test_name: labTestName || null,
+          notes: notes || null,
+        },
+      );
+      const intelligenceData = await fetchPatientIntelligence(
+        scopedSession,
+        selectedId,
+      );
+      setPatientIntelligence(intelligenceData);
+      setMessage(
+        expectedLabOn
+          ? "Monthly lab test date saved and tracking rules recalculated."
+          : "Manual monthly lab test date cleared.",
+      );
+    } catch (err: any) {
+      setMessage(err.message || "Could not save the monthly lab test date.");
     } finally {
       setBusy(false);
     }
@@ -798,6 +872,7 @@ export function Patient({
         onEdit={() => openPatientEdit(selected.id)}
         onUploadPhoto={uploadPhoto}
         onSaveManualPrescriptionDate={saveManualPrescriptionDate}
+        onSaveManualLabDate={saveManualLabDate}
         onSendEngagementAction={sendEngagementAction}
         setActive={setActive}
       />

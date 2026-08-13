@@ -10,17 +10,23 @@ from app.modules.patient_intelligence.service import (
     list_tenant_rules,
     refresh_patient_intelligence,
 )
+from app.api.v1 import patient_intelligence as patient_intelligence_api
 from app.modules.patient_intelligence.models import (
     EngagementActionStatus,
     IntelligenceFlagCategory,
+    IntelligenceFlagStatus,
     PatientEngagementAction,
+    PatientIntelligenceContentItem,
+    PatientIntelligenceFlag,
     PatientIntelligencePatientSetting,
     PatientIntelligenceRule,
     PatientMetricSnapshot,
 )
+from app.modules.patient_intelligence.schemas import IntelligenceRuleUpdate
 from app.modules.integrations.whatsapp_consent import (
     patient_allows_engagement_whatsapp,
 )
+from app.modules.identity.models import User
 from app.modules.patients.models import Patient, WhatsAppConsentStatus
 from app.modules.patients.services.search import PatientSearchService
 from app.modules.patient_subscriptions.models import (
@@ -77,6 +83,8 @@ def test_new_tenant_has_no_implicit_business_rules(test_engine):
 def test_between_operator_uses_both_tenant_configured_thresholds(test_engine):
     with Session(test_engine) as session:
         tenant, _branch, patient = _patient_fixture(session)
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        session.add(patient)
         _rule(
             session,
             tenant.id,
@@ -104,6 +112,213 @@ def test_between_operator_uses_both_tenant_configured_thresholds(test_engine):
 
         assert {flag.flag_key for flag in inside} == {"TENANT_INTERVAL"}
         assert {flag.flag_key for flag in outside} == set()
+
+
+def test_duplicate_matching_rule_flag_keys_create_only_one_patient_flag(test_engine):
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        preferred = _rule(
+            session,
+            tenant.id,
+            rule_key="membership_due_primary",
+            flag_key="MEMBERSHIP_RENEWAL_DUE",
+            priority=10,
+        )
+        _rule(
+            session,
+            tenant.id,
+            rule_key="membership_due_legacy",
+            flag_key="MEMBERSHIP_RENEWAL_DUE",
+            priority=20,
+        )
+
+        flags = evaluate_flags(
+            session,
+            tenant_id=tenant.id,
+            patient=patient,
+            metric_values={"days_since_activity": Decimal("1")},
+            now=now_utc(),
+        )
+
+        matching = [flag for flag in flags if flag.flag_key == "MEMBERSHIP_RENEWAL_DUE"]
+        assert len(matching) == 1
+        assert matching[0].rule_id == preferred.id
+
+
+def test_update_rule_allows_template_edit_with_legacy_duplicate_flag(
+    test_engine, monkeypatch
+):
+    with Session(test_engine) as session:
+        tenant, _branch, _patient = _patient_fixture(session)
+        user = User(
+            name="Tenant Admin",
+            email="tenant.admin@example.test",
+            password_hash="unused",
+            is_super_admin=True,
+        )
+        session.add(user)
+        editable = _rule(
+            session,
+            tenant.id,
+            rule_key="membership_renewal_primary",
+            flag_key="MEMBERSHIP_RENEWAL_DUE",
+            category=IntelligenceFlagCategory.MEMBERSHIP,
+            metric_key="membership_days_remaining",
+            operator="between",
+            threshold=Decimal("0"),
+            threshold_secondary=Decimal("7"),
+            action_enabled=True,
+            action_key="membership_renewal_reminder",
+            action_channel="whatsapp",
+            action_template_key="membership_renewal_patient",
+        )
+        _rule(
+            session,
+            tenant.id,
+            rule_key="membership_renewal_legacy_duplicate",
+            flag_key="MEMBERSHIP_RENEWAL_DUE",
+            category=IntelligenceFlagCategory.MEMBERSHIP,
+            metric_key="membership_days_remaining",
+            operator="between",
+            threshold=Decimal("0"),
+            threshold_secondary=Decimal("7"),
+            action_enabled=True,
+            action_key="membership_renewal_reminder_legacy",
+            action_channel="whatsapp",
+            action_template_key="legacy_membership_renewal_patient",
+        )
+        session.commit()
+
+        monkeypatch.setattr(patient_intelligence_api, "_entitled", lambda *args: None)
+
+        updated = patient_intelligence_api.update_rule(
+            editable.id,
+            IntelligenceRuleUpdate(
+                action_template_key="clinic_subscription_renewal_reminder"
+            ),
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+
+        assert updated.action_template_key == "clinic_subscription_renewal_reminder"
+
+
+def test_content_library_crud_is_tenant_configured(test_engine, monkeypatch):
+    with Session(test_engine) as session:
+        tenant, _branch, _patient = _patient_fixture(session)
+        user = User(
+            name="Tenant Admin",
+            email="tenant.content@example.test",
+            password_hash="unused",
+            is_super_admin=True,
+        )
+        session.add(user)
+        session.commit()
+        monkeypatch.setattr(patient_intelligence_api, "_entitled", lambda *args: None)
+
+        created = patient_intelligence_api.create_content_item(
+            patient_intelligence_api.IntelligenceContentCreate(
+                content_key="monthly_awareness",
+                title="Monthly awareness",
+                category="health_tip",
+                language="en",
+                audience_flag_key="HEALTH_TIP_DUE",
+                body_text="Drink water and follow your clinician advice.",
+                priority=20,
+                is_enabled=True,
+            ),
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+
+        listed = patient_intelligence_api.list_content_library(
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+        assert [item.id for item in listed] == [created.id]
+
+        updated = patient_intelligence_api.update_content_item(
+            created.id,
+            patient_intelligence_api.IntelligenceContentUpdate(
+                title="Updated awareness",
+                body_text="Updated tenant-approved content.",
+                is_enabled=False,
+            ),
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+        assert updated.title == "Updated awareness"
+        assert updated.body_text == "Updated tenant-approved content."
+        assert updated.is_enabled is False
+
+        patient_intelligence_api.delete_content_item(
+            created.id,
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+        assert session.get(PatientIntelligenceContentItem, created.id) is None
+
+
+def test_delete_rule_resolves_flags_and_cancels_unsent_actions(
+    test_engine, monkeypatch
+):
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        user = User(
+            name="Tenant Admin",
+            email="tenant.delete@example.test",
+            password_hash="unused",
+            is_super_admin=True,
+        )
+        session.add(user)
+        rule = _rule(
+            session,
+            tenant.id,
+            rule_key="monthly_health_tip",
+            name="Monthly health tip",
+            flag_key="HEALTH_TIP_DUE",
+            category=IntelligenceFlagCategory.ENGAGEMENT,
+            metric_key="patient_age_days",
+            operator="gte",
+            threshold=Decimal("0"),
+            action_enabled=True,
+            action_key="monthly_health_tip",
+            action_channel="whatsapp",
+            action_template_key="health_tip_patient",
+        )
+        session.commit()
+        result = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+        flag = next(item for item in result.flags if item.flag_key == "HEALTH_TIP_DUE")
+        action = next(
+            item
+            for item in result.engagement_actions
+            if item.action_key == "monthly_health_tip"
+        )
+
+        monkeypatch.setattr(patient_intelligence_api, "_entitled", lambda *args: None)
+
+        patient_intelligence_api.delete_rule(
+            rule.id,
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+
+        assert session.get(PatientIntelligenceRule, rule.id) is None
+        stored_flag = session.get(PatientIntelligenceFlag, flag.id)
+        stored_action = session.get(PatientEngagementAction, action.id)
+        assert stored_flag is not None
+        assert stored_flag.status == IntelligenceFlagStatus.RESOLVED
+        assert stored_flag.rule_id is None
+        assert stored_action is not None
+        assert stored_action.status == EngagementActionStatus.CANCELLED
 
 
 def test_existing_hms_activity_is_adapted_into_metrics_flags_and_timeline(test_engine):
@@ -464,6 +679,8 @@ def test_manual_refill_date_drives_configurable_refill_rule(test_engine):
     with Session(test_engine) as session:
         tenant, _branch, patient = _patient_fixture(session)
         expected_date = date.today() + timedelta(days=14)
+        patient.monthly_tracking_enabled = True
+        session.add(patient)
         _rule(
             session,
             tenant.id,
@@ -508,6 +725,498 @@ def test_manual_refill_date_drives_configurable_refill_rule(test_engine):
         assert recurring_evidence["manual_notes"] == "Monthly medicine pickup"
 
 
+def test_patient_monthly_tracking_fields_auto_advance_after_crossing(test_engine):
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        today = date.today()
+        crossed_refill_on = today - timedelta(days=1)
+        patient.monthly_tracking_enabled = True
+        patient.monthly_refill_on = crossed_refill_on
+        patient.monthly_refill_notes = "Monthly medicine refill"
+        patient.monthly_lab_on = today
+        patient.monthly_lab_test_name = "Sugar test"
+        session.add(patient)
+        session.commit()
+
+        result = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        session.refresh(patient)
+        assert patient.monthly_refill_on is not None
+        assert patient.monthly_refill_on > today
+        assert patient.monthly_refill_on != crossed_refill_on
+        assert result.metrics.expected_refill_at.date() == patient.monthly_refill_on
+        assert result.manual_refill_notes == "Monthly medicine refill"
+        assert patient.monthly_lab_on == today
+        assert result.manual_expected_lab_at.date() == today
+        assert result.manual_lab_test_name == "Sugar test"
+
+
+def test_patient_monthly_tracking_fields_are_ignored_when_disabled(test_engine):
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        patient.monthly_tracking_enabled = False
+        patient.monthly_refill_on = date.today()
+        patient.monthly_lab_on = date.today()
+        session.add(patient)
+        session.commit()
+
+        result = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        assert result.metrics.expected_refill_at is None
+        assert result.manual_expected_refill_at is None
+        assert result.manual_expected_lab_at is None
+
+
+def test_membership_expiring_inside_configured_window_creates_tracking_actions(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        tenant, branch, patient = _patient_fixture(session)
+        plan = PatientSubscriptionPlan(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            name="Smart Care Plan",
+            price_amount=299,
+            duration_days=30,
+            free_consultations=1,
+        )
+        session.add(plan)
+        session.flush()
+        enrollment = PatientSubscriptionEnrollment(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            plan_id=plan.id,
+            starts_on=date.today() - timedelta(days=9),
+            ends_on=date.today() + timedelta(days=2),
+            paid_amount=299,
+            used_consultations=0,
+        )
+        session.add(enrollment)
+        _rule(
+            session,
+            tenant.id,
+            rule_key="membership_renewal_reminder_due",
+            name="Membership renewal reminder due",
+            flag_key="MEMBERSHIP_RENEWAL_DUE",
+            category=IntelligenceFlagCategory.MEMBERSHIP,
+            metric_key="membership_days_remaining",
+            operator="between",
+            threshold=Decimal("0"),
+            threshold_secondary=Decimal("7"),
+            requires_active_membership=True,
+            action_enabled=True,
+            action_key="membership_renewal_reminder",
+            action_channel="whatsapp",
+            action_template_key="membership_renewal_patient",
+            action_requires_approval=True,
+        )
+        _rule(
+            session,
+            tenant.id,
+            rule_key="unused_membership_benefit_reminder",
+            name="Unused membership benefit reminder",
+            flag_key="UNUSED_MEMBERSHIP_BENEFIT",
+            category=IntelligenceFlagCategory.MEMBERSHIP,
+            metric_key="unused_membership_benefit_count",
+            operator="gte",
+            threshold=Decimal("1"),
+            requires_active_membership=True,
+            action_enabled=True,
+            action_key="unused_membership_benefit_reminder",
+            action_channel="whatsapp",
+            action_template_key="unused_benefit_patient",
+            action_requires_approval=True,
+        )
+        session.commit()
+
+        result = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        action_keys = {action.action_key for action in result.engagement_actions}
+        assert "membership_renewal_reminder" in action_keys
+        assert "unused_membership_benefit_reminder" in action_keys
+        renewal_flag = next(
+            flag for flag in result.flags if flag.flag_key == "MEMBERSHIP_RENEWAL_DUE"
+        )
+        assert renewal_flag.evidence["value"] in {"1", "2"}
+
+
+def test_membership_renewal_action_revives_when_window_matches_again(test_engine):
+    with Session(test_engine) as session:
+        tenant, branch, patient = _patient_fixture(session)
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        session.add(patient)
+        plan = PatientSubscriptionPlan(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            name="Smart Care Plan",
+            price=299,
+            duration_days=30,
+        )
+        session.add(plan)
+        session.flush()
+        enrollment = PatientSubscriptionEnrollment(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            plan_id=plan.id,
+            starts_on=date.today() - timedelta(days=9),
+            ends_on=date.today() + timedelta(days=2),
+            paid_amount=299,
+        )
+        session.add(enrollment)
+        _rule(
+            session,
+            tenant.id,
+            rule_key="membership_renewal_reminder_due",
+            name="Membership renewal reminder due",
+            flag_key="MEMBERSHIP_RENEWAL_DUE",
+            category=IntelligenceFlagCategory.MEMBERSHIP,
+            metric_key="membership_days_remaining",
+            operator="between",
+            threshold=Decimal("0"),
+            threshold_secondary=Decimal("7"),
+            requires_active_membership=True,
+            action_enabled=True,
+            action_key="membership_renewal_reminder",
+            action_channel="whatsapp",
+            action_template_key="membership_renewal_patient",
+            action_requires_approval=True,
+            action_cooldown_days=7,
+        )
+        session.commit()
+
+        created = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+        action = next(
+            item
+            for item in created.engagement_actions
+            if item.action_key == "membership_renewal_reminder"
+        )
+        assert action.status == EngagementActionStatus.RECOMMENDED
+
+        enrollment.ends_on = date.today() + timedelta(days=20)
+        session.add(enrollment)
+        session.commit()
+        cancelled = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+        action = next(
+            item
+            for item in cancelled.engagement_actions
+            if item.action_key == "membership_renewal_reminder"
+        )
+        assert action.status == EngagementActionStatus.CANCELLED
+
+        enrollment.ends_on = date.today() + timedelta(days=4)
+        session.add(enrollment)
+        session.commit()
+        revived = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+        action = next(
+            item
+            for item in revived.engagement_actions
+            if item.action_key == "membership_renewal_reminder"
+        )
+        assert action.status == EngagementActionStatus.RECOMMENDED
+        assert action.reason == "Configured action for Membership renewal reminder due"
+
+
+def test_suppressed_engagement_revives_after_patient_opts_in(test_engine):
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        _rule(
+            session,
+            tenant.id,
+            rule_key="health_tip_due",
+            name="Monthly health tip",
+            flag_key="HEALTH_TIP_DUE",
+            category=IntelligenceFlagCategory.ENGAGEMENT,
+            metric_key="patient_age_days",
+            operator="gte",
+            threshold=Decimal("0"),
+            action_enabled=True,
+            action_key="monthly_health_tip",
+            action_channel="whatsapp",
+            action_template_key="health_tip_patient",
+            action_requires_approval=True,
+        )
+        session.commit()
+
+        suppressed = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        action = next(
+            item
+            for item in suppressed.engagement_actions
+            if item.action_key == "monthly_health_tip"
+        )
+        assert action.status == "suppressed"
+        assert action.reason == (
+            "Explicit WhatsApp opt-in is required for intelligence engagement"
+        )
+
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        session.add(patient)
+        session.commit()
+
+        revived = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        action = next(
+            item
+            for item in revived.engagement_actions
+            if item.action_key == "monthly_health_tip"
+        )
+        assert action.status == "recommended"
+        assert action.reason == "Configured action for Monthly health tip"
+
+
+def test_health_tip_action_uses_tenant_content_library(test_engine):
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        session.add(patient)
+        _rule(
+            session,
+            tenant.id,
+            rule_key="health_tip_due",
+            name="Monthly health tip",
+            flag_key="HEALTH_TIP_DUE",
+            category=IntelligenceFlagCategory.ENGAGEMENT,
+            metric_key="patient_age_days",
+            operator="gte",
+            threshold=Decimal("0"),
+            action_enabled=True,
+            action_key="monthly_health_tip",
+            action_channel="whatsapp",
+            action_template_key="health_tip_patient",
+            action_requires_approval=True,
+        )
+        session.add(
+            PatientIntelligenceContentItem(
+                tenant_id=tenant.id,
+                content_key="monthly_awareness",
+                title="Monthly awareness",
+                category="health_tip",
+                language="en",
+                audience_flag_key="HEALTH_TIP_DUE",
+                body_text="Tenant-approved health awareness content.",
+                priority=10,
+                is_enabled=True,
+            )
+        )
+        session.commit()
+
+        result = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        action = next(
+            item
+            for item in result.engagement_actions
+            if item.action_key == "monthly_health_tip"
+        )
+        assert action.personalization["content_key"] == "monthly_awareness"
+        assert action.personalization["content_title"] == "Monthly awareness"
+        assert (
+            action.personalization["content_body"]
+            == "Tenant-approved health awareness content."
+        )
+        assert action.personalization["health_tip_topic"] == "Monthly awareness"
+
+
+def test_engagement_action_personalization_includes_segment_context(test_engine):
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        session.add(patient)
+        _rule(
+            session,
+            tenant.id,
+            rule_key="inactive_patient_reengagement",
+            name="Inactive patient re-engagement",
+            flag_key="INACTIVE_PATIENT_REENGAGEMENT",
+            category=IntelligenceFlagCategory.ENGAGEMENT,
+            metric_key="days_since_activity",
+            operator="gte",
+            threshold=Decimal("0"),
+            action_enabled=True,
+            action_key="inactive_patient_reengagement",
+            action_channel="whatsapp",
+            action_template_key="patient_reengagement",
+            action_requires_approval=True,
+            score_dimension="engagement",
+            score_weight=Decimal("12"),
+        )
+        session.commit()
+
+        result = refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        action = next(
+            item
+            for item in result.engagement_actions
+            if item.action_key == "inactive_patient_reengagement"
+        )
+        assert action.status == "recommended"
+        assert action.personalization["engagement_segment"] == (
+            "Inactive patient re-engagement"
+        )
+        assert action.personalization["flag_label"] == ("Inactive Patient Reengagement")
+        assert "days_since_activity" in action.personalization
+        assert "last_activity_date" in action.personalization
+        assert action.personalization["clinic_name"] == tenant.name
+        assert result.score_summary["engagement"] == Decimal("12")
+        assert result.score_summary["total"] == Decimal("12")
+
+
+def test_dashboard_returns_phase_three_segment_overview(test_engine, monkeypatch):
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        user = User(
+            name="Tenant Admin",
+            email="tenant.segment@example.test",
+            password_hash="unused",
+            is_super_admin=True,
+        )
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        session.add(user)
+        session.add(patient)
+        _rule(
+            session,
+            tenant.id,
+            rule_key="inactive_patient_reengagement",
+            name="Inactive patient re-engagement",
+            flag_key="INACTIVE_PATIENT_REENGAGEMENT",
+            category=IntelligenceFlagCategory.ENGAGEMENT,
+            metric_key="days_since_activity",
+            operator="gte",
+            threshold=Decimal("0"),
+            action_enabled=True,
+            action_key="inactive_patient_reengagement",
+            action_channel="whatsapp",
+            action_template_key="patient_reengagement",
+            action_requires_approval=True,
+            score_dimension="risk",
+            score_weight=Decimal("7"),
+        )
+        session.commit()
+        refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+        monkeypatch.setattr(patient_intelligence_api, "_entitled", lambda *args: None)
+
+        dashboard = patient_intelligence_api.intelligence_dashboard(
+            limit=25,
+            offset=0,
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+
+        segment = next(
+            item
+            for item in dashboard.segments
+            if item.flag_key == "INACTIVE_PATIENT_REENGAGEMENT"
+        )
+        assert segment.patient_count == 1
+        assert segment.open_engagement_count == 1
+        assert segment.recommended_count == 1
+        assert dashboard.rows[0].score_summary["risk"] == Decimal("7")
+        assert dashboard.summary["risk_score_total"] == 7
+
+
+def test_bulk_queue_recommended_engagement_actions(test_engine, monkeypatch):
+    queued: list[dict] = []
+
+    def fake_queue(_session, **kwargs):
+        queued.append(kwargs)
+
+        class Event:
+            id = f"notification_{len(queued)}"
+
+        return Event()
+
+    monkeypatch.setattr(patient_intelligence_api, "_entitled", lambda *args: None)
+    monkeypatch.setattr(
+        patient_intelligence_api,
+        "queue_whatsapp_template_if_allowed",
+        fake_queue,
+    )
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        user = User(
+            name="Tenant Admin",
+            email="tenant.bulk@example.test",
+            password_hash="unused",
+            is_super_admin=True,
+        )
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        session.add(user)
+        session.add(patient)
+        _rule(
+            session,
+            tenant.id,
+            rule_key="inactive_patient_reengagement",
+            name="Inactive patient re-engagement",
+            flag_key="INACTIVE_PATIENT_REENGAGEMENT",
+            category=IntelligenceFlagCategory.ENGAGEMENT,
+            metric_key="days_since_activity",
+            operator="gte",
+            threshold=Decimal("0"),
+            action_enabled=True,
+            action_key="inactive_patient_reengagement",
+            action_channel="whatsapp",
+            action_template_key="patient_reengagement",
+            action_requires_approval=True,
+        )
+        session.commit()
+        refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        preview = patient_intelligence_api.bulk_queue_engagement_actions(
+            patient_intelligence_api.BulkEngagementQueueRequest(
+                flag_key="INACTIVE_PATIENT_REENGAGEMENT",
+                dry_run=True,
+            ),
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+        assert preview.matched == 1
+        assert preview.queued == 0
+
+        result = patient_intelligence_api.bulk_queue_engagement_actions(
+            patient_intelligence_api.BulkEngagementQueueRequest(
+                flag_key="INACTIVE_PATIENT_REENGAGEMENT",
+            ),
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+
+        assert result.matched == 1
+        assert result.queued == 1
+        assert result.notification_event_ids == ["notification_1"]
+        assert queued[0]["flow_key"] == "patient_reengagement"
+        action = session.exec(select(PatientEngagementAction)).first()
+        assert action is not None
+        assert action.status == EngagementActionStatus.QUEUED
+
+
 def test_configured_no_approval_action_is_automatically_queued(
     test_engine, monkeypatch
 ):
@@ -527,6 +1236,8 @@ def test_configured_no_approval_action_is_automatically_queued(
     )
     with Session(test_engine) as session:
         tenant, _branch, patient = _patient_fixture(session)
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        session.add(patient)
         _rule(
             session,
             tenant.id,
@@ -543,6 +1254,8 @@ def test_configured_no_approval_action_is_automatically_queued(
             action_template_key="medicine_refill_patient",
             action_requires_approval=False,
         )
+        patient.monthly_tracking_enabled = True
+        session.add(patient)
         session.add(
             PatientIntelligencePatientSetting(
                 tenant_id=tenant.id,

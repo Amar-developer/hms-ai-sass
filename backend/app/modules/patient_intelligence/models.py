@@ -60,6 +60,8 @@ class PatientIntelligenceRule(SQLModel, table=True):
     display_as_patient_badge: bool = Field(default=False, index=True)
     priority: int = Field(default=100, ge=0, le=10000, index=True)
     exclusive_group: str | None = Field(default=None, max_length=100, index=True)
+    score_dimension: str | None = Field(default=None, max_length=30, index=True)
+    score_weight: Decimal = Field(default=Decimal("0"), sa_type=Numeric(10, 2))
     required_flag_keys_json: str = Field(default="[]", max_length=4000)
     expires_after_days: int | None = Field(default=None, ge=1, le=3650)
     auto_resolve: bool = Field(default=True)
@@ -82,6 +84,30 @@ class PatientIntelligenceRule(SQLModel, table=True):
             return [str(item) for item in value] if isinstance(value, list) else []
         except (TypeError, ValueError):
             return []
+
+
+class PatientIntelligenceContentItem(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "content_key",
+            name="uq_pi_content_tenant_key",
+        ),
+        Index("ix_pi_content_tenant_enabled", "tenant_id", "is_enabled", "priority"),
+    )
+
+    id: str = Field(default_factory=lambda: new_id("picontent"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    content_key: str = Field(index=True, max_length=100)
+    title: str = Field(max_length=180)
+    category: str = Field(default="health_tip", index=True, max_length=40)
+    language: str = Field(default="en", index=True, max_length=20)
+    audience_flag_key: str | None = Field(default=None, index=True, max_length=100)
+    body_text: str = Field(max_length=2000)
+    priority: int = Field(default=100, ge=0, le=10000, index=True)
+    is_enabled: bool = Field(default=True, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+    updated_at: datetime = Field(default_factory=now_utc)
 
 
 class PatientMetricSnapshot(SQLModel, table=True):
@@ -129,6 +155,9 @@ class PatientIntelligencePatientSetting(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
     manual_expected_refill_at: datetime | None = Field(default=None, index=True)
+    manual_expected_lab_at: datetime | None = Field(default=None, index=True)
+    manual_lab_test_name: str | None = Field(default=None, max_length=180)
+    manual_lab_notes: str | None = Field(default=None, max_length=1000)
     notes: str | None = Field(default=None, max_length=1000)
     updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc)

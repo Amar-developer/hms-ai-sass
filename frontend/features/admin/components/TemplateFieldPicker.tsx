@@ -7,6 +7,7 @@ type Props = {
   fields: TemplateFieldOption[];
   selected: string[];
   onToggle: (fieldKey: string) => void;
+  onRemove?: (index: number) => void;
   onMove?: (index: number, direction: -1 | 1) => void;
   disabled?: boolean;
   max: number;
@@ -34,6 +35,7 @@ export function TemplateFieldPicker({
   fields,
   selected,
   onToggle,
+  onRemove,
   onMove,
   disabled = false,
   max,
@@ -60,6 +62,8 @@ export function TemplateFieldPicker({
   const atLimit = selected.length >= max;
   const labelFor = (fieldKey: string) =>
     fields.find((field) => field.key === fieldKey)?.label || fieldKey;
+  const selectedCount = (fieldKey: string) =>
+    selected.filter((key) => key === fieldKey).length;
 
   return (
     <div>
@@ -118,7 +122,7 @@ export function TemplateFieldPicker({
                 <button
                   type="button"
                   disabled={disabled}
-                  onClick={() => onToggle(fieldKey)}
+                  onClick={() => (onRemove ? onRemove(index) : onToggle(fieldKey))}
                   className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
                   aria-label="Remove"
                 >
@@ -177,7 +181,8 @@ export function TemplateFieldPicker({
                 </p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {groupFields.map((field) => {
-                    const isSelected = selected.includes(field.key);
+                    const count = selectedCount(field.key);
+                    const isSelected = count > 0;
                     return (
                       <button
                         type="button"
@@ -186,7 +191,7 @@ export function TemplateFieldPicker({
                         // is identifiable outside its group heading.
                         aria-label={field.label}
                         title={field.label}
-                        disabled={disabled || (!isSelected && atLimit)}
+                        disabled={disabled || atLimit}
                         onClick={() => onToggle(field.key)}
                         className={`rounded-full border px-2.5 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
                           isSelected
@@ -195,6 +200,7 @@ export function TemplateFieldPicker({
                         }`}
                       >
                         {field.short}
+                        {count > 0 ? ` ×${count}` : ""}
                       </button>
                     );
                   })}

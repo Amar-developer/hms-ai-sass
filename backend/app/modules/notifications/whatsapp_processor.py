@@ -322,6 +322,14 @@ def _message_context(
             )
             .order_by(PharmacyIssue.created_at.desc())
         ).first()
+        latest_lab_order = session.exec(
+            select(LabOrder)
+            .where(
+                LabOrder.tenant_id == event.tenant_id,
+                LabOrder.patient_id == patient.id,
+            )
+            .order_by(LabOrder.created_at.desc())
+        ).first()
         values = json.loads(action.personalization_json or "{}")
         entity_values = build_entity_context(
             action.template_key,
@@ -333,6 +341,7 @@ def _message_context(
                 "membership_plan": membership_plan,
                 "invoice": membership_invoice,
                 "pharmacy_issue": latest_pharmacy_issue,
+                "lab_order": latest_lab_order,
                 "engagement_action": action,
             },
         )

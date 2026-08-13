@@ -69,6 +69,18 @@ export const patientSchema = z
       "pa",
       "ur",
     ]),
+
+    monthlyTrackingEnabled: z.boolean().optional(),
+
+    monthlyRefillOn: z.string().optional(),
+
+    monthlyRefillNotes: z.string().optional(),
+
+    monthlyLabOn: z.string().optional(),
+
+    monthlyLabTestName: z.string().optional(),
+
+    monthlyLabNotes: z.string().optional(),
   })
   .superRefine((values, context) => {
     const mobile = values.mobile?.trim();

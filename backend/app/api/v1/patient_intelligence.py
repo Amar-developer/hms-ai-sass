@@ -16,12 +16,18 @@ from app.modules.patient_intelligence.models import (
     IntelligenceFlagCategory,
     IntelligenceFlagStatus,
     PatientEngagementAction,
+    PatientIntelligenceContentItem,
     PatientIntelligenceFlag,
     PatientIntelligencePatientSetting,
     PatientIntelligenceRule,
     PatientMetricSnapshot,
 )
 from app.modules.patient_intelligence.schemas import (
+    BulkEngagementQueueRead,
+    BulkEngagementQueueRequest,
+    IntelligenceContentCreate,
+    IntelligenceContentRead,
+    IntelligenceContentUpdate,
     IntelligenceRuleCreate,
     IntelligenceRuleBase,
     IntelligenceRuleRead,
@@ -29,6 +35,9 @@ from app.modules.patient_intelligence.schemas import (
     IntelligenceDashboardFlag,
     IntelligenceDashboardPatient,
     IntelligenceDashboardRead,
+    IntelligenceDashboardSegment,
+    ManualLabScheduleRead,
+    ManualLabScheduleUpdate,
     ManualRefillScheduleRead,
     ManualRefillScheduleUpdate,
     PatientIntelligenceRead,
@@ -38,6 +47,7 @@ from app.modules.patient_intelligence.service import (
     list_tenant_rules,
     refresh_patient_intelligence,
     refresh_tenant_existing_data,
+    score_summary_for_flags,
 )
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
@@ -49,6 +59,72 @@ from app.modules.patients.models import Patient
 
 
 router = APIRouter(prefix="/patient-intelligence")
+
+
+def _action_month_timestamp(action: PatientEngagementAction) -> datetime:
+    return action.updated_at or action.created_at
+
+
+def _action_in_month(action: PatientEngagementAction, month: date) -> bool:
+    stamp = _action_month_timestamp(action).date()
+    return stamp.year == month.year and stamp.month == month.month
+
+
+def _action_bucket(action: PatientEngagementAction) -> str | None:
+    text = " ".join(
+        [
+            action.action_key or "",
+            action.template_key or "",
+            action.reason or "",
+        ]
+    ).lower()
+    if any(token in text for token in ("health_tip", "awareness")):
+        return "health_tip"
+    if "membership_renewal" in text or "renewal" in text:
+        return "membership"
+    if any(token in text for token in ("medicine_refill", "refill", "lab_test", "lab")):
+        return "monthly"
+    return None
+
+
+def _action_status_rank(status_value: str) -> int:
+    return {
+        EngagementActionStatus.SENT.value: 5,
+        EngagementActionStatus.QUEUED.value: 4,
+        EngagementActionStatus.APPROVED.value: 3,
+        EngagementActionStatus.RECOMMENDED.value: 2,
+        EngagementActionStatus.FAILED.value: 1,
+        EngagementActionStatus.SUPPRESSED.value: 1,
+        EngagementActionStatus.CANCELLED.value: 0,
+    }.get(status_value, 0)
+
+
+def _monthly_action_summary(
+    actions: list[PatientEngagementAction], month: date
+) -> dict[str, tuple[str, datetime | None]]:
+    summary: dict[str, PatientEngagementAction] = {}
+    for action in actions:
+        if not _action_in_month(action, month):
+            continue
+        bucket = _action_bucket(action)
+        if not bucket:
+            continue
+        previous = summary.get(bucket)
+        if previous is None:
+            summary[bucket] = action
+            continue
+        current_rank = _action_status_rank(action.status.value)
+        previous_rank = _action_status_rank(previous.status.value)
+        if current_rank > previous_rank or (
+            current_rank == previous_rank
+            and _action_month_timestamp(action) > _action_month_timestamp(previous)
+        ):
+            summary[bucket] = action
+    return {
+        key: (action.status.value, _action_month_timestamp(action))
+        for key, action in summary.items()
+    }
+
 
 METRIC_CATALOG = (
     ("net_collected", "Net collected", True),
@@ -65,9 +141,26 @@ METRIC_CATALOG = (
     ("recurring_occurrence_count", "Recurring medicine occurrences", False),
     ("recurring_max_deviation_days", "Recurring interval deviation", False),
     ("days_until_expected_refill", "Days until expected refill", False),
+    ("days_until_expected_lab_test", "Days until expected lab test", False),
     ("active_membership", "Active paid membership", False),
     ("membership_days_remaining", "Membership days remaining", False),
+    ("unused_membership_benefit_count", "Unused membership benefit count", False),
+    ("unused_free_consultations", "Unused free consultations", False),
+    ("unused_free_lab_tests", "Unused free lab tests", False),
+    ("unused_free_medicines", "Unused free medicines", False),
 )
+
+
+def _safe_validation_errors(exc: ValidationError) -> list[dict]:
+    errors: list[dict] = []
+    for error in exc.errors(include_url=False):
+        clean = dict(error)
+        if "ctx" in clean:
+            clean["ctx"] = {
+                str(key): str(value) for key, value in dict(clean["ctx"]).items()
+            }
+        errors.append(clean)
+    return errors
 
 
 @router.get(
@@ -189,8 +282,13 @@ def intelligence_dashboard(
 
     dashboard_rows: list[IntelligenceDashboardPatient] = []
     distribution: dict[str, dict] = {}
+    segment_rows: dict[str, dict] = {}
+    current_month = date.today()
     for patient, snapshot in filtered:
         patient_flags = flags_by_patient.get(patient.id, [])
+        patient_actions = actions_by_patient.get(patient.id, [])
+        communication_summary = _monthly_action_summary(patient_actions, current_month)
+        score_summary = score_summary_for_flags(patient_flags, rules)
         dashboard_flags = []
         for flag in patient_flags:
             rule = rules.get(flag.rule_id or "")
@@ -219,9 +317,52 @@ def intelligence_dashboard(
                 },
             )
             bucket["count"] += 1
+            segment = segment_rows.setdefault(
+                flag.flag_key,
+                {
+                    "flag_key": flag.flag_key,
+                    "label": label,
+                    "category": flag.category.value,
+                    "severity": flag.severity,
+                    "patient_count": 0,
+                    "open_engagement_count": 0,
+                    "recommended_count": 0,
+                    "approved_count": 0,
+                    "queued_count": 0,
+                    "sent_count": 0,
+                    "suppressed_count": 0,
+                    "failed_count": 0,
+                    "background_color": rule.badge_background_color if rule else None,
+                    "text_color": rule.badge_text_color if rule else None,
+                    "border_color": rule.badge_border_color if rule else None,
+                    "priority": rule.priority if rule else 100,
+                },
+            )
+            segment["patient_count"] += 1
+            for action in patient_actions:
+                if action.source_flag_id != flag.id:
+                    continue
+                if action.status in open_action_statuses:
+                    segment["open_engagement_count"] += 1
+                count_key = f"{action.status.value}_count"
+                if count_key in segment:
+                    segment[count_key] += 1
         dashboard_flags.sort(key=lambda item: (item.priority, item.flag_key))
-        patient_actions = actions_by_patient.get(patient.id, [])
         setting = settings_by_patient.get(patient.id)
+        manual_refill_at = (
+            datetime.combine(patient.monthly_refill_on, time.min, tzinfo=timezone.utc)
+            if patient.monthly_tracking_enabled and patient.monthly_refill_on
+            else setting.manual_expected_refill_at
+            if setting and patient.monthly_tracking_enabled
+            else None
+        )
+        manual_lab_at = (
+            datetime.combine(patient.monthly_lab_on, time.min, tzinfo=timezone.utc)
+            if patient.monthly_tracking_enabled and patient.monthly_lab_on
+            else setting.manual_expected_lab_at
+            if setting and patient.monthly_tracking_enabled
+            else None
+        )
         dashboard_rows.append(
             IntelligenceDashboardPatient(
                 patient_id=patient.id,
@@ -233,15 +374,38 @@ def intelligence_dashboard(
                 net_collected_30d=snapshot.net_collected_30d if snapshot else 0,
                 net_collected_365d=snapshot.net_collected_365d if snapshot else 0,
                 completed_visits=snapshot.completed_visits if snapshot else 0,
+                score_summary=score_summary,
                 active_flag_count=len(patient_flags),
                 open_engagement_count=sum(
                     action.status in open_action_statuses for action in patient_actions
                 ),
                 expected_refill_at=snapshot.expected_refill_at if snapshot else None,
-                manual_expected_refill_at=(
-                    setting.manual_expected_refill_at if setting else None
-                ),
-                manual_refill_notes=setting.notes if setting else None,
+                manual_expected_refill_at=manual_refill_at,
+                manual_refill_notes=patient.monthly_refill_notes
+                or (setting.notes if setting else None),
+                manual_expected_lab_at=manual_lab_at,
+                manual_lab_test_name=patient.monthly_lab_test_name
+                or (setting.manual_lab_test_name if setting else None),
+                manual_lab_notes=patient.monthly_lab_notes
+                or (setting.manual_lab_notes if setting else None),
+                monthly_reminder_status=communication_summary.get(
+                    "monthly", ("not_sent", None)
+                )[0],
+                monthly_reminder_at=communication_summary.get(
+                    "monthly", ("not_sent", None)
+                )[1],
+                membership_reminder_status=communication_summary.get(
+                    "membership", ("not_sent", None)
+                )[0],
+                membership_reminder_at=communication_summary.get(
+                    "membership", ("not_sent", None)
+                )[1],
+                health_tip_status=communication_summary.get(
+                    "health_tip", ("not_sent", None)
+                )[0],
+                health_tip_at=communication_summary.get(
+                    "health_tip", ("not_sent", None)
+                )[1],
                 flags=dashboard_flags,
             )
         )
@@ -262,6 +426,18 @@ def intelligence_dashboard(
         if snapshot
         and snapshot.expected_refill_at
         and snapshot.expected_refill_at.date() == today
+    }
+    upcoming_lab_patient_ids = {
+        row.patient_id
+        for row in dashboard_rows
+        if row.manual_expected_lab_at
+        and row.manual_expected_lab_at.date() > today
+        and row.manual_expected_lab_at.date() <= today + timedelta(days=2)
+    }
+    today_lab_patient_ids = {
+        row.patient_id
+        for row in dashboard_rows
+        if row.manual_expected_lab_at and row.manual_expected_lab_at.date() == today
     }
     flag_options_by_key: dict[str, dict[str, str]] = {}
     for rule in sorted(rules.values(), key=lambda item: (item.priority, item.name)):
@@ -285,13 +461,41 @@ def intelligence_dashboard(
             ),
             "upcoming_refill_reminders": len(upcoming_refill_patient_ids),
             "today_medicine_patients": len(today_medicine_patient_ids),
+            "upcoming_lab_test_reminders": len(upcoming_lab_patient_ids),
+            "today_lab_test_patients": len(today_lab_patient_ids),
             "manual_refill_dates": sum(
                 row.manual_expected_refill_at is not None for row in dashboard_rows
+            ),
+            "manual_lab_dates": sum(
+                row.manual_expected_lab_at is not None for row in dashboard_rows
+            ),
+            "value_score_total": int(
+                sum(row.score_summary.get("value", 0) for row in dashboard_rows)
+            ),
+            "engagement_score_total": int(
+                sum(row.score_summary.get("engagement", 0) for row in dashboard_rows)
+            ),
+            "risk_score_total": int(
+                sum(row.score_summary.get("risk", 0) for row in dashboard_rows)
+            ),
+            "loyalty_score_total": int(
+                sum(row.score_summary.get("loyalty", 0) for row in dashboard_rows)
             ),
         },
         badge_distribution=sorted(
             distribution.values(), key=lambda item: (-item["count"], item["label"])
         ),
+        segments=[
+            IntelligenceDashboardSegment(**row)
+            for row in sorted(
+                segment_rows.values(),
+                key=lambda item: (
+                    item["category"],
+                    item["priority"],
+                    item["label"],
+                ),
+            )
+        ],
         flag_options=list(flag_options_by_key.values()),
         rows=page_rows,
         total=total,
@@ -330,6 +534,13 @@ def update_manual_refill_schedule(
         setting = PatientIntelligencePatientSetting(
             tenant_id=tenant_id, patient_id=patient_id
         )
+    if payload.expected_refill_on:
+        patient.monthly_tracking_enabled = True
+    elif not patient.monthly_lab_on:
+        patient.monthly_tracking_enabled = False
+    patient.monthly_refill_on = payload.expected_refill_on
+    patient.monthly_refill_notes = payload.notes
+    patient.updated_at = now_utc()
     setting.manual_expected_refill_at = (
         datetime.combine(payload.expected_refill_on, time.min, tzinfo=timezone.utc)
         if payload.expected_refill_on
@@ -338,6 +549,7 @@ def update_manual_refill_schedule(
     setting.notes = payload.notes
     setting.updated_by_user_id = current_user.id
     setting.updated_at = now_utc()
+    session.add(patient)
     session.add(setting)
     session.flush()
     refresh_patient_intelligence(session, tenant_id=tenant_id, patient_id=patient_id)
@@ -358,8 +570,95 @@ def update_manual_refill_schedule(
     )
     return ManualRefillScheduleRead(
         patient_id=patient_id,
-        expected_refill_at=setting.manual_expected_refill_at,
-        notes=setting.notes,
+        expected_refill_at=(
+            datetime.combine(patient.monthly_refill_on, time.min, tzinfo=timezone.utc)
+            if patient.monthly_refill_on
+            else None
+        ),
+        notes=patient.monthly_refill_notes,
+        updated_at=setting.updated_at,
+    )
+
+
+@router.patch(
+    "/patients/{patient_id}/manual-lab",
+    response_model=ManualLabScheduleRead,
+    dependencies=[Depends(require_permission(permissions.PATIENT_INTELLIGENCE_MANAGE))],
+)
+def update_manual_lab_schedule(
+    patient_id: str,
+    payload: ManualLabScheduleUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_permission(permissions.PATIENT_INTELLIGENCE_MANAGE)
+    ),
+    session: Session = Depends(get_session),
+) -> ManualLabScheduleRead:
+    _entitled(session, tenant_id, current_user)
+    patient = session.get(Patient, patient_id)
+    if not patient or patient.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
+        )
+    setting = session.exec(
+        select(PatientIntelligencePatientSetting).where(
+            PatientIntelligencePatientSetting.tenant_id == tenant_id,
+            PatientIntelligencePatientSetting.patient_id == patient_id,
+        )
+    ).first()
+    if not setting:
+        setting = PatientIntelligencePatientSetting(
+            tenant_id=tenant_id, patient_id=patient_id
+        )
+    if payload.expected_lab_on:
+        patient.monthly_tracking_enabled = True
+    elif not patient.monthly_refill_on:
+        patient.monthly_tracking_enabled = False
+    patient.monthly_lab_on = payload.expected_lab_on
+    patient.monthly_lab_test_name = payload.lab_test_name or None
+    patient.monthly_lab_notes = payload.notes or None
+    patient.updated_at = now_utc()
+    setting.manual_expected_lab_at = (
+        datetime.combine(payload.expected_lab_on, time.min, tzinfo=timezone.utc)
+        if payload.expected_lab_on
+        else None
+    )
+    setting.manual_lab_test_name = payload.lab_test_name or None
+    setting.manual_lab_notes = payload.notes or None
+    setting.updated_by_user_id = current_user.id
+    setting.updated_at = now_utc()
+    session.add(patient)
+    session.add(setting)
+    session.flush()
+    refresh_patient_intelligence(session, tenant_id=tenant_id, patient_id=patient_id)
+    session.refresh(setting)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=patient.branch_id,
+        actor_user_id=current_user.id,
+        action="patient_intelligence.manual_lab_updated",
+        resource_type="patient",
+        resource_id=patient_id,
+        purpose="patient_engagement_configuration",
+        metadata_json=json.dumps(
+            {
+                "expected_lab_on": payload.expected_lab_on,
+                "lab_test_name": payload.lab_test_name,
+                "notes": payload.notes,
+            },
+            default=str,
+        ),
+    )
+    return ManualLabScheduleRead(
+        patient_id=patient_id,
+        expected_lab_at=(
+            datetime.combine(patient.monthly_lab_on, time.min, tzinfo=timezone.utc)
+            if patient.monthly_lab_on
+            else None
+        ),
+        lab_test_name=patient.monthly_lab_test_name,
+        notes=patient.monthly_lab_notes,
         updated_at=setting.updated_at,
     )
 
@@ -429,6 +728,12 @@ def configuration_options(
         ],
         "operators": ["gte", "gt", "lte", "lt", "eq", "neq", "between"],
         "categories": [category.value for category in IntelligenceFlagCategory],
+        "score_dimensions": [
+            {"key": "value", "label": "Value score"},
+            {"key": "engagement", "label": "Engagement score"},
+            {"key": "risk", "label": "Risk score"},
+            {"key": "loyalty", "label": "Loyalty score"},
+        ],
         # Phase 1 has a real consent-aware executor only for WhatsApp. Future
         # executors can add their channel here without changing rule storage.
         "channels": ["whatsapp"],
@@ -463,6 +768,19 @@ def create_rule(
             status_code=status.HTTP_409_CONFLICT,
             detail="A rule with this key already exists",
         )
+    if payload.is_enabled:
+        duplicate_flag = session.exec(
+            select(PatientIntelligenceRule).where(
+                PatientIntelligenceRule.tenant_id == tenant_id,
+                PatientIntelligenceRule.flag_key == payload.flag_key,
+                PatientIntelligenceRule.is_enabled.is_(True),
+            )
+        ).first()
+        if duplicate_flag:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An enabled rule with this flag key already exists",
+            )
     values = payload.model_dump(exclude={"category", "required_flag_keys"})
     row = PatientIntelligenceRule(
         tenant_id=tenant_id,
@@ -505,8 +823,6 @@ def update_rule(
     _entitled(session, tenant_id, current_user)
     row = session.get(PatientIntelligenceRule, rule_id)
     if not row or row.tenant_id != tenant_id:
-        from fastapi import HTTPException, status
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found"
         )
@@ -523,8 +839,25 @@ def update_rule(
     except ValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=exc.errors(include_url=False),
+            detail=_safe_validation_errors(exc),
         ) from exc
+    claims_new_enabled_flag_key = bool(candidate["is_enabled"]) and (
+        not row.is_enabled or candidate["flag_key"] != row.flag_key
+    )
+    if claims_new_enabled_flag_key:
+        duplicate_flag = session.exec(
+            select(PatientIntelligenceRule).where(
+                PatientIntelligenceRule.tenant_id == tenant_id,
+                PatientIntelligenceRule.flag_key == candidate["flag_key"],
+                PatientIntelligenceRule.is_enabled.is_(True),
+                PatientIntelligenceRule.id != row.id,
+            )
+        ).first()
+        if duplicate_flag:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An enabled rule with this flag key already exists",
+            )
     for key, value in changes.items():
         if key == "required_flag_keys":
             row.required_flag_keys_json = json.dumps(value)
@@ -548,6 +881,227 @@ def update_rule(
         purpose="patient_engagement_configuration",
     )
     return row
+
+
+@router.get(
+    "/content-library",
+    response_model=list[IntelligenceContentRead],
+    dependencies=[
+        Depends(require_permission(permissions.PATIENT_INTELLIGENCE_RULES_MANAGE))
+    ],
+)
+def list_content_library(
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_permission(permissions.PATIENT_INTELLIGENCE_RULES_MANAGE)
+    ),
+    session: Session = Depends(get_session),
+) -> list[PatientIntelligenceContentItem]:
+    _entitled(session, tenant_id, current_user)
+    return session.exec(
+        select(PatientIntelligenceContentItem)
+        .where(PatientIntelligenceContentItem.tenant_id == tenant_id)
+        .order_by(
+            PatientIntelligenceContentItem.priority,
+            PatientIntelligenceContentItem.title,
+        )
+    ).all()
+
+
+@router.post(
+    "/content-library",
+    response_model=IntelligenceContentRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(require_permission(permissions.PATIENT_INTELLIGENCE_RULES_MANAGE))
+    ],
+)
+def create_content_item(
+    payload: IntelligenceContentCreate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_permission(permissions.PATIENT_INTELLIGENCE_RULES_MANAGE)
+    ),
+    session: Session = Depends(get_session),
+) -> PatientIntelligenceContentItem:
+    _entitled(session, tenant_id, current_user)
+    duplicate = session.exec(
+        select(PatientIntelligenceContentItem).where(
+            PatientIntelligenceContentItem.tenant_id == tenant_id,
+            PatientIntelligenceContentItem.content_key == payload.content_key,
+        )
+    ).first()
+    if duplicate:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A content item with this key already exists",
+        )
+    row = PatientIntelligenceContentItem(tenant_id=tenant_id, **payload.model_dump())
+    session.add(row)
+    invalidate_tenant_intelligence(session, tenant_id=tenant_id)
+    session.commit()
+    session.refresh(row)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        actor_user_id=current_user.id,
+        action="patient_intelligence.content_created",
+        resource_type="patient_intelligence_content",
+        resource_id=row.id,
+        purpose="patient_engagement_configuration",
+    )
+    return row
+
+
+@router.patch(
+    "/content-library/{content_id}",
+    response_model=IntelligenceContentRead,
+    dependencies=[
+        Depends(require_permission(permissions.PATIENT_INTELLIGENCE_RULES_MANAGE))
+    ],
+)
+def update_content_item(
+    content_id: str,
+    payload: IntelligenceContentUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_permission(permissions.PATIENT_INTELLIGENCE_RULES_MANAGE)
+    ),
+    session: Session = Depends(get_session),
+) -> PatientIntelligenceContentItem:
+    _entitled(session, tenant_id, current_user)
+    row = session.get(PatientIntelligenceContentItem, content_id)
+    if not row or row.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Content item not found"
+        )
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(row, key, value)
+    row.updated_at = now_utc()
+    session.add(row)
+    invalidate_tenant_intelligence(session, tenant_id=tenant_id)
+    session.commit()
+    session.refresh(row)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        actor_user_id=current_user.id,
+        action="patient_intelligence.content_updated",
+        resource_type="patient_intelligence_content",
+        resource_id=row.id,
+        purpose="patient_engagement_configuration",
+    )
+    return row
+
+
+@router.delete(
+    "/content-library/{content_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[
+        Depends(require_permission(permissions.PATIENT_INTELLIGENCE_RULES_MANAGE))
+    ],
+)
+def delete_content_item(
+    content_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_permission(permissions.PATIENT_INTELLIGENCE_RULES_MANAGE)
+    ),
+    session: Session = Depends(get_session),
+) -> None:
+    _entitled(session, tenant_id, current_user)
+    row = session.get(PatientIntelligenceContentItem, content_id)
+    if not row or row.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Content item not found"
+        )
+    session.delete(row)
+    invalidate_tenant_intelligence(session, tenant_id=tenant_id)
+    session.commit()
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        actor_user_id=current_user.id,
+        action="patient_intelligence.content_deleted",
+        resource_type="patient_intelligence_content",
+        resource_id=content_id,
+        purpose="patient_engagement_configuration",
+    )
+    return None
+
+
+@router.delete(
+    "/rules/{rule_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[
+        Depends(require_permission(permissions.PATIENT_INTELLIGENCE_RULES_MANAGE))
+    ],
+)
+def delete_rule(
+    rule_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_permission(permissions.PATIENT_INTELLIGENCE_RULES_MANAGE)
+    ),
+    session: Session = Depends(get_session),
+) -> None:
+    _entitled(session, tenant_id, current_user)
+    row = session.get(PatientIntelligenceRule, rule_id)
+    if not row or row.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found"
+        )
+    flags = session.exec(
+        select(PatientIntelligenceFlag).where(
+            PatientIntelligenceFlag.tenant_id == tenant_id,
+            PatientIntelligenceFlag.rule_id == row.id,
+        )
+    ).all()
+    flag_ids = [flag.id for flag in flags]
+    actions = (
+        session.exec(
+            select(PatientEngagementAction).where(
+                PatientEngagementAction.tenant_id == tenant_id,
+                PatientEngagementAction.source_flag_id.in_(flag_ids),
+            )
+        ).all()
+        if flag_ids
+        else []
+    )
+    now = now_utc()
+    for action in actions:
+        if action.status in {
+            EngagementActionStatus.RECOMMENDED,
+            EngagementActionStatus.APPROVED,
+            EngagementActionStatus.SUPPRESSED,
+        }:
+            action.status = EngagementActionStatus.CANCELLED
+            action.reason = "The source rule was deleted"
+            action.updated_at = now
+        session.add(action)
+    for flag in flags:
+        if flag.status not in {
+            IntelligenceFlagStatus.RESOLVED,
+            IntelligenceFlagStatus.CLOSED,
+        }:
+            flag.status = IntelligenceFlagStatus.RESOLVED
+            flag.resolved_at = now
+        flag.rule_id = None
+        flag.updated_at = now
+        session.add(flag)
+    session.delete(row)
+    invalidate_tenant_intelligence(session, tenant_id=tenant_id)
+    session.commit()
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        actor_user_id=current_user.id,
+        action="patient_intelligence.rule_deleted",
+        resource_type="patient_intelligence_rule",
+        resource_id=rule_id,
+        purpose="patient_engagement_configuration",
+    )
+    return None
 
 
 @router.post(
@@ -581,25 +1135,14 @@ def adapt_existing_data(
     return {"patients_processed": count}
 
 
-@router.post(
-    "/engagement-actions/{action_id}/send",
-    response_model=dict[str, str],
-    dependencies=[Depends(require_permission(permissions.PATIENT_ENGAGEMENT_SEND))],
-)
-def send_engagement_action(
-    action_id: str,
-    tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(
-        require_permission(permissions.PATIENT_ENGAGEMENT_SEND)
-    ),
-    session: Session = Depends(get_session),
-) -> dict[str, str]:
-    _entitled(session, tenant_id, current_user)
-    action = session.get(PatientEngagementAction, action_id)
-    if not action or action.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Engagement action not found"
-        )
+def _queue_engagement_whatsapp_action(
+    session: Session,
+    *,
+    tenant_id: str,
+    action: PatientEngagementAction,
+    current_user: User,
+    commit: bool = True,
+) -> tuple[str, str | None]:
     if action.status not in {
         EngagementActionStatus.RECOMMENDED,
         EngagementActionStatus.APPROVED,
@@ -621,7 +1164,8 @@ def send_engagement_action(
         )
         action.updated_at = now_utc()
         session.add(action)
-        session.commit()
+        if commit:
+            session.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Patient has not explicitly opted in to engagement messages",
@@ -631,7 +1175,8 @@ def send_engagement_action(
         action.approved_by_user_id = current_user.id
         action.approved_at = now_utc()
         session.add(action)
-        session.commit()
+        if commit:
+            session.commit()
     event = queue_whatsapp_template_if_allowed(
         session,
         tenant_id=tenant_id,
@@ -652,7 +1197,137 @@ def send_engagement_action(
     action.notification_event_id = event.id
     action.updated_at = now_utc()
     session.add(action)
-    session.commit()
+    if commit:
+        session.commit()
+    return action.status.value, event.id
+
+
+@router.post(
+    "/engagement-actions/bulk-queue",
+    response_model=BulkEngagementQueueRead,
+    dependencies=[Depends(require_permission(permissions.PATIENT_ENGAGEMENT_SEND))],
+)
+def bulk_queue_engagement_actions(
+    payload: BulkEngagementQueueRequest,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_permission(permissions.PATIENT_ENGAGEMENT_SEND)
+    ),
+    session: Session = Depends(get_session),
+) -> BulkEngagementQueueRead:
+    _entitled(session, tenant_id, current_user)
+    statement = (
+        select(PatientEngagementAction, PatientIntelligenceFlag)
+        .join(
+            PatientIntelligenceFlag,
+            PatientIntelligenceFlag.id == PatientEngagementAction.source_flag_id,
+        )
+        .where(
+            PatientEngagementAction.tenant_id == tenant_id,
+            PatientEngagementAction.status == EngagementActionStatus.RECOMMENDED,
+            PatientEngagementAction.channel == "whatsapp",
+            PatientIntelligenceFlag.status.notin_(
+                [IntelligenceFlagStatus.RESOLVED, IntelligenceFlagStatus.CLOSED]
+            ),
+        )
+        .order_by(PatientEngagementAction.created_at)
+        .limit(payload.limit)
+    )
+    if payload.flag_key:
+        statement = statement.where(
+            PatientIntelligenceFlag.flag_key == payload.flag_key
+        )
+    if payload.category:
+        statement = statement.where(
+            PatientIntelligenceFlag.category == payload.category
+        )
+    if payload.action_key:
+        statement = statement.where(
+            PatientEngagementAction.action_key == payload.action_key
+        )
+    rows = session.exec(statement).all()
+    if payload.dry_run:
+        return BulkEngagementQueueRead(
+            matched=len(rows),
+            queued=0,
+            suppressed=0,
+            skipped=0,
+            failed=0,
+        )
+    result = BulkEngagementQueueRead(
+        matched=len(rows),
+        queued=0,
+        suppressed=0,
+        skipped=0,
+        failed=0,
+    )
+    for action, _flag in rows:
+        try:
+            _status, event_id = _queue_engagement_whatsapp_action(
+                session,
+                tenant_id=tenant_id,
+                action=action,
+                current_user=current_user,
+                commit=True,
+            )
+            result.queued += 1
+            if event_id:
+                result.notification_event_ids.append(event_id)
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_409_CONFLICT and "opted in" in str(
+                exc.detail
+            ):
+                result.suppressed += 1
+            else:
+                result.failed += 1
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        actor_user_id=current_user.id,
+        action="patient_engagement.bulk_whatsapp_queued",
+        resource_type="patient_engagement_action",
+        resource_id=tenant_id,
+        purpose="patient_engagement_campaign",
+        metadata_json=json.dumps(
+            {
+                "matched": result.matched,
+                "queued": result.queued,
+                "suppressed": result.suppressed,
+                "failed": result.failed,
+                "flag_key": payload.flag_key,
+                "category": payload.category,
+                "action_key": payload.action_key,
+            }
+        ),
+    )
+    return result
+
+
+@router.post(
+    "/engagement-actions/{action_id}/send",
+    response_model=dict[str, str],
+    dependencies=[Depends(require_permission(permissions.PATIENT_ENGAGEMENT_SEND))],
+)
+def send_engagement_action(
+    action_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_permission(permissions.PATIENT_ENGAGEMENT_SEND)
+    ),
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    _entitled(session, tenant_id, current_user)
+    action = session.get(PatientEngagementAction, action_id)
+    if not action or action.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Engagement action not found"
+        )
+    _status, event_id = _queue_engagement_whatsapp_action(
+        session=session,
+        tenant_id=tenant_id,
+        action=action,
+        current_user=current_user,
+    )
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -666,6 +1341,6 @@ def send_engagement_action(
     )
     return {
         "action_id": action.id,
-        "notification_event_id": event.id,
+        "notification_event_id": event_id or "",
         "status": action.status.value,
     }

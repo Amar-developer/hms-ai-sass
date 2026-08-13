@@ -481,11 +481,18 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | `GET` | `/api/v1/patient-intelligence/patients/{patient_id}` | `patient_intelligence.read` |
 | `GET` | `/api/v1/patient-intelligence/dashboard` | `patient_intelligence.read` |
 | `PATCH` | `/api/v1/patient-intelligence/patients/{patient_id}/manual-refill` | `patient_intelligence.manage` |
+| `PATCH` | `/api/v1/patient-intelligence/patients/{patient_id}/manual-lab` | `patient_intelligence.manage` |
 | `GET` | `/api/v1/patient-intelligence/rules` | `patient_intelligence.rules.manage` |
 | `POST` | `/api/v1/patient-intelligence/rules` | `patient_intelligence.rules.manage` |
 | `PATCH` | `/api/v1/patient-intelligence/rules/{rule_id}` | `patient_intelligence.rules.manage` |
+| `DELETE` | `/api/v1/patient-intelligence/rules/{rule_id}` | `patient_intelligence.rules.manage` |
+| `GET` | `/api/v1/patient-intelligence/content-library` | `patient_intelligence.rules.manage` |
+| `POST` | `/api/v1/patient-intelligence/content-library` | `patient_intelligence.rules.manage` |
+| `PATCH` | `/api/v1/patient-intelligence/content-library/{content_id}` | `patient_intelligence.rules.manage` |
+| `DELETE` | `/api/v1/patient-intelligence/content-library/{content_id}` | `patient_intelligence.rules.manage` |
 | `GET` | `/api/v1/patient-intelligence/configuration-options` | `patient_intelligence.rules.manage` |
 | `POST` | `/api/v1/patient-intelligence/adapt-existing-data` | `patient_intelligence.manage` |
+| `POST` | `/api/v1/patient-intelligence/engagement-actions/bulk-queue` | `patient_engagement.send` |
 | `POST` | `/api/v1/patient-intelligence/engagement-actions/{action_id}/send` | `patient_engagement.send` |
 
 All endpoints enforce the separate `patient_intelligence` plan entitlement. Existing appointments, payments, lab orders, pharmacy dispenses, home-care visits, and patient memberships remain the source of truth. Intelligence-driven WhatsApp sends additionally require explicit patient opt-in and an enabled approved template flow.

@@ -23,7 +23,11 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { Modal } from "@/app/components/common/Modal";
-import { apiFetch } from "@/lib/api";
+import {
+  fetchWhatsAppSettings,
+  sendWhatsAppTest,
+  updateWhatsAppSettings,
+} from "@/features/admin/api/whatsapp.api";
 import { WhatsAppDeliveryQueue } from "./WhatsAppDeliveryQueue";
 import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
@@ -40,8 +44,11 @@ type WhatsAppFlowKey =
   | "prescription_ready_patient"
   | "follow_up_advice_patient"
   | "appointment_reminder_patient"
+  | "health_tip_patient"
   | "medicine_refill_patient"
+  | "lab_test_reminder_patient"
   | "membership_renewal_patient"
+  | "unused_benefit_patient"
   | "patient_reengagement"
   | "home_care_booking_patient"
   | "home_care_visit_patient"
@@ -124,6 +131,15 @@ type WhatsAppTestDraft = {
   mediaFilename: string;
 };
 
+function confirmTemplateDelete(templateName: string) {
+  const message = `Delete "${templateName}"?\n\nThis will remove this template configuration immediately. Existing sent messages will not be affected.`;
+  try {
+    return window.confirm(message) !== false;
+  } catch {
+    return true;
+  }
+}
+
 const flowOptions: Array<{
   key: WhatsAppFlowKey;
   label: string;
@@ -197,9 +213,21 @@ const flowOptions: Array<{
     audience: "patient",
   },
   {
+    key: "health_tip_patient",
+    label: "Health tip / awareness",
+    description: "Send tenant-configured awareness or health-tip messages from patient tracking.",
+    audience: "patient",
+  },
+  {
     key: "medicine_refill_patient",
     label: "Medicine refill reminder",
     description: "Send a consent-aware reminder when a recurring refill is due.",
+    audience: "patient",
+  },
+  {
+    key: "lab_test_reminder_patient",
+    label: "Monthly lab test reminder",
+    description: "Send a reminder when a tracked patient lab test date is due.",
     audience: "patient",
   },
   {
@@ -209,75 +237,15 @@ const flowOptions: Array<{
     audience: "patient",
   },
   {
+    key: "unused_benefit_patient",
+    label: "Unused membership benefit reminder",
+    description: "Remind active members about remaining consultations, lab tests, or medicines.",
+    audience: "patient",
+  },
+  {
     key: "patient_reengagement",
     label: "Patient re-engagement",
     description: "Staff-approved check-in after a no-show or inactivity flag.",
-    audience: "patient",
-  },
-  {
-    key: "home_care_booking_patient",
-    label: "Home care booking confirmation",
-    description: "Trigger after a home care booking is created.",
-    audience: "patient",
-  },
-  {
-    key: "home_care_visit_patient",
-    label: "Home care visit update",
-    description: "Trigger for a scheduled or completed home care visit.",
-    audience: "patient",
-  },
-  {
-    key: "home_visit_booking_patient",
-    label: "Home visit booking confirmation",
-    description: "Trigger after a doctor/staff home visit is booked.",
-    audience: "patient",
-  },
-  {
-    key: "home_visit_reminder_patient",
-    label: "Home visit reminder",
-    description: "Send a reminder before a scheduled home visit.",
-    audience: "patient",
-  },
-  {
-    key: "ip_admission_patient",
-    label: "IP admission confirmation",
-    description: "Trigger when an inpatient admission is created.",
-    audience: "patient",
-  },
-  {
-    key: "ip_discharge_patient",
-    label: "IP discharge summary",
-    description: "Trigger when an inpatient discharge summary is finalized.",
-    audience: "patient",
-  },
-  {
-    key: "physiotherapy_case_patient",
-    label: "Physiotherapy case created",
-    description: "Trigger when a physiotherapy case is opened.",
-    audience: "patient",
-  },
-  {
-    key: "physiotherapy_session_patient",
-    label: "Physiotherapy session update",
-    description: "Trigger for a physiotherapy session or home program update.",
-    audience: "patient",
-  },
-  {
-    key: "pharmacy_dispense_patient",
-    label: "Pharmacy dispense update",
-    description: "Trigger when medicines are dispensed.",
-    audience: "patient",
-  },
-  {
-    key: "service_invoice_patient",
-    label: "Service invoice update",
-    description: "Trigger for healthcare service invoice messages.",
-    audience: "patient",
-  },
-  {
-    key: "service_follow_up_patient",
-    label: "Service follow-up",
-    description: "Trigger for post-service follow-up engagement.",
     audience: "patient",
   },
 ];
@@ -308,8 +276,11 @@ const initialDraft: WhatsAppSettingsDraft = {
     prescription_ready_patient: "",
     follow_up_advice_patient: "",
     appointment_reminder_patient: "",
+    health_tip_patient: "",
     medicine_refill_patient: "",
+    lab_test_reminder_patient: "",
     membership_renewal_patient: "",
+    unused_benefit_patient: "",
     patient_reengagement: "",
     home_care_booking_patient: "",
     home_care_visit_patient: "",
@@ -336,8 +307,11 @@ const initialDraft: WhatsAppSettingsDraft = {
     prescription_ready_patient: false,
     follow_up_advice_patient: false,
     appointment_reminder_patient: false,
+    health_tip_patient: false,
     medicine_refill_patient: false,
+    lab_test_reminder_patient: false,
     membership_renewal_patient: false,
+    unused_benefit_patient: false,
     patient_reengagement: false,
     home_care_booking_patient: false,
     home_care_visit_patient: false,
@@ -368,6 +342,16 @@ const SAMPLE_VALUES_BY_FIELD: Record<string, string> = {
   appointment_id: "appointment_test_001",
   appointment_view_url: "https://app.example.com/appointments",
   expected_date: "25 August 2026",
+  refill_date: "25 August 2026",
+  lab_test_name: "Monthly sugar test",
+  lab_due_date: "25 August 2026",
+  lab_notes: "Fasting sample preferred",
+  unused_consultations: "1",
+  unused_lab_tests: "2",
+  unused_medicines: "0",
+  unused_benefits_summary: "Consultations: 1, Lab tests: 2, Medicines: 0",
+  membership_plan_name: "Smart Care Plan",
+  days_remaining: "7",
   expiry_date: "31 August 2026",
   invoice_number: "TEST-INV-001",
   service_description: "Consultation",
@@ -539,7 +523,6 @@ export function WhatsAppIntegrationSettings({
   const [newTemplate, setNewTemplate] = useState({
     name: "",
     description: "",
-    audience: "patient" as "patient" | "doctor" | "user",
     triggerKey: "appointment_booked_patient" as WhatsAppFlowKey,
     parameters: [] as string[],
     englishIdentifier: "",
@@ -580,7 +563,7 @@ export function WhatsAppIntegrationSettings({
     const scopedSession = { ...apiSession, tenantId: effectiveTenantId };
     setBusy(true);
     setMessage("");
-    void apiFetch("/communications/whatsapp/settings", scopedSession)
+    void fetchWhatsAppSettings(scopedSession)
       .then((value) => {
         if (!active) return;
         const loadedDraft = readDraft(value);
@@ -633,19 +616,32 @@ export function WhatsAppIntegrationSettings({
       };
     });
 
-  function toggleTemplateField(flowKey: WhatsAppFlowKey, fieldKey: string) {
+  function addTemplateField(flowKey: WhatsAppFlowKey, fieldKey: string) {
     setDraft((current) => {
       const existing =
         current.templateFieldMappings[flowKey] ||
         (current.fieldCatalog[flowKey] || []).map((field) => field.key);
-      const parameters = existing.includes(fieldKey)
-        ? existing.filter((key) => key !== fieldKey)
-        : [...existing, fieldKey];
+      if (existing.length >= MAX_TEMPLATE_PARAMETERS) return current;
+      const parameters = [...existing, fieldKey];
       return {
         ...current,
         templateFieldMappings: {
           ...current.templateFieldMappings,
           [flowKey]: parameters,
+        },
+      };
+    });
+  }
+
+  function removeTemplateField(flowKey: WhatsAppFlowKey, index: number) {
+    setDraft((current) => {
+      const existing = current.templateFieldMappings[flowKey] || [];
+      if (index < 0 || index >= existing.length) return current;
+      return {
+        ...current,
+        templateFieldMappings: {
+          ...current.templateFieldMappings,
+          [flowKey]: existing.filter((_field, fieldIndex) => fieldIndex !== index),
         },
       };
     });
@@ -702,42 +698,41 @@ export function WhatsAppIntegrationSettings({
     setActiveTemplateLanguage(language);
   }
 
-  async function saveSettings() {
+  async function saveSettings(
+    overrideDraft?: WhatsAppSettingsDraft,
+    successMessage = "WhatsApp settings saved securely.",
+  ) {
     if (!apiSession || !effectiveTenantId) return;
+    const payloadDraft =
+      overrideDraft && "templates" in overrideDraft ? overrideDraft : draft;
     setBusy(true);
     setMessage("");
     try {
       const scopedSession = { ...apiSession, tenantId: effectiveTenantId };
-      const saved = await apiFetch(
-        "/communications/whatsapp/settings",
-        scopedSession,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            enabled: draft.enabled,
-            api_url: draft.apiUrl.trim() || null,
-            public_media_base_url: draft.publicMediaBaseUrl.trim() || null,
-            appointment_view_url: draft.appointmentViewUrl.trim() || null,
-            api_key: draft.apiKey.trim() || undefined,
-            default_country_code: draft.defaultCountryCode.trim(),
-            timeout_seconds: draft.timeoutSeconds,
-            max_attempts: draft.maxAttempts,
+      const saved = await updateWhatsAppSettings(scopedSession, {
+            enabled: payloadDraft.enabled,
+            api_url: payloadDraft.apiUrl.trim() || null,
+            public_media_base_url:
+              payloadDraft.publicMediaBaseUrl.trim() || null,
+            appointment_view_url: payloadDraft.appointmentViewUrl.trim() || null,
+            api_key: payloadDraft.apiKey.trim() || undefined,
+            default_country_code: payloadDraft.defaultCountryCode.trim(),
+            timeout_seconds: payloadDraft.timeoutSeconds,
+            max_attempts: payloadDraft.maxAttempts,
             patient_notifications_enabled:
-              draft.patientNotificationsEnabled,
-            doctor_notifications_enabled: draft.doctorNotificationsEnabled,
+              payloadDraft.patientNotificationsEnabled,
+            doctor_notifications_enabled: payloadDraft.doctorNotificationsEnabled,
             appointment_reminder_24h_enabled:
-              draft.appointmentReminder24hEnabled,
+              payloadDraft.appointmentReminder24hEnabled,
             appointment_reminder_2h_enabled:
-              draft.appointmentReminder2hEnabled,
-            default_language: draft.defaultLanguage,
-            templates: draft.templates,
-            localized_templates: draft.localizedTemplates,
-            flows: draft.flows,
-            custom_templates: draft.customTemplates,
-            template_field_mappings: draft.templateFieldMappings,
-          }),
-        },
-      );
+              payloadDraft.appointmentReminder2hEnabled,
+            default_language: payloadDraft.defaultLanguage,
+            templates: payloadDraft.templates,
+            localized_templates: payloadDraft.localizedTemplates,
+            flows: payloadDraft.flows,
+            custom_templates: payloadDraft.customTemplates,
+            template_field_mappings: payloadDraft.templateFieldMappings,
+      });
       setDraft(readDraft(saved));
       setHasApiKey(Boolean(saved?.has_api_key));
       setMaskedApiKey(String(saved?.api_key_masked || ""));
@@ -745,7 +740,7 @@ export function WhatsAppIntegrationSettings({
       setHealth(saved?.health || null);
       setReadiness(saved?.readiness || null);
       setShowApiKey(false);
-      setMessage("WhatsApp settings saved securely.");
+      setMessage(successMessage);
     } catch (error: any) {
       setMessage(error.message || "Could not save WhatsApp settings.");
     } finally {
@@ -792,11 +787,22 @@ export function WhatsAppIntegrationSettings({
   const visibleFlowOptions = flowOptions.filter(
     (flow) => !isDeletedBuiltInTemplate(flow.key),
   );
+  const visibleFlowOptionsByStatus = [...visibleFlowOptions].sort((left, right) => {
+    const leftEnabled = Boolean(draft.flows[left.key]);
+    const rightEnabled = Boolean(draft.flows[right.key]);
+    if (leftEnabled === rightEnabled) return 0;
+    return leftEnabled ? -1 : 1;
+  });
+  const visibleCustomTemplatesByStatus = [...draft.customTemplates].sort(
+    (left, right) => {
+      if (left.enabled === right.enabled) return 0;
+      return left.enabled ? -1 : 1;
+    },
+  );
   function openAddTemplate() {
     setNewTemplate({
       name: "",
       description: "",
-      audience: "patient",
       triggerKey: "appointment_booked_patient",
       parameters: [],
       englishIdentifier: "",
@@ -805,12 +811,22 @@ export function WhatsAppIntegrationSettings({
     setAddTemplateOpen(true);
   }
 
-  function toggleNewTemplateField(fieldKey: string) {
+  function addNewTemplateField(fieldKey: string) {
     setNewTemplate((current) => ({
       ...current,
-      parameters: current.parameters.includes(fieldKey)
-        ? current.parameters.filter((key) => key !== fieldKey)
-        : [...current.parameters, fieldKey],
+      parameters:
+        current.parameters.length >= MAX_TEMPLATE_PARAMETERS
+          ? current.parameters
+          : [...current.parameters, fieldKey],
+    }));
+  }
+
+  function removeNewTemplateField(index: number) {
+    setNewTemplate((current) => ({
+      ...current,
+      parameters: current.parameters.filter(
+        (_field, fieldIndex) => fieldIndex !== index,
+      ),
     }));
   }
 
@@ -843,7 +859,9 @@ export function WhatsAppIntegrationSettings({
           id,
           name,
           description: newTemplate.description.trim(),
-          audience: newTemplate.audience,
+          audience:
+            flowOptions.find((flow) => flow.key === newTemplate.triggerKey)
+              ?.audience || "patient",
           enabled: true,
           trigger_key: newTemplate.triggerKey,
           parameters: newTemplate.parameters,
@@ -871,64 +889,81 @@ export function WhatsAppIntegrationSettings({
     }));
   }
 
-  function removeCustomTemplate(templateId: string) {
-    setDraft((current) => ({
-      ...current,
-      customTemplates: current.customTemplates.filter(
-        (template) => template.id !== templateId,
+  async function removeCustomTemplate(templateId: string) {
+    const template = draft.customTemplates.find((item) => item.id === templateId);
+    const confirmed = confirmTemplateDelete(
+      template?.name || "this WhatsApp template",
+    );
+    if (!confirmed) return;
+    const nextDraft = {
+      ...draft,
+      customTemplates: draft.customTemplates.filter(
+        (item) => item.id !== templateId,
       ),
-    }));
-    setMessage("Custom template removed locally. Save WhatsApp Settings to apply.");
+    };
+    setDraft(nextDraft);
+    await saveSettings(nextDraft, "Template deleted.");
   }
 
-  function deleteBuiltInTemplate(flowKey: WhatsAppFlowKey) {
-    setDraft((current) => {
-      return {
-        ...current,
-        flows: { ...current.flows, [flowKey]: false },
-        templates: { ...current.templates, [flowKey]: "" },
-        localizedTemplates: Object.fromEntries(
-          Object.entries(current.localizedTemplates).map(
-            ([language, templates]) => [
-              language,
-              { ...templates, [flowKey]: "" },
-            ],
-          ),
-        ),
-        templateFieldMappings: {
-          ...current.templateFieldMappings,
-          [flowKey]: [],
-        },
-        ...(flowKey === "appointment_reminder_patient"
-          ? {
-              appointmentReminder24hEnabled: false,
-              appointmentReminder2hEnabled: false,
-            }
-          : {}),
-      };
-    });
-    setMessage("Template removed locally. Save WhatsApp Settings to apply.");
+  async function deleteBuiltInTemplate(flowKey: WhatsAppFlowKey) {
+    const flow = flowOptions.find((item) => item.key === flowKey);
+    const confirmed = confirmTemplateDelete(flow?.label || "this WhatsApp template");
+    if (!confirmed) return;
+    const nextDraft = {
+      ...draft,
+      flows: { ...draft.flows, [flowKey]: false },
+      templates: { ...draft.templates, [flowKey]: "" },
+      localizedTemplates: Object.fromEntries(
+        Object.entries(draft.localizedTemplates).map(([language, templates]) => [
+          language,
+          { ...templates, [flowKey]: "" },
+        ]),
+      ),
+      templateFieldMappings: {
+        ...draft.templateFieldMappings,
+        [flowKey]: [],
+      },
+      ...(flowKey === "appointment_reminder_patient"
+        ? {
+            appointmentReminder24hEnabled: false,
+            appointmentReminder2hEnabled: false,
+          }
+        : {}),
+    };
+    setDraft(nextDraft);
+    await saveSettings(nextDraft, "Template deleted.");
   }
 
   // Custom templates keep their ordered field keys on the template itself,
   // rather than in templateFieldMappings like the built-in flows, so they need
   // their own add/reorder helpers. Behaviour is otherwise identical.
-  function toggleCustomTemplateField(templateId: string, fieldKey: string) {
+  function addCustomTemplateField(templateId: string, fieldKey: string) {
     setDraft((current) => ({
       ...current,
       customTemplates: current.customTemplates.map((template) => {
         if (template.id !== templateId) return template;
-        const selected = template.parameters.includes(fieldKey);
-        if (!selected && template.parameters.length >= MAX_TEMPLATE_PARAMETERS) {
-          return template;
-        }
+        if (template.parameters.length >= MAX_TEMPLATE_PARAMETERS) return template;
         return {
           ...template,
-          parameters: selected
-            ? template.parameters.filter((key) => key !== fieldKey)
-            : [...template.parameters, fieldKey],
+          parameters: [...template.parameters, fieldKey],
         };
       }),
+    }));
+  }
+
+  function removeCustomTemplateField(templateId: string, index: number) {
+    setDraft((current) => ({
+      ...current,
+      customTemplates: current.customTemplates.map((template) =>
+        template.id === templateId
+          ? {
+              ...template,
+              parameters: template.parameters.filter(
+                (_field, fieldIndex) => fieldIndex !== index,
+              ),
+            }
+          : template,
+      ),
     }));
   }
 
@@ -1066,12 +1101,7 @@ export function WhatsAppIntegrationSettings({
     setTestMessage("");
     try {
       const scopedSession = { ...apiSession, tenantId: effectiveTenantId };
-      const result = await apiFetch(
-        "/communications/whatsapp/test",
-        scopedSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
+      const result = await sendWhatsAppTest(scopedSession, {
             mobile: testDraft.mobile.trim(),
             recipient_name: testDraft.recipientName.trim(),
             flow_key: testDraft.customTemplateId ? null : testDraft.flowKey,
@@ -1082,9 +1112,7 @@ export function WhatsAppIntegrationSettings({
             media_filename: testDraft.mediaUrl.trim()
               ? testDraft.mediaFilename.trim() || "invoice.pdf"
               : null,
-          }),
-        },
-      );
+      });
       const resultMessage =
         result?.message ||
         (result?.success
@@ -1537,8 +1565,8 @@ export function WhatsAppIntegrationSettings({
         )}
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
           {(showAllTemplates
-            ? visibleFlowOptions
-            : visibleFlowOptions.slice(0, 4)
+            ? visibleFlowOptionsByStatus
+            : visibleFlowOptionsByStatus.slice(0, 4)
           ).map((flow) => {
             const audienceEnabled =
               flow.audience === "patient"
@@ -1606,7 +1634,8 @@ export function WhatsAppIntegrationSettings({
                         draft.templateFieldMappings[flow.key] ||
                         (draft.fieldCatalog[flow.key] || []).map((f) => f.key)
                       }
-                      onToggle={(fieldKey) => toggleTemplateField(flow.key, fieldKey)}
+                      onToggle={(fieldKey) => addTemplateField(flow.key, fieldKey)}
+                      onRemove={(index) => removeTemplateField(flow.key, index)}
                       onMove={(index, direction) =>
                         moveTemplateField(flow.key, index, direction)
                       }
@@ -1662,13 +1691,13 @@ export function WhatsAppIntegrationSettings({
             </button>
           </div>
         )}
-        {draft.customTemplates.length > 0 && (
+        {visibleCustomTemplatesByStatus.length > 0 && (
           <div className="mt-5 border-t border-slate-200 pt-5">
             <h5 className="text-sm font-bold text-slate-800">
               Custom notification templates
             </h5>
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
-              {draft.customTemplates.map((template) => {
+              {visibleCustomTemplatesByStatus.map((template) => {
                 const audienceEnabled =
                   template.audience === "doctor"
                     ? draft.doctorNotificationsEnabled
@@ -1786,7 +1815,10 @@ export function WhatsAppIntegrationSettings({
                           fields={draft.fieldCatalog[template.trigger_key] || []}
                           selected={template.parameters}
                           onToggle={(fieldKey) =>
-                            toggleCustomTemplateField(template.id, fieldKey)
+                            addCustomTemplateField(template.id, fieldKey)
+                          }
+                          onRemove={(index) =>
+                            removeCustomTemplateField(template.id, index)
                           }
                           onMove={(index, direction) =>
                             moveCustomTemplateField(template.id, index, direction)
@@ -1871,24 +1903,9 @@ export function WhatsAppIntegrationSettings({
             placeholder="When or why this template is used"
           />
         </FormField>
-        <FormField label="Recipient audience">
-          <Select
-            value={newTemplate.audience}
-            onChange={(event: any) =>
-              setNewTemplate((current) => ({
-                ...current,
-                audience: event.target.value as "patient" | "doctor" | "user",
-              }))
-            }
-          >
-            <option value="patient">Patient</option>
-            <option value="doctor">Doctor</option>
-            <option value="user">User</option>
-          </Select>
-        </FormField>
         <FormField
           label="Trigger event"
-          hint="Which real event sends this template. If another enabled custom template already uses this trigger, this one will replace it once enabled."
+          hint="The real event determines the recipient. If another enabled custom template already uses this trigger, this one will replace it once enabled."
         >
           <Select
             value={newTemplate.triggerKey}
@@ -1911,7 +1928,8 @@ export function WhatsAppIntegrationSettings({
           <TemplateFieldPicker
             fields={draft.fieldCatalog[newTemplate.triggerKey] || []}
             selected={newTemplate.parameters}
-            onToggle={toggleNewTemplateField}
+            onToggle={addNewTemplateField}
+            onRemove={removeNewTemplateField}
             onMove={moveNewTemplateField}
             max={MAX_TEMPLATE_PARAMETERS}
             // Picking fields is the point of this dialog, so skip the collapse.

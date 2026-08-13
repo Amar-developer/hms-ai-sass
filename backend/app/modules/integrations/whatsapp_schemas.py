@@ -17,8 +17,11 @@ WhatsAppFlowKey = Literal[
     "prescription_ready_patient",
     "follow_up_advice_patient",
     "appointment_reminder_patient",
+    "health_tip_patient",
     "medicine_refill_patient",
+    "lab_test_reminder_patient",
     "membership_renewal_patient",
+    "unused_benefit_patient",
     "patient_reengagement",
     "home_care_booking_patient",
     "home_care_visit_patient",
@@ -60,8 +63,11 @@ class WhatsAppTemplateSettings(BaseModel):
     prescription_ready_patient: str = Field(default="", max_length=160)
     follow_up_advice_patient: str = Field(default="", max_length=160)
     appointment_reminder_patient: str = Field(default="", max_length=160)
+    health_tip_patient: str = Field(default="", max_length=160)
     medicine_refill_patient: str = Field(default="", max_length=160)
+    lab_test_reminder_patient: str = Field(default="", max_length=160)
     membership_renewal_patient: str = Field(default="", max_length=160)
+    unused_benefit_patient: str = Field(default="", max_length=160)
     patient_reengagement: str = Field(default="", max_length=160)
     home_care_booking_patient: str = Field(default="", max_length=160)
     home_care_visit_patient: str = Field(default="", max_length=160)
@@ -93,8 +99,11 @@ class WhatsAppFlowSettings(BaseModel):
     prescription_ready_patient: bool = False
     follow_up_advice_patient: bool = False
     appointment_reminder_patient: bool = False
+    health_tip_patient: bool = False
     medicine_refill_patient: bool = False
+    lab_test_reminder_patient: bool = False
     membership_renewal_patient: bool = False
+    unused_benefit_patient: bool = False
     patient_reengagement: bool = False
     home_care_booking_patient: bool = False
     home_care_visit_patient: bool = False

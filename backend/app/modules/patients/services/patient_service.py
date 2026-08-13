@@ -97,6 +97,16 @@ class PatientService:
                     ),
                 )
 
+    @staticmethod
+    def _clear_monthly_tracking_if_disabled(values: dict) -> dict:
+        if values.get("monthly_tracking_enabled") is False:
+            values["monthly_refill_on"] = None
+            values["monthly_refill_notes"] = None
+            values["monthly_lab_on"] = None
+            values["monthly_lab_test_name"] = None
+            values["monthly_lab_notes"] = None
+        return values
+
     def register_patient(
         self, *, tenant_id: str, payload: PatientCreate, actor: User
     ) -> Patient:
@@ -141,8 +151,9 @@ class PatientService:
             branch_id=payload.branch_id,
             entity="patient",
         )
+        patient_payload = self._clear_monthly_tracking_if_disabled(payload.model_dump())
         patient = Patient.model_validate(
-            payload,
+            patient_payload,
             update={
                 "tenant_id": tenant_id,
                 "patient_number": patient_number,
@@ -334,6 +345,7 @@ class PatientService:
                 updates["whatsapp_consent_updated_at"] = now_utc()
         elif "whatsapp_consent_source" in updates:
             updates["whatsapp_consent_updated_at"] = now_utc()
+        updates = self._clear_monthly_tracking_if_disabled(updates)
         if "branch_id" in updates:
             require_branch_in_tenant(self.session, tenant_id, updates["branch_id"])
         self._validate_mobile_numbers(

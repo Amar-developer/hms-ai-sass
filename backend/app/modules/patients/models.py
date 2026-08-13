@@ -66,6 +66,12 @@ class Patient(SQLModel, table=True):
     whatsapp_consent_source: str | None = Field(default=None, max_length=80)
     whatsapp_consent_updated_at: datetime | None = Field(default=None, index=True)
     whatsapp_preferred_language: str = Field(default="en", max_length=20)
+    monthly_tracking_enabled: bool = Field(default=False, index=True)
+    monthly_refill_on: date | None = Field(default=None, index=True)
+    monthly_refill_notes: str | None = Field(default=None, max_length=1000)
+    monthly_lab_on: date | None = Field(default=None, index=True)
+    monthly_lab_test_name: str | None = Field(default=None, max_length=180)
+    monthly_lab_notes: str | None = Field(default=None, max_length=1000)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 

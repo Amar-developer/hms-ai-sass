@@ -696,13 +696,23 @@ export function useAppController() {
         if (!saved.basePermissions) {
           saved.basePermissions = saved.user?.permissions || [];
         }
-        // Local storage is only a workspace snapshot. Validate the HTTP-only
-        // cookie before mounting authenticated children such as notification
-        // polling, otherwise a stale snapshot creates a burst of 401s.
-        const freshUser = await apiFetch("/auth/me", saved, {
-          suppressErrorReportStatuses: [401],
-          omitAuthorization: true,
-        });
+        // Local storage is only a workspace snapshot. Prefer validating the
+        // HTTP-only cookie before mounting authenticated children such as
+        // notification polling. In local/dev reloads the cookie can be missing
+        // even while the saved bearer token is still valid, so fall back to the
+        // bearer token before treating the session as expired.
+        let freshUser;
+        try {
+          freshUser = await apiFetch("/auth/me", saved, {
+            suppressErrorReportStatuses: [401],
+            omitAuthorization: true,
+          });
+        } catch (error: any) {
+          if (error?.status !== 401 || !saved.accessToken) throw error;
+          freshUser = await apiFetch("/auth/me", saved, {
+            suppressErrorReportStatuses: [401],
+          });
+        }
         if (cancelled) return;
         const restored = { ...saved, user: freshUser };
         localStorage.setItem("medizinhub.session", JSON.stringify(restored));

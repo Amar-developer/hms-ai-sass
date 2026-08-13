@@ -3,7 +3,10 @@ import { ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 
 import { FormField } from "@/app/components/FormElements";
 import { Badge, Card, Input } from "@/app/components/common/ui";
-import { apiFetch } from "@/lib/api";
+import {
+  fetchWhatsAppQueue,
+  updateWhatsAppQueueItem,
+} from "@/features/admin/api/whatsapp.api";
 import {
   FilterConfig,
   FilterSection,
@@ -58,8 +61,11 @@ const flowLabels: Record<string, string> = {
   prescription_ready_patient: "Prescription ready",
   follow_up_advice_patient: "Follow-up advice",
   appointment_reminder_patient: "Appointment reminder",
+  health_tip_patient: "Health tip",
   medicine_refill_patient: "Medicine refill",
+  lab_test_reminder_patient: "Lab test reminder",
   membership_renewal_patient: "Membership renewal",
+  unused_benefit_patient: "Unused benefit",
   patient_reengagement: "Patient re-engagement",
   home_care_booking_patient: "Home care booking",
   home_care_visit_patient: "Home care visit",
@@ -127,18 +133,17 @@ export function WhatsAppDeliveryQueue({
     if (!apiSession || !tenantId || !expanded) return;
     setBusy(true);
     try {
-      const params = new URLSearchParams({
-        limit: "20",
-        offset: String(offset),
-      });
-      if (statusFilter) params.set("status_filter", statusFilter);
-      if (flowFilter) params.set("flow_key", flowFilter);
-      if (query.trim()) params.set("q", query.trim());
-      if (fromDate) params.set("from_date", fromDate);
-      if (toDate) params.set("to_date", toDate);
-      const response = await apiFetch(
-        `/communications/whatsapp/queue?${params.toString()}`,
+      const response = await fetchWhatsAppQueue(
         { ...apiSession, tenantId },
+        {
+          status: statusFilter,
+          flowKey: flowFilter,
+          query,
+          fromDate,
+          toDate,
+          limit: 20,
+          offset,
+        },
       );
       setData({
         ...emptyQueue,
@@ -179,10 +184,10 @@ export function WhatsAppDeliveryQueue({
       return;
     setActionId(item.id);
     try {
-      await apiFetch(
-        `/communications/whatsapp/queue/${encodeURIComponent(item.id)}/${action}`,
+      await updateWhatsAppQueueItem(
         { ...apiSession, tenantId },
-        { method: "POST" },
+        item.id,
+        action,
       );
       onMessage(
         action === "retry"

@@ -1,4 +1,5 @@
 import json
+import calendar
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
@@ -11,11 +12,13 @@ from app.modules.appointments.models import Appointment, AppointmentStatus
 from app.modules.billing.models import Invoice, InvoiceStatus, Payment
 from app.modules.home_care.models import HomeCareBooking, HomeCareVisitLog
 from app.modules.integrations.whatsapp_entity_fields import build_entity_context
-from app.modules.lab.models import LabOrder
+from app.modules.integrations.whatsapp_consent import patient_allows_engagement_whatsapp
+from app.modules.lab.models import LabOrder, LabOrderItem
 from app.modules.patient_intelligence.models import (
     EngagementActionStatus,
     IntelligenceFlagStatus,
     PatientEngagementAction,
+    PatientIntelligenceContentItem,
     PatientIntelligenceFlag,
     PatientIntelligenceFlagHistory,
     PatientIntelligencePatientSetting,
@@ -34,6 +37,10 @@ from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollmentStatus,
     PatientSubscriptionPlan,
 )
+from app.modules.patient_subscriptions.services.serialization import (
+    free_items_from_json,
+    usage_from_json,
+)
 from app.modules.patients.models import Patient
 from app.modules.pharmacy.models import (
     PharmacyIssue,
@@ -49,6 +56,9 @@ QUALIFYING_APPOINTMENT_STATUSES = {
     AppointmentStatus.CONSULTATION_COMPLETED,
     AppointmentStatus.BILLED,
 }
+ENGAGEMENT_OPT_IN_REQUIRED_REASON = (
+    "Explicit WhatsApp opt-in is required for intelligence engagement"
+)
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -72,6 +82,77 @@ def _json(value: dict) -> str:
     return json.dumps(value, default=str, separators=(",", ":"))
 
 
+def _add_one_month(value: date) -> date:
+    month = value.month + 1
+    year = value.year
+    if month > 12:
+        month = 1
+        year += 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def _advance_monthly_date(value: date | None, today: date) -> date | None:
+    if not value:
+        return None
+    next_value = value
+    while next_value < today:
+        next_value = _add_one_month(next_value)
+    return next_value
+
+
+def _date_as_utc_start(value: date | None) -> datetime | None:
+    return datetime.combine(value, time.min, tzinfo=timezone.utc) if value else None
+
+
+def _humanize_key(value: str | None) -> str:
+    return str(value or "").replace("_", " ").replace("-", " ").title()
+
+
+def _money(value: Decimal | int | float | str | None) -> str:
+    amount = Decimal(str(value or "0"))
+    return f"₹{amount:,.2f}"
+
+
+CONTENT_TEMPLATE_KEYS = {"health_tip_patient", "patient_reengagement"}
+CONTENT_FALLBACK_CATEGORIES = {"health_tip", "awareness", "general"}
+
+
+def _content_context_for_flag(
+    content_items: list[PatientIntelligenceContentItem],
+    *,
+    flag_key: str,
+    template_key: str,
+) -> dict[str, str]:
+    if template_key not in CONTENT_TEMPLATE_KEYS:
+        return {}
+    enabled_items = [item for item in content_items if item.is_enabled]
+    selected = next(
+        (item for item in enabled_items if item.audience_flag_key == flag_key),
+        None,
+    )
+    if selected is None:
+        selected = next(
+            (
+                item
+                for item in enabled_items
+                if not item.audience_flag_key
+                and item.category in CONTENT_FALLBACK_CATEGORIES
+            ),
+            None,
+        )
+    if selected is None:
+        return {}
+    return {
+        "content_key": selected.content_key,
+        "content_title": selected.title,
+        "content_body": selected.body_text,
+        "content_category": _humanize_key(selected.category),
+        "content_language": selected.language,
+        "health_tip_topic": selected.title,
+    }
+
+
 def list_tenant_rules(
     session: Session, tenant_id: str
 ) -> list[PatientIntelligenceRule]:
@@ -83,9 +164,49 @@ def list_tenant_rules(
     ).all()
 
 
-def _patient_or_404(session: Session, tenant_id: str, patient_id: str) -> Patient:
-    patient = session.get(Patient, patient_id)
-    if not patient or patient.tenant_id != tenant_id:
+def score_summary_for_flags(
+    flags: list[PatientIntelligenceFlag],
+    rules_by_id: dict[str, PatientIntelligenceRule],
+) -> dict[str, Decimal]:
+    """Sum tenant-configured scoring weights from currently active flags."""
+    summary: dict[str, Decimal] = {
+        "value": Decimal("0"),
+        "engagement": Decimal("0"),
+        "risk": Decimal("0"),
+        "loyalty": Decimal("0"),
+        "total": Decimal("0"),
+    }
+    for flag in flags:
+        rule = rules_by_id.get(flag.rule_id or "")
+        if not rule or not rule.score_dimension:
+            continue
+        weight = Decimal(rule.score_weight or 0)
+        if weight <= 0:
+            continue
+        summary.setdefault(rule.score_dimension, Decimal("0"))
+        summary[rule.score_dimension] += weight
+        summary["total"] += weight
+    return summary
+
+
+def _patient_or_404(
+    session: Session,
+    tenant_id: str,
+    patient_id: str,
+    *,
+    for_update: bool = False,
+) -> Patient:
+    statement = select(Patient).where(
+        Patient.id == patient_id,
+        Patient.tenant_id == tenant_id,
+    )
+    if for_update:
+        # A refresh reads and then creates/updates several patient-scoped rows.
+        # Serializing on the always-present patient row prevents two requests
+        # from both observing a missing flag and inserting the same flag key.
+        statement = statement.with_for_update()
+    patient = session.exec(statement).first()
+    if not patient:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
         )
@@ -272,6 +393,33 @@ def calculate_metrics(
     active_membership = max(
         active_memberships, key=lambda row: row.ends_on, default=None
     )
+    active_plan = (
+        membership_plans.get(active_membership.plan_id) if active_membership else None
+    )
+    unused_consultations = (
+        max(
+            int(active_plan.free_consultations or 0)
+            - int(active_membership.used_consultations or 0),
+            0,
+        )
+        if active_membership and active_plan
+        else 0
+    )
+    unused_lab = 0
+    unused_medicine = 0
+    if active_membership and active_plan:
+        free_lab = free_items_from_json(active_plan.free_lab_test_ids_json)
+        used_lab = usage_from_json(active_membership.used_free_lab_json)
+        unused_lab = sum(
+            max(int(limit or 0) - int(used_lab.get(item_id, 0) or 0), 0)
+            for item_id, limit in free_lab.items()
+        )
+        free_medicine = free_items_from_json(active_plan.free_medicine_ids_json)
+        used_medicine = usage_from_json(active_membership.used_free_medicine_json)
+        unused_medicine = sum(
+            max(int(limit or 0) - int(used_medicine.get(item_id, 0) or 0), 0)
+            for item_id, limit in free_medicine.items()
+        )
     medicine_id, interval, expected_refill, recurrence_evidence = _recurring_medicine(
         session, tenant_id, patient_id, current
     )
@@ -281,15 +429,78 @@ def calculate_metrics(
             PatientIntelligencePatientSetting.patient_id == patient_id,
         )
     ).first()
-    if patient_setting and patient_setting.manual_expected_refill_at:
-        expected_refill = _aware(patient_setting.manual_expected_refill_at)
+    today = current.date()
+    monthly_tracking_enabled = bool(patient.monthly_tracking_enabled)
+    fallback_refill_on = (
+        _aware(patient_setting.manual_expected_refill_at).date()
+        if patient_setting
+        and patient_setting.manual_expected_refill_at
+        and monthly_tracking_enabled
+        else None
+    )
+    fallback_lab_on = (
+        _aware(patient_setting.manual_expected_lab_at).date()
+        if patient_setting
+        and patient_setting.manual_expected_lab_at
+        and monthly_tracking_enabled
+        else None
+    )
+    refill_on = (
+        _advance_monthly_date(patient.monthly_refill_on or fallback_refill_on, today)
+        if monthly_tracking_enabled
+        else None
+    )
+    lab_on = (
+        _advance_monthly_date(patient.monthly_lab_on or fallback_lab_on, today)
+        if monthly_tracking_enabled
+        else None
+    )
+    patient_tracking_changed = False
+    if refill_on != patient.monthly_refill_on:
+        patient.monthly_refill_on = refill_on
+        patient_tracking_changed = True
+    if lab_on != patient.monthly_lab_on:
+        patient.monthly_lab_on = lab_on
+        patient_tracking_changed = True
+    if (
+        monthly_tracking_enabled
+        and patient_setting
+        and patient_setting.notes
+        and not patient.monthly_refill_notes
+    ):
+        patient.monthly_refill_notes = patient_setting.notes
+        patient_tracking_changed = True
+    if (
+        monthly_tracking_enabled
+        and patient_setting
+        and patient_setting.manual_lab_test_name
+        and not patient.monthly_lab_test_name
+    ):
+        patient.monthly_lab_test_name = patient_setting.manual_lab_test_name
+        patient_tracking_changed = True
+    if (
+        monthly_tracking_enabled
+        and patient_setting
+        and patient_setting.manual_lab_notes
+        and not patient.monthly_lab_notes
+    ):
+        patient.monthly_lab_notes = patient_setting.manual_lab_notes
+        patient_tracking_changed = True
+    if patient_tracking_changed:
+        patient.updated_at = now_utc()
+        session.add(patient)
+        session.flush()
+
+    if refill_on:
+        expected_refill = _date_as_utc_start(refill_on)
         recurrence_evidence = {
             **recurrence_evidence,
             "manual_expected_refill_at": expected_refill.isoformat(),
             "manual_schedule": True,
-            "manual_notes": patient_setting.notes,
+            "manual_notes": patient.monthly_refill_notes,
             "days_until_expected": (expected_refill - current).days,
         }
+    expected_lab_at = _date_as_utc_start(lab_on)
 
     activity_dates: list[datetime] = []
     activity_dates.extend(
@@ -342,6 +553,16 @@ def calculate_metrics(
     snapshot.evidence_json = _json(
         {
             "recurring_medicine": recurrence_evidence,
+            "manual_lab": {
+                "expected_lab_at": expected_lab_at.isoformat()
+                if expected_lab_at
+                else None,
+                "lab_test_name": patient.monthly_lab_test_name,
+                "notes": patient.monthly_lab_notes,
+                "days_until_expected": (expected_lab_at - current).days
+                if expected_lab_at
+                else None,
+            },
             "membership": {
                 "active": bool(active_membership),
                 "plan_id": active_membership.plan_id if active_membership else None,
@@ -357,6 +578,9 @@ def calculate_metrics(
                 "paid_amount": active_membership.paid_amount
                 if active_membership
                 else 0,
+                "unused_consultations": unused_consultations,
+                "unused_lab_tests": unused_lab,
+                "unused_medicines": unused_medicine,
             },
         }
     )
@@ -374,6 +598,12 @@ def calculate_metrics(
     recurrence_count = Decimal(recurrence_evidence.get("occurrence_count", 0))
     recurrence_deviation = Decimal(recurrence_evidence.get("max_deviation_days", 0))
     days_until_refill = Decimal(recurrence_evidence.get("days_until_expected", 9999))
+    days_until_lab = (
+        Decimal((expected_lab_at - current).days)
+        if expected_lab_at
+        else Decimal("9999")
+    )
+    unused_benefits = Decimal(unused_consultations + unused_lab + unused_medicine)
     values = {
         "net_collected_30d": net_30,
         "net_collected_365d": net_365,
@@ -389,8 +619,13 @@ def calculate_metrics(
         "recurring_occurrence_count": recurrence_count,
         "recurring_max_deviation_days": recurrence_deviation,
         "days_until_expected_refill": days_until_refill,
+        "days_until_expected_lab_test": days_until_lab,
         "active_membership": Decimal(1 if active_membership else 0),
         "membership_days_remaining": membership_days,
+        "unused_membership_benefit_count": unused_benefits,
+        "unused_free_consultations": Decimal(unused_consultations),
+        "unused_free_lab_tests": Decimal(unused_lab),
+        "unused_free_medicines": Decimal(unused_medicine),
         "patient_age_days": Decimal(
             max((current - first_activity).days, 0) if first_activity else 0
         ),
@@ -555,6 +790,11 @@ def _explanation(rule: PatientIntelligenceRule, value: Decimal) -> str:
         "refill_due": "Expected regular medicine refill is approaching",
         "active_membership": "A paid membership is currently active",
         "membership_days_remaining": "Membership days remaining",
+        "days_until_expected_lab_test": "Days until expected lab test",
+        "unused_membership_benefit_count": "Unused membership benefits",
+        "unused_free_consultations": "Unused free consultations",
+        "unused_free_lab_tests": "Unused free lab tests",
+        "unused_free_medicines": "Unused free medicines",
         "high_value_at_risk": "Historical value and inactivity conditions are both met",
     }
     membership_condition = (
@@ -590,6 +830,10 @@ def evaluate_flags(
     matched: set[str] = set()
     matched_exclusive_groups: set[str] = set()
     for rule in rules:
+        # Tenant configuration may contain legacy rules that share a flag key.
+        # The first matching rule by priority owns that patient flag.
+        if rule.flag_key in matched:
+            continue
         value = metric_values.get(
             rule.id, metric_values.get(rule.metric_key, Decimal("0"))
         )
@@ -662,6 +906,7 @@ def evaluate_flags(
             flag.updated_at = now
         session.add(flag)
         session.flush()
+        existing[rule.flag_key] = flag
         if (
             created
             or flag.status == IntelligenceFlagStatus.OPEN
@@ -781,6 +1026,56 @@ def recommend_actions(
         )
         .order_by(PharmacyIssue.created_at.desc())
     ).first()
+    latest_lab_order = session.exec(
+        select(LabOrder)
+        .where(
+            LabOrder.tenant_id == tenant_id,
+            LabOrder.patient_id == patient.id,
+        )
+        .order_by(LabOrder.created_at.desc())
+    ).first()
+    latest_lab_item_names: list[str] = []
+    if latest_lab_order:
+        latest_lab_item_names = [
+            item.test_name
+            for item in session.exec(
+                select(LabOrderItem)
+                .where(
+                    LabOrderItem.tenant_id == tenant_id,
+                    LabOrderItem.lab_order_id == latest_lab_order.id,
+                )
+                .order_by(LabOrderItem.created_at)
+            ).all()
+        ]
+    content_items = session.exec(
+        select(PatientIntelligenceContentItem)
+        .where(
+            PatientIntelligenceContentItem.tenant_id == tenant_id,
+            PatientIntelligenceContentItem.is_enabled.is_(True),
+        )
+        .order_by(
+            PatientIntelligenceContentItem.priority,
+            PatientIntelligenceContentItem.title,
+        )
+    ).all()
+    try:
+        snapshot_evidence = json.loads(snapshot.evidence_json or "{}")
+    except (TypeError, ValueError):
+        snapshot_evidence = {}
+    manual_lab = snapshot_evidence.get("manual_lab") or {}
+    membership_evidence = snapshot_evidence.get("membership") or {}
+    unused_consultations = int(membership_evidence.get("unused_consultations") or 0)
+    unused_lab_tests = int(membership_evidence.get("unused_lab_tests") or 0)
+    unused_medicines = int(membership_evidence.get("unused_medicines") or 0)
+    unused_benefits_summary = (
+        f"Consultations: {unused_consultations}, "
+        f"Lab tests: {unused_lab_tests}, Medicines: {unused_medicines}"
+    )
+    days_since_activity = (
+        max((now - _aware(snapshot.last_activity_at)).days, 0)
+        if snapshot.last_activity_at
+        else 0
+    )
     for flag in flags:
         rule = rules_by_id.get(flag.rule_id or "")
         if not rule or not rule.action_enabled:
@@ -802,19 +1097,61 @@ def recommend_actions(
                     "membership_plan": membership_plan,
                     "invoice": membership_invoice,
                     "pharmacy_issue": latest_pharmacy_issue,
+                    "lab_order": latest_lab_order,
                 },
             ),
             "recipient_name": patient.full_name,
+            "clinic_name": tenant.name if tenant else "",
             "action_key": rule.action_key,
             "action_channel": rule.action_channel,
             "action_template_key": rule.action_template_key,
             "action_status": EngagementActionStatus.RECOMMENDED.value,
             "action_reason": f"Configured action for {rule.name}",
+            "engagement_segment": rule.name,
+            "flag_label": rule.badge_label or _humanize_key(flag.flag_key),
+            "flag_key_label": _humanize_key(flag.flag_key),
+            "flag_reason": flag.explanation,
+            "last_activity_date": snapshot.last_activity_at.strftime("%d %B %Y")
+            if snapshot.last_activity_at
+            else "",
+            "days_since_activity": str(days_since_activity),
+            "completed_visits": str(snapshot.completed_visits),
+            "no_show_count": str(snapshot.no_show_count),
+            "lab_order_count": str(snapshot.lab_order_count),
+            "pharmacy_dispense_count": str(snapshot.pharmacy_dispense_count),
+            "home_care_visit_count": str(snapshot.home_care_visit_count),
+            "thirty_day_collected": _money(snapshot.net_collected_30d),
+            "annual_collected": _money(snapshot.net_collected_365d),
+            "lifetime_collected": _money(snapshot.lifetime_net_collected),
+            "outstanding_amount": _money(snapshot.outstanding_amount),
+            "membership_plan_name": membership_plan.name if membership_plan else "",
+            "health_tip_topic": rule.name,
+            "lab_test_name": manual_lab.get("lab_test_name")
+            or ", ".join(latest_lab_item_names),
+            "lab_notes": manual_lab.get("notes") or "",
+            "unused_consultations": str(unused_consultations),
+            "unused_lab_tests": str(unused_lab_tests),
+            "unused_medicines": str(unused_medicines),
+            "unused_benefits_summary": unused_benefits_summary,
         }
+        values.update(
+            _content_context_for_flag(
+                content_items,
+                flag_key=flag.flag_key,
+                template_key=rule.action_template_key,
+            )
+        )
         if snapshot.expected_refill_at:
             values["expected_date"] = snapshot.expected_refill_at.strftime("%d %B %Y")
+            values["refill_date"] = values["expected_date"]
+        if manual_lab.get("expected_lab_at"):
+            lab_date = _aware(datetime.fromisoformat(manual_lab["expected_lab_at"]))
+            values["lab_due_date"] = lab_date.strftime("%d %B %Y") if lab_date else ""
         if snapshot.membership_ends_on:
             values["expiry_date"] = snapshot.membership_ends_on.strftime("%d %B %Y")
+            values["days_remaining"] = str(
+                max((snapshot.membership_ends_on.date() - now.date()).days, 0)
+            )
         if rule.action_cooldown_days:
             period = str(now.date().toordinal() // rule.action_cooldown_days)
         else:
@@ -822,6 +1159,45 @@ def recommend_actions(
         action_key = rule.action_key
         dedupe = f"patient-intelligence:{action_key}:{patient.id}:{period}"
         if dedupe in existing:
+            action = existing[dedupe]
+            whatsapp_allowed = (
+                rule.action_channel != "whatsapp"
+                or patient_allows_engagement_whatsapp(patient)
+            )
+            action.source_flag_id = flag.id
+            action.template_key = rule.action_template_key
+            action.channel = rule.action_channel
+            action.requires_approval = rule.action_requires_approval
+            action.personalization_json = _json(values)
+            if (
+                action.status == EngagementActionStatus.SUPPRESSED
+                and action.reason == ENGAGEMENT_OPT_IN_REQUIRED_REASON
+                and whatsapp_allowed
+            ):
+                action.status = EngagementActionStatus.RECOMMENDED
+                action.reason = f"Configured action for {rule.name}"
+                action.updated_at = now
+            elif (
+                action.status
+                in {
+                    EngagementActionStatus.CANCELLED,
+                    EngagementActionStatus.SUPPRESSED,
+                }
+                and whatsapp_allowed
+            ):
+                action.status = EngagementActionStatus.RECOMMENDED
+                action.reason = f"Configured action for {rule.name}"
+                action.notification_event_id = None
+                action.updated_at = now
+            elif (
+                action.status == EngagementActionStatus.CANCELLED
+                and not whatsapp_allowed
+            ):
+                action.status = EngagementActionStatus.SUPPRESSED
+                action.reason = ENGAGEMENT_OPT_IN_REQUIRED_REASON
+                action.notification_event_id = None
+                action.updated_at = now
+            session.add(action)
             continue
         action = PatientEngagementAction(
             tenant_id=tenant_id,
@@ -831,9 +1207,20 @@ def recommend_actions(
             action_key=action_key,
             channel=rule.action_channel,
             template_key=rule.action_template_key,
+            status=(
+                EngagementActionStatus.RECOMMENDED
+                if rule.action_channel != "whatsapp"
+                or patient_allows_engagement_whatsapp(patient)
+                else EngagementActionStatus.SUPPRESSED
+            ),
             requires_approval=rule.action_requires_approval,
             personalization_json=_json(values),
-            reason=f"Configured action for {rule.name}",
+            reason=(
+                f"Configured action for {rule.name}"
+                if rule.action_channel != "whatsapp"
+                or patient_allows_engagement_whatsapp(patient)
+                else ENGAGEMENT_OPT_IN_REQUIRED_REASON
+            ),
             dedupe_key=dedupe,
         )
         session.add(action)
@@ -877,6 +1264,12 @@ def queue_automatic_engagement_actions(
             or action.channel != "whatsapp"
         ):
             continue
+        if not patient_allows_engagement_whatsapp(patient):
+            action.status = EngagementActionStatus.SUPPRESSED
+            action.reason = ENGAGEMENT_OPT_IN_REQUIRED_REASON
+            action.updated_at = now_utc()
+            session.add(action)
+            continue
         event = queue_whatsapp_template_if_allowed(
             session,
             tenant_id=tenant_id,
@@ -898,7 +1291,7 @@ def queue_automatic_engagement_actions(
 def refresh_patient_intelligence(
     session: Session, *, tenant_id: str, patient_id: str
 ) -> PatientIntelligenceRead:
-    patient = _patient_or_404(session, tenant_id, patient_id)
+    patient = _patient_or_404(session, tenant_id, patient_id, for_update=True)
     now = _aware(now_utc())
     assert now is not None
     snapshot, values, timeline = calculate_metrics(
@@ -921,12 +1314,6 @@ def refresh_patient_intelligence(
         patient=patient,
         actions=actions,
     )
-    patient_setting = session.exec(
-        select(PatientIntelligencePatientSetting).where(
-            PatientIntelligencePatientSetting.tenant_id == tenant_id,
-            PatientIntelligencePatientSetting.patient_id == patient_id,
-        )
-    ).first()
     rules_by_id = {rule.id: rule for rule in list_tenant_rules(session, tenant_id)}
     badge_rules = sorted(
         (
@@ -942,10 +1329,22 @@ def refresh_patient_intelligence(
     return PatientIntelligenceRead(
         patient_id=patient.id,
         current_tier=(badge_rules[0].badge_label if badge_rules else None),
-        manual_expected_refill_at=(
-            patient_setting.manual_expected_refill_at if patient_setting else None
-        ),
-        manual_refill_notes=patient_setting.notes if patient_setting else None,
+        score_summary=score_summary_for_flags(flags, rules_by_id),
+        manual_expected_refill_at=_date_as_utc_start(patient.monthly_refill_on)
+        if patient.monthly_tracking_enabled
+        else None,
+        manual_refill_notes=patient.monthly_refill_notes
+        if patient.monthly_tracking_enabled
+        else None,
+        manual_expected_lab_at=_date_as_utc_start(patient.monthly_lab_on)
+        if patient.monthly_tracking_enabled
+        else None,
+        manual_lab_test_name=patient.monthly_lab_test_name
+        if patient.monthly_tracking_enabled
+        else None,
+        manual_lab_notes=patient.monthly_lab_notes
+        if patient.monthly_tracking_enabled
+        else None,
         metrics=MetricSnapshotRead.model_validate(snapshot, from_attributes=True),
         flags=[
             IntelligenceFlagRead(

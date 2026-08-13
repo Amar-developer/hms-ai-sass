@@ -99,6 +99,7 @@ export type ApiErrorLike = Error & {
 type ApiFetchOptions = RequestInit & {
   suppressErrorReportStatuses?: number[];
   omitAuthorization?: boolean;
+  omitIdempotencyKey?: boolean;
 };
 
 const GENERIC_FORBIDDEN =
@@ -297,6 +298,14 @@ async function readErrorDetail(res: Response) {
   return detail;
 }
 
+function backendTransportError(path: string) {
+  return new Error(
+    `The request to MedizinHub HMS backend at ${API_BASE}${path} could not be completed. ` +
+      "The API may be unavailable, or the browser may have blocked an error response. " +
+      "Confirm /health or /api/v1/health opens, then check the backend logs and CORS settings.",
+  );
+}
+
 export async function apiFetch<T = any>(
   path: string,
   session: ApiSession,
@@ -305,11 +314,14 @@ export async function apiFetch<T = any>(
   const {
     suppressErrorReportStatuses = [],
     omitAuthorization = false,
+    omitIdempotencyKey = false,
     ...fetchOptions
   } = options;
   let res: Response;
   const method = String(fetchOptions.method || "GET").toUpperCase();
-  const idempotencyKey = idempotencyKeyFor(path, session, fetchOptions);
+  const idempotencyKey = omitIdempotencyKey
+    ? null
+    : idempotencyKeyFor(path, session, fetchOptions);
   const correlationId = requestId();
   try {
     const attempts = method === "GET" || method === "HEAD" ? 2 : 1;
@@ -351,9 +363,7 @@ export async function apiFetch<T = any>(
       },
       session,
     );
-    throw new Error(
-      `Could not connect to MedizinHub HMS backend at ${API_BASE}. Start the FastAPI server, confirm /health or /api/v1/health opens, and check NEXT_PUBLIC_MEDIZINHUB_API_URL/CORS settings.`,
-    );
+    throw backendTransportError(path);
   }
   if (!res.ok) {
     const detail = await readErrorDetail(res);
@@ -421,9 +431,7 @@ export async function apiBlob(
       },
       session,
     );
-    throw new Error(
-      `Could not connect to MedizinHub HMS backend at ${API_BASE}. Start the FastAPI server, confirm /health or /api/v1/health opens, and check NEXT_PUBLIC_MEDIZINHUB_API_URL/CORS settings.`,
-    );
+    throw backendTransportError(path);
   }
   if (!res.ok) {
     const detail = await readErrorDetail(res);
@@ -484,9 +492,7 @@ export async function apiUpload(
       },
       session,
     );
-    throw new Error(
-      `Could not connect to MedizinHub HMS backend at ${API_BASE}.`,
-    );
+    throw backendTransportError(path);
   }
   if (!res.ok) {
     const detail = await readErrorDetail(res);

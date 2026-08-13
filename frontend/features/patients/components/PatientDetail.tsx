@@ -79,6 +79,7 @@ export function PatientDetail({
   onEdit,
   onUploadPhoto,
   onSaveManualPrescriptionDate,
+  onSaveManualLabDate,
   onSendEngagementAction,
   setActive,
 }: any & { apiSession?: ApiSession | null }) {
@@ -111,6 +112,9 @@ export function PatientDetail({
   ]);
   const [manualPrescriptionDate, setManualPrescriptionDate] = useState("");
   const [manualPrescriptionNotes, setManualPrescriptionNotes] = useState("");
+  const [manualLabDate, setManualLabDate] = useState("");
+  const [manualLabTestName, setManualLabTestName] = useState("");
+  const [manualLabNotes, setManualLabNotes] = useState("");
   const [familyPatientId, setFamilyPatientId] = useState("");
   const [familyRelationship, setFamilyRelationship] = useState("father");
   const [familyNotes, setFamilyNotes] = useState("");
@@ -159,10 +163,18 @@ export function PatientDetail({
       String(patientIntelligence?.manual_expected_refill_at || "").slice(0, 10),
     );
     setManualPrescriptionNotes(patientIntelligence?.manual_refill_notes || "");
+    setManualLabDate(
+      String(patientIntelligence?.manual_expected_lab_at || "").slice(0, 10),
+    );
+    setManualLabTestName(patientIntelligence?.manual_lab_test_name || "");
+    setManualLabNotes(patientIntelligence?.manual_lab_notes || "");
   }, [
     patient.id,
     patientIntelligence?.manual_expected_refill_at,
     patientIntelligence?.manual_refill_notes,
+    patientIntelligence?.manual_expected_lab_at,
+    patientIntelligence?.manual_lab_test_name,
+    patientIntelligence?.manual_lab_notes,
   ]);
   const alerts = [
     ...(summary?.critical_alerts || []),
@@ -736,14 +748,28 @@ export function PatientDetail({
               value={patientIntelligence.metrics?.pharmacy_dispense_count || 0}
             />
             <CompactMetric
-              label="Expected Refill"
+              label="Next Medicine Refill"
               value={fmtDate(patientIntelligence.metrics?.expected_refill_at)}
+            />
+            <CompactMetric
+              label="Next Lab Test"
+              value={fmtDate(patientIntelligence.manual_expected_lab_at)}
             />
             <CompactMetric
               label="Active Paid Membership"
               value={
                 patientIntelligence.metrics?.active_membership ? "Yes" : "No"
               }
+            />
+            <CompactMetric
+              label="Total Score"
+              value={patientIntelligence.score_summary?.total || 0}
+            />
+            <CompactMetric
+              label="Value / Engagement / Risk"
+              value={`${patientIntelligence.score_summary?.value || 0} / ${
+                patientIntelligence.score_summary?.engagement || 0
+              } / ${patientIntelligence.score_summary?.risk || 0}`}
             />
           </div>
 
@@ -754,37 +780,35 @@ export function PatientDetail({
           />
 
           {canManageIntelligence && (
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div>
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <h5 className="text-sm font-black text-slate-950">
-                  Monthly Prescription Schedule
+                  Monthly Medicine Tracking
                 </h5>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
-                  Set this existing patient&apos;s next prescription or medicine
-                  refill date. Tenant-configured intelligence rules decide when
-                  and which personalized WhatsApp reminder is created.
+                  Set the next refill date used by configured reminder rules.
                 </p>
-              </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-[220px_1fr_auto] md:items-end">
-                <FormField label="Next Prescription Date">
-                  <Input
-                    type="date"
-                    value={manualPrescriptionDate}
-                    onChange={(event: any) =>
-                      setManualPrescriptionDate(event.target.value)
-                    }
-                  />
-                </FormField>
-                <FormField label="Schedule Notes">
-                  <Input
-                    value={manualPrescriptionNotes}
-                    onChange={(event: any) =>
-                      setManualPrescriptionNotes(event.target.value)
-                    }
-                    placeholder="Optional patient-specific note"
-                  />
-                </FormField>
-                <div className="flex gap-2">
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <FormField label="Next Refill Date">
+                    <Input
+                      type="date"
+                      value={manualPrescriptionDate}
+                      onChange={(event: any) =>
+                        setManualPrescriptionDate(event.target.value)
+                      }
+                    />
+                  </FormField>
+                  <FormField label="Notes">
+                    <Input
+                      value={manualPrescriptionNotes}
+                      onChange={(event: any) =>
+                        setManualPrescriptionNotes(event.target.value)
+                      }
+                      placeholder="Optional medicine note"
+                    />
+                  </FormField>
+                </div>
+                <div className="mt-3 flex gap-2">
                   <Button
                     onClick={() =>
                       onSaveManualPrescriptionDate?.(
@@ -794,7 +818,7 @@ export function PatientDetail({
                     }
                     disabled={loading || !manualPrescriptionDate}
                   >
-                    Save Date
+                    Save Refill
                   </Button>
                   {patientIntelligence.manual_expected_refill_at && (
                     <ActionButton
@@ -804,6 +828,65 @@ export function PatientDetail({
                           "",
                           manualPrescriptionNotes,
                         )
+                      }
+                      disabled={loading}
+                    >
+                      Clear
+                    </ActionButton>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <h5 className="text-sm font-black text-slate-950">
+                  Monthly Lab Tracking
+                </h5>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Set the next lab date and test used by configured reminder rules.
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <FormField label="Next Lab Date">
+                    <Input
+                      type="date"
+                      value={manualLabDate}
+                      onChange={(event: any) => setManualLabDate(event.target.value)}
+                    />
+                  </FormField>
+                  <FormField label="Lab Test">
+                    <Input
+                      value={manualLabTestName}
+                      onChange={(event: any) =>
+                        setManualLabTestName(event.target.value)
+                      }
+                      placeholder="For example, HbA1c"
+                    />
+                  </FormField>
+                  <FormField label="Notes" className="md:col-span-2">
+                    <Input
+                      value={manualLabNotes}
+                      onChange={(event: any) => setManualLabNotes(event.target.value)}
+                      placeholder="Optional lab note"
+                    />
+                  </FormField>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    onClick={() =>
+                      onSaveManualLabDate?.(
+                        manualLabDate,
+                        manualLabTestName,
+                        manualLabNotes,
+                      )
+                    }
+                    disabled={loading || !manualLabDate}
+                  >
+                    Save Lab Date
+                  </Button>
+                  {patientIntelligence.manual_expected_lab_at && (
+                    <ActionButton
+                      tone="danger"
+                      onClick={() =>
+                        onSaveManualLabDate?.("", manualLabTestName, manualLabNotes)
                       }
                       disabled={loading}
                     >

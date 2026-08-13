@@ -47,6 +47,12 @@ class PatientCreate(BaseModel):
     whatsapp_consent_status: WhatsAppConsentStatus = WhatsAppConsentStatus.NOT_RECORDED
     whatsapp_consent_source: str | None = Field(default=None, max_length=80)
     whatsapp_preferred_language: WhatsAppPatientLanguage = "en"
+    monthly_tracking_enabled: bool = False
+    monthly_refill_on: date | None = None
+    monthly_refill_notes: str | None = Field(default=None, max_length=1000)
+    monthly_lab_on: date | None = None
+    monthly_lab_test_name: str | None = Field(default=None, max_length=180)
+    monthly_lab_notes: str | None = Field(default=None, max_length=1000)
 
     @field_validator("date_of_birth")
     @classmethod
@@ -74,6 +80,12 @@ class PatientUpdate(BaseModel):
     whatsapp_consent_status: WhatsAppConsentStatus | None = None
     whatsapp_consent_source: str | None = Field(default=None, max_length=80)
     whatsapp_preferred_language: WhatsAppPatientLanguage | None = None
+    monthly_tracking_enabled: bool | None = None
+    monthly_refill_on: date | None = None
+    monthly_refill_notes: str | None = Field(default=None, max_length=1000)
+    monthly_lab_on: date | None = None
+    monthly_lab_test_name: str | None = Field(default=None, max_length=180)
+    monthly_lab_notes: str | None = Field(default=None, max_length=1000)
 
     @field_validator("date_of_birth")
     @classmethod
@@ -107,6 +119,12 @@ class PatientRead(BaseModel):
     whatsapp_consent_source: str | None
     whatsapp_consent_updated_at: datetime | None
     whatsapp_preferred_language: WhatsAppPatientLanguage
+    monthly_tracking_enabled: bool = False
+    monthly_refill_on: date | None = None
+    monthly_refill_notes: str | None = None
+    monthly_lab_on: date | None = None
+    monthly_lab_test_name: str | None = None
+    monthly_lab_notes: str | None = None
     created_at: datetime
     updated_at: datetime
 
