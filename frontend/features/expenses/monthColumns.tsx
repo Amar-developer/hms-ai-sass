@@ -7,6 +7,7 @@ export function getMonthColumns() {
     {
       key: "label",
       header: "Month",
+      sortable: true,
       render: (row: MonthGroup) => <span className="text-sm font-bold">{row.label}</span>,
     },
     {
@@ -15,6 +16,7 @@ export function getMonthColumns() {
       width: "120px",
       className: "text-center",
       cellClassName: "text-center",
+      sortable: true,
       render: (row: MonthGroup) => <span className="text-sm">{row.count}</span>,
     },
     {
@@ -23,6 +25,7 @@ export function getMonthColumns() {
       width: "160px",
       className: "text-right",
       cellClassName: "text-right",
+      sortable: true,
       render: (row: MonthGroup) => <b className="text-sm">{money(row.total)}</b>,
     },
     {

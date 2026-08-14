@@ -25,6 +25,7 @@ export function getScheduleColumns({
       key: "doctor",
       header: "Doctor",
       width: "130px",
+      sortable: true,
       render: (row: any) => {
         const doctor = doctors.find(
           (item: any) => item.id === row.practitioner_id,
@@ -42,6 +43,7 @@ export function getScheduleColumns({
       key: "branch",
       header: "Branch",
       width: "180px",
+      sortable: true,
       render: (row: any) => {
         const branch = branches.find((item: any) => item.id === row.branch_id);
         return (
@@ -73,9 +75,16 @@ export function getScheduleColumns({
       header: "Days",
       width: "130px",
       render: (row: any) => (
-        <span className="text-sm">
-          {formatWeekdaysLabel(row.mode, row.weekdays)}
-        </span>
+        <div className="max-w-[100px]">
+          <p className="text-sm truncate" title={formatWeekdaysLabel(row.mode, row.weekdays)}>
+            {formatWeekdaysLabel(row.mode, row.weekdays)}
+          </p>
+        </div>
+        // <div className="max-w-[200px]">
+        //           <p className="font-bold truncate text-xs" title={file?.file_name}>
+        //             {capitalizeFirst(file.file_name)}
+        //           </p>
+        //         </div>
       ),
     },
     {
@@ -102,6 +111,7 @@ export function getScheduleColumns({
       width: "100px",
       className: "text-center",
       cellClassName: "text-center",
+      sortable: true,
       render: (row: any) => (
         <Badge
           tone={row.is_active ? "green" : "red"}

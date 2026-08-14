@@ -31,7 +31,8 @@ export function getPatientColumns({
     {
       key: "full_name",
       header: "Patient",
-      width: "220px",
+      width: "200px",
+      sortable: true,
       render: (row: any) => (
         <div className="min-w-0">
           <RecordIdCell
@@ -41,12 +42,21 @@ export function getPatientColumns({
             value={capitalizeFirst(row.full_name)}
             valueClassName="text-sm text-slate-950"
           />
-          <p className="mt-0.5 text-sm font-medium text-slate-500">
-            {row.patient_number}
-          </p>
+
           <PatientFlagBadges patient={row} className="mt-1.5" maxVisible={3} />
         </div>
       ),
+    },
+    {
+      key:"patient_number",
+      header:"Number",
+      width:"150px",
+      sortable:true,
+      render: (row:any)=>(
+        <p className="">
+          {row.patient_number}
+        </p>
+      )
     },
     {
       key: "mobile",
@@ -62,6 +72,7 @@ export function getPatientColumns({
       key: "branch_id",
       header: "Branch",
       width: "170px",
+      sortable: true,
       render: (row: any) => {
         const branch = branches.find((item: any) => item.id === row.branch_id);
         return (
@@ -75,6 +86,7 @@ export function getPatientColumns({
       key: "gender",
       header: "Gender / Age",
       width: "130px",
+      sortable: true,
       render: (row: any) => (
         <span className="text-sm text-slate-700">
           {displayPatientGender(row.gender)} / {row.age_years ?? "-"}
@@ -100,6 +112,7 @@ export function getPatientColumns({
       width: "110px",
       className: "text-center",
       cellClassName: "text-center",
+      sortable: true,
       render: (row: any) => (
         <Badge
           tone={

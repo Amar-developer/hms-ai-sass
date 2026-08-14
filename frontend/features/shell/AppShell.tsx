@@ -8,6 +8,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
 import { SearchableSelect } from "@/app/components/common/ui";
@@ -44,6 +45,7 @@ type ShellChromeValue = {
   setReportsSection: (value: string) => void;
   superAdminSection: string;
   setSuperAdminSection: (value: string) => void;
+  breadcrumbSlotEl: HTMLDivElement | null;
 };
 
 const ShellChromeContext = createContext<ShellChromeValue | null>(null);
@@ -55,6 +57,19 @@ export function useShellChrome(): ShellChromeValue {
     throw new Error("useShellChrome must be used within AppShell");
   }
   return value;
+}
+
+// Lets a module page render into the breadcrumb row's right corner (e.g. an
+// AdaptiveFilterTrigger) without AppShell needing a per-page special case.
+// Portals straight into the DOM node AppShell owns, rather than routing the
+// content through React state — state would mean every render of the calling
+// page re-registers a brand-new element, which never stabilizes and loops.
+// Render nothing (or null children) while the page has nothing to show here
+// (e.g. a detail view).
+export function BreadcrumbSlot({ children }: { children: ReactNode }) {
+  const { breadcrumbSlotEl } = useShellChrome();
+  if (!breadcrumbSlotEl) return null;
+  return createPortal(children, breadcrumbSlotEl);
 }
 
 export function AppShell({
@@ -230,6 +245,8 @@ export function AppShell({
   const activeSuperAdminSection = isVisibleSuperAdminSection(superAdminSection)
     ? superAdminSection
     : visiblePlatformSections[0]?.[0] || superAdminSection;
+  const [breadcrumbSlotEl, setBreadcrumbSlotEl] =
+    useState<HTMLDivElement | null>(null);
   const [superAdminSettingsOpen, setSuperAdminSettingsOpen] = useState(true);
   // Tenant Admin sections are real nested routes (/admin/users, /admin/roles,
   // ...) now, so the current section is derived from the URL instead of
@@ -506,6 +523,7 @@ export function AppShell({
     setReportsSection,
     superAdminSection: activeSuperAdminSection,
     setSuperAdminSection,
+    breadcrumbSlotEl,
   };
 
   return (
@@ -668,11 +686,11 @@ export function AppShell({
           {showNavigationSkeleton ? (
             <BreadcrumbBarSkeleton />
           ) : (
-            <div className="border-b border-slate-100 bg-white px-4 py-1 lg:px-5">
+            <div className=" border-slate-100 bg-white px-4 py-3 lg:px-5 ">
             <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-2">
                 {/* Back / Forward group */}
-                <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                {/* <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
                   <button
                     type="button"
                     onClick={() => router.back()}
@@ -689,10 +707,9 @@ export function AppShell({
                   >
                     <ArrowRight size={14} />
                   </button>
-                </div>
+                </div> */}
 
                 {/* Divider */}
-                <span className="h-4 w-px bg-slate-200" />
 
                 {/* Breadcrumb */}
                 <div className="flex min-w-0 items-center gap-2">
@@ -770,12 +787,17 @@ export function AppShell({
                   />
                 </div>
               )}
+
+              <div
+                ref={setBreadcrumbSlotEl}
+                className="flex shrink-0 items-center justify-end gap-2 empty:hidden"
+              />
             </div>
           </div>
           )}
 
           <section
-            className=" py-4 px-6"
+            className=" py-2 px-6"
             aria-busy={showNavigationSkeleton}
             aria-live="polite"
           >

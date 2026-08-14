@@ -1,6 +1,6 @@
 import { Column } from "@/utils/types";
 import { pageSize } from "./constants";
-import { displayDate } from "@/utils/helper";
+import { capitalizeFirst, displayDate } from "@/utils/helper";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { Badge } from "@/app/components/common/ui";
 import { RecordIdCell } from "@/app/components/common/RecordIdCell";
@@ -40,8 +40,8 @@ export function getLabColumns({
   return [
         {
           key: "index",
-          header: "#",
-          width: "80px",
+          header: "S.No",
+          width: "50px",
           render: (_, index) => <b>{(safePage - 1) * pageSize + index + 1}</b>,
         },
 
@@ -57,7 +57,6 @@ export function getLabColumns({
                 allowed={canCopyIds}
                 value={o.lab_order_number || publicDisplayValue(o.id, "Lab Order")}
               />
-              <b>{displayDate(o.created_at)}</b>
               <p className="text-xs text-slate-500">
                 {new Date(o.created_at).toLocaleTimeString([], {
                   hour: "2-digit",
@@ -66,6 +65,17 @@ export function getLabColumns({
               </p>
             </div>
           ),
+        },
+        {
+          key:'date',
+          header:"Date",
+          className:"text-center",
+          width:'110px',
+          render: (o)=>(
+            <div>
+              <b>{displayDate(o.created_at)}</b>
+            </div>
+          )
         },
 
         {
@@ -78,9 +88,9 @@ export function getLabColumns({
             return (
               <div>
                 <span>
-                  {o.patient_name ||
+                  {capitalizeFirst(o.patient_name ||
                     p?.name ||
-                    publicDisplayValue(o.patient_id, "Patient")}
+                    publicDisplayValue(o.patient_id, "Patient"))}
                 </span>
                 <PatientFlagBadges patient={p} className="mt-1" />
               </div>
@@ -92,6 +102,7 @@ export function getLabColumns({
           key: "source",
           header: "Source",
           width: "150px",
+          sortable: true,
           render: (o) => (
             <Badge className="normal-badge w-[70%]">
               {humanizeOptionLabel(o.acquisition_source || o.source)}
@@ -103,6 +114,7 @@ export function getLabColumns({
           key: "status",
           header: "Status",
           width: "150px",
+          sortable: true,
           render: (o) => {
             const released = isReleased(o);
             const cancelled = isCancelled(o);
@@ -130,6 +142,7 @@ export function getLabColumns({
           key: "amount",
           header: "Amount",
           width: "90px",
+          sortable: true,
           render: (o) => <>₹{o.amount}</>,
         },
 

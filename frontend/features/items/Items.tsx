@@ -11,11 +11,8 @@ import {
 import { NumberField, SelectField } from "@/app/components/FormElements";
 import {
   homeServiceTypes,
-  itemTypes,
   modalities,
-  price_options,
   serviceItemTypes,
-  sort_type_options,
 } from "@/features/items/constants";
 import { ItemForm } from "@/features/items/forms/ItemForms";
 import { ItemFormValues, itemSchema } from "@/features/items/items.schema";
@@ -24,10 +21,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { generatedItemCode } from "./helpers";
 import { useItemsActions, useItemsData } from "./api";
-import { FilterSection } from "@/app/components/common/FilterSection";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
 import { Pagination } from "@/app/components/common/Pagination";
 import { getItemsColumns } from "./Column";
+import { getItemsTableSchema } from "./filterSchema";
+import { sortRows } from "@/utils/sortRows";
+import type { SortState } from "@/utils/types";
 
 function itemCodePreview(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -111,10 +112,13 @@ export function Items({ apiSession, branchId }: any) {
   const [confirmAction, setConfirmAction] = useState<any>(null);
   const [filters, setFilters] = useState({
     type: "all",
-    query: "",
     labOnly: "all",
     priceBand: "all",
-    sortBy: "name",
+  });
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortState | null>({
+    key: "name",
+    dir: "asc",
   });
   const [page, setPage] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -220,39 +224,28 @@ export function Items({ apiSession, branchId }: any) {
           return false;
         if (filters.priceBand === "free" && Number(row.price || 0) > 0)
           return false;
-        const query = String(filters.query || "")
-          .trim()
-          .toLowerCase();
+        const trimmedQuery = query.trim().toLowerCase();
         if (
-          query &&
+          trimmedQuery &&
           !`${row.kind} ${row.name} ${row.code} ${row.meta} ${row.id}`
             .toLowerCase()
-            .includes(query)
+            .includes(trimmedQuery)
         )
           return false;
         return true;
       }),
-    [rows, filters],
+    [rows, filters, query],
   );
-  const sortedRows = useMemo(() => {
-    const valueFor = (row: any) => {
-      if (filters.sortBy === "latest") return row.created_at || row.id || "";
-      if (filters.sortBy === "type") return row.kind || "";
-      if (filters.sortBy === "code") return row.code || "";
-      if (filters.sortBy === "price") return Number(row.price ?? -1);
-      if (filters.sortBy === "mrp") return Number(row.mrp_price ?? -1);
-      return row.name || "";
-    };
-    return [...filteredRows].sort((a: any, b: any) => {
-      const left = valueFor(a);
-      const right = valueFor(b);
-      if (typeof left === "number" && typeof right === "number") {
-        return left - right;
-      }
-      const result = String(left).localeCompare(String(right));
-      return filters.sortBy === "latest" ? -result : result;
-    });
-  }, [filteredRows, filters.sortBy]);
+  const sortedRows = useMemo(
+    () =>
+      sortRows(filteredRows, sort, (row, key) => {
+        if (key === "type") return row.kind || "";
+        if (key === "mrp_price") return Number(row.mrp_price ?? -1);
+        if (key === "price") return Number(row.price ?? -1);
+        return row[key];
+      }),
+    [filteredRows, sort],
+  );
 
   useEffect(() => {
     if (loadError) setMessage(loadError);
@@ -334,32 +327,18 @@ export function Items({ apiSession, branchId }: any) {
     setPage(1);
   }
 
-  const itemFilters = [
-    {
-      key: "type",
-      label: "Type",
-      options: [
-        { value: "all", label: "All item types" },
-        ...itemTypes.map(([value, label]) => ({ value, label })),
-      ],
-    },
-    {
-      key: "sortBy",
-      label: "Sort By",
-      options: sort_type_options,
-    },
-    {
-      key: "priceBand",
-      label: "Price",
-      options: price_options,
-    },
-  ];
+  const itemsSchema = getItemsTableSchema();
 
   const filterValues = {
     type: filters.type,
-    sortBy: filters.sortBy,
     priceBand: filters.priceBand,
   };
+
+  function resetItemFilters() {
+    setFilters({ type: "all", labOnly: "all", priceBand: "all" });
+    setSort({ key: "name", dir: "asc" });
+    setPage(1);
+  }
 
   const itemColumns = getItemsColumns({
     deleteItem,
@@ -370,6 +349,21 @@ export function Items({ apiSession, branchId }: any) {
 
   return (
     <div className="space-y-6 scroll-mt-24" ref={containerRef}>
+      <BreadcrumbSlot>
+        <AdaptiveFilterTrigger
+          schema={itemsSchema}
+          query={query}
+          setQuery={(value: string) => {
+            setQuery(value);
+            setPage(1);
+          }}
+          filterValues={filterValues}
+          onFilterChange={updateFilter}
+          sort={sort}
+          onSortChange={setSort}
+          onReset={resetItemFilters}
+        />
+      </BreadcrumbSlot>
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
@@ -408,25 +402,6 @@ export function Items({ apiSession, branchId }: any) {
               Configure items used across healthcare services
             </p>
           </div>
-          <FilterSection
-            title="Items"
-            filters={itemFilters}
-            filterValues={filterValues}
-            className="lg:grid-cols-5"
-            query={filters.query}
-            setQuery={(value: string) => updateFilter("query", value)}
-            onFilterChange={updateFilter}
-            onReset={() => {
-              setFilters({
-                type: "all",
-                query: "",
-                labOnly: "all",
-                priceBand: "all",
-                sortBy: "name",
-              });
-              setPage(1);
-            }}
-          />
         </div>
         <div className="mt-4">
           <DataTable
@@ -434,6 +409,8 @@ export function Items({ apiSession, branchId }: any) {
             data={pagedRows}
             loading={loading}
             emptyMessage="No items match your filter."
+            sort={sort ?? undefined}
+            onSortChange={setSort}
           />
           {confirmAction && (
             <ConfirmModal

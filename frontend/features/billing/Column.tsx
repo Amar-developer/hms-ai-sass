@@ -75,10 +75,12 @@ export function getInvoiceColumns({
           ? "amber"
           : status === "failed" || status === "cancelled"
             ? "red"
-            : "slate";
+            : status == 'not_sent'
+            ? "purple"
+            :'slate'
 
     return (
-      <Badge tone={tone as any} className="table-status text-xs text-center">
+      <Badge tone={tone as any} className="normal-badge text-xs text-center">
         {label}
       </Badge>
     );
@@ -173,7 +175,7 @@ export function getInvoiceColumns({
                     ? "red"
                     : "slate"
           }
-          className="table-status text-xs text-center"
+          className="normal-badge text-xs text-center"
         >
           {capitalizeFirst(
             invoice.status === "partially_paid"

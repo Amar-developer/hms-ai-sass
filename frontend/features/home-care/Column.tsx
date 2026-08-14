@@ -36,6 +36,7 @@ export function getBookingListColumn({
       key: "booking_number",
       header: "Booking ID",
       width: "180px",
+      sortable: true,
       render: (booking: any) => (
         <div>
           <RecordIdCell
@@ -62,6 +63,7 @@ export function getBookingListColumn({
       key: "patient",
       header: "Patient",
       width: "160px",
+      sortable: true,
       render: (booking: any) => {
         const patient: any = patientMap.get(booking.patient_id);
         return (
@@ -93,6 +95,7 @@ export function getBookingListColumn({
       key: "date_range",
       header: "Date Range",
       width: "160px",
+      sortable: true,
       render: (booking: any) => (
         <div className="text-sm">
           {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
@@ -114,6 +117,7 @@ export function getBookingListColumn({
       header: "Status",
       className: "text-center",
       width: "120px",
+      sortable: true,
       render: (booking: any) => {
         return (
           <Badge
@@ -147,6 +151,7 @@ export function getBookingListColumn({
       width: "120px",
       className: "text-center",
       cellClassName: "text-center",
+      sortable: true,
       render: (booking: any) => money(bookingTotal(booking)),
     },
     {

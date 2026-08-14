@@ -30,6 +30,7 @@ export type SearchableSelectProps<T = string> = {
   emptyText?: string;
   maxOptions?: number;
   className?: string;
+  text?:string;
   searchable?: boolean;
   required?: boolean;
   error?: string;

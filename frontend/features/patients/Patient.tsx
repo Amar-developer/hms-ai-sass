@@ -12,8 +12,10 @@ import { PatientForm } from "@/features/patients/forms/PatientForms";
 import { PatientDetail } from "./components/PatientDetail";
 import { mapPatient } from "@/lib/liveData";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
-import { patient_status_options } from "./constants";
-import { FilterSection } from "@/app/components/common/FilterSection";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
 import { canReadPatientLinkedModule } from "./patientModuleAccess";
 import {
@@ -23,6 +25,10 @@ import {
   type PatientListFilters,
 } from "./api";
 import { getPatientColumns } from "./Column";
+import { getPatientTableSchema, getPatientQueryFields } from "./filterSchema";
+import { sortRows } from "@/utils/sortRows";
+import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
 import {
   fetchPatientIntelligence,
   sendPatientEngagementAction,
@@ -91,6 +97,9 @@ export function Patient({
   const [branchFilter, setBranchFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const DEFAULT_SORT: SortState = { key: "updated_at", dir: "desc" };
+  const [sort, setSort] = useState<SortState | null>(DEFAULT_SORT);
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -127,6 +136,60 @@ export function Patient({
   });
 
   const selected = selectedDetail || rows.find((row: any) => row.id === selectedId);
+
+  const patientSchema = getPatientTableSchema({ isSuperAdmin, tenants });
+  const patientQueryFields = getPatientQueryFields({ rows, branches });
+
+  const filterValues = {
+    tenant: tenantId,
+    branch: branchFilter,
+    status,
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    setPage(1);
+    setMessage("");
+
+    const overrides: Record<string, string> = {};
+
+    switch (key) {
+      case "tenant":
+        setTenantId(value);
+        refreshPatients(value, 1, overrides);
+        return;
+
+      case "branch":
+        setBranchFilter(value);
+        overrides.branchFilter = value; // ← force the new value
+        break;
+
+      case "status":
+        setStatus(value);
+        overrides.status = value; // ← force the new value
+        break;
+    }
+
+    refreshPatients(tenantId, 1, overrides);
+  };
+
+  function resetPatientFilters() {
+    setStatus("all");
+    setGender("all");
+    setBranchFilter("all");
+    setFromDate("");
+    setToDate("");
+    setSort(DEFAULT_SORT);
+    setPage(1);
+    setMessage("");
+    loadData(tenantId, 1, {
+      query: "",
+      status: "all",
+      gender: "all",
+      branchFilter: "all",
+      fromDate: "",
+      toDate: "",
+    });
+  }
 
   function syncSharedPatient(patient: any) {
     if (!setPatients || !patient?.id) return;
@@ -394,70 +457,15 @@ export function Patient({
 
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageRows = rows;
-
-  const patientFilters = [
-    ...(isSuperAdmin
-      ? [
-          {
-            key: "tenant",
-            label: "Tenant",
-            options: tenants.map((t: any) => ({
-              value: t.id,
-              label: t.name,
-            })),
-          },
-        ]
-      : []),
-    {
-      key: "branch",
-      label: "Branch",
-      options: [
-        { value: "all", label: "All branches" },
-        ...branches.map((b: any) => ({
-          value: b.id,
-          label: b.name,
-        })),
-      ],
-    },
-    {
-      key: "status",
-      label: "Status",
-      options: patient_status_options,
-    },
-  ];
-
-  const filterValues = {
-    tenant: tenantId,
-    branch: branchFilter,
-    status,
-  };
-
-  const handleFilterChange = (key: string, value: string) => {
-    setPage(1);
-    setMessage("");
-
-    const overrides: Record<string, string> = {};
-
-    switch (key) {
-      case "tenant":
-        setTenantId(value);
-        refreshPatients(value, 1, overrides);
-        return;
-
-      case "branch":
-        setBranchFilter(value);
-        overrides.branchFilter = value; // ← force the new value
-        break;
-
-      case "status":
-        setStatus(value);
-        overrides.status = value; // ← force the new value
-        break;
-    }
-
-    refreshPatients(tenantId, 1, overrides);
-  };
+  // Sorting and the ad-hoc query filters only act on the current
+  // server-fetched page — the API has no sort param and the query builder
+  // is client-side, so this narrows/reorders "what I'm looking at," not the
+  // full tenant-wide dataset. See adaptive-filter checklist Phase 4 for a
+  // server-side follow-up.
+  const pageRows = sortRows(
+    applyQueryFilters(rows, patientQueryFields, queryFilters),
+    sort,
+  );
 
   const patientColumns = getPatientColumns({
     branches,
@@ -472,8 +480,43 @@ export function Patient({
 
   return (
     <Card className="">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-        <div className="min-w-0">
+      <BreadcrumbSlot>
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={pageRows.length}
+            total={totalRows}
+            noun="patients"
+          />
+          <RefreshButton
+            onRefresh={() => {
+              setMessage("");
+              refreshPatients(tenantId);
+            }}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={patientSchema}
+            query={query}
+            setQuery={setQuery}
+            filterValues={filterValues}
+            onFilterChange={handleFilterChange}
+            sort={sort}
+            onSortChange={setSort}
+            showSort={false}
+            onReset={resetPatientFilters}
+            queryFields={patientQueryFields}
+            queryFilters={queryFilters}
+            onQueryFiltersChange={setQueryFilters}
+          />
+          <AdaptiveSortTrigger
+            fields={patientSchema.sortFields}
+            sort={sort}
+            onSortChange={setSort}
+          />
+        </div>
+      </BreadcrumbSlot>
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start ">
+        <div className="min-w-0 ">
           <h3 className="card-title font-bold">EMR / Patient Management</h3>
           <p className="mt-1 max-w-3xl card-desc text-slate-500">
             Tenant-scoped patient registry with history, alerts, treatment
@@ -481,12 +524,6 @@ export function Patient({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <RefreshButton
-            onRefresh={() => {
-              setMessage("");
-              refreshPatients(tenantId);
-            }}
-          />
           {canCreatePatient && (
             <button
               type="button"
@@ -500,38 +537,6 @@ export function Patient({
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 mt-3">
-      <div>
-        <FilterSection
-          title="Patient / Mobile"
-          filters={patientFilters}
-          filterValues={filterValues}
-          className="lg:grid-cols-4 xl:grid-cols-5"
-          query={query}
-          setQuery={setQuery}
-          onFilterChange={handleFilterChange}
-          onReset={() => {
-            setStatus("all");
-            setGender("all");
-            setBranchFilter("all");
-            setFromDate("");
-            setToDate("");
-            setPage(1);
-            setMessage("");
-
-              loadData(tenantId, 1, {
-                query: "",
-                status: "all",
-                gender: "all",
-                branchFilter: "all",
-                fromDate: "",
-                toDate: "",
-              });
-            }}
-          >
-          </FilterSection>
-        </div>
-      </div>
       <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin">
         <div className="min-w-[1120px]">
           <DataTable
@@ -540,6 +545,8 @@ export function Patient({
             loading={busy}
             emptyMessage="No patients match your search."
             onRowClick={(row: any) => open("detail", row.id)}
+            sort={sort ?? undefined}
+            onSortChange={setSort}
           />
         </div>
       </div>

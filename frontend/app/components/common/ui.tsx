@@ -586,7 +586,7 @@ export function DateInput({
 export const Input = forwardRef<HTMLInputElement, any>(
   (
     {
-      className = "rounded-lg px-2 py-2 lg:px-2 lg:py-2.5 text-xs lg:text-xs placeholder:text-xs",
+      className = "rounded-lg px-2 py-2 lg:px-2 lg:py-2 text-xs lg:text-xs placeholder:text-xs",
       mobileNumber = false,
       ...props
     },
@@ -767,6 +767,7 @@ export function SearchableSelect<T = string>({
   emptyText = "No matches.",
   maxOptions = 200,
   className = "",
+  text ='text-sm',
   searchable = true,
   required = false,
   error,
@@ -884,7 +885,7 @@ export function SearchableSelect<T = string>({
             return !current;
           })
         }
-        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:text-sm"
+        className={`flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:${text}`}
       >
         <span className="flex min-w-0 items-center gap-2">
           <span
@@ -914,6 +915,7 @@ export function SearchableSelect<T = string>({
         createPortal(
           <div
             ref={menuRef}
+            data-select-menu=""
             style={menuPosition}
             className="fixed z-[1000] max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg scrollbar-thin"
           >
@@ -971,7 +973,7 @@ export function SearchableSelect<T = string>({
                   key={option.value}
                   type="button"
                   onClick={() => commit(option.value)}
-                  className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
+                  className={`block w-full px-4 py-2 text-left ${text} hover:bg-slate-50 ${
                     option.value === String(value)
                       ? "bg-slate-50 font-bold"
                       : ""

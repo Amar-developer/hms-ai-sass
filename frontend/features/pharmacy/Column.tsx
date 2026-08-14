@@ -1,6 +1,6 @@
 import { Column } from "@/utils/types";
 import { Trash2 } from "lucide-react";
-import { displayDate, displayDateTime } from "@/utils/helper";
+import { capitalizeFirst, displayDate, displayDateTime } from "@/utils/helper";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { ActionButton, Badge, Button } from "@/app/components/common/ui";
 import { RecordIdCell } from "@/app/components/common/RecordIdCell";
@@ -43,11 +43,13 @@ export function getPrescriptionColumns({
     {
       key: "patient",
       header: "Patient",
+      width:'120px',
       render: (a: any) => <span className="font-semibold">{a.patient}</span>,
     },
     {
       key: "doctor",
       header: "Doctor",
+      width:'120px',
       cellClassName: "text-slate-600",
       render: (a: any) =>
         a.doctor && a.doctor !== "Unassigned" ? a.doctor : "-",
@@ -56,6 +58,7 @@ export function getPrescriptionColumns({
       key: "date",
       header: "Date & Time",
       cellClassName: "whitespace-nowrap text-slate-600",
+      width:'220px',
       render: (a: any) =>
         displayDateTime(
           a.consultationSignedAt ||
@@ -133,8 +136,8 @@ export function getPharmacyColumns({
   return [
     {
       key: "index",
-      header: "#",
-      width: "80px",
+      header: "S.No",
+      width: "50px",
       render: (_, index) => <b>{(safePage - 1) * pageSize + index + 1}</b>,
     },
     {
@@ -150,7 +153,6 @@ export function getPharmacyColumns({
             value={issue.issue_number || publicDisplayValue(issue.id, "Issue")}
             valueClassName="text-xs"
           />
-          <b className="text-xs">{displayDate(issue.created_at)}</b>
           <p className="text-xs text-slate-500">
             {new Date(issue.created_at).toLocaleTimeString([], {
               hour: "2-digit",
@@ -160,6 +162,15 @@ export function getPharmacyColumns({
         </div>
       ),
     },
+     {
+      key: "date",
+      header: "Date",
+      className:'text-center',
+      width: "100px",
+      render: (issue:any)=>(
+        <b className="text-xs">{displayDate(issue.created_at)}</b>
+      )
+     },
     {
       key: "patient",
       header: "Patient",
@@ -170,9 +181,9 @@ export function getPharmacyColumns({
         return (
           <div className="text-xs">
             <span>
-              {issue.patient_name ||
+              {capitalizeFirst(issue.patient_name ||
                 p?.name ||
-                publicDisplayValue(issue.patient_id, "Patient")}
+                publicDisplayValue(issue.patient_id, "Patient"))}
             </span>
             <PatientFlagBadges patient={p} className="mt-1" />
           </div>
@@ -183,8 +194,10 @@ export function getPharmacyColumns({
       key: "source",
       header: "Source",
       width: "140px",
+      className:"text-center",
+      sortable: true,
       render: (issue: any) => (
-        <Badge className="normal-badge w-[70%] text-xs px-2">
+        <Badge className="normal-badge text-xs px-2">
           {humanizeOptionLabel(issue.source)}
         </Badge>
       ),
@@ -193,6 +206,7 @@ export function getPharmacyColumns({
       key: "status",
       header: "Status",
       width: "150px",
+      sortable: true,
       render: (issue: any) => {
         const dispensed = isDispensed(issue);
         const cancelled = isCancelledIssue(issue);
@@ -219,6 +233,7 @@ export function getPharmacyColumns({
       header: "Amount",
       width: "100px",
       disableRowClick: true,
+      sortable: true,
       render: (issue: any) => {
         const cancelled = isCancelledIssue(issue);
         const invoiced = invoicedIssueIds.has(issue.id);

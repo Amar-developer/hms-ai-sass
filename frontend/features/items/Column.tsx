@@ -21,6 +21,7 @@ export function getItemsColumns({
       key: "type",
       header: "Type",
       width: "180px",
+      sortable: true,
       render: (row: any) => (
         <p className="text-sm font-bold">{humanizeOptionLabel(row.kind)}</p>
       ),
@@ -29,6 +30,7 @@ export function getItemsColumns({
       key: "name",
       header: "Item",
       width: "180px",
+      sortable: true,
       render: (row: any) => <b className="text-sm">{row.name}</b>,
     },
     {
@@ -41,6 +43,7 @@ export function getItemsColumns({
       key: "mrp_price",
       header: "MRP",
       width: "100px",
+      sortable: true,
       render: (row: any) => (
         <span className="text-sm">
           {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
@@ -63,6 +66,7 @@ export function getItemsColumns({
       width: "120px",
       className: "text-center",
       cellClassName: "text-center",
+      sortable: true,
       render: (row: any) => (
         <span className="text-sm">
           {row.price === null ? "-" : `₹${row.price}`}

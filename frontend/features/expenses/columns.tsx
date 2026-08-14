@@ -25,6 +25,7 @@ export function getExpenseColumns(
       key: "incurredOn",
       header: "Date",
       width: "110px",
+      sortable: true,
       render: (row: Expense) => (
         <span className="text-sm">{isoToDisplayDate(row.incurredOn)}</span>
       ),
@@ -33,6 +34,7 @@ export function getExpenseColumns(
       key: "category",
       header: "Category",
       width: "130px",
+      sortable: true,
       render: (row: Expense) => (
         <span className="text-sm">{categoryLabel(row.category)}</span>
       ),
@@ -48,7 +50,7 @@ export function getExpenseColumns(
     {
       key: "description",
       header: "Description",
-      width:"130px",
+      width:"180px",
       render: (row: Expense) => (
         <span className="text-sm">{row.description}</span>
       ),
@@ -56,7 +58,7 @@ export function getExpenseColumns(
     {
       key: "branchName",
       header: "Branch",
-      width: "150px",
+      width: "200px",
       render: (row: Expense) => (
         <span className="text-sm">{row.branchName}</span>
       ),
@@ -73,6 +75,7 @@ export function getExpenseColumns(
       key: "amount",
       header: "Amount",
       width: "110px",
+      sortable: true,
       render: (row: Expense) => (
         <b className="text-sm">{money(row.amount)}</b>
       ),
@@ -83,6 +86,7 @@ export function getExpenseColumns(
       width: "150px",
       className: "text-center",
       cellClassName: "text-center",
+      sortable: true,
       render: (row: Expense) => (
         <Badge tone={EXPENSE_STATUS_TONE[row.status]} className="normal-badge text-sm">
           {EXPENSE_STATUS_LABEL[row.status]}

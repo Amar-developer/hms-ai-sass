@@ -47,6 +47,7 @@ export function getDoctorColumns({
       key: "full_name",
       header: "Doctor",
       width: "140px",
+      sortable: true,
       render: (row: any) => (
         <RecordIdCell
           id={row.id}
@@ -61,6 +62,7 @@ export function getDoctorColumns({
       key: "practitioner_type",
       header: "Type",
       width: "100px",
+      sortable: true,
       render: (row: any) => (
         <span className="text-sm">
           {doctorTypes.find(
@@ -198,6 +200,7 @@ export function getDoctorColumns({
       width: "100px",
       className: "text-center",
       cellClassName: "text-center",
+      sortable: true,
       render: (row: any) => (
         <Badge
           tone={row.status === "active" ? "green" : "red"}

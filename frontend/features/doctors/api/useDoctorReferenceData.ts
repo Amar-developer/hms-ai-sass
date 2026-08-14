@@ -62,11 +62,6 @@ export function useDoctorReferenceData({
 
   async function loadReferenceData(nextTenantId = tenantId, force = false) {
     if (!apiSession || !nextTenantId) return;
-    if (!force && nextTenantId === apiSession.tenantId) {
-      setBranches(clinic?.branches || []);
-      setDepartments(uniqueDepartmentRows(allowedDepartments));
-      return;
-    }
     setReferenceLoading(true);
     setMessage("");
     const session = { ...apiSession, tenantId: nextTenantId };

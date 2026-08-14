@@ -4,8 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, PlusCircle } from "lucide-react";
 import { Button, Card, Input, StatusToast } from "@/app/components/common/ui";
 import { DataTable } from "@/app/components/common/DataTable";
-import { FilterSection, FilterConfig } from "@/app/components/common/FilterSection";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { FormField } from "@/app/components/FormElements";
+import { getExpenseTableSchema } from "./filterSchema";
+import { sortRows } from "@/utils/sortRows";
+import type { SortState } from "@/utils/types";
 import { ExpenseSummaryTiles } from "./components/ExpenseSummaryTiles";
 import { ExpenseDetail } from "./components/ExpenseDetail";
 import { ExpenseForm } from "./forms/ExpenseForm";
@@ -13,10 +17,6 @@ import { getExpenseColumns } from "./columns";
 import { getMonthColumns } from "./monthColumns";
 import { groupExpensesByMonth, mapExpense, monthLabel } from "./helpers";
 import { useExpenseActions, useExpensesData, useRecentSubcategories } from "./api";
-import {
-  EXPENSE_CATEGORY_OPTIONS,
-  EXPENSE_STATUS_FILTER_OPTIONS,
-} from "./constants";
 import type { Expense } from "./types";
 import type { ExpenseFormSchemaValues } from "./expenses.schema";
 
@@ -29,6 +29,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [sort, setSort] = useState<SortState | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -79,26 +80,22 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
     [rawExpenses, branchNameById, apiSession?.user?.id],
   );
 
-  const monthGroups = useMemo(() => groupExpensesByMonth(rows), [rows]);
-  const monthRows = selectedMonth
-    ? rows.filter((expense) => expense.incurredOn.slice(0, 7) === selectedMonth)
-    : [];
+  const monthGroups = useMemo(
+    () => sortRows(groupExpensesByMonth(rows), selectedMonth ? null : sort),
+    [rows, selectedMonth, sort],
+  );
+  const monthRows = useMemo(
+    () =>
+      sortRows(
+        selectedMonth
+          ? rows.filter((expense) => expense.incurredOn.slice(0, 7) === selectedMonth)
+          : [],
+        selectedMonth ? sort : null,
+      ),
+    [rows, selectedMonth, sort],
+  );
 
-  const filters: FilterConfig[] = [
-    {
-      key: "status",
-      label: "Status",
-      options: EXPENSE_STATUS_FILTER_OPTIONS,
-    },
-    {
-      key: "category",
-      label: "Category",
-      options: [
-        { value: "all", label: "All Categories" },
-        ...EXPENSE_CATEGORY_OPTIONS,
-      ],
-    },
-  ];
+  const expenseSchema = getExpenseTableSchema(selectedMonth ? "expenses" : "months");
 
   const handleFilterChange = (key: string, value: string) => {
     if (key === "status") setFilterStatus(value);
@@ -109,6 +106,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
     setQuery("");
     setFilterStatus("all");
     setFilterCategory("all");
+    setSort(null);
   };
 
   async function handleCreate(values: ExpenseFormSchemaValues) {
@@ -175,6 +173,18 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
 
   return (
     <div className="grid gap-4">
+      <BreadcrumbSlot>
+        <AdaptiveFilterTrigger
+          schema={expenseSchema}
+          query={query}
+          setQuery={setQuery}
+          filterValues={{ status: filterStatus, category: filterCategory }}
+          onFilterChange={handleFilterChange}
+          sort={sort}
+          onSortChange={setSort}
+          onReset={handleReset}
+        />
+      </BreadcrumbSlot>
       <StatusToast message={message || error} onClose={() => setMessage("")} />
 
       <ExpenseSummaryTiles expenses={rows} />
@@ -212,18 +222,6 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
           </Button>
         </div>
 
-        <FilterSection
-          query={query}
-          setQuery={setQuery}
-          title="Expenses"
-          className="lg:grid-cols-4"
-          searchPlaceholder="Search description"
-          filters={filters}
-          filterValues={{ status: filterStatus, category: filterCategory }}
-          onFilterChange={handleFilterChange}
-          onReset={handleReset}
-        />
-
         <div className="mt-4 overflow-auto max-w-[1000px]">
           {selectedMonth ? (
             <DataTable
@@ -235,6 +233,8 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
               emptyMessage={loading ? "Loading expenses..." : "No expenses found for this month."}
               onRowClick={(row: Expense) => setSelectedExpense(row)}
               className="max-w-[1000px] overflow-auto"
+              sort={sort ?? undefined}
+              onSortChange={setSort}
             />
           ) : (
             <DataTable
@@ -242,6 +242,8 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
               data={monthGroups}
               emptyMessage={loading ? "Loading expenses..." : "No expenses found."}
               onRowClick={(row: { monthKey: string }) => setSelectedMonth(row.monthKey)}
+              sort={sort ?? undefined}
+              onSortChange={setSort}
             />
           )}
         </div>

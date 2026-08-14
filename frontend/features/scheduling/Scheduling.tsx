@@ -11,13 +11,13 @@ import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { Pagination } from "@/app/components/common/Pagination";
 import { ScheduleFormValues } from "./schedule.schema";
 import { useSchedulingData, useSchedulingActions } from "./api";
-import { status_options } from "../superAdmin/constants";
-import {
-  type FilterConfig,
-  FilterSection,
-} from "@/app/components/common/FilterSection";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getScheduleColumns } from "./column";
+import { getScheduleTableSchema } from "./filterSchema";
+import { sortRows } from "@/utils/sortRows";
+import type { SortState } from "@/utils/types";
 
 export function Scheduling({
   apiSession,
@@ -43,6 +43,10 @@ export function Scheduling({
   const [filterBranch, setFilterBranch] = useState("all");
   const [filterWeekday, setFilterWeekday] = useState("all");
   const [filterStatus, setFilterStatus] = useState("active");
+  const [sort, setSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
   const [page, setPage] = useState(1);
   const [message, setMessage] = useState("");
   const [confirm, setConfirm] = useState<any>(null);
@@ -52,6 +56,39 @@ export function Scheduling({
 
   // One row is one editable schedule now — no more client-side grouping.
   const selected = rows.find((row: any) => row.id === selectedId);
+
+  const scheduleSchema = getScheduleTableSchema({ branches, departments });
+
+  const filterValues = {
+    branch: filterBranch,
+    department: filterDepartment,
+    weekday: filterWeekday,
+    status: filterStatus,
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    if (key == "branch") {
+      setFilterBranch(value);
+    }
+    if (key == "department") {
+      setFilterDepartment(value);
+    }
+    if (key == "status") {
+      setFilterStatus(value);
+    }
+    if (key == "weekday") {
+      setFilterWeekday(value);
+    }
+    setPage(1);
+  };
+
+  const resetScheduleFilters = () => {
+    setFilterBranch("all");
+    setFilterDepartment("all");
+    setFilterStatus("active");
+    setFilterWeekday("all");
+    setSort({ key: "updated_at", dir: "desc" });
+  };
 
   // Bounce back to the list if a direct/bookmarked edit link no longer
   // resolves to a real schedule, but only once loading has finished.
@@ -256,8 +293,8 @@ export function Scheduling({
       />
     );
 
-  const filteredRows = rows
-    .filter((row: any) => {
+  const filteredRows = sortRows(
+    rows.filter((row: any) => {
       const doctor = doctors.find(
         (item: any) => item.id === row.practitioner_id,
       );
@@ -280,12 +317,31 @@ export function Scheduling({
         (filterStatus === "all" ||
           (filterStatus === "active" ? row.is_active : !row.is_active))
       );
-    })
-    .sort(
-      (a: any, b: any) =>
-        new Date(b.updated_at || b.created_at).getTime() -
-        new Date(a.updated_at || a.created_at).getTime(),
-    );
+    }),
+    sort,
+    (row, key) => {
+      if (key === "updated_at") return row.updated_at || row.created_at;
+      if (key === "doctor")
+        return (
+          row.practitioner_full_name ||
+          doctors.find((item: any) => item.id === row.practitioner_id)
+            ?.full_name
+        );
+      if (key === "branch")
+        return (
+          row.branch_name ||
+          branches.find((item: any) => item.id === row.branch_id)?.name
+        );
+      if (key === "department")
+        return (
+          row.department_name ||
+          departments.find((item: any) => item.id === row.department_id)
+            ?.name
+        );
+      if (key === "status") return row.is_active ? 1 : 0;
+      return row[key];
+    },
+  );
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -293,77 +349,6 @@ export function Scheduling({
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
-  const scheduleFilters: FilterConfig[] = [
-    {
-      key: "branch",
-      label: "Branch",
-      options: [
-        { value: "All", label: "All Branches" },
-        ...branches.map((branch: any) => ({
-          value: branch.id,
-          label: branch.name,
-        })),
-      ],
-    },
-    {
-      key: "department",
-      label: "Department",
-      options: [
-        { value: "All", label: "All Departments" },
-        ...departments.map((department: any) => ({
-          value: department.id,
-          label: department.name,
-        })),
-      ],
-    },
-    {
-      key: "weekday",
-      label: "Weekday",
-      options: [
-        { value: "all", label: "All days" },
-        ...weekdays.map(([value, label]) => ({
-          value,
-          label,
-        })),
-      ],
-    },
-    {
-      key: "status",
-      label: "Status",
-      options: status_options,
-    },
-  ];
-
-  const filterValues = {
-    branch: filterBranch,
-    department: filterDepartment,
-    weekday: filterWeekday,
-    status: filterStatus,
-  };
-
-  const handleChange = (key: string, value: string) => {
-    if (key == "branch") {
-      setFilterBranch(value);
-    }
-    if (key == "department") {
-      setFilterDepartment(value);
-    }
-    if (key == "status") {
-      setFilterStatus(value);
-    }
-    if (key == "weekday") {
-      setFilterWeekday(value);
-    }
-    setPage(1);
-  };
-
-  const handleReset = () => {
-    setFilterBranch("all");
-    setFilterDepartment("all");
-    setQuery("");
-    setFilterStatus("active");
-    setFilterWeekday("all");
-  };
   const columns = getScheduleColumns({
     doctors,
     branches,
@@ -373,6 +358,18 @@ export function Scheduling({
   });
   return (
     <Card>
+      <BreadcrumbSlot>
+        <AdaptiveFilterTrigger
+          schema={scheduleSchema}
+          query={query}
+          setQuery={setQuery}
+          filterValues={filterValues}
+          onFilterChange={handleFilterChange}
+          sort={sort}
+          onSortChange={setSort}
+          onReset={resetScheduleFilters}
+        />
+      </BreadcrumbSlot>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="card-title font-bold">
@@ -397,17 +394,6 @@ export function Scheduling({
       </div>
 
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <FilterSection
-        query={query}
-        setQuery={setQuery}
-        filters={scheduleFilters}
-        filterValues={filterValues}
-        onFilterChange={handleChange}
-        onReset={handleReset}
-        title="Search"
-        searchPlaceholder="Search"
-        className="lg:grid-cols-6"
-      />
       <div className="mt-3 overflow-x-auto max-w-[1000px]">
         <DataTable
           columns={columns}
@@ -416,6 +402,8 @@ export function Scheduling({
           emptyMessage="No schedules available"
           className=" rounded-2xl border border-slate-200 overflow-auto"
           onRowClick={(row) => open("edit", row.id)}
+          sort={sort ?? undefined}
+          onSortChange={setSort}
         />
       </div>
 

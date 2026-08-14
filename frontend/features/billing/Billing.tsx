@@ -9,15 +9,19 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { FilterSection } from "@/app/components/common/FilterSection";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
-import { invoiceSourceOptions } from "./helpers";
+import {
+  formatInvoiceDate,
+  invoicePatientDueAmount,
+  invoiceSource,
+} from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
 import { money } from "@/utils/helper";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
-import { status_options } from "./contants";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
@@ -30,6 +34,11 @@ import {
 import { fetchInvoicePage } from "./api/billing.api";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getConsultationPendingColumns, getInvoiceColumns } from "./Column";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
+import { getBillingTableSchema } from "./filterSchema";
+import { sortRows } from "@/utils/sortRows";
+import type { SortState } from "@/utils/types";
+import { status_options } from "./contants";
 
 export function Billing({
   apiSession,
@@ -62,6 +71,7 @@ export function Billing({
     fromDate: "",
     toDate: "",
   });
+  const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(1);
   const [invoiceRows, setInvoiceRows] = useState<any[]>([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
@@ -160,6 +170,11 @@ export function Billing({
   const { invoicePaymentOptions, defaultPaymentMethod } =
     usePaymentMethods(apiSession);
 
+  const invoiceDeliveryStatus = useInvoiceDeliveryStatuses(
+    apiSession,
+    invoiceRows,
+  );
+
   const {
     dueReport,
     currentMonthDueReport,
@@ -210,11 +225,19 @@ export function Billing({
   const invoices = invoiceRows;
   const totalPages = Math.max(1, Math.ceil(invoiceTotal / pageSize));
   const safePage = Math.min(page, totalPages);
-  const invoicePageRows = invoices;
-  const invoiceDeliveryStatus = useInvoiceDeliveryStatuses(
-    apiSession,
-    invoicePageRows,
-  );
+  // Invoices are server-paginated with no backend sort param, so sorting
+  // only reorders the current page — see adaptive-filter checklist Phase 4.
+  const invoicePageRows = sortRows(invoices, sort, (invoice, key) => {
+    if (key === "patient")
+      return (
+        invoice.patient_name ||
+        (patientMap.get(invoice.patient_id) as any)?.name
+      );
+    if (key === "due") return invoicePatientDueAmount(invoice);
+    return invoice[key];
+  });
+
+  const billingSchema = getBillingTableSchema();
 
   const payableSettlement = Number(
     settlement?.payable_settlement_amount ??
@@ -384,7 +407,6 @@ export function Billing({
   async function collectSplitPayment(invoice: any, rows: any[]) {
     await collectSplitPaymentAction(invoice, rows, defaultPaymentMethod);
   }
-
   const invoiceColumns = getInvoiceColumns({
     safePage,
     patientMap,
@@ -572,6 +594,37 @@ export function Billing({
 
   return (
     <div className="">
+      <BreadcrumbSlot>
+        <AdaptiveFilterTrigger
+          schema={billingSchema}
+          query={filters.query}
+          setQuery={(value: string) => updateFilter("query", value)}
+          filterValues={filters}
+          onFilterChange={updateFilter}
+          sort={sort}
+          onSortChange={setSort}
+          onReset={clearFilters}
+        >
+          <FormField label="From">
+            <Input
+              type="date"
+              value={filters.fromDate}
+              onChange={(event: any) =>
+                updateFilter("fromDate", event.target.value)
+              }
+            />
+          </FormField>
+          <FormField label="To">
+            <Input
+              type="date"
+              value={filters.toDate}
+              onChange={(event: any) =>
+                updateFilter("toDate", event.target.value)
+              }
+            />
+          </FormField>
+        </AdaptiveFilterTrigger>
+      </BreadcrumbSlot>
       {(canViewRevenueSummary || canViewSettlementSummary) && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {canViewRevenueSummary && (
@@ -703,81 +756,6 @@ export function Billing({
             </Badge>
           </div>
         </div>
-        <FilterSection
-          title="Invoices"
-          query={filters.query}
-          setQuery={(value: string) => updateFilter("query", value)}
-          searchPlaceholder="Invoice, patient, source"
-          className="lg:grid-cols-6 xl:grid-cols-6"
-          filters={[
-            {
-              key: "source",
-              label: "Source",
-              options: [
-                { value: "all", label: "All sources" },
-                ...invoiceSourceOptions.map((s) => ({
-                  value: s.key,
-                  label: s.label,
-                })),
-              ],
-            },
-            {
-              key: "paidStatus",
-              label: "Paid Status",
-              options: status_options,
-            },
-          ]}
-          filterValues={filters}
-          onFilterChange={updateFilter}
-          onReset={clearFilters}
-        >
-          <FormField label="From">
-            <Input
-              type="date"
-              value={filters.fromDate}
-              onChange={(event: any) =>
-                updateFilter("fromDate", event.target.value)
-              }
-            />
-          </FormField>
-          <FormField label="To">
-            <Input
-              type="date"
-              value={filters.toDate}
-              onChange={(event: any) =>
-                updateFilter("toDate", event.target.value)
-              }
-            />
-          </FormField>
-        </FilterSection>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {status_options.map((option) => {
-            const active = filters.paidStatus === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => updateFilter("paidStatus", option.value)}
-                className={`inline-flex h-8 items-center gap-2 rounded-lg border px-3 text-xs font-bold transition ${
-                  active
-                    ? "border-brand bg-brand text-brand-fg"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-brand hover:text-brand"
-                }`}
-              >
-                <span>{option.label}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] ${
-                    active
-                      ? "bg-white/20 text-brand-fg"
-                      : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {paidStatusCounts[option.value] ?? 0}
-                </span>
-              </button>
-            );
-          })}
-        </div>
         <div className="scrollbar-hidden mt-4 overflow-auto rounded-2xl border border-slate-200">
           <DataTable
             columns={invoiceColumns}
@@ -790,6 +768,8 @@ export function Billing({
                   : "No invoices match the selected filters."
             }
             onRowClick={openInvoiceDetail}
+            sort={sort ?? undefined}
+            onSortChange={setSort}
           />
         </div>
         <Pagination

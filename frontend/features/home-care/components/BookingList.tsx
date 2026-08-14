@@ -2,11 +2,8 @@ import {
   Card,
   RefreshButton,
   Button,
-  Input,
   Badge,
 } from "@/app/components/common/ui";
-import { FormField } from "@/app/components/FormElements";
-import { statuses } from "../constants";
 import {
   capitalizeFirst,
   displayDate,
@@ -18,7 +15,6 @@ import { humanizeOptionLabel } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "@/features/admin/components/RowActions";
-import { FilterSection } from "@/app/components/common/FilterSection";
 import { DataTable } from "@/app/components/common/DataTable";
 import { Column } from "@/utils/types";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
@@ -30,8 +26,8 @@ export function BookingsList({
   page,
   totalPages,
   onPage,
-  filters,
-  setFilters,
+  sort,
+  onSortChange,
   patientMap,
   staffMap,
   loading = false,
@@ -44,20 +40,6 @@ export function BookingsList({
   canCreate = false,
   canCopyIds = false,
 }: any) {
-  const statusFilterConfigs = [
-    {
-      key: "status",
-      label: "Status",
-      options: [
-        { value: "all", label: "All statuses" },
-        ...statuses.map(([value, label]: [string, string]) => ({
-          value,
-          label,
-        })),
-      ],
-    },
-  ];
-
   const bookingColumns = getBookingListColumn({
     canCopyIds,
     patientMap,
@@ -87,46 +69,6 @@ export function BookingsList({
             )}
           </div>
         </div>
-
-        <FilterSection
-          title="Bookings"
-          query={filters.query}
-          setQuery={(value: string) => setFilters({ ...filters, query: value })}
-          filters={statusFilterConfigs}
-          filterValues={filters}
-          className="lg:grid-cols-5 xl:grid-cols-5"
-          onFilterChange={(key: string, value: string) =>
-            setFilters({ ...filters, [key]: value })
-          }
-          onReset={() =>
-            setFilters({
-              ...filters,
-              query: "",
-              status: "all",
-              fromDate: "",
-              toDate: "",
-            })
-          }
-        >
-          <FormField label="From">
-            <Input
-              type="date"
-              value={filters.fromDate}
-              onChange={(event: any) =>
-                setFilters({ ...filters, fromDate: event.target.value })
-              }
-            />
-          </FormField>
-          <FormField label="To">
-            <Input
-              type="date"
-              value={filters.toDate}
-              onChange={(event: any) =>
-                setFilters({ ...filters, toDate: event.target.value })
-              }
-            />
-          </FormField>
-        </FilterSection>
       </div>
 
       <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-2xl border border-slate-200">
@@ -137,6 +79,8 @@ export function BookingsList({
             loading={loading}
             emptyMessage="No home care / visit bookings match your filter."
             onRowClick={(booking: any) => onView(booking)}
+            sort={sort ?? undefined}
+            onSortChange={onSortChange}
           />
         </div>
       </div>

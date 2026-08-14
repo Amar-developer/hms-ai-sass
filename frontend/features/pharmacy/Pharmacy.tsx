@@ -15,7 +15,8 @@ import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { today } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import { DataTable } from "@/app/components/common/DataTable";
-import { FilterSection } from "@/app/components/common/FilterSection";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { ConsultPrescriptionModal } from "./components/ConsultPrescriptionModal";
 import { MedicineDetailModal } from "./components/MedicineDetailModal";
@@ -30,6 +31,9 @@ import {
 } from "./api";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { getPharmacyColumns, getPrescriptionColumns } from "./Column";
+import { getPharmacyTableSchema } from "./filterSchema";
+import { sortRows } from "@/utils/sortRows";
+import type { SortState } from "@/utils/types";
 
 const pageSize = 10;
 
@@ -95,6 +99,7 @@ export function Pharmacy({
   const [worklistFilters, setWorklistFilters] = useState<
     Record<string, string>
   >({ source: "all", status: "all" });
+  const [worklistSort, setWorklistSort] = useState<SortState | null>(null);
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
   const [worklistFromDate, setWorklistFromDate] = useState("");
@@ -213,6 +218,12 @@ export function Pharmacy({
     setWorklistFilters((prev) => ({ ...prev, [key]: value }));
   }
 
+  const pharmacySchema = getPharmacyTableSchema({
+    sourceOptions: worklistSourceOptions,
+    statusOptions: worklistStatusOptions,
+  });
+
+
   const { patients, patientMap } = usePatientReferencesQuery(
     apiSession,
     issues.map((issue: any) => issue.patient_id),
@@ -229,7 +240,7 @@ export function Pharmacy({
       ? new Date(`${worklistToDate}T23:59:59`).getTime()
       : null;
 
-    return issues.filter((issue: any) => {
+    const matching = issues.filter((issue: any) => {
       if (q) {
         const name = String(
           issue.patient_name ||
@@ -262,10 +273,13 @@ export function Pharmacy({
 
       return true;
     });
+
+    return sortRows(matching, worklistSort);
   }, [
     issues,
     worklistQuery,
     worklistFilters,
+    worklistSort,
     amountMin,
     amountMax,
     worklistFromDate,
@@ -548,6 +562,55 @@ export function Pharmacy({
         />
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
+      <BreadcrumbSlot>
+        <AdaptiveFilterTrigger
+          schema={pharmacySchema}
+          query={worklistQuery}
+          setQuery={setWorklistQuery}
+          filterValues={worklistFilters}
+          onFilterChange={onWorklistFilterChange}
+          sort={worklistSort}
+          onSortChange={setWorklistSort}
+          onReset={() => {
+            setWorklistFilters({ source: "all", status: "all" });
+            setAmountMin("");
+            setAmountMax("");
+            setWorklistFromDate("");
+            setWorklistToDate("");
+          }}
+        >
+          <FormField label="Price Min">
+            <Input
+              type="number"
+              value={amountMin}
+              onChange={(e: any) => setAmountMin(e.target.value)}
+              placeholder="Min amount"
+            />
+          </FormField>
+          <FormField label="Price Max">
+            <Input
+              type="number"
+              value={amountMax}
+              onChange={(e: any) => setAmountMax(e.target.value)}
+              placeholder="Max amount"
+            />
+          </FormField>
+          <FormField label="From">
+            <Input
+              type="date"
+              value={worklistFromDate}
+              onChange={(e: any) => setWorklistFromDate(e.target.value)}
+            />
+          </FormField>
+          <FormField label="To">
+            <Input
+              type="date"
+              value={worklistToDate}
+              onChange={(e: any) => setWorklistToDate(e.target.value)}
+            />
+          </FormField>
+        </AdaptiveFilterTrigger>
+      </BreadcrumbSlot>
       {canCreatePharmacyIssue && (
         <Card>
           <h3 className="card-title font-bold">
@@ -648,7 +711,7 @@ export function Pharmacy({
               </button>
               <Button
                 disabled={busy === "create"}
-                className="w-[130px] px-1 lg:px-2 py-2.5"
+                className="save-button"
               >
                 {busy === "create" ? "Saving..." : "Create Order"}
               </Button>
@@ -676,55 +739,6 @@ export function Pharmacy({
           <h3 className="card-title font-bold">Pharmacy Worklist</h3>
           <RefreshButton onRefresh={load} />
         </div>
-        <FilterSection
-          title="Patient"
-          query={worklistQuery}
-          className="lg:grid-cols-6 xl:grid-cols-6"
-          setQuery={setWorklistQuery}
-          filters={[
-            { key: "source", label: "Source", options: worklistSourceOptions },
-            { key: "status", label: "Status", options: worklistStatusOptions },
-          ]}
-          filterValues={worklistFilters}
-          onFilterChange={onWorklistFilterChange}
-          onReset={() => {
-            setAmountMin("");
-            setAmountMax("");
-            setWorklistFromDate("");
-            setWorklistToDate("");
-          }}
-        >
-          <FormField label="Price Min">
-            <Input
-              type="number"
-              value={amountMin}
-              onChange={(e: any) => setAmountMin(e.target.value)}
-              placeholder="Min amount"
-            />
-          </FormField>
-          <FormField label="Price Max">
-            <Input
-              type="number"
-              value={amountMax}
-              onChange={(e: any) => setAmountMax(e.target.value)}
-              placeholder="Max amount"
-            />
-          </FormField>
-          <FormField label="From">
-            <Input
-              type="date"
-              value={worklistFromDate}
-              onChange={(e: any) => setWorklistFromDate(e.target.value)}
-            />
-          </FormField>
-          <FormField label="To">
-            <Input
-              type="date"
-              value={worklistToDate}
-              onChange={(e: any) => setWorklistToDate(e.target.value)}
-            />
-          </FormField>
-        </FilterSection>
         <div className="mt-4">
           {!issuesLoaded ? (
             <div className="overflow-auto rounded-lg border">
@@ -736,6 +750,8 @@ export function Pharmacy({
               data={pharmacyPageRows}
               emptyMessage="No pharmacy issues match your filters."
               onRowClick={setSelectedIssue}
+              sort={worklistSort ?? undefined}
+              onSortChange={setWorklistSort}
             />
           )}
         </div>

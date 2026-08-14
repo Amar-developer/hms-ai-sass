@@ -114,7 +114,7 @@ export function DataTable<T>({
               {columns.map((column) => (
                 <td
                   key={String(column.key)}
-                  className={`px-4 py-4 ${column.cellClassName ?? ""}`}
+                  className={`px-4 py-2 ${column.cellClassName ?? ""}`}
                   onClick={
                     column.disableRowClick
                       ? (e) => e.stopPropagation()

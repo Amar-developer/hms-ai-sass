@@ -14,10 +14,13 @@ import {
   useDoctorReferenceData,
   useDoctorActions,
 } from "@/features/doctors/api";
-import { status_options } from "../superAdmin/constants";
-import { FilterSection } from "@/app/components/common/FilterSection";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getDoctorColumns } from "./Column";
+import { getDoctorTableSchema } from "./filterSchema";
+import { sortRows } from "@/utils/sortRows";
+import type { SortState } from "@/utils/types";
 
 const pageSize = 10;
 
@@ -64,6 +67,10 @@ export function Doctors({
   const [status, setStatus] = useState("all");
   const [branchFilter, setBranchFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [sort, setSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -96,6 +103,37 @@ export function Doctors({
     setMessage,
   });
   const listLoading = practitionersLoading || referenceLoading;
+
+  const doctorSchema = getDoctorTableSchema({ branches, departments });
+
+  const filterValues = {
+    branch: branchFilter,
+    department: departmentFilter,
+    status,
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    setPage(1);
+    switch (key) {
+      case "branch":
+        setBranchFilter(value);
+        break;
+      case "department":
+        setDepartmentFilter(value);
+        break;
+      case "status":
+        setStatus(value);
+        break;
+    }
+    loadUsers(tenantId);
+  };
+
+  function resetDoctorFilters() {
+    setBranchFilter("all");
+    setDepartmentFilter("all");
+    setStatus("all");
+    setPage(1);
+  }
 
   function syncSharedPractitioner(practitioner: any) {
     if (!setLivePractitioners || !practitioner?.id) return;
@@ -228,8 +266,8 @@ export function Doctors({
         back={() => open("list")}
       />
     );
-  const filtered = rows
-    .filter((row: any) => {
+  const filtered = sortRows(
+    rows.filter((row: any) => {
       const text = [
         row.full_name,
         row.primary_specialty,
@@ -248,53 +286,17 @@ export function Doctors({
         (departmentFilter === "all" ||
           (row.department_ids || []).includes(departmentFilter))
       );
-    })
-    .sort(
-      (a: any, b: any) =>
-        new Date(b.updated_at || b.created_at).getTime() -
-        new Date(a.updated_at || a.created_at).getTime(),
-    );
+    }),
+    sort,
+    (row, key) =>
+      key === "updated_at" ? row.updated_at || row.created_at : row[key],
+  );
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageRows = filtered.slice(
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
-  const doctorFilters = [
-    {
-      key: "branch",
-      label: "Branch",
-      options: [
-        { value: "all", label: "All branches" },
-        ...branches.map((branch: any) => ({
-          value: branch.id,
-          label: branch.name,
-        })),
-      ],
-    },
-    {
-      key: "department",
-      label: "Department",
-      options: [
-        { value: "all", label: "All departments" },
-        ...departments.map((department: any) => ({
-          value: department.id,
-          label: department.name,
-        })),
-      ],
-    },
-    {
-      key: "status",
-      label: "Status",
-      options: status_options,
-    },
-  ];
-
-  const filterValues = {
-    branch: branchFilter,
-    department: departmentFilter,
-    status,
-  };
 
   const doctorColumns = getDoctorColumns({
     canCopyIds,
@@ -311,24 +313,31 @@ export function Doctors({
     setConfirm,
   });
 
-  const handleFilterChange = (key: string, value: string) => {
-    setPage(1);
-    switch (key) {
-      case "branch":
-        setBranchFilter(value);
-        break;
-      case "department":
-        setDepartmentFilter(value);
-        break;
-      case "status":
-        setStatus(value);
-        break;
-    }
-    loadUsers(tenantId);
-  };
-
   return (
     <Card>
+      <BreadcrumbSlot>
+        <AdaptiveFilterTrigger
+          schema={doctorSchema}
+          query={query}
+          setQuery={setQuery}
+          filterValues={filterValues}
+          onFilterChange={handleFilterChange}
+          sort={sort}
+          onSortChange={setSort}
+          onReset={resetDoctorFilters}
+        >
+          {isSuperAdmin && (
+            <FormField label="Tenant">
+              <SearchableSelect
+                searchable={false}
+                value={tenantId}
+                onChange={setTenantId}
+                options={tenants.map((t: any) => ({ value: t.id, label: t.name }))}
+              />
+            </FormField>
+          )}
+        </AdaptiveFilterTrigger>
+      </BreadcrumbSlot>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="card-title font-bold">Doctor Management</h3>
@@ -352,40 +361,16 @@ export function Doctors({
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <FilterSection
-        title="Doctors"
-        filters={doctorFilters}
-        filterValues={filterValues}
-        query={query}
-        setQuery={setQuery}
-        onReset={() => {
-          setBranchFilter("all");
-          setDepartmentFilter("all");
-          setStatus("all");
-          setPage(1);
-        }}
-        onFilterChange={handleFilterChange}
-        className={isSuperAdmin ? "lg:grid-cols-6 " : "lg:grid-cols-5"}
-      >
-        {isSuperAdmin && (
-          <FormField label="Tenant">
-            <SearchableSelect
-              searchable={false}
-              value={tenantId}
-              onChange={setTenantId}
-              options={tenants.map((t: any) => ({ value: t.id, label: t.name }))}
-            />
-          </FormField>
-        )}
-      </FilterSection>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-        <div className="min-w-[1280px]">
+        <div className="min-w-[1080px]">
           <DataTable
             columns={doctorColumns}
             data={pageRows}
             loading={listLoading}
             emptyMessage="No doctors match your search."
             onRowClick={(row: any) => open("edit", row.id)}
+            sort={sort ?? undefined}
+            onSortChange={setSort}
           />
         </div>
       </div>
