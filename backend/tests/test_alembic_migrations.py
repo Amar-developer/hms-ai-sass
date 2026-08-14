@@ -22,7 +22,7 @@ def test_alembic_revision_chain_is_complete_and_linear():
         path for path in VERSIONS_DIR.glob("*.py") if path.name != "__init__.py"
     }
 
-    assert scripts.get_heads() == ["20260812_0116"]
+    assert scripts.get_heads() == ["20260814_0117"]
     assert len(scripts.get_bases()) == 1
     assert len(revisions) == len(migration_files)
     assert len(revision_ids) == len(revisions)

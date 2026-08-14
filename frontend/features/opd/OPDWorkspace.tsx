@@ -78,7 +78,6 @@ const sectionTabs = [
       "consultations.read",
       "consultations.write",
       "consultations.sign",
-      "consultations.manage",
     ],
   },
   {
@@ -111,7 +110,6 @@ const sectionTabs = [
       "billing.manage",
       "payments.manage",
       "payments.create",
-      "payments.read",
     ],
   },
   {
@@ -122,7 +120,6 @@ const sectionTabs = [
     permissions: [
       "consultations.read",
       "consultations.write",
-      "consultations.manage",
       "consultations.sign",
     ],
   },
@@ -247,7 +244,6 @@ export function OPDWorkspace({
     "billing.manage",
     "payments.manage",
     "payments.create",
-    "payments.read",
   ]);
   const departmentOptions = uniqueDepartmentRows(
     workspace.allowedDepartments || [],
