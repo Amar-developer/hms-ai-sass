@@ -284,17 +284,20 @@ def create_pharmacy_issue_from_consultation_record(
     session.add(issue)
     session.commit()
     session.refresh(issue)
-    medicines = reference_repo.list_consultation_medicines(
-        consultation_id=consultation.id
-    )
-    add_consultation_issue_items(
-        session,
-        tenant_id=tenant_id,
-        branch_id=consultation.branch_id,
-        issue=issue,
-        medicines=medicines,
-        prescription_text=consultation.prescription_text,
-    )
+    if payload.items:
+        add_issue_items(session, issue, payload.items)
+    else:
+        medicines = reference_repo.list_consultation_medicines(
+            consultation_id=consultation.id
+        )
+        add_consultation_issue_items(
+            session,
+            tenant_id=tenant_id,
+            branch_id=consultation.branch_id,
+            issue=issue,
+            medicines=medicines,
+            prescription_text=consultation.prescription_text,
+        )
     session.commit()
     record_audit_event(
         session,

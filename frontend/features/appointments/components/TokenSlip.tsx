@@ -10,6 +10,7 @@ export type TokenSlipData = {
   gender?: string;
   mobile?: string;
   tokenNumber: string;
+  appointmentNumber?: string;
   appointmentDate?: string;
   appointmentTime?: string;
   department?: string;
@@ -88,6 +89,10 @@ export default function TokenSlip({ data }: { data: TokenSlipData }) {
         <div className="px-3 py-2">
           <p className="text-[11px] font-bold uppercase text-slate-900">
             Token No: <span className="font-semibold">{data.tokenNumber}</span>
+          </p>
+          <p className="text-[11px] font-bold uppercase text-slate-900">
+            Visit ID:{" "}
+            <span className="font-semibold">{data.appointmentNumber || "-"}</span>
           </p>
           <p className="text-[11px] font-bold uppercase text-slate-900">
             Date : <span className="font-semibold">{data.appointmentDate}</span>

@@ -21,6 +21,7 @@ from app.modules.home_care.services.booking_support_service import (
     HomeCareBookingSupportService,
 )
 from app.modules.identity.models import User
+from app.modules.settings.numbering import next_document_number
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
 
@@ -98,7 +99,16 @@ class HomeCareVisitService:
         total_amount = unit_amount
         values = {
             "tenant_id": tenant_id,
+            "branch_id": booking.branch_id,
             "booking_id": booking.id,
+            "visit_number": existing.visit_number
+            if existing
+            else next_document_number(
+                self.session,
+                tenant_id=tenant_id,
+                branch_id=booking.branch_id,
+                entity="home_care_visit",
+            ),
             "visit_date": payload.visit_date
             or (existing.visit_date if existing else date.today()),
             "assigned_staff_user_id": staff_id

@@ -1,5 +1,5 @@
 import { Badge } from "@/app/components/common/ui";
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { RecordIdCell } from "@/app/components/common/RecordIdCell";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { Column } from "@/utils/types";
 import { doctorTypes } from "@/features/doctors/constants";
@@ -48,10 +48,13 @@ export function getDoctorColumns({
       header: "Doctor",
       width: "140px",
       render: (row: any) => (
-        <div className="flex min-w-0 items-center gap-2">
-          <b className="truncate text-sm">{formatPractitionerName(row)}</b>
-          <CopyIdButton value={row.id} label="Doctor ID" allowed={canCopyIds} />
-        </div>
+        <RecordIdCell
+          id={row.id}
+          label="Doctor ID"
+          allowed={canCopyIds}
+          value={formatPractitionerName(row)}
+          valueClassName="text-sm"
+        />
       ),
     },
     {

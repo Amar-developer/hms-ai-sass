@@ -1,7 +1,8 @@
 import { Badge } from "@/app/components/common/ui";
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { RecordIdCell } from "@/app/components/common/RecordIdCell";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { publicDisplayValue } from "@/lib/options";
+import { displayDocumentNumber } from "@/lib/documentNumbers";
 import { displayDate } from "@/utils/helper";
 import type { Column } from "@/utils/types";
 import { appointmentStatusInfo, formatDisplayTime } from "./helpers";
@@ -12,6 +13,7 @@ export function getAppointmentColumns({
   patientMap,
   departmentOptions,
   canRescheduleAppointments,
+  numberingRules,
   openReschedule,
   openPatient,
   printTokenSlipForRow,
@@ -20,27 +22,34 @@ export function getAppointmentColumns({
   patientMap: Map<string, any>;
   departmentOptions: any[];
   canRescheduleAppointments: boolean;
+  numberingRules?: any;
   openReschedule: (appointment: any) => void;
   openPatient: (appointment: any) => void;
   printTokenSlipForRow: (appointment: any) => void;
 }): Column<any>[] {
   return [
     {
-      key: "patient",
-      header: "Patient",
-      width:'160px',
+      key: "appointment",
+      header: "Appointment",
+      width: "190px",
       render: (appointment: any) => (
         <div>
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-semibold break-all">
-              {appointment.patient}
-            </p>
-            <CopyIdButton
-              value={appointment.id}
-              label="Appointment ID"
-              allowed={canCopyIds}
-            />
-          </div>
+          <RecordIdCell
+            id={appointment.id}
+            label="Appointment ID"
+            allowed={canCopyIds}
+            value={
+              displayDocumentNumber(
+                appointment.appointmentNumber || appointment.appointment_number,
+                numberingRules,
+                "appointment",
+              ) || publicDisplayValue(appointment.id, "Appointment")
+            }
+            valueClassName="text-sm font-black"
+          />
+          <p className="mt-1 text-xs font-semibold text-slate-600">
+            {appointment.patient}
+          </p>
           <PatientFlagBadges
             patient={patientMap.get(appointment.patientId)}
             className="mt-1"
@@ -186,14 +195,13 @@ export function getPlatformColumns({
       key: "patient",
       header: "Patient",
       render: (row: any) => (
-        <div className="flex items-center gap-2">
-          <b className="table-data">{row.patient_name}</b>
-          <CopyIdButton
-            value={row.id}
-            label="Appointment ID"
-            allowed={canCopyIds}
-          />
-        </div>
+        <RecordIdCell
+          id={row.id}
+          label="Appointment ID"
+          allowed={canCopyIds}
+          value={row.patient_name}
+          valueClassName="table-data"
+        />
       ),
     },
     {

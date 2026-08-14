@@ -1,4 +1,4 @@
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { RecordIdCell } from "@/app/components/common/RecordIdCell";
 import {
   capitalizeFirst,
   displayDate,
@@ -38,14 +38,13 @@ export function getBookingListColumn({
       width: "180px",
       render: (booking: any) => (
         <div>
-          <div className="flex items-center gap-2">
-            <b className="text-sm">{booking.booking_number}</b>
-            <CopyIdButton
-              value={booking.id}
-              label="Home Care Booking ID"
-              allowed={canCopyIds}
-            />
-          </div>
+          <RecordIdCell
+            id={booking.id}
+            label="Home Care Booking ID"
+            allowed={canCopyIds}
+            value={booking.booking_number}
+            valueClassName="text-sm"
+          />
         </div>
       ),
     },

@@ -686,7 +686,8 @@ This document captures the latest implemented behavior across billing, reports, 
 | Lab invoices | `features/lab/Lab.tsx` | Lab Invoice button creates/refreshes billing invoice and reloads global invoice data so the Invoices module immediately shows Lab / Scan invoices. |
 | IP care billing | `features/ip/IPAdmission.tsx` | Daily care medicine/lab selectors now carry catalog prices into care rows. Care entries can create billable medicine administrations and lab/scan items. |
 | Consultation payload | `features/consulation/DoctorConsultation.tsx` | Empty structured clinical rows are removed before API submission to avoid FastAPI 422 validation errors. |
-| API error messages | `lib/api.ts` | FastAPI validation details are surfaced instead of generic `422 Unprocessable Entity`. |
+| API error messages | `lib/api.ts` | FastAPI validation details are surfaced instead of generic `422
+￼ Unprocessable Entity`. |
 
 ## Backend Feature Updates
 

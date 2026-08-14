@@ -185,6 +185,7 @@ class PharmacyIssueCreate(BaseModel):
 
 class PharmacyIssueFromConsultation(BaseModel):
     amount: int = Field(default=0, ge=0)
+    items: list[PharmacyIssueItemCreate] = Field(default_factory=list)
     issued_by_user_id: UserId | None = None
 
 

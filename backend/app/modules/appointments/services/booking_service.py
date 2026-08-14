@@ -58,6 +58,7 @@ from app.modules.queue.service import (
     next_token_number,
     record_queue_event,
 )
+from app.modules.settings.numbering import next_document_number
 from app.modules.tenants.models import now_utc
 
 
@@ -283,6 +284,12 @@ class AppointmentBookingService:
             payload,
             update={
                 "tenant_id": tenant_id,
+                "appointment_number": next_document_number(
+                    self.session,
+                    tenant_id=tenant_id,
+                    entity="appointment",
+                    branch_id=payload.branch_id,
+                ),
                 "is_billable": is_billable,
                 "billing_note": billing_note,
                 "custom_fee_amount": custom_fee_amount,
@@ -643,7 +650,16 @@ class AppointmentBookingService:
         )
         DuplicatePatientBookingRule(self.session).check(tenant_id, follow_up_payload)
         appointment = Appointment.model_validate(
-            follow_up_payload, update={"tenant_id": tenant_id}
+            follow_up_payload,
+            update={
+                "tenant_id": tenant_id,
+                "appointment_number": next_document_number(
+                    self.session,
+                    tenant_id=tenant_id,
+                    entity="appointment",
+                    branch_id=follow_up_payload.branch_id,
+                ),
+            },
         )
         self.appointments.add(appointment)
         self.session.commit()

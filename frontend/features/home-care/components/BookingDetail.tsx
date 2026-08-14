@@ -401,13 +401,18 @@ export function BookingDetail({
                   <tr key={row.id}>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
-                        <span>{displayDate(row.visit_date)}</span>
+                        <span className="font-bold">
+                          {row.visit_number || row.id}
+                        </span>
                         <CopyIdButton
                           value={row.id}
                           label="Home Visit ID"
                           allowed={canCopyIds}
                         />
                       </div>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {displayDate(row.visit_date)}
+                      </p>
                     </td>
                     <td>
                       {row.assigned_staff_name ||

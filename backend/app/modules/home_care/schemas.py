@@ -111,7 +111,9 @@ class HomeCareVisitLogUpdate(BaseModel):
 class HomeCareVisitLogRead(HomeCareVisitLogCreate):
     id: str
     tenant_id: str
+    branch_id: str
     booking_id: str
+    visit_number: str | None = None
     visit_date: date
     service_category: str
     description: str

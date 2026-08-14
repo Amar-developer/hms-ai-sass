@@ -12,6 +12,7 @@ export type Props = {
   setAppointments: (value: any[]) => void;
   apiSession: ApiSession | null;
   loadLiveData: (session: ApiSession) => Promise<void>;
+  numberingRules?: any;
   setActive?: (page: string) => void;
   isInitialLoading?: boolean;
   /** Top-level view, driven by the route: /appointments vs /appointments/new. */

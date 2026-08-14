@@ -47,6 +47,7 @@ def appointment_grid_row(row) -> AppointmentGridRead:
         patient_id=patient_id,
         patient_name=patient_name,
         patient_mobile=patient_mobile,
+        appointment_number=appointment.appointment_number,
         department_id=department_id or appointment.department_id,
         department_name=department_name or appointment.department_id,
         practitioner_id=practitioner_id or appointment.practitioner_id,

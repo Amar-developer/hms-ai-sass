@@ -1,4 +1,5 @@
 import { Card, ActionButton, Button } from "@/app/components/common/ui";
+import { useEffect, useState } from "react";
 import { normalizeMedicineSchedule } from "../helpers";
 
 export function ConsultPrescriptionModal({
@@ -17,6 +18,22 @@ export function ConsultPrescriptionModal({
       duration: m.duration,
       instructions: m.instructions,
     }),
+  );
+  const [prices, setPrices] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setPrices({});
+  }, [a?.consultationId, medicines.length]);
+  const pricedItems = medicines.map((m: any, index: number) => ({
+    medicine_name: m.medicine_name,
+    quantity: 1,
+    unit_price: Number(prices[String(index)] || 0),
+  }));
+  const hasManualPrice = Object.values(prices).some(
+    (value) => String(value || "").trim() !== "",
+  );
+  const totalAmount = pricedItems.reduce(
+    (sum, item) => sum + Number(item.unit_price || 0) * Number(item.quantity || 1),
+    0,
   );
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
@@ -40,6 +57,7 @@ export function ConsultPrescriptionModal({
                   <th>Dosage</th>
                   <th>Frequency</th>
                   <th>Duration</th>
+                  <th className="w-32">Price</th>
                   <th>Instructions</th>
                 </tr>
               </thead>
@@ -52,6 +70,22 @@ export function ConsultPrescriptionModal({
                     <td>{m.dosage || "-"}</td>
                     <td>{m.frequency || "-"}</td>
                     <td>{m.duration || "-"}</td>
+                    <td className="pr-3">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={prices[String(i)] || ""}
+                        onChange={(event) =>
+                          setPrices((current) => ({
+                            ...current,
+                            [String(i)]: event.target.value,
+                          }))
+                        }
+                        className="h-9 w-28 rounded-lg border border-slate-200 px-2 text-xs font-semibold outline-none focus:border-teal-600"
+                        placeholder="0"
+                      />
+                    </td>
                     <td className="pr-4 text-slate-500">
                       {m.instructions || "-"}
                     </td>
@@ -69,7 +103,12 @@ export function ConsultPrescriptionModal({
         <div className="mt-4 flex gap-2">
           <Button
             disabled={busy === a.consultationId || loading}
-            onClick={() => onCreate(a)}
+            onClick={() =>
+              onCreate(a, {
+                amount: hasManualPrice ? totalAmount : 0,
+                items: hasManualPrice ? pricedItems : [],
+              })
+            }
             className='save-button'
           >
             {busy === a.consultationId

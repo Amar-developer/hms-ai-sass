@@ -119,7 +119,9 @@ def ensure_upload_schema(session: Session) -> None:
         CREATE TABLE homecarevisitlog (
             id VARCHAR PRIMARY KEY,
             tenant_id VARCHAR NOT NULL,
+            branch_id VARCHAR NOT NULL,
             booking_id VARCHAR NOT NULL,
+            visit_number VARCHAR(60),
             visit_date DATE NOT NULL,
             assigned_staff_user_id VARCHAR,
             assigned_staff_name VARCHAR(160),
@@ -140,6 +142,20 @@ def ensure_upload_schema(session: Session) -> None:
         """,
     )
     _add_column(session, "ipadmission", "aadhaar_number", "VARCHAR(12)")
+    _add_column(session, "appointment", "appointment_number", "VARCHAR(60)")
+    _add_column(session, "homecarevisitlog", "branch_id", "VARCHAR")
+    _add_column(session, "homecarevisitlog", "visit_number", "VARCHAR(60)")
+    session.exec(
+        text(
+            """
+            UPDATE homecarevisitlog
+            SET branch_id = homecarebooking.branch_id
+            FROM homecarebooking
+            WHERE homecarevisitlog.booking_id = homecarebooking.id
+              AND (homecarevisitlog.branch_id IS NULL OR homecarevisitlog.branch_id = '')
+            """
+        )
+    )
     _add_column(
         session, "homecarebooking", "recurrence", "VARCHAR(40) NOT NULL DEFAULT 'daily'"
     )

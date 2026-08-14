@@ -356,7 +356,7 @@ export function ClinicalTemplateManager({
               {medicines.map((medicine, index) => (
                 <div key={`${medicine.name}-${index}`} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
                   <span><strong>{medicine.name}</strong> · {medicine.dosage} · {medicine.frequency} · {medicine.duration} · {medicine.instructions}</span>
-                  <button type="button" onClick={() => setMedicines((current) => current.filter((_, rowIndex) => rowIndex !== index))} aria-label={`Remove ${medicine.name}`} className="text-red-600"><Trash2 className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => setMedicines((current) => current.filter((_, rowIndex) => rowIndex !== index))} aria-label="Remove" title="Remove" className="grid h-7 w-7 place-items-center rounded-md border border-red-200 text-red-600 transition hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               ))}
             </div>
@@ -395,7 +395,7 @@ export function ClinicalTemplateManager({
               {labs.map((lab, index) => (
                 <div key={`${lab.name}-${index}`} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
                   <span><strong>{lab.name}</strong> · {lab.priority} {lab.instructions ? `· ${lab.instructions}` : ""}</span>
-                  <button type="button" onClick={() => setLabs((current) => current.filter((_, rowIndex) => rowIndex !== index))} aria-label={`Remove ${lab.name}`} className="text-red-600"><Trash2 className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => setLabs((current) => current.filter((_, rowIndex) => rowIndex !== index))} aria-label="Remove" title="Remove" className="grid h-7 w-7 place-items-center rounded-md border border-red-200 text-red-600 transition hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               ))}
             </div>

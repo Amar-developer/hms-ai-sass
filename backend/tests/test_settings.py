@@ -176,6 +176,12 @@ def test_default_document_numbering_keeps_legacy_formats():
             branch_id=branch.id,
             entity="patient",
         )
+        appointment_number = next_document_number(
+            session,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            entity="appointment",
+        )
         invoice_number = next_document_number(
             session,
             tenant_id=tenant.id,
@@ -196,6 +202,7 @@ def test_default_document_numbering_keeps_legacy_formats():
         )
 
         assert patient_number == "PAT-000001"
+        assert appointment_number == "APT-000001"
         assert invoice_number == "MZH-000001"
         assert admission_number == "IP-000001"
         assert case_number == "PHY-000001"

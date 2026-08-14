@@ -2,7 +2,8 @@
 
 import { useParams, useSearchParams } from "next/navigation";
 
-import { OPDWorkspace, type OPDSection } from "@/features/opd/OPDWorkspace";
+import { OPDWorkspace } from "@/features/opd/OPDWorkspace";
+import { opdSectionFromSegment } from "@/features/opd/routing";
 import { useShellChrome } from "@/features/shell/AppShell";
 import { useWorkspace } from "@/features/shell/WorkspaceContext";
 
@@ -12,18 +13,7 @@ export default function OPDWorkspacePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const segment = ((params?.segments as string[] | undefined) || [])[0];
-  const section: OPDSection =
-    segment === "new"
-      ? "new"
-      : segment === "appointments"
-        ? "appointments"
-        : segment === "schedule"
-          ? "schedule"
-        : segment === "invoices"
-            ? "invoices"
-            : segment === "templates"
-              ? "templates"
-              : "consultation";
+  const section = opdSectionFromSegment(segment);
 
   return (
     <OPDWorkspace

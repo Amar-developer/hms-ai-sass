@@ -36,6 +36,7 @@ export function AppointmentCalendarBooking(props: Props) {
     setAppointments,
     apiSession,
     loadLiveData,
+    numberingRules,
     setActive,
     isInitialLoading,
     mode = "list",
@@ -426,6 +427,10 @@ export function AppointmentCalendarBooking(props: Props) {
         booked?.queue_entry?.token ||
         booked?.appointment?.token ||
         "-",
+      appointmentNumber:
+        booked?.appointment?.appointment_number ||
+        booked?.appointment?.appointmentNumber ||
+        "",
       appointmentDate:
         booked?.appointment?.appointment_date ||
         booked?.appointment?.appointmentDate ||
@@ -468,6 +473,8 @@ export function AppointmentCalendarBooking(props: Props) {
       gender: patient?.gender || "",
       mobile: patient?.mobile || appointment.patientMobile || "",
       tokenNumber: appointment.token || "-",
+      appointmentNumber:
+        appointment.appointmentNumber || appointment.appointment_number || "",
       appointmentDate: appointment.appointmentDate || "",
       appointmentTime: appointmentTime
         ? formatDisplayTime(appointmentTime)
@@ -659,6 +666,7 @@ export function AppointmentCalendarBooking(props: Props) {
     patientMap,
     departmentOptions,
     canRescheduleAppointments,
+    numberingRules,
     openReschedule,
     openPatient,
     printTokenSlipForRow,
