@@ -73,7 +73,9 @@ class HomeCareBookingItem(SQLModel, table=True):
 class HomeCareVisitLog(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("hcvisit"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str = Field(index=True, foreign_key="branch.id")
     booking_id: str = Field(index=True, foreign_key="homecarebooking.id")
+    visit_number: str | None = Field(default=None, index=True, max_length=60)
     visit_date: date = Field(default_factory=date.today, index=True)
     assigned_staff_user_id: str | None = Field(
         default=None, index=True, foreign_key="user.id"

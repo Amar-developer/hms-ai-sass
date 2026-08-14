@@ -3,7 +3,7 @@ import { pageSize } from "./constants";
 import { displayDate } from "@/utils/helper";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { Badge } from "@/app/components/common/ui";
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { RecordIdCell } from "@/app/components/common/RecordIdCell";
 import { PatientFlagBadges } from "../patients/components/PatientFlagBadges";
 import { RowActions } from "../admin/components/RowActions";
 import { isCancelled, isReleased } from "@/features/lab/helpers";
@@ -46,11 +46,17 @@ export function getLabColumns({
         },
 
         {
-          key: "created_at",
-          header: "Date & Time",
-          width: "170px",
+          key: "lab_order_number",
+          header: "Order ID",
+          width: "190px",
           render: (o) => (
-            <>
+            <div>
+              <RecordIdCell
+                id={o.id}
+                label="Lab / Service Order ID"
+                allowed={canCopyIds}
+                value={o.lab_order_number || publicDisplayValue(o.id, "Lab Order")}
+              />
               <b>{displayDate(o.created_at)}</b>
               <p className="text-xs text-slate-500">
                 {new Date(o.created_at).toLocaleTimeString([], {
@@ -58,7 +64,7 @@ export function getLabColumns({
                   minute: "2-digit",
                 })}
               </p>
-            </>
+            </div>
           ),
         },
 
@@ -71,18 +77,11 @@ export function getLabColumns({
 
             return (
               <div>
-                <div className="flex items-center gap-2">
-                  <span>
-                    {o.patient_name ||
-                      p?.name ||
-                      publicDisplayValue(o.patient_id, "Patient")}
-                  </span>
-                  <CopyIdButton
-                    value={o.id}
-                    label="Lab / Service Order ID"
-                    allowed={canCopyIds}
-                  />
-                </div>
+                <span>
+                  {o.patient_name ||
+                    p?.name ||
+                    publicDisplayValue(o.patient_id, "Patient")}
+                </span>
                 <PatientFlagBadges patient={p} className="mt-1" />
               </div>
             );

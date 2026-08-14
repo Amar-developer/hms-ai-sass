@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Trash2 } from "lucide-react";
 import {
   ActionButton,
   Button,
@@ -36,6 +37,7 @@ import {
 } from "./api";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getLabColumns } from "./Column";
+import { displayDocumentNumber } from "@/lib/documentNumbers";
 
 const MAX_REPORT_DOCUMENTS = 5;
 
@@ -56,6 +58,9 @@ export function Lab({
   appointments,
   loadLiveData,
   setActive,
+  numberingRules,
+  onConsultationPendingCountChange,
+  workspaceMode = "direct",
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const {
@@ -171,6 +176,8 @@ export function Lab({
             consultationId: row.consultation_id,
             consultationStatus: row.status,
             labReferralText: row.lab_referral_text,
+            appointmentNumber: row.appointment_number || "",
+            appointment_number: row.appointment_number || "",
             token: row.token_number || "",
             tokenType: "Normal",
             patient: row.patient_name || row.patient_id,
@@ -191,6 +198,22 @@ export function Lab({
     consultationReferrals,
     orderedConsultationIds,
     ordersLoaded,
+  ]);
+  const visibleConsultationReferrals = useMemo(
+    () =>
+      labReady.filter(
+        (a: any) => !dismissedConsultations.includes(a.consultationId),
+      ),
+    [labReady, dismissedConsultations],
+  );
+
+  useEffect(() => {
+    if (workspaceMode !== "consultation") return;
+    onConsultationPendingCountChange?.(visibleConsultationReferrals.length);
+  }, [
+    workspaceMode,
+    visibleConsultationReferrals.length,
+    onConsultationPendingCountChange,
   ]);
 
   const { patients, patientMap } = usePatientReferencesQuery(
@@ -549,6 +572,127 @@ export function Lab({
         </p>
       </Card>
     );
+
+  if (workspaceMode === "consultation") {
+    const visibleReferrals = visibleConsultationReferrals;
+    return (
+      <div className="space-y-3">
+        {viewConsult && (
+          <ConsultReferralModal
+            a={viewConsult}
+            detail={consultDetail}
+            loading={loadingDetail}
+            busy={busy}
+            onClose={() => setViewConsult(null)}
+            onCreate={(a: any) => {
+              setViewConsult(null);
+              createFromConsultation(a);
+            }}
+          />
+        )}
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        <Card>
+          <div className="border-b border-slate-200 pb-3">
+            <h3 className="card-title font-bold">
+              Consultation Lab &amp; Services
+            </h3>
+            <p className="card-desc text-slate-500">
+              Lab and service referrals created from completed OPD
+              consultations.
+            </p>
+          </div>
+          <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
+            <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Appointment ID</th>
+                  <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Doctor</th>
+                  <th className="px-4 py-3">Date &amp; Time</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {visibleReferrals.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-4 py-6 text-center text-slate-500"
+                    >
+                      No consultation lab or service referrals are waiting.
+                    </td>
+                  </tr>
+                ) : (
+                  visibleReferrals.map((a: any) => (
+                    <tr
+                      key={a.id}
+                      onClick={() => loadConsultDetail(a)}
+                      className="cursor-pointer transition-colors hover:bg-emerald-50/30"
+                    >
+                      <td className="px-4 py-3 font-bold">
+                        {displayDocumentNumber(
+                          a.appointmentNumber || a.appointment_number,
+                          numberingRules,
+                          "appointment",
+                        ) || "-"}
+                      </td>
+                      <td className="px-4 py-3 font-semibold">{a.patient}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {a.doctor && a.doctor !== "Unassigned"
+                          ? a.doctor
+                          : "-"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                        {displayDateTime(
+                          a.referralDate ||
+                            a.consultationSignedAt ||
+                            a.consultationCreatedAt ||
+                            a.appointmentDate,
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          {canCreateLabOrder && (
+                            <Button
+                              disabled={busy === a.consultationId}
+                              onClick={(event: any) => {
+                                event.stopPropagation();
+                                createFromConsultation(a);
+                              }}
+                              className="rounded-lg px-4 py-2 text-xs"
+                            >
+                              {busy === a.consultationId
+                                ? "Creating..."
+                                : "Create Order"}
+                            </Button>
+                          )}
+                          <ActionButton
+                            onClick={(event: any) => {
+                              event.stopPropagation();
+                              setDismissedConsultations((ids: string[]) => [
+                                ...ids,
+                                a.consultationId,
+                              ]);
+                            }}
+                            className="close-button"
+                            aria-label="Remove"
+                            title="Remove"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </ActionButton>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="">
       {selectedOrder && (
@@ -589,7 +733,9 @@ export function Lab({
       <StatusToast message={message} onClose={() => setMessage("")} />
       {canCreateLabOrder && (
         <Card>
-          <h3 className="card-title font-bold">Create Lab & Service Order</h3>
+          <h3 className="card-title font-bold">
+            Create Direct Lab &amp; Service Order
+          </h3>
           <LabOrderForm
             apiSession={apiSession}
             patients={patients}
@@ -635,92 +781,6 @@ export function Lab({
           />
         </Card>
       )}
-      <Card className="mt-3">
-        <h3 className="card-title font-bold">Consultation Referrals</h3>
-        <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
-          {(() => {
-            const visible = labReady.filter(
-              (a: any) => !dismissedConsultations.includes(a.consultationId),
-            );
-            return (
-              <table className="w-full min-w-[850px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Referral</th>
-                    <th className="px-4 py-3">Patient</th>
-                    <th className="px-4 py-3">Doctor</th>
-                    <th className="px-4 py-3">Date &amp; Time</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {visible.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-5 text-slate-500">
-                        No completed consultation referrals ready.
-                      </td>
-                    </tr>
-                  ) : (
-                    visible.slice(0, 6).map((a: any) => (
-                      <tr key={a.id}>
-                        <td className="px-4 py-3 font-bold">
-                          {a.token || "-"}
-                        </td>
-                        <td className="px-4 py-3 font-semibold">{a.patient}</td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {a.doctor && a.doctor !== "Unassigned"
-                            ? a.doctor
-                            : "-"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                          {displayDateTime(
-                            a.referralDate ||
-                              a.consultationSignedAt ||
-                              a.consultationCreatedAt ||
-                              a.appointmentDate,
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end gap-2">
-                            <ActionButton
-                              onClick={() => loadConsultDetail(a)}
-                              className="close-button"
-                            >
-                              View Tests
-                            </ActionButton>
-                            {canCreateLabOrder && (
-                              <Button
-                                disabled={busy === a.consultationId}
-                                onClick={() => createFromConsultation(a)}
-                                className="rounded-lg px-2 py-2 text-xs lg:px-4"
-                              >
-                                {busy === a.consultationId
-                                  ? "Creating..."
-                                  : "Create Order"}
-                              </Button>
-                            )}
-                            <ActionButton
-                              onClick={() =>
-                                setDismissedConsultations((ids: string[]) => [
-                                  ...ids,
-                                  a.consultationId,
-                                ])
-                              }
-                              className="close-button"
-                            >
-                              Remove
-                            </ActionButton>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            );
-          })()}
-        </div>
-      </Card>
       <Card className="mt-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="card-title font-bold">Lab / Service Worklist</h3>

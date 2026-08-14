@@ -1,7 +1,7 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from sqlalchemy import and_, exists, func, or_
+from sqlalchemy import and_, case, exists, func, or_
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment
@@ -173,7 +173,24 @@ class BillingReadRepository:
             from_date=from_date,
             to_date=to_date,
         )
-        statement = statement.order_by(Invoice.created_at.desc())
+        unpaid_rank = case(
+            (
+                and_(
+                    Invoice.status.not_in(
+                        (
+                            InvoiceStatus.PAID,
+                            InvoiceStatus.REFUNDED,
+                            InvoiceStatus.PARTIALLY_REFUNDED,
+                            InvoiceStatus.CANCELLED,
+                        )
+                    ),
+                    Invoice.balance_amount > 0,
+                ),
+                0,
+            ),
+            else_=1,
+        )
+        statement = statement.order_by(unpaid_rank, Invoice.created_at.desc())
         statement = statement.offset(offset)
         if limit:
             statement = statement.limit(limit)

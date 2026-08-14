@@ -209,22 +209,25 @@ export function LabOrderForm({
       {orderTests.length > 0 && (
         <div className="md:col-span-5 lg:col-span-6 flex flex-wrap gap-2">
           {orderTests.map((test: any, index: number) => (
-            <button
+            <div
               key={`${test.name}-${index}`}
-              type="button"
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
             >
-              {test.name}{" "}
-              <span
-                className="px-1 hover:bg-black hover:text-white hover:rounded-full"
+              <span>{test.name}</span>
+              <button
+                type="button"
+                aria-label="Remove"
+                title="Remove"
+                className="grid h-7 w-7 place-items-center rounded-md border border-red-200 text-red-600 transition hover:bg-red-50"
                 onClick={() => onRemoveTest(index)}
               >
-                x
-              </span>
-            </button>
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           ))}
         </div>
       )}
     </form>
   );
 }
+import { Trash2 } from "lucide-react";

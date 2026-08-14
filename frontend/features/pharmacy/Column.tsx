@@ -1,30 +1,44 @@
 import { Column } from "@/utils/types";
+import { Trash2 } from "lucide-react";
 import { displayDate, displayDateTime } from "@/utils/helper";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { ActionButton, Badge, Button } from "@/app/components/common/ui";
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { RecordIdCell } from "@/app/components/common/RecordIdCell";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 import { RowActions } from "../admin/components/RowActions";
 import { isBilledIssue, isCancelledIssue, isDispensed } from "./helpers";
+import { displayDocumentNumber } from "@/lib/documentNumbers";
+
+function hasPositiveIssueAmount(issue: any) {
+  return Number(issue.amount || 0) > 0;
+}
 
 export function getPrescriptionColumns({
   busy,
   canCreatePharmacyIssue,
-  onView,
+  numberingRules,
   onCreate,
   onDismiss,
 }: {
   busy: string;
   canCreatePharmacyIssue: boolean;
-  onView: (a: any) => void;
+  numberingRules: any;
   onCreate: (a: any) => void;
   onDismiss: (a: any) => void;
 }): Column<any>[] {
   return [
     {
       key: "prescription",
-      header: "Prescription",
-      render: (a: any) => <span className="font-bold">{a.token || "-"}</span>,
+      header: "Appointment ID",
+      render: (a: any) => (
+        <span className="font-bold">
+          {displayDocumentNumber(
+            a.appointmentNumber || a.appointment_number,
+            numberingRules,
+            "appointment",
+          ) || "-"}
+        </span>
+      ),
     },
     {
       key: "patient",
@@ -56,9 +70,6 @@ export function getPrescriptionColumns({
       disableRowClick: true,
       render: (a: any) => (
         <div className="flex justify-end gap-2">
-          <ActionButton onClick={() => onView(a)} className="close-button">
-            View
-          </ActionButton>
           {canCreatePharmacyIssue && (
             <Button
               disabled={busy === a.consultationId}
@@ -68,8 +79,13 @@ export function getPrescriptionColumns({
               {busy === a.consultationId ? "Creating..." : "Create Issue"}
             </Button>
           )}
-          <ActionButton onClick={() => onDismiss(a)} className="close-button">
-            Remove
+          <ActionButton
+            onClick={() => onDismiss(a)}
+            className="close-button"
+            aria-label="Remove"
+            title="Remove"
+          >
+            <Trash2 className="h-4 w-4" />
           </ActionButton>
         </div>
       ),
@@ -122,11 +138,18 @@ export function getPharmacyColumns({
       render: (_, index) => <b>{(safePage - 1) * pageSize + index + 1}</b>,
     },
     {
-      key: "created_at",
-      header: "Date & Time",
-      width: "150px",
+      key: "issue_number",
+      header: "Issue ID",
+      width: "190px",
       render: (issue: any) => (
-        <>
+        <div>
+          <RecordIdCell
+            id={issue.id}
+            label="Pharmacy Issue ID"
+            allowed={canCopyIds}
+            value={issue.issue_number || publicDisplayValue(issue.id, "Issue")}
+            valueClassName="text-xs"
+          />
           <b className="text-xs">{displayDate(issue.created_at)}</b>
           <p className="text-xs text-slate-500">
             {new Date(issue.created_at).toLocaleTimeString([], {
@@ -134,7 +157,7 @@ export function getPharmacyColumns({
               minute: "2-digit",
             })}
           </p>
-        </>
+        </div>
       ),
     },
     {
@@ -146,18 +169,11 @@ export function getPharmacyColumns({
 
         return (
           <div className="text-xs">
-            <div className="flex items-center gap-2">
-              <span>
-                {issue.patient_name ||
-                  p?.name ||
-                  publicDisplayValue(issue.patient_id, "Patient")}
-              </span>
-              <CopyIdButton
-                value={issue.id}
-                label="Pharmacy Issue ID"
-                allowed={canCopyIds}
-              />
-            </div>
+            <span>
+              {issue.patient_name ||
+                p?.name ||
+                publicDisplayValue(issue.patient_id, "Patient")}
+            </span>
             <PatientFlagBadges patient={p} className="mt-1" />
           </div>
         );
@@ -208,6 +224,7 @@ export function getPharmacyColumns({
         const invoiced = invoicedIssueIds.has(issue.id);
         const billed = isBilledIssue(issue) || invoiced;
         const busyAmount = amountBusy(issue);
+        const hasAmount = hasPositiveIssueAmount(issue);
 
         return editingAmountId === issue.id ? (
           <div className="flex items-center gap-1">
@@ -249,7 +266,9 @@ export function getPharmacyColumns({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <b>₹{issue.amount}</b>
+            <b className={hasAmount ? "" : "text-amber-700"}>
+              {hasAmount ? `₹${issue.amount}` : "Enter amount"}
+            </b>
             {canEditPharmacyIssue && (
               <button
                 type="button"
@@ -276,6 +295,7 @@ export function getPharmacyColumns({
         const invoiced = invoicedIssueIds.has(issue.id);
         const rowBusy = busy === issue.id;
         const invoiceBusy = busy === `invoice-${issue.id}`;
+        const hasAmount = hasPositiveIssueAmount(issue);
 
         return (
           <div className="ml-auto flex justify-center">
@@ -298,9 +318,11 @@ export function getPharmacyColumns({
                   onClick: () => handleIssueAction(issue, "dispense"),
                 },
                 {
-                  label: "Generate invoice",
+                  label: hasAmount
+                    ? "Generate invoice"
+                    : "Generate invoice (enter amount)",
                   hidden: invoiced || !canBillPharmacyIssue,
-                  disabled: rowBusy || invoiceBusy,
+                  disabled: !hasAmount || rowBusy || invoiceBusy,
                   onClick: () => handleIssueAction(issue, "invoice"),
                 },
                 {

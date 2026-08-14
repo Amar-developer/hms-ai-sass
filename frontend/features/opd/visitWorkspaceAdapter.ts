@@ -11,6 +11,7 @@ export type OPDVisitStatus =
 export type OPDVisitRecord = {
   id: string;
   appointmentId: string;
+  appointmentNumber: string;
   patientId: string;
   patientName: string;
   patientNumber: string;
@@ -151,6 +152,9 @@ export function buildOPDVisits({
     return {
       id: appointmentId,
       appointmentId,
+      appointmentNumber: String(
+        appointment.appointmentNumber || appointment.appointment_number || "",
+      ),
       patientId,
       patientName: String(
         patient?.full_name ||

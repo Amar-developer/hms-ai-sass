@@ -1,6 +1,6 @@
 import { capitalizeFirst } from "@/utils/helper";
 import { Badge } from "@/app/components/common/ui";
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { RecordIdCell } from "@/app/components/common/RecordIdCell";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { Column } from "@/utils/types";
 import { displayPatientGender, patientDisplayMobile } from "./helpers";
@@ -34,16 +34,13 @@ export function getPatientColumns({
       width: "220px",
       render: (row: any) => (
         <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <b className="block truncate text-sm text-slate-950">
-              {capitalizeFirst(row.full_name)}
-            </b>
-            <CopyIdButton
-              value={row.id}
-              label="Patient ID"
-              allowed={canCopyIds}
-            />
-          </div>
+          <RecordIdCell
+            id={row.id}
+            label="Patient ID"
+            allowed={canCopyIds}
+            value={capitalizeFirst(row.full_name)}
+            valueClassName="text-sm text-slate-950"
+          />
           <p className="mt-0.5 text-sm font-medium text-slate-500">
             {row.patient_number}
           </p>

@@ -9,7 +9,7 @@ import {
   Button,
   SearchableSelect,
 } from "@/app/components/common/ui";
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { RecordIdCell } from "@/app/components/common/RecordIdCell";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 import {
@@ -46,13 +46,44 @@ export function getInvoiceColumns({
   canCopyIds,
   openInvoiceDetail,
   detailLoading,
+  invoiceDeliveryStatus = {},
 }: {
   safePage: number;
   patientMap: Map<string, any>;
   canCopyIds: boolean;
   openInvoiceDetail: (invoice: any) => void;
   detailLoading: string;
+  invoiceDeliveryStatus?: Record<string, any>;
 }): Column<any>[] {
+  function renderWhatsAppStatus(invoice: any) {
+    const delivery = invoiceDeliveryStatus[invoice.id];
+    const status = String(delivery?.status || "not_sent");
+    const label =
+      status === "sent"
+        ? "Sent"
+        : status === "queued"
+          ? "Queued"
+          : status === "failed"
+            ? "Failed"
+            : status === "cancelled"
+              ? "Cancelled"
+              : "Not Sent";
+    const tone =
+      status === "sent"
+        ? "green"
+        : status === "queued"
+          ? "amber"
+          : status === "failed" || status === "cancelled"
+            ? "red"
+            : "slate";
+
+    return (
+      <Badge tone={tone as any} className="table-status text-xs text-center">
+        {label}
+      </Badge>
+    );
+  }
+
   return [
     {
       key: "index",
@@ -67,17 +98,12 @@ export function getInvoiceColumns({
       width: "200px",
       render: (invoice) => (
         <>
-          <div className="flex items-center gap-2">
-            <b>{invoice.invoice_number}</b>
-            <CopyIdButton
-              value={invoice.id}
-              label="Invoice ID"
-              allowed={canCopyIds}
-            />
-          </div>
-          <p className="mt-1 text-sm font-semibold text-slate-400">
-            {formatInvoiceDate(invoice)}
-          </p>
+          <RecordIdCell
+            id={invoice.id}
+            label="Invoice ID"
+            allowed={canCopyIds}
+            value={invoice.invoice_number}
+          />
         </>
       ),
     },
@@ -147,7 +173,7 @@ export function getInvoiceColumns({
                     ? "red"
                     : "slate"
           }
-          className="normal-badge text-xs text-center"
+          className="table-status text-xs text-center"
         >
           {capitalizeFirst(
             invoice.status === "partially_paid"
@@ -158,6 +184,13 @@ export function getInvoiceColumns({
           )}
         </Badge>
       ),
+    },
+    {
+      key: "whatsapp_status",
+      header: "WhatsApp",
+      className: "text-center",
+      width: "120px",
+      render: renderWhatsAppStatus,
     },
     {
       key: "total_amount",

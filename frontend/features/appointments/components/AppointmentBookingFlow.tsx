@@ -673,6 +673,14 @@ export function AppointmentBookingFlow(props: any) {
               }
             />
             <Info
+              label="Visit ID"
+              value={
+                booked.appointment?.appointment_number ||
+                booked.appointment?.appointmentNumber ||
+                "-"
+              }
+            />
+            <Info
               label="Token"
               value={
                 booked.queue_entry?.token_number ||
@@ -706,6 +714,12 @@ export function AppointmentBookingFlow(props: any) {
                   booked.appointment?.patient ||
                   "-"}
               </b>
+              <span>
+                Visit ID:{" "}
+                {booked.appointment?.appointment_number ||
+                  booked.appointment?.appointmentNumber ||
+                  "-"}
+              </span>
               <span>
                 Token:{" "}
                 {booked.queue_entry?.token_number ||

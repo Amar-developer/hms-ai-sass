@@ -256,9 +256,10 @@ export function OPDPatientWorklist({
                   </span>
                   <span className="mt-0.5 flex min-w-0 items-center justify-between gap-2">
                     <span className="truncate text-[10px] font-medium text-slate-500">
-                      {humanizeOptionLabel(
-                        row.visitType || row.appointmentType || "OP consultation",
-                      )}
+                      {row.appointmentNumber ||
+                        humanizeOptionLabel(
+                          row.visitType || row.appointmentType || "OP consultation",
+                        )}
                     </span>
                     <Badge
                       tone={statusTone(status)}

@@ -44,6 +44,8 @@ import {
   tenantBranchesQueryKey,
   tenantDepartmentsQueryKey,
 } from "@/features/tenants/api/tenantReferenceQueries";
+import { parseNumberingRules } from "@/features/admin/constants";
+import { getResolvedSetting } from "@/features/settings/api/resolvedSettingQueries";
 
 const allModuleIds = nav.map(([id]) => id);
 const defaultEntitlementModuleIds = Array.from(
@@ -99,6 +101,7 @@ export function useAppController() {
   const [liveTenants, setLiveTenants] = useState<any[]>([]);
   const [doctorScope, setDoctorScope] = useState<any | null>(null);
   const [liveInvoices, setLiveInvoices] = useState<any[]>([]);
+  const [numberingRules, setNumberingRules] = useState<any>(null);
   const [enabledModules, setEnabledModules] = useState<string[]>(
     defaultEntitlementModuleIds,
   );
@@ -267,7 +270,24 @@ export function useAppController() {
           [],
         )
       : Promise.resolve<any[]>([]);
-    const [tenantRows, branchRows, departmentRows] = await Promise.all([
+    const numberingRulesPromise = sessionHasAnyPermission(session, [
+      "settings.manage",
+      "settings.read",
+      "billing.manage",
+      "invoices.read",
+      "payments.manage",
+    ])
+      ? getResolvedSetting(
+          queryClient,
+          session,
+          "numbering",
+          "numbering.rules",
+        )
+          .then((setting: any) => parseNumberingRules(setting?.value, ""))
+          .catch(() => null)
+      : Promise.resolve(null);
+    const [tenantRows, branchRows, departmentRows, resolvedNumberingRules] =
+      await Promise.all([
       tenantRowsPromise,
       sessionHasAnyPermission(session, referenceReadPermissions)
         ? queryClient.fetchQuery({
@@ -295,8 +315,10 @@ export function useAppController() {
             staleTime: TENANT_REFERENCE_STALE_MS,
           })
         : Promise.resolve<any[]>([]),
+      numberingRulesPromise,
     ]);
     if (requestRevision !== liveDataRequestRef.current) return;
+    setNumberingRules(resolvedNumberingRules);
     const activeTenant = tenantRows.find(
       (tenant: any) => tenant.id === session.tenantId,
     );
@@ -1095,6 +1117,7 @@ export function useAppController() {
     apiSession,
     loadLiveData: refreshLiveDataInBackground,
     liveInvoices,
+    numberingRules,
     isInitialLoading,
   };
   const permissionKeys = apiSession?.user?.permissions || [];

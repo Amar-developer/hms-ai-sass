@@ -45,6 +45,7 @@ class Appointment(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
+    appointment_number: str | None = Field(default=None, index=True, max_length=60)
     department_id: str | None = Field(
         default=None, index=True, foreign_key="department.id"
     )

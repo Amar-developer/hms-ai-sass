@@ -59,6 +59,7 @@ def build_lab_consultation_referral_reads(
                 id=appointment.id,
                 consultation_id=consultation.id,
                 appointment_id=appointment.id,
+                appointment_number=appointment.appointment_number,
                 patient_id=patient.id,
                 patient_name=patient.full_name,
                 practitioner_name=(practitioner.full_name if practitioner else None),

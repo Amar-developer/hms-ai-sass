@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  ActionButton,
   Badge,
   Card,
   Input,
@@ -13,29 +12,24 @@ import { FormField } from "@/app/components/FormElements";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
-import {
-  formatInvoiceDate,
-  invoicePatientDueAmount,
-  invoiceSource,
-  invoiceSourceOptions,
-} from "./helpers";
+import { invoiceSourceOptions } from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
-import { capitalizeFirst, money } from "@/utils/helper";
-import {
-  canCopyDatabaseIds,
-  CopyIdButton,
-} from "@/app/components/common/CopyIdButton";
+import { money } from "@/utils/helper";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { status_options } from "./contants";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
-import { useBillingActions, useBillingReports, usePaymentMethods } from "./api";
+import {
+  useBillingActions,
+  useBillingReports,
+  useInvoiceDeliveryStatuses,
+  usePaymentMethods,
+} from "./api";
 import { fetchInvoicePage } from "./api/billing.api";
-import { Column } from "@/utils/types";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getConsultationPendingColumns, getInvoiceColumns } from "./Column";
-import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 export function Billing({
   apiSession,
@@ -71,6 +65,7 @@ export function Billing({
   const [page, setPage] = useState(1);
   const [invoiceRows, setInvoiceRows] = useState<any[]>([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
+  const [paidStatusCounts, setPaidStatusCounts] = useState<Record<string, number>>({});
   const [invoiceListLoading, setInvoiceListLoading] = useState(false);
   const invoiceLoadSequence = useRef(0);
   const userPermissions = apiSession?.user?.permissions || [];
@@ -134,6 +129,34 @@ export function Billing({
     }
   }
 
+  async function loadPaidStatusCounts(
+    filterOverrides: Partial<typeof filters> = {},
+  ) {
+    if (!apiSession) return;
+    const effectiveFilters = { ...filters, ...filterOverrides };
+    const countStatuses = status_options.map((option) => option.value);
+    const entries = await Promise.all(
+      countStatuses.map(async (status) => {
+        const params = new URLSearchParams({ limit: "1", offset: "0" });
+        if (branchId) params.set("branch_id", branchId);
+        if (effectiveFilters.query.trim())
+          params.set("q", effectiveFilters.query.trim());
+        if (effectiveFilters.source !== "all")
+          params.set("source", effectiveFilters.source);
+        if (status !== "all") params.set("payment_state", status);
+        if (effectiveFilters.fromDate)
+          params.set("from_date", effectiveFilters.fromDate);
+        if (effectiveFilters.toDate)
+          params.set("to_date", effectiveFilters.toDate);
+        const result = await fetchInvoicePage(apiSession, params).catch(
+          () => ({ total: 0 }),
+        );
+        return [status, Number(result?.total || 0)] as const;
+      }),
+    );
+    setPaidStatusCounts(Object.fromEntries(entries));
+  }
+
   const { invoicePaymentOptions, defaultPaymentMethod } =
     usePaymentMethods(apiSession);
 
@@ -188,6 +211,10 @@ export function Billing({
   const totalPages = Math.max(1, Math.ceil(invoiceTotal / pageSize));
   const safePage = Math.min(page, totalPages);
   const invoicePageRows = invoices;
+  const invoiceDeliveryStatus = useInvoiceDeliveryStatuses(
+    apiSession,
+    invoicePageRows,
+  );
 
   const payableSettlement = Number(
     settlement?.payable_settlement_amount ??
@@ -221,6 +248,7 @@ export function Billing({
     if (!apiSession) return;
     const timer = window.setTimeout(() => {
       void loadInvoicePage(page);
+      void loadPaidStatusCounts();
     }, 250);
     return () => window.clearTimeout(timer);
   }, [
@@ -357,147 +385,14 @@ export function Billing({
     await collectSplitPaymentAction(invoice, rows, defaultPaymentMethod);
   }
 
-  const invoiceColumns: Column<any>[] = [
-    {
-      key: "index",
-      header: "S.No",
-      width: "60px",
-      render: (_, index) => (safePage - 1) * pageSize + index + 1,
-      cellClassName: "font-semibold text-slate-500 text-center",
-    },
-    {
-      key: "invoice_number",
-      header: "Invoice",
-      width: "200px",
-      render: (invoice) => (
-        <>
-          <div className="flex items-center gap-2">
-            <b>{invoice.invoice_number}</b>
-            <CopyIdButton
-              value={invoice.id}
-              label="Invoice ID"
-              allowed={canCopyIds}
-            />
-          </div>
-          <p className="mt-1 text-sm font-semibold text-slate-400">
-            {formatInvoiceDate(invoice)}
-          </p>
-        </>
-      ),
-    },
-    {
-      key: "invoice_date",
-      className: "text-center",
-      header: "Date",
-      width: "100px",
-      render: (invoice) => (
-        <>
-          <p className="text-sm ">{formatInvoiceDate(invoice)}</p>
-        </>
-      ),
-    },
-    {
-      key: "source",
-      header: "Source",
-      width: "160px",
-      className: "text-center",
-      render: (invoice) => {
-        const source = invoiceSource(invoice);
-
-        return (
-          <Badge
-            tone={source.tone as any}
-            className="table-status text-xs text-center "
-          >
-            {source.label}
-          </Badge>
-        );
-      },
-    },
-    {
-      key: "patient",
-      header: "Patient",
-      width: "120px",
-      render: (invoice) => {
-        const p: any = patientMap.get(invoice.patient_id);
-
-        return (
-          <div>
-            {capitalizeFirst(invoice.patient_name || p?.name || p?.full_name || "Patient")}
-            <PatientFlagBadges patient={p} className="mt-1" />
-          </div>
-        );
-      },
-      cellClassName: "font-medium",
-    },
-    {
-      key: "status",
-      header: "Status",
-      className: "text-center",
-      width: "120px",
-      render: (invoice) => (
-        <Badge
-          tone={
-            invoice.status === "paid"
-              ? "green"
-              : invoice.status === "partially_refunded" ||
-                  invoice.status === "refunded"
-                ? "blue"
-                : invoice.status === "partially_paid"
-                  ? "amber"
-                  : invoice.status == "cancelled"
-                    ? "red"
-                    : "slate"
-          }
-          className="table-status text-xs text-center"
-        >
-          {capitalizeFirst(
-            invoice.status === "partially_paid"
-              ? "Partially Paid"
-              : invoice.status === "partially_refunded"
-                ? "Partially Refunded"
-                : invoice.status,
-          )}
-        </Badge>
-      ),
-    },
-    {
-      key: "total_amount",
-      header: "Total",
-      width: "100px",
-      render: (invoice) => money(invoice.total_amount),
-      cellClassName: "font-semibold tabular-nums",
-    },
-    {
-      key: "paid_amount",
-      header: "Paid",
-      width: "100px",
-      render: (invoice) => money(invoice.paid_amount),
-      cellClassName: "tabular-nums",
-    },
-    {
-      key: "due",
-      header: "Due",
-      width: "100px",
-      render: (invoice) => money(invoicePatientDueAmount(invoice)),
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      width: "120px",
-      disableRowClick: true,
-      render: (invoice) => (
-        <ActionButton
-          onClick={() => openInvoiceDetail(invoice)}
-          disabled={detailLoading === invoice.id}
-        >
-          <ButtonLoader loading={detailLoading === invoice.id}>
-            {detailLoading === invoice.id ? "Loading..." : "View"}
-          </ButtonLoader>
-        </ActionButton>
-      ),
-    },
-  ];
+  const invoiceColumns = getInvoiceColumns({
+    safePage,
+    patientMap,
+    canCopyIds,
+    openInvoiceDetail,
+    detailLoading,
+    invoiceDeliveryStatus,
+  });
 
   if (!apiSession) {
     return (
@@ -855,6 +750,34 @@ export function Billing({
             />
           </FormField>
         </FilterSection>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {status_options.map((option) => {
+            const active = filters.paidStatus === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => updateFilter("paidStatus", option.value)}
+                className={`inline-flex h-8 items-center gap-2 rounded-lg border px-3 text-xs font-bold transition ${
+                  active
+                    ? "border-brand bg-brand text-brand-fg"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-brand hover:text-brand"
+                }`}
+              >
+                <span>{option.label}</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] ${
+                    active
+                      ? "bg-white/20 text-brand-fg"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {paidStatusCounts[option.value] ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
         <div className="scrollbar-hidden mt-4 overflow-auto rounded-2xl border border-slate-200">
           <DataTable
             columns={invoiceColumns}

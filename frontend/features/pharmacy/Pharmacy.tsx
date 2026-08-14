@@ -38,6 +38,9 @@ export function Pharmacy({
   branchId,
   appointments,
   loadLiveData,
+  numberingRules,
+  onConsultationPendingCountChange,
+  workspaceMode = "direct",
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [patientId, setPatientId] = useState("");
@@ -151,6 +154,23 @@ export function Pharmacy({
           ),
     [appointments, issuedConsultationIds, issuesLoaded],
   );
+  const visibleConsultationPrescriptions = useMemo(
+    () =>
+      prescriptionReady.filter(
+        (a: any) => !dismissedConsultations.includes(a.consultationId),
+      ),
+    [prescriptionReady, dismissedConsultations],
+  );
+
+  useEffect(() => {
+    if (workspaceMode !== "consultation") return;
+    onConsultationPendingCountChange?.(visibleConsultationPrescriptions.length);
+  }, [
+    workspaceMode,
+    visibleConsultationPrescriptions.length,
+    onConsultationPendingCountChange,
+  ]);
+
   const invoicedIssueIds = useMemo(
     () =>
       new Set([
@@ -379,6 +399,10 @@ export function Pharmacy({
   }
 
   async function handleGenerateInvoice(issue: any) {
+    if (Number(issue?.amount || 0) <= 0) {
+      setMessage("Enter pharmacy issue amount before generating invoice.");
+      return;
+    }
     const detail = await generateInvoice(issue);
     if (detail) {
       setLocalInvoicedIssueIds((ids) =>
@@ -421,7 +445,7 @@ export function Pharmacy({
   const prescriptionColumns = getPrescriptionColumns({
     busy,
     canCreatePharmacyIssue,
-    onView: (a: any) => setViewConsult(a),
+    numberingRules,
     onCreate: (a: any) => createFromConsultation(a),
     onDismiss: (a: any) =>
       setDismissedConsultations((ids: string[]) => [...ids, a.consultationId]),
@@ -456,6 +480,46 @@ export function Pharmacy({
         </p>
       </Card>
     );
+
+  if (workspaceMode === "consultation") {
+    const visiblePrescriptions = visibleConsultationPrescriptions;
+    return (
+      <div className="space-y-3">
+        {viewConsult && (
+          <ConsultPrescriptionModal
+            a={viewConsult}
+            detail={consultDetail}
+            loading={loadingDetail}
+            busy={busy}
+            onClose={() => setViewConsult(null)}
+            onCreate={(a: any, pricePayload?: any) => {
+              setViewConsult(null);
+              createFromConsultation(a, pricePayload);
+            }}
+          />
+        )}
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        <Card>
+          <div className="border-b border-slate-200 pb-3">
+            <h3 className="card-title font-bold">Consultation Prescriptions</h3>
+            <p className="card-desc text-slate-500">
+              Doctor prescriptions created from signed OPD consultations.
+            </p>
+          </div>
+          <div className="mt-4">
+            <DataTable
+              columns={prescriptionColumns}
+              data={visiblePrescriptions}
+              emptyMessage="No consultation prescriptions are waiting."
+              rowClassName="hover:bg-emerald-50/30"
+              onRowClick={(row: any) => setViewConsult(row)}
+            />
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {selectedIssue && (
@@ -476,17 +540,19 @@ export function Pharmacy({
           detail={consultDetail}
           loading={loadingDetail}
           busy={busy}
-          onClose={() => setViewConsult(null)}
-          onCreate={(a: any) => {
-            setViewConsult(null);
-            createFromConsultation(a);
-          }}
+            onClose={() => setViewConsult(null)}
+            onCreate={(a: any, pricePayload?: any) => {
+              setViewConsult(null);
+              createFromConsultation(a, pricePayload);
+            }}
         />
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       {canCreatePharmacyIssue && (
         <Card>
-          <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
+          <h3 className="card-title font-bold">
+            Create Direct Prescription Order
+          </h3>
           <form
             onSubmit={handleCreateDirect}
             className="mt-4 grid gap-3 md:grid-cols-4"
@@ -605,20 +671,6 @@ export function Pharmacy({
           </form>
         </Card>
       )}
-      <Card>
-        <h3 className="card-title font-bold">Doctor Prescriptions</h3>
-        <div className="mt-4">
-          <DataTable
-            columns={prescriptionColumns}
-            data={prescriptionReady
-              .filter(
-                (a: any) => !dismissedConsultations.includes(a.consultationId),
-              )
-              .slice(0, 6)}
-            emptyMessage="No completed prescriptions ready."
-          />
-        </div>
-      </Card>
       <Card>
         <div className="flex items-center justify-between gap-2">
           <h3 className="card-title font-bold">Pharmacy Worklist</h3>

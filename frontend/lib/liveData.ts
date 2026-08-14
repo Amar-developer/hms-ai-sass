@@ -66,6 +66,8 @@ export function mapAppointment(
 
   return {
     id: row.id,
+    appointmentNumber: row.appointment_number || row.appointmentNumber || "",
+    appointment_number: row.appointment_number || row.appointmentNumber || "",
     updated_at: row.updated_at,
     created_at: row.created_at,
     queueEntryId: q?.id,
