@@ -147,17 +147,36 @@ def summarize_samples(samples: list[dict]) -> dict[str, object]:
     }
 
 
+def _compose_prefix(
+    compose_command: str, compose_file: str, env_file: str | None
+) -> list[str]:
+    """Build the compose invocation, including --env-file when supplied.
+
+    Compose files that declare required variables (``${POSTGRES_USER:?...}``)
+    cannot even be parsed without the env file that defines them, and Compose
+    only reads ``.env`` by default. Omitting this made every subcommand fail on
+    a host whose environment lives in ``.env.staging``.
+    """
+    prefix = shlex.split(compose_command)
+    if env_file:
+        prefix += ["--env-file", env_file]
+    return prefix + ["-f", compose_file]
+
+
 def _admin_command(
-    query: str, *, compose_command: str, compose_file: str, service: str
+    query: str,
+    *,
+    compose_command: str,
+    compose_file: str,
+    service: str,
+    env_file: str | None = None,
 ) -> list[str]:
     inner = (
         'PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -p 5432 '
         f'-U "$DB_USER" -d {ADMIN_DATABASE} --csv -c "{query}"'
     )
     return [
-        *shlex.split(compose_command),
-        "-f",
-        compose_file,
+        *_compose_prefix(compose_command, compose_file, env_file),
         "exec",
         "-T",
         service,
@@ -173,6 +192,7 @@ def run_admin_query(
     compose_command: str,
     compose_file: str,
     service: str,
+    env_file: str | None = None,
     timeout_seconds: float = 20.0,
 ) -> str:
     command = _admin_command(
@@ -180,6 +200,7 @@ def run_admin_query(
         compose_command=compose_command,
         compose_file=compose_file,
         service=service,
+        env_file=env_file,
     )
     try:
         completed = subprocess.run(
@@ -203,6 +224,12 @@ def run_admin_query(
         ) from exc
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip()
+        if "is missing a value" in detail or "interpolating" in detail:
+            detail += (
+                "\nHint: this compose file needs its env file to resolve "
+                "required variables. Pass --env-file (for example "
+                "--env-file .env.staging)."
+            )
         if "notallowed" in detail:
             detail += (
                 "\nHint: the pooler grants admin access only to users in "
@@ -221,6 +248,7 @@ def _holder_command(
     service: str,
     holders: int,
     hold_seconds: int,
+    env_file: str | None = None,
 ) -> list[str]:
     """Build the command that occupies every server connection in the pool.
 
@@ -236,9 +264,7 @@ def _holder_command(
         "done; wait"
     )
     return [
-        *shlex.split(compose_command),
-        "-f",
-        compose_file,
+        *_compose_prefix(compose_command, compose_file, env_file),
         "exec",
         "-d",
         service,
@@ -279,7 +305,7 @@ def probe_http(url: str, *, payload: str | None, timeout_seconds: float) -> dict
 
 
 def _pool_pressure(
-    *, compose_command: str, compose_file: str, service: str
+    *, compose_command: str, compose_file: str, service: str, env_file: str | None
 ) -> tuple[int, int]:
     pools = parse_csv_rows(
         run_admin_query(
@@ -287,6 +313,7 @@ def _pool_pressure(
             compose_command=compose_command,
             compose_file=compose_file,
             service=service,
+            env_file=env_file,
         )
     )
     waiting = sum(_to_int(pool.get("cl_waiting")) for pool in pools)
@@ -330,6 +357,7 @@ def command_saturate(args: argparse.Namespace) -> int:
             compose_command=args.compose_command,
             compose_file=args.compose_file,
             service=args.service,
+            env_file=args.env_file,
         )
         print(f"  server_active={active} clients_waiting={waiting}", flush=True)
         if waiting > 0:
@@ -404,6 +432,7 @@ def command_verify(args: argparse.Namespace) -> int:
         compose_command=args.compose_command,
         compose_file=args.compose_file,
         service=args.service,
+        env_file=args.env_file,
     )
     config = parse_show_config(output)
     expected = _expected_from_args(args.expect)
@@ -482,6 +511,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--compose-file", default="docker-compose.yml")
     parser.add_argument("--service", default="pgbouncer")
+    parser.add_argument(
+        "--env-file",
+        help="Compose env file, e.g. .env.staging. Required whenever the "
+        "compose file declares variables with no default.",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
