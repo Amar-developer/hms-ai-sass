@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import InterfaceError, OperationalError, ResourceClosedError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from app.api.router import api_router
@@ -37,18 +37,37 @@ async def database_pool_timeout_handler(
     )
 
 
+# Raised when PgBouncer drops a connection that waited out query_wait_timeout.
+# SQLAlchemy reports the same event under three unrelated classes depending on
+# how far the connection had got, and none of them inherit from another:
+#
+#   OperationalError    - the driver failed mid-query (DBAPIError)
+#   InterfaceError      - the driver connection was already gone (DBAPIError)
+#   ResourceClosedError - SQLAlchemy invalidated the connection and a retry on
+#                         the same object found it closed (InvalidRequestError)
+#
+# Observed on the staging pooler: with a cold engine the wait lands inside
+# dialect initialisation (`select current_schema()` on first connect), and the
+# invalidation surfaces as ResourceClosedError, masking the driver error that
+# caused it. Registering only OperationalError therefore misses the exact case
+# this exists for.
+DATABASE_UNAVAILABLE_ERRORS = (OperationalError, InterfaceError, ResourceClosedError)
+
+
 async def database_unavailable_handler(
-    request: Request, exc: OperationalError
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """Return 503 instead of 500 when the database connection itself fails.
 
-    Under saturation PgBouncer holds the request for `query_wait_timeout` and
-    then closes the queued connection. That surfaces as OperationalError, not
-    the SQLAlchemyTimeoutError above, so without this handler the load-shedding
-    path returns 500 and clients have no signal to retry. Every OperationalError
-    means the database was unreachable or dropped the connection, which is a
-    server-side availability problem in all cases, so the mapping is not
-    narrowed to the pooler's specific message.
+    Under saturation PgBouncer holds a request for `query_wait_timeout` and then
+    closes the queued connection. That is not the SQLAlchemyTimeoutError above,
+    which fires only when this process's own pool is exhausted, so without this
+    handler the load-shedding path returns a bare 500 with no Retry-After and
+    clients have no signal to back off.
+
+    The event is logged at error level because the same exception classes also
+    cover a genuinely unreachable database, which must stay visible rather than
+    being flattened into a routine "busy" response.
     """
     logging.getLogger("medizinhub").error(
         "database_unavailable",
@@ -103,7 +122,8 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
 
     app.add_exception_handler(SQLAlchemyTimeoutError, database_pool_timeout_handler)
-    app.add_exception_handler(OperationalError, database_unavailable_handler)
+    for error_type in DATABASE_UNAVAILABLE_ERRORS:
+        app.add_exception_handler(error_type, database_unavailable_handler)
 
     @app.get("/", tags=["platform"])
     def root() -> dict[str, str]:
