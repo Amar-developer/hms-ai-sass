@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     slow_request_ms: int = Field(default=1000, ge=1)
     web_concurrency: int = Field(default=2, ge=1, le=64)
     web_limit_concurrency: int = Field(default=80, ge=10, le=10000)
+    # Almost every route handler is a sync `def`, so it runs on AnyIO's thread
+    # pool rather than the event loop. That pool's size is a real concurrency
+    # limit sitting between web_limit_concurrency above and the database pool
+    # below, and AnyIO's default of 40 was never chosen by anyone. Naming it
+    # here keeps the capacity chain complete: admitted requests are bounded by
+    # web_concurrency × web_limit_concurrency, handlers actually executing by
+    # web_concurrency × web_thread_limit, and database work by the pool sizes.
+    # Raising it past the pool only converts running handlers into handlers
+    # blocked on a connection checkout.
+    web_thread_limit: int = Field(default=40, ge=8, le=512)
     web_backlog: int = Field(default=2048, ge=128, le=65535)
     web_timeout_keep_alive: int = Field(default=5, ge=1, le=120)
     web_graceful_shutdown_seconds: int = Field(default=30, ge=5, le=600)

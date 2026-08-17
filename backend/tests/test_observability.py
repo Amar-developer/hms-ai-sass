@@ -32,10 +32,27 @@ from scripts.start_api import migration_lock, run_deployment_gate, uvicorn_comma
 from scripts.summarize_api_metrics import parse_lines
 
 
-async def _request(headers: list[tuple[bytes, bytes]]) -> list[dict]:
+PARAM_ROUTE = "/api/v1/patients/{patient_id}"
+
+
+async def _request(
+    headers: list[tuple[bytes, bytes]],
+    *,
+    path: str = "/health",
+    route_path: str | None = "/health",
+) -> list[dict]:
+    """Drive ObservabilityMiddleware over one request.
+
+    ``route_path`` mirrors what Starlette's router does: on a match it stores
+    the resolved route in the shared scope, which the outer middleware reads
+    after the inner app returns. Passing None models a request that matched no
+    route, which is what a 404 looks like from here.
+    """
     messages: list[dict] = []
 
-    async def app(_scope, _receive, send):
+    async def app(scope, _receive, send):
+        if route_path is not None:
+            scope["route"] = SimpleNamespace(path=route_path)
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"ok"})
 
@@ -48,7 +65,7 @@ async def _request(headers: list[tuple[bytes, bytes]]) -> list[dict]:
     scope = {
         "type": "http",
         "method": "GET",
-        "path": "/health",
+        "path": path,
         "headers": headers,
         "state": {},
     }
@@ -157,6 +174,30 @@ def test_runtime_metrics_report_request_and_database_percentiles():
     assert metrics["database_queries"]["SELECT"]["p50_ms"] == 12.5
     assert metrics["database_queries"]["SELECT"]["p99_ms"] == 25.0
     assert metrics["database_pool_checkout_wait"]["p95_ms"] == 4.5
+
+
+def test_requests_are_keyed_by_route_template_not_by_url():
+    """Metric keys must stay bounded by the routing table.
+
+    Keying on the raw path let every distinct URL allocate a permanent entry:
+    the metric dictionaries prune old samples but never drop keys, so a
+    scanner walking unmatched URLs, or a path parameter reaching the fallback,
+    would grow the process without limit.
+    """
+    reset_for_tests()
+
+    asyncio.run(_request([], path="/api/v1/patients/pat-1", route_path=PARAM_ROUTE))
+    asyncio.run(_request([], path="/api/v1/patients/pat-2", route_path=PARAM_ROUTE))
+    for index in range(25):
+        asyncio.run(_request([], path=f"/nope-{index}", route_path=None))
+
+    requests = snapshot()["requests"]
+
+    # Two distinct patient URLs collapse onto the one route template.
+    assert requests[f"GET {PARAM_ROUTE}"]["total"] == 2
+    # Twenty-five distinct unmatched URLs collapse onto a single key.
+    assert requests["GET UNMATCHED"]["total"] == 25
+    assert set(requests) == {f"GET {PARAM_ROUTE}", "GET UNMATCHED"}
 
 
 def test_combined_log_summary_calculates_deployment_percentiles():

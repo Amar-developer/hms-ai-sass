@@ -52,7 +52,25 @@ __pycache__/
 
 # Local editor and AI-assistant configuration
 .claude/
+.agents/
+.codex/
 .vscode/
+
+# Database dumps and restores. A dump of this system is patient data: names,
+# mobile numbers, diagnoses, invoices. It must never reach the repository,
+# where it would be replicated to every clone and survive in history even
+# after deletion. Keep dumps outside the working tree, or under
+# .deploy-backups/ below.
+*.sql
+*.dump
+*.sql.gz
+*.dump.gz
+*_dump*
+*.backup
+
+# Measurement output from the performance runbook (pool samples, load-test
+# reports). Reproducible from the tooling, and noisy in diffs.
+artifacts/
 
 # Temporary invoice design/debug artifacts
 frontend/debug.png

@@ -37,7 +37,11 @@ def test_readiness_contract_starts_without_external_dependencies(client: TestCli
     assert body["status"] == "ready"
     assert body["dependencies"]["database"] == "configured"
     assert body["dependencies"]["database_pool"].startswith("checked_out=")
-    assert body["dependencies"]["redis"] == "not_configured"
+    # Redis is reported honestly rather than as a fixed string. No Redis runs
+    # in the test environment, so "unreachable" is the expected answer — the
+    # contract being asserted is that readiness still returns 200 and "ready",
+    # because the application degrades to database reads without the cache.
+    assert body["dependencies"]["redis"] in {"reachable", "unreachable"}
     assert body["dependencies"]["object_storage"] == "local_configured"
     assert body["dependencies"]["permanent_invoice_delivery"] == "enabled"
 

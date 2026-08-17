@@ -22,6 +22,23 @@ from app.modules.tenants.models import Branch, Tenant
 
 request_logger = logging.getLogger("medizinhub.request")
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
+UNMATCHED_ROUTE = "UNMATCHED"
+
+
+def _metrics_route(scope: dict) -> str:
+    """Return a bounded metrics key for a request.
+
+    A matched request carries its route template ("/api/v1/patients/{id}"),
+    so the key set is bounded by the routing table. A request that matches no
+    route has no ``route`` in scope; falling back to the raw path there would
+    let every distinct 404 URL allocate a permanent entry in the runtime
+    metric dictionaries, which prune samples but never drop keys. One scanner
+    walking random paths would grow the process indefinitely. Unrouted
+    requests are therefore counted together — the useful signal is how many
+    there are, not which URLs were guessed.
+    """
+    route_path = getattr(scope.get("route"), "path", None)
+    return str(route_path) if route_path else UNMATCHED_ROUTE
 
 
 @contextmanager
@@ -241,10 +258,8 @@ class ObservabilityMiddleware:
             await self.app(scope, receive, send_with_request_id)
         except Exception:
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
-            route = scope.get("route")
-            route_path = str(getattr(route, "path", None) or path)
             record_request(
-                route=route_path,
+                route=_metrics_route(scope),
                 method=method,
                 status_code=500,
                 duration_ms=duration_ms,
@@ -277,10 +292,8 @@ class ObservabilityMiddleware:
             raise
 
         duration_ms = round((time.perf_counter() - started) * 1000, 2)
-        route = scope.get("route")
-        route_path = str(getattr(route, "path", None) or path)
         record_request(
-            route=route_path,
+            route=_metrics_route(scope),
             method=method,
             status_code=response_status,
             duration_ms=duration_ms,

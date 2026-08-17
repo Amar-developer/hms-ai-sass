@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+
+import anyio.to_thread
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -37,6 +39,11 @@ async def database_pool_timeout_handler(
 async def lifespan(app: FastAPI):
     # Docker runs Alembic before Uvicorn. Keep app startup free of DB work so
     # health checks and normal requests cannot be blocked by optional repairs.
+    # Setting the thread limiter is safe here: it touches no dependency, and
+    # the limiter is stored per event loop so it must be set from inside one.
+    anyio.to_thread.current_default_thread_limiter().total_tokens = (
+        get_settings().web_thread_limit
+    )
     yield
 
 

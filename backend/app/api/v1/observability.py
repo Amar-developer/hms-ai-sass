@@ -37,6 +37,12 @@ def operational_metrics(
             "request_limit_per_container": (
                 settings.web_concurrency * settings.web_limit_concurrency
             ),
+            # Sync handlers execute here, so this — not the admission limit
+            # above — bounds how many requests are doing work at once.
+            "thread_limit_per_worker": settings.web_thread_limit,
+            "thread_limit_per_container": (
+                settings.web_concurrency * settings.web_thread_limit
+            ),
             "database_connections_per_worker": database_connections_per_worker,
             "database_connections_per_container": (
                 settings.web_concurrency * database_connections_per_worker

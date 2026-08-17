@@ -103,3 +103,83 @@ Start with these thresholds and tune them from real baselines:
 Long-term retention and alerts should consume the structured logs and metrics in
 the selected monitoring platform. The in-process snapshot is deliberately
 bounded and is not a replacement for Prometheus/OpenTelemetry storage.
+
+## 6. Pooler limits and contention
+
+Sections 2 to 4 measure the application's own side of the pooler. They cannot
+see the limit that actually bounds concurrent database work: PgBouncer's
+`default_pool_size` server connections, shared by every API worker and the
+report worker. `backend/scripts/pgbouncer_admin.py` reads that directly.
+
+Confirm the running pooler matches the declared limits. Configuration changes
+only take effect when the container is recreated, so a stale container keeps
+its old values while the compose file says otherwise:
+
+```bash
+docker compose up -d pgbouncer
+python3 backend/scripts/pgbouncer_admin.py verify
+```
+
+Use `--compose-file docker-compose.staging.yml` on staging, and
+`--compose-command "sudo docker compose"` where elevation is required. A
+non-zero exit means the pooler is not enforcing the limits this repository
+declares. `query_wait_timeout` matters most: at PgBouncer's 120-second default
+the API's `503` + `Retry-After` load shedding never triggers, because the wait
+moves from the application pool into the pooler. Saturation then presents as a
+hang, and `database_pool_timeouts` stays at zero while the system is failing.
+
+Sample contention during the load window from section 3, in a second terminal:
+
+```bash
+python3 backend/scripts/pgbouncer_admin.py sample \
+  --duration-seconds 300 \
+  --interval-seconds 2 \
+  --output artifacts/pool-samples.jsonl
+```
+
+Read the summary as follows:
+
+| Field | Meaning |
+| --- | --- |
+| `peak_clients_waiting` | Above zero, the server pool was the binding constraint. |
+| `peak_max_wait_seconds` | Approaching `query_wait_timeout`, requests are being cancelled rather than delayed. |
+| `peak_server_connections_active` | At `default_pool_size`, the pool was fully committed. |
+| `total_wait_time_us_delta` | Total microseconds clients spent queued during the window. |
+
+If `pool_was_the_constraint` is false, the run never reached the pooler's
+limit; raise load, or look upstream at `web_thread_limit` and
+`web_limit_concurrency`.
+
+## 7. Throughput ceiling
+
+Latency says whether the requests that ran were fast. Throughput says how many
+the system can retire per second, which is what capacity planning needs.
+`scripts/load_test_api.py` reports `requests_per_second` for the measured run.
+
+Derive the theoretical ceiling and compare. From the observability endpoint in
+section 2, total database milliseconds over the window is the sum across SQL
+operations of `average_ms x total`. Divide by the number of requests in the same
+window to get `D`, the mean database milliseconds per request. Then:
+
+```text
+ceiling (requests/second) = default_pool_size / (D / 1000)
+```
+
+At 20 server connections and `D` of 25 ms that is roughly 800 requests/second;
+at 100 ms it is 200. Record `D`, the ceiling, and the measured
+`requests_per_second` together — the gap between the last two is the headroom
+before queueing begins, and a measured rate that stops rising as concurrency
+increases confirms the pool is saturated rather than the application being slow.
+
+Record the following, and treat it as the baseline every later change is
+compared against:
+
+| Measurement | Value | Source |
+| --- | --- | --- |
+| Read API p50 / p95 / p99 | | section 3 |
+| Requests per second | | `load_test_api.py` |
+| Database ms per request (`D`) | | section 2 |
+| Theoretical ceiling | | `default_pool_size / (D / 1000)` |
+| Peak clients waiting | | section 6 |
+| Peak server connections active | | section 6 |
+| Slowest query by total time | | section 4 |

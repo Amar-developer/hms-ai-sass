@@ -1,9 +1,9 @@
-name: medizinhub-hms
+name: ${MEDIZINHUB_PROJECT_NAME:-medizinhub-hms-local}
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: medizinhub-postgres
+    container_name: ${MEDIZINHUB_PROJECT_NAME:-medizinhub-hms-local}-postgres
     command:
       - postgres
       - -c
@@ -17,7 +17,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-medizinhub}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medizinhub_dev}
     ports:
-      - "5433:5432"
+      - "${MEDIZINHUB_POSTGRES_PORT:-5433}:5432"
     volumes:
       - medizinhub_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,9 +28,9 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: medizinhub-redis
+    container_name: ${MEDIZINHUB_PROJECT_NAME:-medizinhub-hms-local}-redis
     ports:
-      - "6380:6379"
+      - "${MEDIZINHUB_REDIS_PORT_HOST:-6380}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -43,9 +43,9 @@ services:
       dockerfile: Dockerfile.dev
       args:
         NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8080/api/v1}
-    container_name: medizinhub-frontend
+    container_name: ${MEDIZINHUB_PROJECT_NAME:-medizinhub-hms-local}-frontend
     ports:
-      - "3000:3000"
+      - "${MEDIZINHUB_FRONTEND_PORT:-3000}:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -72,9 +72,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
-    container_name: medizinhub-backend
+    container_name: ${MEDIZINHUB_PROJECT_NAME:-medizinhub-hms-local}-backend
     ports:
-      - "8080:8080"
+      - "${MEDIZINHUB_API_PORT:-8080}:8080"
     extra_hosts:
       - "local.healthcare:host-gateway"
     volumes:
@@ -89,7 +89,15 @@ services:
       - .env
     environment:
       PYTHONPATH: /app
-      MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+      # Defined here, not in .env, so one place decides where the app connects
+      # — the same rule as docker-compose.yml. This stack runs no pooler, so
+      # the default host is PostgreSQL itself; docker-compose.yml defaults to
+      # pgbouncer instead. Both accept MEDIZINHUB_DB_HOST to override.
+      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@${MEDIZINHUB_DB_HOST:-postgres}:${MEDIZINHUB_DB_PORT:-5432}/${POSTGRES_DB:-medizinhub_hms}
+      MEDIZINHUB_MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@${MEDIZINHUB_MIGRATION_DB_HOST:-postgres}:${MEDIZINHUB_MIGRATION_DB_PORT:-5432}/${POSTGRES_DB:-medizinhub_hms}
+      # No pooler in this stack, so prepared statements are safe to keep.
+      MEDIZINHUB_DB_DISABLE_PREPARED_STATEMENTS: ${MEDIZINHUB_DB_DISABLE_PREPARED_STATEMENTS:-false}
+      MEDIZINHUB_REDIS_URL: redis://${MEDIZINHUB_REDIS_HOST:-redis}:${MEDIZINHUB_REDIS_PORT:-6379}/${MEDIZINHUB_REDIS_DB:-0}
     command: >
       bash -c "
       alembic -c alembic/alembic.ini upgrade head &&
@@ -107,7 +115,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
-    container_name: medizinhub-report-worker
+    container_name: ${MEDIZINHUB_PROJECT_NAME:-medizinhub-hms-local}-report-worker
     extra_hosts:
       - "local.healthcare:host-gateway"
     volumes:
@@ -120,7 +128,15 @@ services:
       - .env
     environment:
       PYTHONPATH: /app
-      MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+      # Defined here, not in .env, so one place decides where the app connects
+      # — the same rule as docker-compose.yml. This stack runs no pooler, so
+      # the default host is PostgreSQL itself; docker-compose.yml defaults to
+      # pgbouncer instead. Both accept MEDIZINHUB_DB_HOST to override.
+      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@${MEDIZINHUB_DB_HOST:-postgres}:${MEDIZINHUB_DB_PORT:-5432}/${POSTGRES_DB:-medizinhub_hms}
+      MEDIZINHUB_MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@${MEDIZINHUB_MIGRATION_DB_HOST:-postgres}:${MEDIZINHUB_MIGRATION_DB_PORT:-5432}/${POSTGRES_DB:-medizinhub_hms}
+      # No pooler in this stack, so prepared statements are safe to keep.
+      MEDIZINHUB_DB_DISABLE_PREPARED_STATEMENTS: ${MEDIZINHUB_DB_DISABLE_PREPARED_STATEMENTS:-false}
+      MEDIZINHUB_REDIS_URL: redis://${MEDIZINHUB_REDIS_HOST:-redis}:${MEDIZINHUB_REDIS_PORT:-6379}/${MEDIZINHUB_REDIS_DB:-0}
     command: python -m app.modules.reports.worker
 
 volumes:
