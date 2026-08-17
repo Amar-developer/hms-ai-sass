@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 import anyio.to_thread
@@ -5,6 +6,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from app.api.router import api_router
@@ -24,6 +26,35 @@ async def database_pool_timeout_handler(
     request: Request, _exc: SQLAlchemyTimeoutError
 ) -> JSONResponse:
     record_pool_timeout()
+    request_id = getattr(request.state, "request_id", None)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "detail": "The service is temporarily busy. Please retry shortly.",
+            "request_id": request_id,
+        },
+        headers={"Retry-After": "3"},
+    )
+
+
+async def database_unavailable_handler(
+    request: Request, exc: OperationalError
+) -> JSONResponse:
+    """Return 503 instead of 500 when the database connection itself fails.
+
+    Under saturation PgBouncer holds the request for `query_wait_timeout` and
+    then closes the queued connection. That surfaces as OperationalError, not
+    the SQLAlchemyTimeoutError above, so without this handler the load-shedding
+    path returns 500 and clients have no signal to retry. Every OperationalError
+    means the database was unreachable or dropped the connection, which is a
+    server-side availability problem in all cases, so the mapping is not
+    narrowed to the pooler's specific message.
+    """
+    logging.getLogger("medizinhub").error(
+        "database_unavailable",
+        extra={"error_type": type(exc).__name__},
+        exc_info=exc,
+    )
     request_id = getattr(request.state, "request_id", None)
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -72,6 +103,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
 
     app.add_exception_handler(SQLAlchemyTimeoutError, database_pool_timeout_handler)
+    app.add_exception_handler(OperationalError, database_unavailable_handler)
 
     @app.get("/", tags=["platform"])
     def root() -> dict[str, str]:
