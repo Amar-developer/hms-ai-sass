@@ -155,3 +155,34 @@ def test_probe_http_reports_a_failure_instead_of_raising():
 
     assert result["status"] is None
     assert "Error" in result["body"] or "error" in result["body"]
+
+
+def test_env_file_is_passed_before_the_compose_file():
+    """Compose parses -f against variables from --env-file, so ordering and
+    presence both matter: a compose file declaring ${VAR:?...} cannot even be
+    read without it."""
+    from scripts.pgbouncer_admin import _admin_command
+
+    command = _admin_command(
+        "SHOW CONFIG",
+        compose_command="sudo docker compose",
+        compose_file="docker-compose.staging.yml",
+        service="pgbouncer",
+        env_file=".env.staging",
+    )
+
+    assert command[3:5] == ["--env-file", ".env.staging"]
+    assert command[5:7] == ["-f", "docker-compose.staging.yml"]
+
+
+def test_env_file_is_omitted_when_not_supplied():
+    from scripts.pgbouncer_admin import _admin_command
+
+    command = _admin_command(
+        "SHOW POOLS",
+        compose_command="docker compose",
+        compose_file="docker-compose.yml",
+        service="pgbouncer",
+    )
+
+    assert "--env-file" not in command

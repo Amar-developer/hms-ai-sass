@@ -72,6 +72,28 @@ Restore:
 docker exec -t <postgres_container> pg_restore -U <db_user> -d <db_name> --no-owner --no-privileges /tmp/hms_prod_dump.sql
 ```
 
+Rebuild planner statistics — do not skip this:
+```bash
+docker exec -t <postgres_container> psql -U <db_user> -d <db_name> -c "ANALYZE;"
+```
+
+`pg_restore` loads rows and rebuilds indexes but computes **no statistics**, so
+until `ANALYZE` runs the planner has none and estimates every table using
+built-in defaults. Verified on a real restore of this database: 93 of 109
+tables had no statistics at all, and 43 still reported `reltuples = -1`
+(PostgreSQL's marker for "never analysed"). Plans chosen in that state are not
+the plans production would choose, so any `EXPLAIN` work — and any conclusion
+drawn from it — is invalid until this has run. Autovacuum gets there
+eventually, but only after enough write traffic, which a freshly restored
+environment does not have.
+
+Confirm it worked:
+```bash
+docker exec -t <postgres_container> psql -U <db_user> -d <db_name> \
+  -c "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.reltuples = -1;"
+```
+Expect `0`.
+
 Restart services:
 ```bash
 docker start <backend_container> <worker_container>
