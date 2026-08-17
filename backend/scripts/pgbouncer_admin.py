@@ -334,6 +334,7 @@ def command_saturate(args: argparse.Namespace) -> int:
             service=args.service,
             holders=args.holders,
             hold_seconds=args.hold_seconds,
+            env_file=args.env_file,
         ),
         capture_output=True,
         text=True,
@@ -463,6 +464,7 @@ def command_sample(args: argparse.Namespace) -> int:
                     compose_command=args.compose_command,
                     compose_file=args.compose_file,
                     service=args.service,
+                    env_file=args.env_file,
                 )
             ),
             "stats": parse_csv_rows(
@@ -471,6 +473,7 @@ def command_sample(args: argparse.Namespace) -> int:
                     compose_command=args.compose_command,
                     compose_file=args.compose_file,
                     service=args.service,
+                    env_file=args.env_file,
                 )
             ),
         }

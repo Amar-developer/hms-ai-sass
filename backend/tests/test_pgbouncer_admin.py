@@ -186,3 +186,55 @@ def test_env_file_is_omitted_when_not_supplied():
     )
 
     assert "--env-file" not in command
+
+
+def test_every_subcommand_passes_env_file_through_to_compose(monkeypatch):
+    """Guards the wiring, not just the helpers.
+
+    An earlier fix added --env-file to _admin_command and _holder_command but
+    missed three call sites, so `verify` worked while `sample` and `saturate`
+    still failed to interpolate the compose file. Tests that called the
+    helpers directly passed anyway. This drives the subcommands and inspects
+    the argv actually handed to subprocess.
+    """
+    import subprocess as sp
+    from types import SimpleNamespace
+
+    from scripts import pgbouncer_admin as mod
+
+    calls: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        calls.append(command)
+        out = SHOW_POOLS_CSV if "SHOW POOLS" in command[-1] else SHOW_STATS_CSV
+        return sp.CompletedProcess(command, 0, stdout=out, stderr="")
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+
+    base = dict(
+        compose_command="docker compose",
+        compose_file="docker-compose.staging.yml",
+        service="pgbouncer",
+        env_file=".env.staging",
+    )
+
+    mod.command_sample(
+        SimpleNamespace(**base, duration_seconds=0, interval_seconds=0, output=None)
+    )
+    mod.command_saturate(
+        SimpleNamespace(
+            **base,
+            holders=30,
+            hold_seconds=45,
+            saturation_timeout_seconds=0,
+            probe_url=None,
+            probe_json=None,
+            probe_timeout_seconds=1,
+        )
+    )
+
+    assert calls, "no compose commands were issued"
+    for command in calls:
+        assert "--env-file" in command, f"missing --env-file in {command[:6]}"
+        index = command.index("--env-file")
+        assert command[index + 1] == ".env.staging"
