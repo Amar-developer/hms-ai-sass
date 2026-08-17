@@ -383,19 +383,31 @@ def command_saturate(args: argparse.Namespace) -> int:
         payload=args.probe_json,
         timeout_seconds=args.probe_timeout_seconds,
     )
-    print(
-        f"\n  HTTP {result['status']} in {result['seconds']}s\n" f"  {result['body']}"
-    )
+    print(f"\n  HTTP {result['status']} in {result['seconds']}s\n  {result['body']}")
     if result["status"] == 503:
         print("\nLoad shedding works: saturation returns 503 to the client.")
         return 0
+
+    # No HTTP status at all means the probe never got a response to judge. The
+    # request did not reach the application, so this says nothing about how the
+    # application behaves under saturation.
+    if result["status"] is None:
+        print(
+            f"\nInconclusive: the probe got no HTTP response after "
+            f"{result['seconds']}s, so it never reached the application. A "
+            "connection error within a second or two usually means the API is "
+            "still starting — the container reports `Started` before Uvicorn "
+            "binds, because migrations and readiness checks run first. Wait "
+            "for `(healthy)` and for /api/v1/health to return 200, then re-run."
+        )
+        return 1
 
     # A fast, ordinary response means the request never queued behind the
     # exhausted pool, so it says nothing about overload behaviour. Reporting it
     # as a load-shedding failure would be wrong: the likely causes are that the
     # API reaches PostgreSQL without passing through this pooler, or that it
     # uses a different user/database pair and therefore a different pool.
-    if result["status"] is not None and result["seconds"] < args.hold_seconds / 4:
+    if result["seconds"] < args.hold_seconds / 4:
         print(
             f"\nInconclusive: the probe returned {result['status']} in "
             f"{result['seconds']}s without waiting, even though "
@@ -409,10 +421,13 @@ def command_saturate(args: argparse.Namespace) -> int:
 
     print(
         f"\nExpected 503 under saturation, got {result['status']} after "
-        f"{result['seconds']}s. A request that waited and then failed points "
-        "at PgBouncer closing the queued connection, which raises "
-        "OperationalError — not the SQLAlchemyTimeoutError that the handler "
-        "in app/main.py catches."
+        f"{result['seconds']}s. A request that waited and then failed points at "
+        "PgBouncer closing the queued connection. Read the class off the "
+        "traceback before changing anything — the same event surfaces as "
+        "OperationalError, InterfaceError or ResourceClosedError depending on "
+        "how far the connection got, and none of them inherit from another:\n"
+        "  docker compose logs backend --since 15m --no-color "
+        "| grep -A2 unhandled_error"
     )
     return 1
 

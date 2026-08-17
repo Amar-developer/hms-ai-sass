@@ -97,6 +97,36 @@ These decisions are release gates, not implementation details:
 
 ## 5. Proposed Architecture
 
+### 5.0 SOLID implementation constraints
+
+The SMS integration must follow the architecture already established by the
+project. SOLID is an implementation constraint and part of review acceptance,
+not a later refactoring activity.
+
+| Principle | SMS implementation rule |
+| --- | --- |
+| Single Responsibility | Routes handle HTTP only; `SmsIntegrationService` handles settings/use cases; `SmsPolicyService` handles consent and eligibility; `SmsTemplateResolver` handles approved template selection/rendering; `SmsQueueProcessor` handles claiming and status transitions; `SmsCountryGateway` handles only SMSCountry protocol translation; repositories handle persistence queries. |
+| Open/Closed | New providers are added as new `SmsGateway` adapters and factory registrations. Domain workflows, queue models, and API contracts must not be rewritten to add another provider. |
+| Liskov Substitution | Every adapter must obey the same gateway result semantics for accepted, permanent failure, retryable failure, external ID, and delivery status. Shared contract tests must run against the SMSCountry adapter and future adapters. |
+| Interface Segregation | Use small interfaces such as `SmsSender`, `SmsDeliveryStatusVerifier`, or webhook verifier only where required. Do not create one gateway interface containing SMS, WhatsApp, OTP, balance, templates, reports, and campaigns. |
+| Dependency Inversion | Notification/domain services depend on the `SmsGateway` port and injected policy/repository contracts, never on SMSCountry HTTP classes. The composition factory is the only layer that selects `SmsCountryGateway`. |
+
+Additional boundaries:
+
+- No provider SDK, endpoint, payload key, or SMSCountry status code in clinical,
+  billing, patient, notification-domain, or API route code.
+- No direct database queries in the SMS API router or provider adapter.
+- No business policy in Pydantic schemas, React components, worker entrypoints,
+  or webhook parsing code.
+- Do not create a single large `sms_service.py`; split settings, policy,
+  templates, usage, queue administration, processing, and callbacks by reason
+  to change.
+- Use constructor/function dependency injection and the existing integration
+  factory. Tests provide fake gateway/clock implementations without network
+  calls or global monkey-patching where practical.
+- Keep compatibility facades only where existing imports require them; new code
+  imports the focused service or port directly.
+
 ### 5.1 Boundary and modules
 
 Follow the existing ports-and-adapters structure:
@@ -436,9 +466,12 @@ matrix; provider sandbox and webhook documentation are available.
 - Add SMS schemas/settings service, encrypted configuration, gateway port and
   selected adapter, delivery lifecycle fields, consent model, template resolver,
   usage policy, and unit tests.
+- Add dependency injection/composition through the integration factory and
+  architecture tests that prevent application/domain modules from importing the
+  SMSCountry adapter.
 
 Exit: settings/readiness APIs pass; adapter contract and migrations are tested;
-no production triggers send yet.
+SOLID boundary tests pass; no production triggers send yet.
 
 ### Phase 2 — Worker and administration
 
@@ -486,6 +519,9 @@ incident processes are operational.
   viewing secrets or unnecessary patient data.
 - Usage/segment limits and subscription entitlement are enforced before send.
 - Regulatory, privacy, security, load, integration, and frontend tests pass.
+- Architecture tests confirm routes remain thin, persistence stays behind
+  repositories, domain services depend on the `SmsGateway` abstraction, and no
+  SMSCountry imports escape the infrastructure adapter/composition boundary.
 - Canary, rollback/kill switch, support runbook, monitoring, and owner sign-off
   are complete before broader tenant enablement.
 
