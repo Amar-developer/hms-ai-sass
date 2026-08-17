@@ -144,7 +144,7 @@ Read the summary as follows:
 | `peak_clients_waiting` | Above zero, the server pool was the binding constraint. |
 | `peak_max_wait_seconds` | Approaching `query_wait_timeout`, requests are being cancelled rather than delayed. |
 | `peak_server_connections_active` | At `default_pool_size`, the pool was fully committed. |
-| `total_wait_time_us_delta` | Total microseconds clients spent queued during the window. |
+| `total_wait_time_us_delta` | Microseconds spent queued by clients that were **eventually served**. Waits that PgBouncer cancels at `query_wait_timeout` are not counted, so this reads 0 in a deliberate saturation test even while clients queue continuously. Use `peak_max_wait_seconds` to judge saturation; use this only for runs that stayed below the timeout. |
 
 If `pool_was_the_constraint` is false, the run never reached the pooler's
 limit; raise load, or look upstream at `web_thread_limit` and

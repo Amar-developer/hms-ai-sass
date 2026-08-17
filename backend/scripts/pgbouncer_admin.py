@@ -108,6 +108,14 @@ def summarize_samples(samples: list[dict]) -> dict[str, object]:
     connection: the pool is the binding constraint at that moment.
     ``peak_max_wait_seconds`` approaching ``query_wait_timeout`` means requests
     are being cancelled rather than merely delayed.
+
+    ``total_wait_time_us_delta`` is narrower than it sounds. PgBouncer adds to
+    ``total_wait_time`` only when a waiting client is finally handed a server
+    connection, so waits it cancels at ``query_wait_timeout`` never land in the
+    counter. Measured on staging: 26 consecutive samples with clients queued and
+    a 10-second ``maxwait`` still produced a delta of zero. A zero here is
+    therefore not evidence that nobody waited — read ``peak_max_wait_seconds``
+    and ``samples_with_clients_waiting`` for that.
     """
     peak_waiting = 0
     peak_wait_seconds = 0.0
