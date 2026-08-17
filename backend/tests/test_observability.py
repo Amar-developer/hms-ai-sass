@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import Session
 
@@ -16,7 +17,7 @@ from app.core.runtime_metrics import (
     reset_for_tests,
     snapshot,
 )
-from app.main import database_pool_timeout_handler
+from app.main import database_pool_timeout_handler, database_unavailable_handler
 from app.modules.notifications.services.operational_metrics import (
     read_queue_metrics,
     read_worker_metrics,
@@ -159,6 +160,36 @@ def test_pool_timeout_returns_fast_retryable_service_unavailable():
         "The service is temporarily busy"
     )
     assert snapshot()["database_pool_timeouts"] == 1
+
+
+def test_pooler_dropped_connection_is_shed_as_503_not_500():
+    """Measured on staging: under saturation PgBouncer waits query_wait_timeout
+    and then closes the queued connection, which raises OperationalError rather
+    than SQLAlchemyTimeoutError. Without a handler the client sees 500 and has
+    no Retry-After, so load shedding is invisible to callers."""
+    request = SimpleNamespace(state=SimpleNamespace(request_id="request-shed"))
+    response = asyncio.run(
+        database_unavailable_handler(
+            request,
+            OperationalError(
+                "SELECT 1", {}, Exception("server closed the connection unexpectedly")
+            ),
+        )
+    )
+
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "3"
+    assert json.loads(response.body)["request_id"] == "request-shed"
+
+
+def test_the_app_registers_a_handler_for_pooler_dropped_connections():
+    """The handler only sheds load if it is actually wired to the app."""
+    from app.main import create_app
+
+    handlers = create_app().exception_handlers
+
+    assert handlers[OperationalError] is database_unavailable_handler
+    assert handlers[SQLAlchemyTimeoutError] is database_pool_timeout_handler
 
 
 def test_runtime_metrics_report_request_and_database_percentiles():
