@@ -29,6 +29,8 @@ import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { FormField } from "@/app/components/FormElements";
 import {
@@ -38,8 +40,9 @@ import {
 } from "./api";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getLabColumns } from "./Column";
-import { getLabTableSchema } from "./filterSchema";
+import { getLabTableSchema, getLabQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
+import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 import { displayDocumentNumber } from "@/lib/documentNumbers";
 
@@ -155,10 +158,10 @@ export function Lab({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [page, setPage] = useState(1);
   const [worklistQuery, setWorklistQuery] = useState("");
-  const [worklistFilters, setWorklistFilters] = useState<
-    Record<string, string>
-  >({ source: "all", status: "all" });
   const [worklistSort, setWorklistSort] = useState<SortState | null>(null);
+  const [worklistQueryFilters, setWorklistQueryFilters] = useState<
+    QueryFilterRow[]
+  >([]);
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
   const [worklistFromDate, setWorklistFromDate] = useState("");
@@ -255,14 +258,15 @@ export function Lab({
     ];
   }, [orders]);
 
-  const labSchema = getLabTableSchema({
-    sourceOptions: worklistSourceOptions,
-    statusOptions: worklistStatusOptions,
-  });
-
-  function onWorklistFilterChange(key: string, value: string) {
-    setWorklistFilters((prev) => ({ ...prev, [key]: value }));
-  }
+  const labSchema = getLabTableSchema();
+  const labQueryFields = useMemo(
+    () =>
+      getLabQueryFields({
+        sourceOptions: worklistSourceOptions,
+        statusOptions: worklistStatusOptions,
+      }),
+    [worklistSourceOptions, worklistStatusOptions],
+  );
 
   const filteredOrders = useMemo(() => {
     const q = worklistQuery.trim().toLowerCase();
@@ -273,48 +277,55 @@ export function Lab({
       ? new Date(`${worklistToDate}T23:59:59`).getTime()
       : null;
 
-    const matching = orders.filter((o: any) => {
-      if (q) {
-        const name = String(
-          o.patient_name || (patientMap.get(o.patient_id) as any)?.name || "",
-        ).toLowerCase();
-        if (!name.includes(q)) return false;
-      }
+    const matching = orders
+      .filter((o: any) => {
+        if (q) {
+          const name = String(
+            o.patient_name ||
+              (patientMap.get(o.patient_id) as any)?.name ||
+              "",
+          ).toLowerCase();
+          if (!name.includes(q)) return false;
+        }
 
-      if (worklistFilters.source !== "all") {
-        const source = String(o.acquisition_source || o.source || "");
-        if (source !== worklistFilters.source) return false;
-      }
+        const amount = Number(o.amount);
+        if (min !== null && amount < min) return false;
+        if (max !== null && amount > max) return false;
 
-      if (worklistFilters.status !== "all") {
-        if (String(o.status || "") !== worklistFilters.status) return false;
-      }
+        const createdAt = o.created_at
+          ? new Date(o.created_at).getTime()
+          : null;
+        if (from !== null && (createdAt === null || createdAt < from))
+          return false;
+        if (to !== null && (createdAt === null || createdAt > to))
+          return false;
 
-      const amount = Number(o.amount);
-      if (min !== null && amount < min) return false;
-      if (max !== null && amount > max) return false;
+        return true;
+      })
+      // The ad-hoc "Source" query field targets `acquisition_source`
+      // specifically — normalize the older `source` field into it so rows
+      // written before the rename still match.
+      .map((o: any) => ({
+        ...o,
+        acquisition_source: o.acquisition_source || o.source,
+      }));
 
-      const createdAt = o.created_at ? new Date(o.created_at).getTime() : null;
-      if (from !== null && (createdAt === null || createdAt < from))
-        return false;
-      if (to !== null && (createdAt === null || createdAt > to)) return false;
-
-      return true;
-    });
-
-    return sortRows(matching, worklistSort, (row, key) =>
-      key === "source" ? row.acquisition_source || row.source : row[key],
+    return sortRows(
+      applyQueryFilters(matching, labQueryFields, worklistQueryFilters),
+      worklistSort,
+      (row, key) => (key === "source" ? row.acquisition_source : row[key]),
     );
   }, [
     orders,
     worklistQuery,
-    worklistFilters,
     worklistSort,
     amountMin,
     amountMax,
     worklistFromDate,
     worklistToDate,
     patientMap,
+    labQueryFields,
+    worklistQueryFilters,
   ]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
@@ -354,7 +365,6 @@ export function Lab({
     setPage(1);
   }, [
     worklistQuery,
-    worklistFilters,
     amountMin,
     amountMax,
     worklistFromDate,
@@ -742,53 +752,71 @@ export function Lab({
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <BreadcrumbSlot>
-        <AdaptiveFilterTrigger
-          schema={labSchema}
-          query={worklistQuery}
-          setQuery={setWorklistQuery}
-          filterValues={worklistFilters}
-          onFilterChange={onWorklistFilterChange}
-          sort={worklistSort}
-          onSortChange={setWorklistSort}
-          onReset={() => {
-            setWorklistFilters({ source: "all", status: "all" });
-            setAmountMin("");
-            setAmountMax("");
-            setWorklistFromDate("");
-            setWorklistToDate("");
-          }}
-        >
-          <FormField label="Price Min">
-            <Input
-              type="number"
-              value={amountMin}
-              onChange={(e: any) => setAmountMin(e.target.value)}
-              placeholder="Min amount"
-            />
-          </FormField>
-          <FormField label="Price Max">
-            <Input
-              type="number"
-              value={amountMax}
-              onChange={(e: any) => setAmountMax(e.target.value)}
-              placeholder="Max amount"
-            />
-          </FormField>
-          <FormField label="From">
-            <Input
-              type="date"
-              value={worklistFromDate}
-              onChange={(e: any) => setWorklistFromDate(e.target.value)}
-            />
-          </FormField>
-          <FormField label="To">
-            <Input
-              type="date"
-              value={worklistToDate}
-              onChange={(e: any) => setWorklistToDate(e.target.value)}
-            />
-          </FormField>
-        </AdaptiveFilterTrigger>
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={labPageRows.length}
+            total={filteredOrders.length}
+            noun="orders"
+          />
+          <RefreshButton
+            onRefresh={load}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={labSchema}
+            query={worklistQuery}
+            setQuery={setWorklistQuery}
+            filterValues={{}}
+            sort={worklistSort}
+            onSortChange={setWorklistSort}
+            showSort={false}
+            onReset={() => {
+              setAmountMin("");
+              setAmountMax("");
+              setWorklistFromDate("");
+              setWorklistToDate("");
+            }}
+            queryFields={labQueryFields}
+            queryFilters={worklistQueryFilters}
+            onQueryFiltersChange={setWorklistQueryFilters}
+          >
+            <FormField label="Price Min">
+              <Input
+                type="number"
+                value={amountMin}
+                onChange={(e: any) => setAmountMin(e.target.value)}
+                placeholder="Min amount"
+              />
+            </FormField>
+            <FormField label="Price Max">
+              <Input
+                type="number"
+                value={amountMax}
+                onChange={(e: any) => setAmountMax(e.target.value)}
+                placeholder="Max amount"
+              />
+            </FormField>
+            <FormField label="From">
+              <Input
+                type="date"
+                value={worklistFromDate}
+                onChange={(e: any) => setWorklistFromDate(e.target.value)}
+              />
+            </FormField>
+            <FormField label="To">
+              <Input
+                type="date"
+                value={worklistToDate}
+                onChange={(e: any) => setWorklistToDate(e.target.value)}
+              />
+            </FormField>
+          </AdaptiveFilterTrigger>
+          <AdaptiveSortTrigger
+            fields={labSchema.sortFields}
+            sort={worklistSort}
+            onSortChange={setWorklistSort}
+          />
+        </div>
       </BreadcrumbSlot>
       {canCreateLabOrder && (
         <Card>
@@ -843,7 +871,6 @@ export function Lab({
       <Card className="mt-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="card-title font-bold">Lab / Service Worklist</h3>
-          <RefreshButton onRefresh={load} />
         </div>
         <div className="mt-4">
           {!ordersLoaded ? (

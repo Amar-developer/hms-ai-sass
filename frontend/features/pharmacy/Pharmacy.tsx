@@ -16,6 +16,8 @@ import { today } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import { DataTable } from "@/app/components/common/DataTable";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { ConsultPrescriptionModal } from "./components/ConsultPrescriptionModal";
@@ -31,8 +33,9 @@ import {
 } from "./api";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { getPharmacyColumns, getPrescriptionColumns } from "./Column";
-import { getPharmacyTableSchema } from "./filterSchema";
+import { getPharmacyTableSchema, getPharmacyQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
+import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 
 const pageSize = 10;
@@ -96,10 +99,10 @@ export function Pharmacy({
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [worklistQuery, setWorklistQuery] = useState("");
-  const [worklistFilters, setWorklistFilters] = useState<
-    Record<string, string>
-  >({ source: "all", status: "all" });
   const [worklistSort, setWorklistSort] = useState<SortState | null>(null);
+  const [worklistQueryFilters, setWorklistQueryFilters] = useState<
+    QueryFilterRow[]
+  >([]);
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
   const [worklistFromDate, setWorklistFromDate] = useState("");
@@ -214,14 +217,15 @@ export function Pharmacy({
     ];
   }, [issues]);
 
-  function onWorklistFilterChange(key: string, value: string) {
-    setWorklistFilters((prev) => ({ ...prev, [key]: value }));
-  }
-
-  const pharmacySchema = getPharmacyTableSchema({
-    sourceOptions: worklistSourceOptions,
-    statusOptions: worklistStatusOptions,
-  });
+  const pharmacySchema = getPharmacyTableSchema();
+  const pharmacyQueryFields = useMemo(
+    () =>
+      getPharmacyQueryFields({
+        sourceOptions: worklistSourceOptions,
+        statusOptions: worklistStatusOptions,
+      }),
+    [worklistSourceOptions, worklistStatusOptions],
+  );
 
 
   const { patients, patientMap } = usePatientReferencesQuery(
@@ -250,16 +254,6 @@ export function Pharmacy({
         if (!name.includes(q)) return false;
       }
 
-      if (worklistFilters.source !== "all") {
-        if (String(issue.source || "") !== worklistFilters.source)
-          return false;
-      }
-
-      if (worklistFilters.status !== "all") {
-        if (String(issue.status || "") !== worklistFilters.status)
-          return false;
-      }
-
       const amount = Number(issue.amount);
       if (min !== null && amount < min) return false;
       if (max !== null && amount > max) return false;
@@ -274,17 +268,21 @@ export function Pharmacy({
       return true;
     });
 
-    return sortRows(matching, worklistSort);
+    return sortRows(
+      applyQueryFilters(matching, pharmacyQueryFields, worklistQueryFilters),
+      worklistSort,
+    );
   }, [
     issues,
     worklistQuery,
-    worklistFilters,
     worklistSort,
     amountMin,
     amountMax,
     worklistFromDate,
     worklistToDate,
     patientMap,
+    pharmacyQueryFields,
+    worklistQueryFilters,
   ]);
 
   const totalPages = Math.max(1, Math.ceil(filteredIssues.length / pageSize));
@@ -307,7 +305,6 @@ export function Pharmacy({
     setPage(1);
   }, [
     worklistQuery,
-    worklistFilters,
     amountMin,
     amountMax,
     worklistFromDate,
@@ -563,53 +560,71 @@ export function Pharmacy({
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <BreadcrumbSlot>
-        <AdaptiveFilterTrigger
-          schema={pharmacySchema}
-          query={worklistQuery}
-          setQuery={setWorklistQuery}
-          filterValues={worklistFilters}
-          onFilterChange={onWorklistFilterChange}
-          sort={worklistSort}
-          onSortChange={setWorklistSort}
-          onReset={() => {
-            setWorklistFilters({ source: "all", status: "all" });
-            setAmountMin("");
-            setAmountMax("");
-            setWorklistFromDate("");
-            setWorklistToDate("");
-          }}
-        >
-          <FormField label="Price Min">
-            <Input
-              type="number"
-              value={amountMin}
-              onChange={(e: any) => setAmountMin(e.target.value)}
-              placeholder="Min amount"
-            />
-          </FormField>
-          <FormField label="Price Max">
-            <Input
-              type="number"
-              value={amountMax}
-              onChange={(e: any) => setAmountMax(e.target.value)}
-              placeholder="Max amount"
-            />
-          </FormField>
-          <FormField label="From">
-            <Input
-              type="date"
-              value={worklistFromDate}
-              onChange={(e: any) => setWorklistFromDate(e.target.value)}
-            />
-          </FormField>
-          <FormField label="To">
-            <Input
-              type="date"
-              value={worklistToDate}
-              onChange={(e: any) => setWorklistToDate(e.target.value)}
-            />
-          </FormField>
-        </AdaptiveFilterTrigger>
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={pharmacyPageRows.length}
+            total={filteredIssues.length}
+            noun="issues"
+          />
+          <RefreshButton
+            onRefresh={load}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={pharmacySchema}
+            query={worklistQuery}
+            setQuery={setWorklistQuery}
+            filterValues={{}}
+            sort={worklistSort}
+            onSortChange={setWorklistSort}
+            showSort={false}
+            onReset={() => {
+              setAmountMin("");
+              setAmountMax("");
+              setWorklistFromDate("");
+              setWorklistToDate("");
+            }}
+            queryFields={pharmacyQueryFields}
+            queryFilters={worklistQueryFilters}
+            onQueryFiltersChange={setWorklistQueryFilters}
+          >
+            <FormField label="Price Min">
+              <Input
+                type="number"
+                value={amountMin}
+                onChange={(e: any) => setAmountMin(e.target.value)}
+                placeholder="Min amount"
+              />
+            </FormField>
+            <FormField label="Price Max">
+              <Input
+                type="number"
+                value={amountMax}
+                onChange={(e: any) => setAmountMax(e.target.value)}
+                placeholder="Max amount"
+              />
+            </FormField>
+            <FormField label="From">
+              <Input
+                type="date"
+                value={worklistFromDate}
+                onChange={(e: any) => setWorklistFromDate(e.target.value)}
+              />
+            </FormField>
+            <FormField label="To">
+              <Input
+                type="date"
+                value={worklistToDate}
+                onChange={(e: any) => setWorklistToDate(e.target.value)}
+              />
+            </FormField>
+          </AdaptiveFilterTrigger>
+          <AdaptiveSortTrigger
+            fields={pharmacySchema.sortFields}
+            sort={worklistSort}
+            onSortChange={setWorklistSort}
+          />
+        </div>
       </BreadcrumbSlot>
       {canCreatePharmacyIssue && (
         <Card>
@@ -737,7 +752,6 @@ export function Pharmacy({
       <Card>
         <div className="flex items-center justify-between gap-2">
           <h3 className="card-title font-bold">Pharmacy Worklist</h3>
-          <RefreshButton onRefresh={load} />
         </div>
         <div className="mt-4">
           {!issuesLoaded ? (

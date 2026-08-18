@@ -1,51 +1,37 @@
-import { FilterSection } from "@/app/components/common/FilterSection";
 import { Pagination } from "@/app/components/common/Pagination";
-import { Button, Card, RefreshButton } from "@/app/components/common/ui";
+import { Button, Card } from "@/app/components/common/ui";
 import { Plus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
+// Search, sort, reset, and the "+ Add a Filter" custom builder now live in
+// the breadcrumb row (AdaptiveFilterTrigger/AdaptiveSortTrigger/
+// AdaptiveResultCount, rendered by TenantAdmin per section) — this stays a
+// dumb paginated table over whatever pre-filtered/sorted `rows` it's given.
 export function ListCard({
   title,
   rows,
-  searchKeys,
-  filter_className,
   createLabel,
   onCreate,
   canCreate = true,
-  filters = [],
-  filterValues = {},
-  onFilterChange,
-  onRefresh,
   columns,
   render,
   loading = false,
 }: any) {
-  const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 8;
 
-  const filtered = useMemo(() => {
-    return rows.filter((row: any) =>
-      searchKeys.some((key: string) =>
-        String(row[key] ?? "")
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-      ),
-    );
-  }, [rows, query, searchKeys]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const safePage = Math.min(page, totalPages);
 
-  const pageRows = filtered.slice(
+  const pageRows = rows.slice(
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
 
   useEffect(() => {
     setPage(1);
-  }, [query, rows.length]);
+  }, [rows.length]);
 
   return (
     <Card>
@@ -59,34 +45,16 @@ export function ListCard({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {onRefresh && <RefreshButton onRefresh={onRefresh} />}
-
-          {canCreate && onCreate && (
-            <button
-              type="button"
-              onClick={onCreate}
-              className="primary-action gap-2 px-4 py-3 text-xs"
-            >
-              <Plus size={16} />
-              {createLabel}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* SEARCH & FILTERS */}
-      <FilterSection
-        title={title}
-        query={query}
-        setQuery={setQuery}
-        filters={filters}
-        filterValues={filterValues}
-        className={filter_className}
-        onFilterChange={onFilterChange}
-      />
-      <div>
-
+        {canCreate && onCreate && (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="primary-action gap-2 px-4 py-3 text-xs"
+          >
+            <Plus size={16} />
+            {createLabel}
+          </button>
+        )}
       </div>
 
       {/* TABLE */}
@@ -139,7 +107,7 @@ export function ListCard({
       <Pagination
         page={safePage}
         totalPages={totalPages}
-        total={filtered.length}
+        total={rows.length}
         pageSize={pageSize}
         onPage={setPage}
       />

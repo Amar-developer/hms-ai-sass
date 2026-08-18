@@ -12,11 +12,14 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { ScheduleFormValues } from "./schedule.schema";
 import { useSchedulingData, useSchedulingActions } from "./api";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getScheduleColumns } from "./column";
-import { getScheduleTableSchema } from "./filterSchema";
+import { getScheduleTableSchema, getScheduleQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
+import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 
 export function Scheduling({
@@ -26,7 +29,11 @@ export function Scheduling({
   selectedId = "",
 }: any) {
   const router = useRouter();
-  const [filterDepartment, setFilterDepartment] = useState("all");
+  // Department is no longer a row-level filter (moved into the ad-hoc
+  // builder below) — the hook only ever used it to order the department
+  // dropdown's options, so a fixed "all" is equivalent to what a user who
+  // never touched the old dropdown would have seen anyway.
+  const filterDepartment = "all";
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
 
   const { tenants, branches, departments, doctors, rows, loading, reload } =
@@ -40,13 +47,12 @@ export function Scheduling({
 
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const [query, setQuery] = useState("");
-  const [filterBranch, setFilterBranch] = useState("all");
   const [filterWeekday, setFilterWeekday] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("active");
   const [sort, setSort] = useState<SortState | null>({
     key: "updated_at",
     dir: "desc",
   });
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [page, setPage] = useState(1);
   const [message, setMessage] = useState("");
   const [confirm, setConfirm] = useState<any>(null);
@@ -57,25 +63,13 @@ export function Scheduling({
   // One row is one editable schedule now — no more client-side grouping.
   const selected = rows.find((row: any) => row.id === selectedId);
 
-  const scheduleSchema = getScheduleTableSchema({ branches, departments });
+  const scheduleSchema = getScheduleTableSchema();
 
   const filterValues = {
-    branch: filterBranch,
-    department: filterDepartment,
     weekday: filterWeekday,
-    status: filterStatus,
   };
 
   const handleFilterChange = (key: string, value: string) => {
-    if (key == "branch") {
-      setFilterBranch(value);
-    }
-    if (key == "department") {
-      setFilterDepartment(value);
-    }
-    if (key == "status") {
-      setFilterStatus(value);
-    }
     if (key == "weekday") {
       setFilterWeekday(value);
     }
@@ -83,9 +77,6 @@ export function Scheduling({
   };
 
   const resetScheduleFilters = () => {
-    setFilterBranch("all");
-    setFilterDepartment("all");
-    setFilterStatus("active");
     setFilterWeekday("all");
     setSort({ key: "updated_at", dir: "desc" });
   };
@@ -293,31 +284,35 @@ export function Scheduling({
       />
     );
 
+  const scheduleQueryFields = getScheduleQueryFields({
+    rows,
+    branches,
+    departments,
+  });
   const filteredRows = sortRows(
-    rows.filter((row: any) => {
-      const doctor = doctors.find(
-        (item: any) => item.id === row.practitioner_id,
-      );
-      const department = departments.find(
-        (item: any) => item.id === row.department_id,
-      );
-      const text = [
-        row.practitioner_full_name || doctor?.full_name,
-        row.department_name || department?.name,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return (
-        (!query || text.includes(query.toLowerCase())) &&
-        (filterBranch === "all" || row.branch_id === filterBranch) &&
-        (filterDepartment === "all" ||
-          row.department_id === filterDepartment) &&
-        (filterWeekday === "all" ||
-          (row.weekdays || []).includes(Number(filterWeekday))) &&
-        (filterStatus === "all" ||
-          (filterStatus === "active" ? row.is_active : !row.is_active))
-      );
-    }),
+    applyQueryFilters(
+      rows.filter((row: any) => {
+        const doctor = doctors.find(
+          (item: any) => item.id === row.practitioner_id,
+        );
+        const department = departments.find(
+          (item: any) => item.id === row.department_id,
+        );
+        const text = [
+          row.practitioner_full_name || doctor?.full_name,
+          row.department_name || department?.name,
+        ]
+          .join(" ")
+          .toLowerCase();
+        return (
+          (!query || text.includes(query.toLowerCase())) &&
+          (filterWeekday === "all" ||
+            (row.weekdays || []).includes(Number(filterWeekday)))
+        );
+      }),
+      scheduleQueryFields,
+      queryFilters,
+    ),
     sort,
     (row, key) => {
       if (key === "updated_at") return row.updated_at || row.created_at;
@@ -359,16 +354,36 @@ export function Scheduling({
   return (
     <Card>
       <BreadcrumbSlot>
-        <AdaptiveFilterTrigger
-          schema={scheduleSchema}
-          query={query}
-          setQuery={setQuery}
-          filterValues={filterValues}
-          onFilterChange={handleFilterChange}
-          sort={sort}
-          onSortChange={setSort}
-          onReset={resetScheduleFilters}
-        />
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={pageRows.length}
+            total={filteredRows.length}
+            noun="schedules"
+          />
+          <RefreshButton
+            onRefresh={reload}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={scheduleSchema}
+            query={query}
+            setQuery={setQuery}
+            filterValues={filterValues}
+            onFilterChange={handleFilterChange}
+            sort={sort}
+            onSortChange={setSort}
+            showSort={false}
+            onReset={resetScheduleFilters}
+            queryFields={scheduleQueryFields}
+            queryFilters={queryFilters}
+            onQueryFiltersChange={setQueryFilters}
+          />
+          <AdaptiveSortTrigger
+            fields={scheduleSchema.sortFields}
+            sort={sort}
+            onSortChange={setSort}
+          />
+        </div>
       </BreadcrumbSlot>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
@@ -381,7 +396,6 @@ export function Scheduling({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <RefreshButton onRefresh={reload} />
           <button
             type="button"
             onClick={() => open("create")}

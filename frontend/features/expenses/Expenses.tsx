@@ -2,13 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, PlusCircle } from "lucide-react";
-import { Button, Card, Input, StatusToast } from "@/app/components/common/ui";
+import {
+  Button,
+  Card,
+  Input,
+  RefreshButton,
+  StatusToast,
+} from "@/app/components/common/ui";
 import { DataTable } from "@/app/components/common/DataTable";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { FormField } from "@/app/components/FormElements";
-import { getExpenseTableSchema } from "./filterSchema";
+import { getExpenseTableSchema, getExpenseQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
+import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 import { ExpenseSummaryTiles } from "./components/ExpenseSummaryTiles";
 import { ExpenseDetail } from "./components/ExpenseDetail";
@@ -30,6 +39,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [sort, setSort] = useState<SortState | null>(null);
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -80,19 +90,48 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
     [rawExpenses, branchNameById, apiSession?.user?.id],
   );
 
+  const rawMonthGroups = useMemo(() => groupExpensesByMonth(rows), [rows]);
+  const rawMonthRows = useMemo(
+    () =>
+      selectedMonth
+        ? rows.filter((expense) => expense.incurredOn.slice(0, 7) === selectedMonth)
+        : [],
+    [rows, selectedMonth],
+  );
+
+  const expenseQueryFields = useMemo(
+    () =>
+      getExpenseQueryFields(
+        selectedMonth ? "expenses" : "months",
+        selectedMonth ? rawMonthRows : rawMonthGroups,
+      ),
+    [selectedMonth, rawMonthRows, rawMonthGroups],
+  );
+
+  // Query filters are field-key based and the two views have different
+  // field sets — clear them on switching so a stale filter from one view
+  // doesn't silently no-op in the other.
+  useEffect(() => {
+    setQueryFilters([]);
+  }, [Boolean(selectedMonth)]);
+
   const monthGroups = useMemo(
-    () => sortRows(groupExpensesByMonth(rows), selectedMonth ? null : sort),
-    [rows, selectedMonth, sort],
+    () =>
+      sortRows(
+        applyQueryFilters(rawMonthGroups, expenseQueryFields, queryFilters),
+        selectedMonth ? null : sort,
+      ),
+    [rawMonthGroups, expenseQueryFields, queryFilters, selectedMonth, sort],
   );
   const monthRows = useMemo(
     () =>
       sortRows(
         selectedMonth
-          ? rows.filter((expense) => expense.incurredOn.slice(0, 7) === selectedMonth)
+          ? applyQueryFilters(rawMonthRows, expenseQueryFields, queryFilters)
           : [],
         selectedMonth ? sort : null,
       ),
-    [rows, selectedMonth, sort],
+    [rawMonthRows, expenseQueryFields, queryFilters, selectedMonth, sort],
   );
 
   const expenseSchema = getExpenseTableSchema(selectedMonth ? "expenses" : "months");
@@ -174,16 +213,36 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
   return (
     <div className="grid gap-4">
       <BreadcrumbSlot>
-        <AdaptiveFilterTrigger
-          schema={expenseSchema}
-          query={query}
-          setQuery={setQuery}
-          filterValues={{ status: filterStatus, category: filterCategory }}
-          onFilterChange={handleFilterChange}
-          sort={sort}
-          onSortChange={setSort}
-          onReset={handleReset}
-        />
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={selectedMonth ? monthRows.length : monthGroups.length}
+            total={selectedMonth ? rawMonthRows.length : rawMonthGroups.length}
+            noun={selectedMonth ? "expenses" : "months"}
+          />
+          <RefreshButton
+            onRefresh={reload}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={expenseSchema}
+            query={query}
+            setQuery={setQuery}
+            filterValues={{ status: filterStatus, category: filterCategory }}
+            onFilterChange={handleFilterChange}
+            sort={sort}
+            onSortChange={setSort}
+            showSort={false}
+            onReset={handleReset}
+            queryFields={expenseQueryFields}
+            queryFilters={queryFilters}
+            onQueryFiltersChange={setQueryFilters}
+          />
+          <AdaptiveSortTrigger
+            fields={expenseSchema.sortFields}
+            sort={sort}
+            onSortChange={setSort}
+          />
+        </div>
       </BreadcrumbSlot>
       <StatusToast message={message || error} onClose={() => setMessage("")} />
 

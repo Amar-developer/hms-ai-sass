@@ -10,6 +10,8 @@ import {
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
@@ -35,8 +37,9 @@ import { fetchInvoicePage } from "./api/billing.api";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getConsultationPendingColumns, getInvoiceColumns } from "./Column";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
-import { getBillingTableSchema } from "./filterSchema";
+import { getBillingTableSchema, getBillingQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
+import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 import { status_options } from "./contants";
 
@@ -72,6 +75,7 @@ export function Billing({
     toDate: "",
   });
   const [sort, setSort] = useState<SortState | null>(null);
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [page, setPage] = useState(1);
   const [invoiceRows, setInvoiceRows] = useState<any[]>([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
@@ -225,17 +229,23 @@ export function Billing({
   const invoices = invoiceRows;
   const totalPages = Math.max(1, Math.ceil(invoiceTotal / pageSize));
   const safePage = Math.min(page, totalPages);
+  const billingQueryFields = getBillingQueryFields({ rows: invoices });
   // Invoices are server-paginated with no backend sort param, so sorting
-  // only reorders the current page — see adaptive-filter checklist Phase 4.
-  const invoicePageRows = sortRows(invoices, sort, (invoice, key) => {
-    if (key === "patient")
-      return (
-        invoice.patient_name ||
-        (patientMap.get(invoice.patient_id) as any)?.name
-      );
-    if (key === "due") return invoicePatientDueAmount(invoice);
-    return invoice[key];
-  });
+  // (and the ad-hoc query builder below) only reorders/filters the current
+  // page — see adaptive-filter checklist Phase 4 / accepted scope limitation.
+  const invoicePageRows = sortRows(
+    applyQueryFilters(invoices, billingQueryFields, queryFilters),
+    sort,
+    (invoice, key) => {
+      if (key === "patient")
+        return (
+          invoice.patient_name ||
+          (patientMap.get(invoice.patient_id) as any)?.name
+        );
+      if (key === "due") return invoicePatientDueAmount(invoice);
+      return invoice[key];
+    },
+  );
 
   const billingSchema = getBillingTableSchema();
 
@@ -595,35 +605,55 @@ export function Billing({
   return (
     <div className="">
       <BreadcrumbSlot>
-        <AdaptiveFilterTrigger
-          schema={billingSchema}
-          query={filters.query}
-          setQuery={(value: string) => updateFilter("query", value)}
-          filterValues={filters}
-          onFilterChange={updateFilter}
-          sort={sort}
-          onSortChange={setSort}
-          onReset={clearFilters}
-        >
-          <FormField label="From">
-            <Input
-              type="date"
-              value={filters.fromDate}
-              onChange={(event: any) =>
-                updateFilter("fromDate", event.target.value)
-              }
-            />
-          </FormField>
-          <FormField label="To">
-            <Input
-              type="date"
-              value={filters.toDate}
-              onChange={(event: any) =>
-                updateFilter("toDate", event.target.value)
-              }
-            />
-          </FormField>
-        </AdaptiveFilterTrigger>
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={invoicePageRows.length}
+            total={invoiceTotal}
+            noun="invoices"
+          />
+          <RefreshButton
+            onRefresh={refreshBillingData}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={billingSchema}
+            query={filters.query}
+            setQuery={(value: string) => updateFilter("query", value)}
+            filterValues={filters}
+            onFilterChange={updateFilter}
+            sort={sort}
+            onSortChange={setSort}
+            showSort={false}
+            onReset={clearFilters}
+            queryFields={billingQueryFields}
+            queryFilters={queryFilters}
+            onQueryFiltersChange={setQueryFilters}
+          >
+            <FormField label="From">
+              <Input
+                type="date"
+                value={filters.fromDate}
+                onChange={(event: any) =>
+                  updateFilter("fromDate", event.target.value)
+                }
+              />
+            </FormField>
+            <FormField label="To">
+              <Input
+                type="date"
+                value={filters.toDate}
+                onChange={(event: any) =>
+                  updateFilter("toDate", event.target.value)
+                }
+              />
+            </FormField>
+          </AdaptiveFilterTrigger>
+          <AdaptiveSortTrigger
+            fields={billingSchema.sortFields}
+            sort={sort}
+            onSortChange={setSort}
+          />
+        </div>
       </BreadcrumbSlot>
       {(canViewRevenueSummary || canViewSettlementSummary) && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -748,12 +778,6 @@ export function Billing({
               Track invoice source, patient dues, settlement share, and payment
               collection in one list.
             </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <RefreshButton onRefresh={refreshBillingData} />
-            <Badge tone="slate" className="normal-badge">
-              Showing {invoicePageRows.length} of {invoiceTotal} invoices
-            </Badge>
           </div>
         </div>
         <div className="scrollbar-hidden mt-4 overflow-auto rounded-2xl border border-slate-200">

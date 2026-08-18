@@ -11,7 +11,7 @@ import { BookingsList } from "./components/BookingList";
 import { InvoiceCard } from "./components/InvoiceCard";
 import { BookingForm } from "@/features/home-care/forms/HomeCareForms";
 import { patientName } from "@/utils/helper";
-import { Input, StatusToast } from "@/app/components/common/ui";
+import { Input, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { BookingDetail } from "./components/BookingDetail";
 import { pageSize } from "@/utils/constants";
@@ -24,9 +24,12 @@ import {
   useHomeCareData,
 } from "./api";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
-import { getHomeCareTableSchema } from "./filterSchema";
+import { getHomeCareTableSchema, getHomeCareQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
+import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
@@ -58,11 +61,11 @@ export function HomeCare({
   const [busy, setBusy] = useState("");
   const [filters, setFilters] = useState({
     query: "",
-    status: "all",
     fromDate: "",
     toDate: "",
   });
   const [sort, setSort] = useState<SortState | null>(null);
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [page, setPage] = useState(1);
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
   const [confirmAction, setConfirmAction] = useState<any>(null);
@@ -132,10 +135,15 @@ export function HomeCare({
     router.replace("/home_care");
   }, [view, selectedId, loading, selected, router]);
 
+  const homeCareQueryFields = useMemo(
+    () => getHomeCareQueryFields({ rows: bookings }),
+    [bookings],
+  );
   const filteredBookings = useMemo(
     () =>
       sortRows(
-        bookings.filter((booking: any) => {
+        applyQueryFilters(
+          bookings.filter((booking: any) => {
         const patient: any = patientMap.get(booking.patient_id);
         const assigned: any = staffMap.get(booking.assigned_staff_user_id);
         const haystack = [
@@ -160,8 +168,6 @@ export function HomeCare({
           .trim()
           .toLowerCase();
         if (query && !haystack.includes(query)) return false;
-        if (filters.status !== "all" && booking.status !== filters.status)
-          return false;
         const from = filters.fromDate
           ? new Date(filters.fromDate).getTime()
           : null;
@@ -180,6 +186,9 @@ export function HomeCare({
           return false;
         return true;
         }),
+          homeCareQueryFields,
+          queryFilters,
+        ),
         sort,
         (booking, key) => {
           if (key === "patient")
@@ -191,7 +200,7 @@ export function HomeCare({
           return booking[key];
         },
       ),
-    [bookings, filters, sort, patientMap, staffMap],
+    [bookings, filters, sort, patientMap, staffMap, homeCareQueryFields, queryFilters],
   );
   const totalPages = Math.max(1, Math.ceil(filteredBookings.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -241,7 +250,7 @@ export function HomeCare({
   }, [apiSession?.tenantId, bookings.length, view, router]);
   useEffect(() => {
     setPage(1);
-  }, [filters.query, filters.status, filters.fromDate, filters.toDate]);
+  }, [filters.query, filters.fromDate, filters.toDate]);
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
@@ -388,40 +397,60 @@ export function HomeCare({
 
       {view === "list" && (
         <BreadcrumbSlot>
-          <AdaptiveFilterTrigger
-            schema={homeCareSchema}
-            query={filters.query}
-            setQuery={(value: string) => setFilters({ ...filters, query: value })}
-            filterValues={filters}
-            onFilterChange={(key: string, value: string) =>
-              setFilters({ ...filters, [key]: value })
-            }
-            sort={sort}
-            onSortChange={setSort}
-            onReset={() => {
-              setFilters({ query: "", status: "all", fromDate: "", toDate: "" });
-              setSort(null);
-            }}
-          >
-            <FormField label="From">
-              <Input
-                type="date"
-                value={filters.fromDate}
-                onChange={(event: any) =>
-                  setFilters({ ...filters, fromDate: event.target.value })
-                }
-              />
-            </FormField>
-            <FormField label="To">
-              <Input
-                type="date"
-                value={filters.toDate}
-                onChange={(event: any) =>
-                  setFilters({ ...filters, toDate: event.target.value })
-                }
-              />
-            </FormField>
-          </AdaptiveFilterTrigger>
+          <div className="flex items-center gap-2">
+            <AdaptiveResultCount
+              shown={pagedBookings.length}
+              total={filteredBookings.length}
+              noun="bookings"
+            />
+            <RefreshButton
+              onRefresh={load}
+              className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+            />
+            <AdaptiveFilterTrigger
+              schema={homeCareSchema}
+              query={filters.query}
+              setQuery={(value: string) => setFilters({ ...filters, query: value })}
+              filterValues={filters}
+              onFilterChange={(key: string, value: string) =>
+                setFilters({ ...filters, [key]: value })
+              }
+              sort={sort}
+              onSortChange={setSort}
+              showSort={false}
+              onReset={() => {
+                setFilters({ query: "", fromDate: "", toDate: "" });
+                setSort(null);
+              }}
+              queryFields={homeCareQueryFields}
+              queryFilters={queryFilters}
+              onQueryFiltersChange={setQueryFilters}
+            >
+              <FormField label="From">
+                <Input
+                  type="date"
+                  value={filters.fromDate}
+                  onChange={(event: any) =>
+                    setFilters({ ...filters, fromDate: event.target.value })
+                  }
+                />
+              </FormField>
+              <FormField label="To">
+                <Input
+                  type="date"
+                  value={filters.toDate}
+                  onChange={(event: any) =>
+                    setFilters({ ...filters, toDate: event.target.value })
+                  }
+                />
+              </FormField>
+            </AdaptiveFilterTrigger>
+            <AdaptiveSortTrigger
+              fields={homeCareSchema.sortFields}
+              sort={sort}
+              onSortChange={setSort}
+            />
+          </div>
         </BreadcrumbSlot>
       )}
 
@@ -437,7 +466,6 @@ export function HomeCare({
           patientMap={patientMap}
           staffMap={staffMap}
           loading={loading}
-          onRefresh={load}
           onCreate={openCreate}
           onView={openView}
           onEdit={startEdit}

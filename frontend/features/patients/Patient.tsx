@@ -280,17 +280,10 @@ export function Patient({
       )
         setMessage(pending.message);
     } catch {
-      // ignore malformed payloads
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch (or refetch) the full record whenever the URL names a different
-  // patient than what's currently cached — covers detail/edit views for
-  // both in-app navigation and direct/bookmarked links. The ref bridges the
-  // one-render gap before setBusy(true) (fired inside loadPatientDetail)
-  // actually takes effect, so the guard effect below can't mistake "about
-  // to fetch" for "finished loading, found nothing" and bounce prematurely.
+
   const detailFetchInFlightRef = useRef(false);
   useEffect(() => {
     if (isInitialLoading) return;
@@ -300,11 +293,8 @@ export function Patient({
     loadPatientDetail(scopedSession, selectedId).finally(() => {
       detailFetchInFlightRef.current = false;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, selectedId, selectedDetail?.id, isInitialLoading]);
 
-  // Bounce back to the list if a direct/bookmarked detail or edit link no
-  // longer resolves to a real patient, but only once loading has finished.
   useEffect(() => {
     if (
       (view !== "detail" && view !== "edit") ||
@@ -315,7 +305,6 @@ export function Patient({
     )
       return;
     router.replace("/patients");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, selectedId, busy, selectedDetail?.id]);
 
   function open(nextView: string, id = "") {
@@ -394,12 +383,6 @@ export function Patient({
       />
     );
   if (view === "edit" && selected && canEditPatient) {
-    // `selected` can still be the lightweight list row (missing
-    // date_of_birth/blood_group, which aren't part of that shape) if the
-    // full-detail fetch hasn't resolved yet — e.g. navigating here directly
-    // rather than via the detail page. The form's defaultValues are only
-    // evaluated once at mount, so mounting on the partial row would freeze
-    // those fields blank; wait for the full record instead of guessing.
     if (selectedDetail?.id !== selectedId) {
       return (
         <Card>
@@ -457,11 +440,6 @@ export function Patient({
 
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(page, totalPages);
-  // Sorting and the ad-hoc query filters only act on the current
-  // server-fetched page — the API has no sort param and the query builder
-  // is client-side, so this narrows/reorders "what I'm looking at," not the
-  // full tenant-wide dataset. See adaptive-filter checklist Phase 4 for a
-  // server-side follow-up.
   const pageRows = sortRows(
     applyQueryFilters(rows, patientQueryFields, queryFilters),
     sort,
@@ -537,8 +515,8 @@ export function Patient({
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin">
-        <div className="min-w-[1120px]">
+      <div className="mt-3 overflow-x-auto  rounded-lg border border-slate-200 bg-white z-0 scrollbar-hidden">
+        <div className="min-w-[1120px] ">
           <DataTable
             columns={patientColumns}
             data={pageRows}

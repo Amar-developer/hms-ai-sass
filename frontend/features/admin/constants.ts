@@ -13,7 +13,11 @@ import {
   Truck,
   Users,
 } from "lucide-react";
-import { WhatsAppFlowKey, WhatsAppLanguage, WhatsAppSettingsDraft } from "./types";
+import {
+  WhatsAppFlowKey,
+  WhatsAppLanguage,
+  WhatsAppSettingsDraft,
+} from "./types";
 
 type FileCategoryRule = {
   modules: string[];
@@ -23,22 +27,27 @@ type FileCategoryRule = {
   folders: string[];
 };
 
+// "Settings" — everything except the three sections Clinic owns (see
+// clinic_sections below). Routed under /admin/{section}.
 export const sections = [
-  ["users", "Users", Users],
-  ["roles", "Roles", ShieldCheck],
-  ["departments", "Medical Departments", ClipboardList],
-  ["branches", "Branches", Building2],
-  ["suppliers", "Suppliers", Truck],
-  ["tax", "Tax", Percent],
-  ["offers", "Discounts & Offers", Tags],
-  ["membership", "Patient Membership", ShieldCheck],
   ["files", "Files", FileText],
   ["settings", "Tenant & Branch Settings", Settings],
   ["patient-intelligence", "Patient Intelligence", BrainCircuit],
   ["whatsapp", "WhatsApp Settings", MessageCircleMore],
+  ["roles", "Roles", ShieldCheck],
+  ["membership", "Patient Membership", ShieldCheck],
 ] as const;
 
 export const tenantAdminSections = sections;
+
+export const clinic_sections = [
+  ["users", "Users", Users],
+  ["branches", "Branches", Building2],
+  ["departments", "Medical Departments", ClipboardList],
+  ["tax", "Tax", Percent],
+  ["offers", "Discounts & Offers", Tags],
+  ["suppliers", "Suppliers", Truck],
+] as const;
 
 export const userTypes = [
   ["tenant_admin", "Tenant Admin"],
@@ -385,14 +394,12 @@ export const branch_status_options = [
   },
 ];
 
-
 export const flowOptions: Array<{
   key: WhatsAppFlowKey;
   label: string;
   description: string;
   audience: "patient" | "doctor";
-}> =
-[
+}> = [
   {
     key: "appointment_booked_patient",
     label: "Patient appointment confirmation",
@@ -450,7 +457,8 @@ export const flowOptions: Array<{
   {
     key: "follow_up_advice_patient",
     label: "Follow-up advice",
-    description: "Trigger when a signed consultation includes follow-up advice.",
+    description:
+      "Trigger when a signed consultation includes follow-up advice.",
     audience: "patient",
   },
   {
@@ -462,7 +470,8 @@ export const flowOptions: Array<{
   {
     key: "medicine_refill_patient",
     label: "Medicine refill reminder",
-    description: "Send a consent-aware reminder when a recurring refill is due.",
+    description:
+      "Send a consent-aware reminder when a recurring refill is due.",
     audience: "patient",
   },
   {
@@ -547,7 +556,10 @@ export const flowOptions: Array<{
 
 export const MAX_TEMPLATE_PARAMETERS = 10;
 
-export const languageOptions: Array<{ value: WhatsAppLanguage; label: string }> = [
+export const languageOptions: Array<{
+  value: WhatsAppLanguage;
+  label: string;
+}> = [
   { value: "en", label: "English" },
   { value: "ta", label: "Tamil" },
 ];
@@ -575,7 +587,6 @@ export const SAMPLE_VALUES_BY_FIELD: Record<string, string> = {
   follow_up_advice: "Return after seven days",
   cancellation_reason: "Schedule change",
 };
-
 
 export const newTemplateInitialState = {
   name: "",

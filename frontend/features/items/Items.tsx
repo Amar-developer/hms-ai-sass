@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionButton,
-  Badge,
   Card,
   RefreshButton,
   StatusToast,
@@ -22,12 +21,15 @@ import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { generatedItemCode } from "./helpers";
 import { useItemsActions, useItemsData } from "./api";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
 import { Pagination } from "@/app/components/common/Pagination";
 import { getItemsColumns } from "./Column";
-import { getItemsTableSchema } from "./filterSchema";
+import { getItemsTableSchema, getItemsQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
+import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 
 function itemCodePreview(type: string, name: string) {
@@ -111,15 +113,14 @@ export function Items({ apiSession, branchId }: any) {
   const [editing, setEditing] = useState<any>(null);
   const [confirmAction, setConfirmAction] = useState<any>(null);
   const [filters, setFilters] = useState({
-    type: "all",
     labOnly: "all",
-    priceBand: "all",
   });
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortState | null>({
     key: "name",
     dir: "asc",
   });
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [page, setPage] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 10;
@@ -214,15 +215,10 @@ export function Items({ apiSession, branchId }: any) {
   const filteredRows = useMemo(
     () =>
       rows.filter((row: any) => {
-        if (filters.type !== "all" && row.type !== filters.type) return false;
         if (
           filters.labOnly === "lab" &&
           !["lab_test", "lab_package"].includes(row.type)
         )
-          return false;
-        if (filters.priceBand === "priced" && Number(row.price || 0) <= 0)
-          return false;
-        if (filters.priceBand === "free" && Number(row.price || 0) > 0)
           return false;
         const trimmedQuery = query.trim().toLowerCase();
         if (
@@ -236,15 +232,23 @@ export function Items({ apiSession, branchId }: any) {
       }),
     [rows, filters, query],
   );
+  const itemsQueryFields = useMemo(
+    () => getItemsQueryFields({ rows }),
+    [rows],
+  );
   const sortedRows = useMemo(
     () =>
-      sortRows(filteredRows, sort, (row, key) => {
-        if (key === "type") return row.kind || "";
-        if (key === "mrp_price") return Number(row.mrp_price ?? -1);
-        if (key === "price") return Number(row.price ?? -1);
-        return row[key];
-      }),
-    [filteredRows, sort],
+      sortRows(
+        applyQueryFilters(filteredRows, itemsQueryFields, queryFilters),
+        sort,
+        (row, key) => {
+          if (key === "type") return row.kind || "";
+          if (key === "mrp_price") return Number(row.mrp_price ?? -1);
+          if (key === "price") return Number(row.price ?? -1);
+          return row[key];
+        },
+      ),
+    [filteredRows, itemsQueryFields, queryFilters, sort],
   );
 
   useEffect(() => {
@@ -329,13 +333,10 @@ export function Items({ apiSession, branchId }: any) {
 
   const itemsSchema = getItemsTableSchema();
 
-  const filterValues = {
-    type: filters.type,
-    priceBand: filters.priceBand,
-  };
+  const filterValues = {};
 
   function resetItemFilters() {
-    setFilters({ type: "all", labOnly: "all", priceBand: "all" });
+    setFilters({ labOnly: "all" });
     setSort({ key: "name", dir: "asc" });
     setPage(1);
   }
@@ -350,19 +351,39 @@ export function Items({ apiSession, branchId }: any) {
   return (
     <div className="space-y-6 scroll-mt-24" ref={containerRef}>
       <BreadcrumbSlot>
-        <AdaptiveFilterTrigger
-          schema={itemsSchema}
-          query={query}
-          setQuery={(value: string) => {
-            setQuery(value);
-            setPage(1);
-          }}
-          filterValues={filterValues}
-          onFilterChange={updateFilter}
-          sort={sort}
-          onSortChange={setSort}
-          onReset={resetItemFilters}
-        />
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={pagedRows.length}
+            total={sortedRows.length}
+            noun="items"
+          />
+          <RefreshButton
+            onRefresh={load}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={itemsSchema}
+            query={query}
+            setQuery={(value: string) => {
+              setQuery(value);
+              setPage(1);
+            }}
+            filterValues={filterValues}
+            onFilterChange={updateFilter}
+            sort={sort}
+            onSortChange={setSort}
+            showSort={false}
+            onReset={resetItemFilters}
+            queryFields={itemsQueryFields}
+            queryFilters={queryFilters}
+            onQueryFiltersChange={setQueryFilters}
+          />
+          <AdaptiveSortTrigger
+            fields={itemsSchema.sortFields}
+            sort={sort}
+            onSortChange={setSort}
+          />
+        </div>
       </BreadcrumbSlot>
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
@@ -372,12 +393,6 @@ export function Items({ apiSession, branchId }: any) {
               ERP-style item master for medicines, lab tests, Service,
               physiotherapy equipment, and home care / visit services.
             </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <RefreshButton onRefresh={load} />
-            <Badge tone="blue" className="normal-badge">
-              {sortedRows.length} items
-            </Badge>
           </div>
         </div>
         <StatusToast message={message} onClose={() => setMessage("")} />

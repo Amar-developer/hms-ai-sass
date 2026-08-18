@@ -72,6 +72,11 @@ Restore:
 docker exec -t <postgres_container> pg_restore -U <db_user> -d <db_name> --no-owner --no-privileges /tmp/hms_prod_dump.sql
 ```
 
+to copy the sql file
+```bash
+docker cp /tmp/hms_dev_dump_02.sql medizinhub-hms-local-postgres:/tmp/<sql_file_name>
+```
+
 Rebuild planner statistics — do not skip this:
 ```bash
 docker exec -t <postgres_container> psql -U <db_user> -d <db_name> -c "ANALYZE;"

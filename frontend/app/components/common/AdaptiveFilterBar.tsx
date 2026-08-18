@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { Input, SearchableSelect, Button } from "./ui";
 import { FormField } from "../FormElements";
 import type { SortState } from "@/utils/types";
@@ -22,10 +22,6 @@ export type SortFieldSchema = {
   label: string;
 };
 
-// Describes what a single table can be filtered/sorted by. A page (or a tab
-// within a page) hands this to AdaptiveFilterBar instead of hand-building a
-// filter UI — swap the schema and the same bar renders different fields, which
-// is what lets tab-switched modules reuse one instance across their tables.
 export type TableSchema = {
   id: string;
   searchLabel?: string;
@@ -43,10 +39,9 @@ type AdaptiveFilterBarProps = {
   onFilterChange?: (key: string, value: string) => void;
   sort?: SortState | null;
   onSortChange?: (sort: SortState | null) => void;
-  // Set false when the caller renders sort as its own separate control
-  // (e.g. AdaptiveSortTrigger) instead of inline here.
   showSort?: boolean;
   onReset?: () => void;
+  onClose?: () => void;
   className?: string;
   children?: React.ReactNode;
 };
@@ -64,6 +59,7 @@ export function AdaptiveFilterBar({
   onReset,
   className = "lg:grid-cols-4 xl:grid-cols-5",
   children,
+  onClose,
 }: AdaptiveFilterBarProps) {
   function handleReset() {
     setQuery?.("");
@@ -87,75 +83,91 @@ export function AdaptiveFilterBar({
   }
 
   return (
-    <div key={schema.id} className={`grid gap-3 md:grid-cols-2 ${className}`}>
-      {showSearch && (
-        <FormField label={schema.searchLabel ?? "Search"}>
-          <Input
-            value={query}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setQuery?.(e.target.value)
-            }
-            placeholder={schema.searchPlaceholder ?? "Search"}
-          />
-        </FormField>
-      )}
+    <div className="flex flex-col ">
+      <div className="flex justify-end cursor-pointer">
+        <X size={18} onClick={() => onClose?.()} />
+      </div>
+      <div
+        key={schema.id}
+        className={`grid gap-3 md:grid-cols-[3fr_.6fr] ${className}`}
+      >
+        {showSearch && (
+          <FormField label={schema.searchLabel ?? "Search"}>
+            <Input
+              value={query}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setQuery?.(e.target.value)
+              }
+              placeholder={schema.searchPlaceholder ?? "Search"}
+            />
+          </FormField>
+        )}
 
-      {schema.filters.map((filter) => (
-        <FormField key={filter.key} label={filter.label}>
-          <SearchableSelect
-            name={filter.key}
-            value={filterValues[filter.key] ?? "all"}
-            onChange={(value: string) => onFilterChange?.(filter.key, value)}
-            options={filter.options}
-            searchable={false}
-            placeholder={`Select ${filter.label}`}
-            className="w-full"
-          />
-        </FormField>
-      ))}
-
-      {children}
-
-      {showSort && schema.sortFields.length > 0 && (
-        <FormField label="Sort by">
-          <div className="flex items-stretch gap-2">
+        {schema.filters.map((filter) => (
+          <FormField key={filter.key} label={filter.label}>
             <SearchableSelect
-              name="sort-field"
-              value={sort?.key ?? ""}
-              onChange={handleSortField}
-              options={[
-                { value: "", label: "None" },
-                ...schema.sortFields.map((field) => ({
-                  value: field.key,
-                  label: field.label,
-                })),
-              ]}
+              name={filter.key}
+              value={filterValues[filter.key] ?? "all"}
+              onChange={(value: string) => onFilterChange?.(filter.key, value)}
+              options={filter.options}
               searchable={false}
-              placeholder="None"
+              placeholder={`Select ${filter.label}`}
               className="w-full"
             />
-            <button
-              type="button"
-              onClick={toggleSortDir}
-              disabled={!sort}
-              title={sort?.dir === "desc" ? "Sorted descending" : "Sorted ascending"}
-              className="flex shrink-0 items-center justify-center rounded-lg border border-slate-200 px-3 text-slate-500 hover:text-slate-900 disabled:opacity-40"
-            >
-              {sort?.dir === "desc" ? <ArrowDown size={16} /> : <ArrowUp size={16} />}
-            </button>
-          </div>
-        </FormField>
-      )}
+          </FormField>
+        ))}
 
-      <FormField label="">
-        <Button
-          type="button"
-          onClick={handleReset}
-          className="px-4 py-2 mt-4 text-xs"
-        >
-          Reset
-        </Button>
-      </FormField>
+        {children}
+
+        {showSort && schema.sortFields.length > 0 && (
+          <FormField label="Sort by">
+            <div className="flex items-stretch gap-2">
+              <SearchableSelect
+                name="sort-field"
+                value={sort?.key ?? ""}
+                onChange={handleSortField}
+                options={[
+                  { value: "", label: "None" },
+                  ...schema.sortFields.map((field) => ({
+                    value: field.key,
+                    label: field.label,
+                  })),
+                ]}
+                searchable={false}
+                placeholder="None"
+                className="w-full"
+              />
+              <button
+                type="button"
+                onClick={toggleSortDir}
+                disabled={!sort}
+                title={
+                  sort?.dir === "desc"
+                    ? "Sorted descending"
+                    : "Sorted ascending"
+                }
+                className="flex shrink-0 items-center justify-center rounded-lg border border-slate-200 px-3 text-slate-500 hover:text-slate-900 disabled:opacity-40"
+              >
+                {sort?.dir === "desc" ? (
+                  <ArrowDown size={16} />
+                ) : (
+                  <ArrowUp size={16} />
+                )}
+              </button>
+            </div>
+          </FormField>
+        )}
+
+        <FormField label="">
+          <Button
+            type="button"
+            onClick={handleReset}
+            className="px-4 py-2 mt-4 text-xs"
+          >
+            Reset
+          </Button>
+        </FormField>
+      </div>
     </div>
   );
 }

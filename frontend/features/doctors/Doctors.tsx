@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { Card, RefreshButton, SearchableSelect, StatusToast } from "@/app/components/common/ui";
+import {
+  Card,
+  RefreshButton,
+  SearchableSelect,
+  StatusToast,
+} from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { DoctorForm } from "@/features/doctors/forms/DoctorForm";
@@ -15,12 +20,15 @@ import {
   useDoctorActions,
 } from "@/features/doctors/api";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getDoctorColumns } from "./Column";
-import { getDoctorTableSchema } from "./filterSchema";
+import { getDoctorTableSchema, getDoctorQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
+import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 
 const pageSize = 10;
 
@@ -64,13 +72,13 @@ export function Doctors({
     setLocal: setLivePractitioners,
   } = usePractitionersQuery(scopedSession);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
   const [branchFilter, setBranchFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [sort, setSort] = useState<SortState | null>({
     key: "updated_at",
     dir: "desc",
   });
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -88,6 +96,7 @@ export function Doctors({
     departments,
     users,
     feeRules,
+    totalRows,
     feeRulesTenantId,
     referenceLoading,
     loadReferenceData,
@@ -109,9 +118,7 @@ export function Doctors({
   const filterValues = {
     branch: branchFilter,
     department: departmentFilter,
-    status,
   };
-
   const handleFilterChange = (key: string, value: string) => {
     setPage(1);
     switch (key) {
@@ -121,9 +128,6 @@ export function Doctors({
       case "department":
         setDepartmentFilter(value);
         break;
-      case "status":
-        setStatus(value);
-        break;
     }
     loadUsers(tenantId);
   };
@@ -131,7 +135,6 @@ export function Doctors({
   function resetDoctorFilters() {
     setBranchFilter("all");
     setDepartmentFilter("all");
-    setStatus("all");
     setPage(1);
   }
 
@@ -266,27 +269,31 @@ export function Doctors({
         back={() => open("list")}
       />
     );
+  const doctorQueryFields = getDoctorQueryFields({ rows });
   const filtered = sortRows(
-    rows.filter((row: any) => {
-      const text = [
-        row.full_name,
-        row.primary_specialty,
-        row.registration_number,
-        row.mobile,
-        row.email,
-        row.id,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return (
-        (!query || text.includes(query.toLowerCase())) &&
-        (status === "all" || row.status === status) &&
-        (branchFilter === "all" ||
-          (row.branch_ids || []).includes(branchFilter)) &&
-        (departmentFilter === "all" ||
-          (row.department_ids || []).includes(departmentFilter))
-      );
-    }),
+    applyQueryFilters(
+      rows.filter((row: any) => {
+        const text = [
+          row.full_name,
+          row.primary_specialty,
+          row.registration_number,
+          row.mobile,
+          row.email,
+          row.id,
+        ]
+          .join(" ")
+          .toLowerCase();
+        return (
+          (!query || text.includes(query.toLowerCase())) &&
+          (branchFilter === "all" ||
+            (row.branch_ids || []).includes(branchFilter)) &&
+          (departmentFilter === "all" ||
+            (row.department_ids || []).includes(departmentFilter))
+        );
+      }),
+      doctorQueryFields,
+      queryFilters,
+    ),
     sort,
     (row, key) =>
       key === "updated_at" ? row.updated_at || row.created_at : row[key],
@@ -316,27 +323,50 @@ export function Doctors({
   return (
     <Card>
       <BreadcrumbSlot>
-        <AdaptiveFilterTrigger
-          schema={doctorSchema}
-          query={query}
-          setQuery={setQuery}
-          filterValues={filterValues}
-          onFilterChange={handleFilterChange}
-          sort={sort}
-          onSortChange={setSort}
-          onReset={resetDoctorFilters}
-        >
-          {isSuperAdmin && (
-            <FormField label="Tenant">
-              <SearchableSelect
-                searchable={false}
-                value={tenantId}
-                onChange={setTenantId}
-                options={tenants.map((t: any) => ({ value: t.id, label: t.name }))}
-              />
-            </FormField>
-          )}
-        </AdaptiveFilterTrigger>
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={pageRows.length}
+            total={filtered.length}
+            noun="doctors"
+          />
+          <RefreshButton
+            onRefresh={refreshList}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={doctorSchema}
+            query={query}
+            setQuery={setQuery}
+            filterValues={filterValues}
+            onFilterChange={handleFilterChange}
+            sort={sort}
+            onSortChange={setSort}
+            showSort={false}
+            onReset={resetDoctorFilters}
+            queryFields={doctorQueryFields}
+            queryFilters={queryFilters}
+            onQueryFiltersChange={setQueryFilters}
+          >
+            {isSuperAdmin && (
+              <FormField label="Tenant">
+                <SearchableSelect
+                  searchable={false}
+                  value={tenantId}
+                  onChange={setTenantId}
+                  options={tenants.map((t: any) => ({
+                    value: t.id,
+                    label: t.name,
+                  }))}
+                />
+              </FormField>
+            )}
+          </AdaptiveFilterTrigger>
+          <AdaptiveSortTrigger
+            fields={doctorSchema.sortFields}
+            sort={sort}
+            onSortChange={setSort}
+          />
+        </div>
       </BreadcrumbSlot>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
@@ -347,7 +377,6 @@ export function Doctors({
           </p>
         </div>
         <div className="flex justify-start items-center gap-2">
-          <RefreshButton onRefresh={refreshList} />
           {canCreateDoctor && (
             <button
               type="button"

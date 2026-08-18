@@ -45,6 +45,7 @@ export function useDoctorReferenceData({
   const [usersTenantId, setUsersTenantId] = useState("");
   const [feeRulesTenantId, setFeeRulesTenantId] = useState("");
   const [referenceLoading, setReferenceLoading] = useState(false);
+   const [totalRows, setTotalRows] = useState(0);
 
   async function loadTenants() {
     if (!apiSession?.user?.is_super_admin) return;
@@ -88,6 +89,7 @@ export function useDoctorReferenceData({
       .catch(() => []);
     setUsers(userRows);
     setUsersTenantId(nextTenantId);
+    setTotalRows(userRows.length)
   }
 
   async function loadFeeRules(nextTenantId = tenantId, force = false) {
@@ -129,6 +131,7 @@ export function useDoctorReferenceData({
     departments,
     users,
     feeRules,
+    totalRows,
     feeRulesTenantId,
     referenceLoading,
     loadReferenceData,

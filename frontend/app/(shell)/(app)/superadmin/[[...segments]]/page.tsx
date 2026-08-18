@@ -4,14 +4,20 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { SuperAdminDashboard } from "@/features/superAdmin/SuperAdminDashboard";
 import { useShellChrome } from "@/features/shell/AppShell";
-import { parseSuperAdminSegments } from "@/features/superAdmin/routing";
+import {
+  parseSuperAdminSegments,
+  SUPER_ADMIN_SETTINGS_SECTIONS,
+} from "@/features/superAdmin/routing";
 
 export default function SuperAdminPage() {
   const { apiSession, switchTenant, setSuperAdminSection } = useShellChrome();
   const router = useRouter();
   const params = useParams();
   const segments = (params?.segments as string[] | undefined) || [];
-  const { section, id } = parseSuperAdminSegments(segments);
+  const { section, id } = parseSuperAdminSegments(segments, {
+    defaultSection: "overview",
+    allowedSections: SUPER_ADMIN_SETTINGS_SECTIONS,
+  });
 
   useEffect(() => {
     if (segments.length === 0) router.replace("/superadmin/overview");

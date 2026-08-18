@@ -1,6 +1,7 @@
-import { ChevronDown, Settings } from "lucide-react";
+import { ChevronDown, Hospital, Settings } from "lucide-react";
 import { BrandBlock } from "./BrandBlock";
 import { useEffect, useRef, useState } from "react";
+import { superAdminSections } from "@/features/superAdmin/constants";
 
 interface SidebarProps {
   visibleNav: any[];
@@ -12,6 +13,8 @@ interface SidebarProps {
 
   reportsOpen: boolean;
   setReportsOpen: any;
+  clinicOpen: boolean;
+  setClinicOpen: any;
   reportsSection: string;
   setReportsSection: any;
 
@@ -20,7 +23,8 @@ interface SidebarProps {
 
   tenantAdminSection: string;
   setTenantAdminSection: any;
-
+  clinicSection: string;
+  setClinicSection:any;
   superAdminSettingsOpen: boolean;
   setSuperAdminSettingsOpen: any;
 
@@ -28,6 +32,8 @@ interface SidebarProps {
   setSuperAdminSection: any;
 
   visibleTenantAdminSections: any[];
+  visibleClinicSections: any[];
+  clinicModuleSections: any[];
   enabled: any;
   clinic: any;
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -41,7 +47,7 @@ interface SidebarProps {
 
 export function Sidebar(props: SidebarProps) {
   const [popupMenu, setPopupMenu] = useState<
-    "superadmin" | "admin" | "reports" | null
+    "superadmin" | "admin" | "reports" | "clinic" | null
   >(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -93,7 +99,7 @@ export function Sidebar(props: SidebarProps) {
   };
 
   const openPopup = (
-    menu: "admin" | "superadmin" | "reports",
+    menu: "admin" | "superadmin" | "reports" | "clinic",
     e: React.MouseEvent<HTMLButtonElement>,
   ) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -105,6 +111,7 @@ export function Sidebar(props: SidebarProps) {
 
     setPopupMenu(menu);
   };
+
 
   return (
     <aside
@@ -251,7 +258,6 @@ export function Sidebar(props: SidebarProps) {
                       } else {
                         openPopup("admin", e);
                       }
-
                       showModuleBadge(label, e);
                       return;
                     }
@@ -260,13 +266,18 @@ export function Sidebar(props: SidebarProps) {
                       !props.tenantAdminSettingsOpen,
                     );
                   }}
-                  className={`relative flex w-full items-center rounded-xl transition ${isActive ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-3 text-slate-900 hover:bg-slate-50"}
-${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
+                  className={`relative flex w-full items-center justify-between rounded-xl transition px-3 ${
+                    isActive
+                      ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"
+                      : "py-3 text-slate-900 hover:bg-slate-50"
+                  }`}
                 >
-                  <Settings size={22} />
-                  {!props.tabletCollapsed && (
-                    <span className="truncate text-xs">{label} Settings</span>
-                  )}
+                  <div className="flex justify-center items-center gap-3">
+                    <Settings size={22} />
+                    {!props.tabletCollapsed && (
+                      <span className="truncate text-xs">{label}</span>
+                    )}
+                  </div>
                   {!props.tabletCollapsed && (
                     <ChevronDown
                       size={16}
@@ -277,6 +288,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                   )}
                 </button>
 
+                {/* Collapsed popup – only Settings sections */}
                 {props.tabletCollapsed && popupMenu === "admin" && (
                   <div
                     ref={popupRef}
@@ -286,6 +298,9 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                       left: popupPosition.left,
                     }}
                   >
+                    <div className="mb-1 px-2 text-[10px] font-bold uppercase text-slate-400">
+                      Settings
+                    </div>
                     {props.visibleTenantAdminSections.map(
                       ([sectionId, sectionLabel, SectionIcon]) => (
                         <button
@@ -297,7 +312,11 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                             });
                             setPopupMenu(null);
                           }}
-                          className={`flex w-full items-start justify-start gap-3 px-2 py-2 text-xs ${props.tenantAdminSection == sectionId ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-3"}`}
+                          className={`flex w-full items-start justify-start gap-3 px-2 py-2 text-xs ${
+                            props.tenantAdminSection == sectionId
+                              ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"
+                              : "py-3"
+                          }`}
                         >
                           <SectionIcon size={15} />
                           {sectionLabel}
@@ -306,14 +325,12 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                     )}
                   </div>
                 )}
+
+                {/* Expanded sub-menu – only Settings sections */}
                 {!props.tabletCollapsed &&
                   isActive &&
                   props.tenantAdminSettingsOpen && (
                     <div className="mt-2 grid gap-1 pl-5">
-                      {/* <div className="mb-1 flex items-center gap-2 px-3 text-xs font-bold uppercase text-slate-400">
-                        <Settings size={13} />
-                        Settings
-                      </div> */}
                       {props.visibleTenantAdminSections.map(
                         ([sectionId, sectionLabel, SectionIcon]: any) => (
                           <button
@@ -342,6 +359,182 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                       )}
                     </div>
                   )}
+              </div>
+            );
+          }
+          if (id === "clinic") {
+            // Doctors/Scheduling/Items are separate top-level modules
+            // nested visually under Clinic — activePage is their own id
+            // (e.g. "practitioners"), not "clinic", so the outer row needs
+            // its own active check that also covers them.
+            const clinicRowActive =
+              isActive ||
+              props.clinicModuleSections.some(
+                ([moduleId]: any) => moduleId === props.activePage,
+              );
+            return (
+              <div key={id}>
+                <button
+                  type="button"
+                  aria-label={label}
+                  onClick={(e) => {
+                    if (props.tabletCollapsed) {
+                      if (popupMenu === "clinic") {
+                        setPopupMenu(null);
+                      } else {
+                        openPopup("clinic", e);
+                      }
+                      showModuleBadge(label, e);
+                      return;
+                    }
+
+                    // Only toggle – never fight with navigatePage
+                    const willOpen = !props.clinicOpen;
+                    props.setClinicOpen(willOpen);
+
+                    // When opening, land on the first clinic module
+                    if (willOpen && props.visibleClinicSections.length > 0) {
+                      props.navigatePage({
+                        id: "clinic",
+                        section: props.visibleClinicSections[0][0],
+                      });
+                    } else if (
+                      willOpen &&
+                      props.clinicModuleSections.length > 0
+                    ) {
+                      props.navigatePage(props.clinicModuleSections[0][0]);
+                    }
+                  }}
+                  className={`relative flex w-full items-center justify-between rounded-xl transition ${
+                    clinicRowActive
+                      ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"
+                      : "py-3 text-slate-900 hover:bg-slate-50"
+                  } ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Hospital size={22} />
+                    {!props.tabletCollapsed && (
+                      <span className="truncate text-xs">{label}</span>
+                    )}
+                  </div>
+
+                  {!props.tabletCollapsed && (
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${
+                        props.clinicOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  )}
+                </button>
+
+                {/* Collapsed floating popup */}
+                {props.tabletCollapsed && popupMenu === "clinic" && (
+                  <div
+                    ref={popupRef}
+                    className="fixed z-[9999] w-56 rounded-xl border bg-white p-2 text-slate-900 shadow-xl"
+                    style={{
+                      top: popupPosition.top,
+                      left: popupPosition.left,
+                    }}
+                  >
+                    <div className="mb-1 px-2 text-[10px] font-bold uppercase text-slate-400">
+                      Clinic
+                    </div>
+                    {props.visibleClinicSections.map(
+                      ([sectionId, sectionLabel, SectionIcon]: any) => (
+                        <button
+                          key={sectionId}
+                          onClick={() => {
+                            props.navigatePage({
+                              id: "clinic",
+                              section: sectionId,
+                            });
+                            setPopupMenu(null);
+                          }}
+                          className={`flex w-full items-center gap-3 px-2 py-2 text-xs ${
+                            props.clinicSection === sectionId
+                              ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"
+                              : "py-3"
+                          }`}
+                        >
+                          <SectionIcon size={15} />
+                          {sectionLabel}
+                        </button>
+                      ),
+                    )}
+                    {props.clinicModuleSections.map(
+                      ([moduleId, moduleLabel, ModuleIcon]: any) => (
+                        <button
+                          key={moduleId}
+                          onClick={() => {
+                            props.navigatePage(moduleId);
+                            setPopupMenu(null);
+                          }}
+                          className={`flex w-full items-center gap-3 px-2 py-2 text-xs ${
+                            props.activePage === moduleId
+                              ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"
+                              : "py-3"
+                          }`}
+                        >
+                          <ModuleIcon size={15} />
+                          {moduleLabel}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
+
+                {/* Expanded nested list – key change: show whenever clinicOpen is true */}
+                {!props.tabletCollapsed && props.clinicOpen && (
+                  <div className="mt-2 grid gap-1 pl-5">
+                    {props.visibleClinicSections.map(
+                      ([sectionId, sectionLabel, SectionIcon]: any) => (
+                        <button
+                          key={sectionId}
+                          type="button"
+                          onClick={() => {
+                            props.navigatePage({
+                              id: "clinic",
+                              section: sectionId,
+                            });
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
+                            props.clinicSection === sectionId
+                              ? "bg-brand text-brand-fg"
+                              : "text-slate-500 hover:bg-slate-50"
+                          }`}
+                        >
+                          <SectionIcon size={15} />
+                          <span className="truncate text-xs">
+                            {sectionLabel}
+                          </span>
+                        </button>
+                      ),
+                    )}
+                    {props.clinicModuleSections.map(
+                      ([moduleId, moduleLabel, ModuleIcon]: any) => (
+                        <button
+                          key={moduleId}
+                          type="button"
+                          onClick={() => {
+                            props.navigatePage(moduleId);
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
+                            props.activePage === moduleId
+                              ? "bg-brand text-brand-fg"
+                              : "text-slate-500 hover:bg-slate-50"
+                          }`}
+                        >
+                          <ModuleIcon size={15} />
+                          <span className="truncate text-xs">
+                            {moduleLabel}
+                          </span>
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
               </div>
             );
           }
@@ -375,7 +568,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                       props.setReportsSection("metrix");
                     }
                   }}
-                  className={`flex w-full items-center rounded-xl py-3 transition
+                  className={`flex w-full items-center jutify-between rounded-xl py-3 transition
     ${
       isActive
         ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"

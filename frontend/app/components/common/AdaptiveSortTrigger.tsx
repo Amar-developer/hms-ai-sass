@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+} from "lucide-react";
 import { SearchableSelect } from "./ui";
 import type { SortFieldSchema } from "./AdaptiveFilterBar";
 import type { SortState } from "@/utils/types";
@@ -65,16 +69,46 @@ export function AdaptiveSortTrigger({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-bold transition ${
+        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-bold transition ${
           sort
             ? "border-emerald-200 bg-emerald-50 text-emerald-800"
             : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
         }`}
       >
         {sort?.dir === "desc" ? (
-          <ArrowDown size={13} />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="lucide lucide-list-sort-descending-icon lucide-list-sort-descending"
+          >
+            <path d="M15 12H3" />
+            <path d="M3 5h18" />
+            <path d="M9 19H3" />
+          </svg>
         ) : sort?.dir === "asc" ? (
-          <ArrowUp size={13} />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="lucide lucide-list-sort-ascending-icon lucide-list-sort-ascending"
+          >
+            <path d="M3 19h18" />
+            <path d="M15 12H3" />
+            <path d="M9 5H3" />
+          </svg>
         ) : (
           <ArrowUpDown size={13} />
         )}
@@ -104,10 +138,16 @@ export function AdaptiveSortTrigger({
               type="button"
               onClick={toggleDir}
               disabled={!sort}
-              title={sort?.dir === "desc" ? "Sorted descending" : "Sorted ascending"}
+              title={
+                sort?.dir === "desc" ? "Sorted descending" : "Sorted ascending"
+              }
               className="flex shrink-0 items-center justify-center rounded-lg border border-slate-200 px-3 text-slate-500 hover:text-slate-900 disabled:opacity-40"
             >
-              {sort?.dir === "desc" ? <ArrowDown size={16} /> : <ArrowUp size={16} />}
+              {sort?.dir === "desc" ? (
+                <ArrowDown size={16} />
+              ) : (
+                <ArrowUp size={16} />
+              )}
             </button>
           </div>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Filter } from "lucide-react";
+import { SlidersHorizontal,X } from "lucide-react";
 import {
   AdaptiveFilterBar,
   type TableSchema,
@@ -92,13 +92,13 @@ export function AdaptiveFilterTrigger({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-bold transition ${
+        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-bold transition ${
           activeCount > 0
             ? "border-emerald-200 bg-emerald-50 text-emerald-800"
             : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
         }`}
       >
-        <Filter size={13} />
+        <SlidersHorizontal size={13} />
         Filters
         {activeCount > 0 && (
           <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
@@ -128,10 +128,10 @@ export function AdaptiveFilterTrigger({
               onReset?.();
             }}
             className="grid-cols-1"
+            onClose={()=>setOpen(false)}
           >
             {children}
           </AdaptiveFilterBar>
-
           {queryFields && queryFields.length > 0 && (
             <div className="my-3 border-t border-slate-100 pt-3">
               <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">

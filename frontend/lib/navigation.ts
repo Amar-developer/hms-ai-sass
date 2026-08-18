@@ -15,13 +15,14 @@
     Stethoscope,
     UserCog,
     Users,
-    BanknoteIcon
+    BanknoteIcon,
+    Hospital
   } from "lucide-react";
 
   export const nav = [
     ["dashboard", "Dashboard", HeartPulse],
-    ["superadmin", "Super Admin", Building2],
-    ["admin", "Tenant Admin", ShieldCheck],
+    ["superadmin", "Settings", Building2],
+    ["clinic", "Clinic", Hospital],
     ["opd", "OPD Workspace", Stethoscope],
     ["queue", "Token Queue", Clock],
     ["patients", "EMR / Patient Management", Users],
@@ -35,5 +36,6 @@
     ["home_care", "Home Care  Visit Booking", Home],
     ["billing", "Invoices", ReceiptIndianRupee],
     ["reports", "Reports", BarChart3],
-    ["expense","Expense",BanknoteIcon]
+    ["expense","Expense",BanknoteIcon],
+    ["admin", "Settings", ShieldCheck],
   ] as const;

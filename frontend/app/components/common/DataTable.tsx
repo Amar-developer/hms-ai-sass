@@ -44,7 +44,7 @@ export function DataTable<T>({
 
   return (
     <div className={className}>
-      <div className="overflow-auto  rounded-lg border">
+      <div className="overflow-auto scrollbar-thin rounded-lg border">
         <table
           className={`w-full min-w-[920px] table-fixed text-left text-sm ${tableClassName ?? ""}`}
         >

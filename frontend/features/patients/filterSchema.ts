@@ -56,15 +56,6 @@ function distinctFieldOptions(
   return Array.from(seen.entries()).map(([value, label]) => ({ value, label }));
 }
 
-// Fields the ad-hoc "+ Add a Filter" builder can query. Scoped to what the
-// list endpoint (GET /patients/page) actually returns on each row — the
-// detail endpoint carries more (email, DOB, address, blood group, WhatsApp
-// consent, monthly-tracking fields...) but none of that reaches the table,
-// so filtering by it here would silently match nothing. Select-field options
-// are the distinct values seen in the currently loaded page, not a static
-// list — pick a suggestion or type past it (allowCustom on the value input).
-// Same caveat as sort: patients are server-paginated, so this narrows the
-// current page, not the full tenant-wide dataset.
 export function getPatientQueryFields({
   rows,
   branches,

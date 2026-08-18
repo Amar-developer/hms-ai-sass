@@ -1,9 +1,4 @@
-import {
-  Card,
-  RefreshButton,
-  Button,
-  Badge,
-} from "@/app/components/common/ui";
+import { Card, Button, Badge } from "@/app/components/common/ui";
 import {
   capitalizeFirst,
   displayDate,
@@ -31,7 +26,6 @@ export function BookingsList({
   patientMap,
   staffMap,
   loading = false,
-  onRefresh,
   onCreate,
   onView,
   onEdit,
@@ -61,7 +55,6 @@ export function BookingsList({
             </p>
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <RefreshButton onRefresh={onRefresh} />
             {canCreate && (
               <Button type="button" onClick={onCreate} className="save-button">
                 New Booking

@@ -4,18 +4,20 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { TenantAdmin } from "@/features/admin/TenantAdmin";
 import { useWorkspace } from "@/features/shell/WorkspaceContext";
-import { sections } from "@/features/admin/constants";
+import { tenantAdminSections } from "@/features/admin/constants";
 import { canUseTenantAdminSection } from "@/features/admin/permissions";
 
-const SECTION_IDS = sections.map(([id]) => id);
+const SECTION_IDS = tenantAdminSections.map(([id]) => id);
 
 /**
- * One route matches every Tenant Admin screen (/admin/users,
- * /admin/users/new, /admin/users/{id}/edit, /admin/roles, ...) so
- * TenantAdmin stays mounted once across all of them — section/view/id come
- * from the URL segments below instead of internal component state, which
- * is what makes each screen bookmarkable/shareable and gives back/forward
- * correct behavior, without re-fetching admin data on every navigation.
+ * One route matches every "Settings" screen (/admin/roles, /admin/roles/new,
+ * /admin/roles/{id}/edit, /admin/settings, ...) so TenantAdmin stays mounted
+ * once across all of them — section/view/id come from the URL segments below
+ * instead of internal component state, which is what makes each screen
+ * bookmarkable/shareable and gives back/forward correct behavior, without
+ * re-fetching admin data on every navigation. Users/Branches/Medical
+ * Departments live under the separate /clinic route instead (see
+ * app/(shell)/(app)/(tenant-admin)/clinic/[[...segments]]/page.tsx).
  */
 export default function AdminPage() {
   const ctx = useWorkspace();
@@ -24,8 +26,9 @@ export default function AdminPage() {
   const segments = (params?.segments as string[] | undefined) || [];
 
   const defaultSection =
-    sections.find(([id]) => canUseTenantAdminSection(id, ctx.apiSession?.user))?.[0] ||
-    "users";
+    tenantAdminSections.find(([id]) =>
+      canUseTenantAdminSection(id, ctx.apiSession?.user),
+    )?.[0] || "settings";
 
   const [rawSection, second, third] = segments;
   const section = SECTION_IDS.includes(rawSection as any)
@@ -54,6 +57,13 @@ export default function AdminPage() {
   }, [segments.join("/"), defaultSection]);
 
   return (
-    <TenantAdmin {...ctx} section={section} view={view} selectedId={selectedId} />
+    <TenantAdmin
+      {...ctx}
+      section={section}
+      view={view}
+      selectedId={selectedId}
+      sections={tenantAdminSections}
+      basePath="/admin"
+    />
   );
 }

@@ -31,6 +31,7 @@ export function canOpenModule(
       id === "error_logs" ||
       id === "admin" ||
       id === "superadmin" ||
+      id === "clinic" ||
       moduleEnabled)
   );
 }

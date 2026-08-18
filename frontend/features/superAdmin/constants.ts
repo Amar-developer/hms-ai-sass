@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
+import { CLINIC_SECTION_IDS } from "@/lib/clinicSections";
 
 export const tenantTypes = [
   ["clinic", "Clinic"],
@@ -213,6 +214,17 @@ export const superAdminSections = [
   ["settings", "Tenant & Branch Settings", Settings],
   ["whatsappSettings", "WhatsApp Settings", MessageCircleMore],
 ] as const;
+
+// Display-only split of the list above: "Settings" is its own sidebar
+// dropdown (routed under /superadmin/{section}), "Clinic" is a separate one
+// (routed under /clinic/{section} — see superAdminPath in routing.ts). Both
+// are still filtered through platformSectionsForUser() for permissions.
+export const superAdminSettingsSections = superAdminSections.filter(
+  ([id]) => !(CLINIC_SECTION_IDS as readonly string[]).includes(id),
+);
+export const superAdminClinicSections = superAdminSections.filter(([id]) =>
+  (CLINIC_SECTION_IDS as readonly string[]).includes(id),
+);
 
 export function platformSectionsForUser(user: any) {
   if (user?.is_super_admin) return [...superAdminSections];

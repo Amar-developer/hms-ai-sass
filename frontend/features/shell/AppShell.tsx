@@ -14,8 +14,9 @@ import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
 import { SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { canUseTenantAdminSection } from "../admin/permissions";
-import { tenantAdminSections } from "../admin/constants";
+import { tenantAdminSections, clinic_sections } from "../admin/constants";
 import { platformSectionsForUser } from "@/features/superAdmin/SuperAdminDashboard";
+import { superAdminClinicSections } from "@/features/superAdmin/constants";
 import {
   parseSuperAdminSegments,
   superAdminPath,
@@ -41,6 +42,8 @@ type ShellChromeValue = {
   switchTenant: any;
   tenantAdminSection: string;
   setTenantAdminSection: (value: string) => void;
+  clinicSection: string;
+  setClinicSection: (value: string) => void;
   reportsSection: string;
   setReportsSection: (value: string) => void;
   superAdminSection: string;
@@ -123,6 +126,7 @@ export function AppShell({
   const router = useRouter();
   const pathname = usePathname();
   const [pendingPage, setPendingPage] = useState("");
+  const [clinicOpen, setClinicOpen] = useState(false);
 
   // Sidebar navigation uses router.push() on click rather than <Link>, so it
   // gets none of Next.js's automatic hover/viewport prefetching — every
@@ -253,10 +257,19 @@ export function AppShell({
   // tracked as independent state — that's what keeps the breadcrumb and
   // sidebar highlight correct on back/forward and direct navigation too.
   const tenantAdminSection = pathname.startsWith("/admin/")
-    ? pathname.split("/")[2] || "users"
-    : "users";
+    ? pathname.split("/")[2] || "files"
+    : "files";
   function setTenantAdminSection(value: string) {
     router.push(`/admin/${value}`);
+  }
+
+  // Clinic section (only /clinic/...)
+  const clinicSection = pathname.startsWith("/clinic/")
+    ? pathname.split("/")[2] || "users"
+    : "users";
+
+  function setClinicSection(value: string) {
+    router.push(`/clinic/${value}`);
   }
   const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(false);
   const visibleTenantAdminSections = tenantAdminSections.filter(
@@ -266,11 +279,44 @@ export function AppShell({
       (sectionId !== "patient-intelligence" ||
         clinic.modules?.includes("patient_intelligence")),
   );
+  // Clinic is one shared dropdown for both roles — tenant admins get
+  // tenant-scoped sections, platform/super-admin users get the platform
+  // template sections (users/branches/departments), both routed under
+  // /clinic/{section} (see superAdminPath in routing.ts for how the two
+  // stay disambiguated).
+  const visibleClinicSections = canAccessPlatformWorkspace
+    ? superAdminClinicSections.filter(([id]: any) =>
+        visiblePlatformSections.some(([visibleId]: any) => visibleId === id),
+      )
+    : clinic_sections.filter(([sectionId]: any) =>
+        canUseTenantAdminSection(sectionId, apiSession?.user),
+      );
+  // Doctors/Scheduling/Items are full standalone modules with their own
+  // routes (/practitioners, /scheduling, /items) — nested visually under
+  // the Clinic dropdown rather than moved into it, so they keep their
+  // existing route and permission gating (enabled("practitioners")/etc.).
+  const clinicModuleIds = ["practitioners", "scheduling", "items"];
+  const clinicModuleSections = nav.filter(
+    ([id]: any) => clinicModuleIds.includes(id) && enabled(id),
+  );
+  // Sidebar renders these nested inside Clinic instead of as their own
+  // top-level row — visibleNav itself stays untouched since prefetching,
+  // the search palette, and activePage resolution all still need them.
+  const sidebarVisibleNav = visibleNav.filter(
+    ([id]: any) => !clinicModuleIds.includes(id),
+  );
   const activeTenantAdminSection = visibleTenantAdminSections.some(
-    ([sectionId]: any) => sectionId === tenantAdminSection,
+    ([id]: any) => id === tenantAdminSection,
   )
     ? tenantAdminSection
     : visibleTenantAdminSections[0]?.[0] || tenantAdminSection;
+
+  const activeClinicSection = visibleClinicSections.some(
+    ([id]: any) => id === clinicSection,
+  )
+    ? clinicSection
+    : visibleClinicSections[0]?.[0] || clinicSection;
+
   const [profileOpen, setProfileOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(true);
   // Report tabs are real nested routes (/reports/metrix, /reports/lab, ...),
@@ -305,16 +351,24 @@ export function AppShell({
         )
       : activePage === "admin"
         ? String(
-            tenantAdminSections.find(
+            visibleTenantAdminSections.find(
+              // only pure admin sections
               ([id]: any) => id === activeTenantAdminSection,
             )?.[1] ?? "",
           )
-        : activePage === "reports"
+        : activePage === "clinic"
           ? String(
-              reportSections.find(([id]: any) => id === reportsSection)?.[1] ??
-                "",
+              visibleClinicSections.find(
+                ([id]: any) => id === activeClinicSection,
+              )?.[1] ?? "",
             )
-          : "";
+          : activePage === "reports"
+            ? String(
+                reportSections.find(
+                  ([id]: any) => id === reportsSection,
+                )?.[1] ?? "",
+              )
+            : "";
 
   const searchItems = [
     ...visibleNav.map(([id, label]: any) => ({
@@ -336,17 +390,20 @@ export function AppShell({
           },
         ]
       : []),
-    ...tenantAdminSections
-      .filter(([sectionId]: any) =>
-        visibleTenantAdminSections.some(([id]: any) => id === sectionId),
-      )
-      .map(([id, label]: any) => ({
-        id: `admin-${id}`,
-        label: `${label}`,
-        description: "Tenant Admin",
-        keywords: `settings admin ${label}`,
-        action: () => navigatePage({ id: "admin", section: id }),
-      })),
+    ...visibleTenantAdminSections.map(([id, label]: any) => ({
+      id: `admin-${id}`,
+      label: `${label}`,
+      description: "Settings",
+      keywords: `settings admin ${label}`,
+      action: () => navigatePage({ id: "admin", section: id }),
+    })),
+    ...visibleClinicSections.map(([id, label]: any) => ({
+      id: `clinic-${id}`,
+      label: `${label}`,
+      description: "Clinic",
+      keywords: `clinic ${label}`,
+      action: () => navigatePage({ id: "clinic", section: id }),
+    })),
     ...(visibleNav.some(([id]: any) => id === "reports")
       ? reportSections.map(([id, label]: any) => ({
           id: `reports-${id}`,
@@ -392,40 +449,62 @@ export function AppShell({
 
     if (!id) return;
 
-    if (id === "admin" && section) {
+    // Settings
+    if (id === "admin") {
       setTenantAdminSettingsOpen(true);
-      setTenantAdminSection(section);
+      setClinicOpen(false);
+      if (section) {
+        setTenantAdminSection(section); // → /admin/{section}
+      } else {
+        setTenantAdminSection(activeTenantAdminSection);
+      }
       return;
     }
 
+    // Clinic
+    if (id === "clinic") {
+      setClinicOpen(true);
+      setTenantAdminSettingsOpen(false);
+      if (section) {
+        setClinicSection(section); // → /clinic/{section}
+      } else {
+        setClinicSection(activeClinicSection);
+      }
+      return;
+    }
+    // ---- Reports ----
     if (id === "reports" && section) {
       setReportsOpen(true);
+      setClinicOpen(false);
       setReportsSection(section);
       return;
     }
 
+    // ---- Super-admin ----
     if (id === "superadmin" && section) {
       setSuperAdminSettingsOpen(true);
-
       if (isVisibleSuperAdminSection(section)) {
         setSuperAdminSection(section);
         return;
       }
     }
 
+    // ---- normal modules ----
     const destinationPath =
       id === "opd" && appointmentId
         ? opdAppointmentPath(appointmentId)
         : requestedId === "doctor"
           ? "/queue"
           : legacyOPDPath[requestedId] ||
-          (id === "admin"
-            ? `/admin/${tenantAdminSection}`
-            : id === "reports"
-              ? `/reports/${reportsSection}`
-              : id === "superadmin"
-                ? superAdminPath(superAdminSection)
-                : `/${id}`);
+            (id === "admin"
+              ? `/admin/${tenantAdminSection}`
+              : id === "clinic"
+                ? `/clinic/${clinicSection}`
+                : id === "reports"
+                  ? `/reports/${reportsSection}`
+                  : id === "superadmin"
+                    ? superAdminPath(superAdminSection)
+                    : `/${id}`);
 
     if (id === activePage && pathname === destinationPath) return;
 
@@ -455,6 +534,14 @@ export function AppShell({
   useEffect(() => {
     setPendingPage("");
   }, [pathname]);
+
+  // Direct/bookmarked navigation into Clinic (or into Doctors/Scheduling/
+  // Items, now nested under it) should land with the dropdown already
+  // expanded, not just highlighted.
+  useEffect(() => {
+    if (activePage === "clinic" || clinicModuleIds.includes(activePage))
+      setClinicOpen(true);
+  }, [activePage]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -519,6 +606,8 @@ export function AppShell({
     switchTenant,
     tenantAdminSection: activeTenantAdminSection,
     setTenantAdminSection,
+    clinicSection: activeClinicSection,
+    setClinicSection,
     reportsSection,
     setReportsSection,
     superAdminSection: activeSuperAdminSection,
@@ -545,7 +634,7 @@ export function AppShell({
           {/* Tablet view Sidebar */}
           <div className="w-fit scrollbar-hidden h-full overflow-y-auto  ">
             <Sidebar
-              visibleNav={visibleNav}
+              visibleNav={sidebarVisibleNav}
               activePage={activePage}
               navigatePage={navigatePage}
               isSuperAdmin={isSuperAdmin}
@@ -558,11 +647,15 @@ export function AppShell({
               setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
               tenantAdminSection={activeTenantAdminSection}
               setTenantAdminSection={setTenantAdminSection}
+              clinicSection={activeClinicSection} // new
+              setClinicSection={setClinicSection}
               superAdminSettingsOpen={superAdminSettingsOpen}
               setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
               superAdminSection={activeSuperAdminSection}
               setSuperAdminSection={setSuperAdminSection}
               visibleTenantAdminSections={visibleTenantAdminSections}
+              visibleClinicSections={visibleClinicSections}
+              clinicModuleSections={clinicModuleSections}
               enabled={enabled}
               clinic={clinic}
               setSidebarOpen={setSidebarOpen}
@@ -572,6 +665,8 @@ export function AppShell({
               superAdminSections={visiblePlatformSections}
               tabletCollapsed={tabletCollapsed}
               setTabletCollapsed={setTabletCollapsed}
+              clinicOpen={clinicOpen}
+              setClinicOpen={setClinicOpen}
             />
           </div>
         </div>
@@ -588,7 +683,7 @@ export function AppShell({
               }`}
             >
               <Sidebar
-                visibleNav={visibleNav}
+                visibleNav={sidebarVisibleNav}
                 activePage={activePage}
                 navigatePage={navigatePage}
                 isSuperAdmin={isSuperAdmin}
@@ -601,11 +696,15 @@ export function AppShell({
                 setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
                 tenantAdminSection={activeTenantAdminSection}
                 setTenantAdminSection={setTenantAdminSection}
+                clinicSection={activeClinicSection} // new
+                setClinicSection={setClinicSection}
                 superAdminSettingsOpen={superAdminSettingsOpen}
                 setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
                 superAdminSection={activeSuperAdminSection}
                 setSuperAdminSection={setSuperAdminSection}
                 visibleTenantAdminSections={visibleTenantAdminSections}
+                visibleClinicSections={visibleClinicSections}
+                clinicModuleSections={clinicModuleSections}
                 enabled={enabled}
                 clinic={clinic}
                 setSidebarOpen={setSidebarOpen}
@@ -615,6 +714,8 @@ export function AppShell({
                 superAdminSections={visiblePlatformSections}
                 tabletCollapsed={tabletCollapsed}
                 setTabletCollapsed={setTabletCollapsed}
+                clinicOpen={clinicOpen}
+                setClinicOpen={setClinicOpen}
               />
             </div>
           )}
@@ -687,10 +788,10 @@ export function AppShell({
             <BreadcrumbBarSkeleton />
           ) : (
             <div className=" border-slate-100 bg-white px-4 py-3 lg:px-5 ">
-            <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-2">
-                {/* Back / Forward group */}
-                {/* <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-2">
+                  {/* Back / Forward group */}
+                  {/* <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
                   <button
                     type="button"
                     onClick={() => router.back()}
@@ -709,91 +810,117 @@ export function AppShell({
                   </button>
                 </div> */}
 
-                {/* Divider */}
+                  {/* Divider */}
 
-                {/* Breadcrumb */}
-                <div className="flex min-w-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => navigatePage("dashboard")}
-                    disabled={
-                      activePage === "dashboard" || !enabled("dashboard")
-                    }
-                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
-                  >
-                    <Home size={14} /> Dashboard
-                  </button>
+                  {/* Breadcrumb */}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigatePage("dashboard")}
+                      disabled={
+                        activePage === "dashboard" || !enabled("dashboard")
+                      }
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
+                    >
+                      <Home size={14} /> Dashboard
+                    </button>
 
-                  {activePage !== "dashboard" && (
-                    <>
-                      <span className="text-slate-300">/</span>
-                      <span className="truncate text-[11px] font-bold text-slate-900">
-                        {activeNavLabel}
-                      </span>
-                    </>
-                  )}
+                    {activePage !== "dashboard" && (
+                      <>
+                        <span className="text-slate-300">/</span>
+                        <span className="truncate text-[11px] font-bold text-slate-900">
+                          {activeNavLabel}
+                        </span>
+                      </>
+                    )}
 
-                  {activeSectionLabel && (
-                    <>
-                      <span className="hidden text-slate-300 sm:inline">/</span>
-                      <span className="hidden truncate text-[11px] text-slate-500 sm:inline">
-                        {activeSectionLabel}
-                      </span>
-                    </>
-                  )}
+                    {activeSectionLabel && (
+                      <>
+                        <span className="hidden text-slate-300 sm:inline">
+                          /
+                        </span>
+                        <span className="hidden truncate text-[11px] text-slate-500 sm:inline">
+                          {activeSectionLabel}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {activePage === "admin" &&
-                visibleTenantAdminSections.length > 0 && (
+                {activePage === "admin" &&
+                  visibleTenantAdminSections.length > 0 && (
+                    <div className="flex shrink-0 items-center justify-end gap-2">
+                      <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
+                        Settings
+                      </span>
+                      <SearchableSelect
+                        value={activeTenantAdminSection}
+                        onChange={(value: string) => {
+                          setTenantAdminSettingsOpen(true);
+                          setTenantAdminSection(value);
+                        }}
+                        options={visibleTenantAdminSections.map(
+                          ([id, label]: any) => ({
+                            label,
+                            value: id,
+                          }),
+                        )}
+                        searchable={false}
+                        className="min-w-[200px] scrollbar-thin"
+                      />
+                    </div>
+                  )}
+
+                {activePage === "clinic" &&
+                  visibleClinicSections.length > 0 && (
+                    <div className="flex shrink-0 items-center justify-end gap-2">
+                      <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
+                        Clinic
+                      </span>
+                      <SearchableSelect
+                        value={activeClinicSection}
+                        onChange={(value: string) => {
+                          setClinicOpen(true);
+                          setClinicSection(value);
+                        }}
+                        options={visibleClinicSections.map(
+                          ([id, label]: any) => ({
+                            label,
+                            value: id,
+                          }),
+                        )}
+                        searchable={false}
+                        className="min-w-[200px] scrollbar-thin"
+                      />
+                    </div>
+                  )}
+
+                {pageNeedsDepartmentFilter && departmentOptions.length > 0 && (
                   <div className="flex shrink-0 items-center justify-end gap-2">
                     <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
-                      Tenant Admin
+                      Department
                     </span>
                     <SearchableSelect
-                      value={activeTenantAdminSection}
-                      onChange={(value: string) => {
-                        setTenantAdminSettingsOpen(true);
-                        setTenantAdminSection(value);
-                      }}
-                      options={visibleTenantAdminSections.map(
-                        ([id, label]: any) => ({
-                          label,
-                          value: id,
-                        }),
-                      )}
+                      value={departmentId}
+                      onChange={(value) => setDepartmentId(value)}
+                      options={departmentOptions.map((department: any) => ({
+                        value: department.id,
+                        label: department.name,
+                      }))}
+                      disabled={!canChangeDepartment}
+                      className=" min-w-[170px] "
+                      placeholder="Select department"
                       searchable={false}
-                      className="min-w-[200px] scrollbar-thin"
                     />
                   </div>
                 )}
 
-              {pageNeedsDepartmentFilter && departmentOptions.length > 0 && (
-                <div className="flex shrink-0 items-center justify-end gap-2">
-                  <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
-                    Department
-                  </span>
-                  <SearchableSelect
-                    value={departmentId}
-                    onChange={(value) => setDepartmentId(value)}
-                    options={departmentOptions.map((department: any) => ({
-                      value: department.id,
-                      label: department.name,
-                    }))}
-                    disabled={!canChangeDepartment}
-                    className=" min-w-[170px] "
-                    placeholder="Select department"
-                    searchable={false}
-                  />
-                </div>
-              )}
-
-              <div
-                ref={setBreadcrumbSlotEl}
-                className="flex shrink-0 items-center justify-end gap-2 empty:hidden"
-              />
+                <div
+                  ref={setBreadcrumbSlotEl}
+                  className="flex shrink-0 items-center justify-end gap-2 empty:hidden"
+                />
+              </div>
             </div>
-          </div>
           )}
 
           <section
