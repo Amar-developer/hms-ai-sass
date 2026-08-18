@@ -383,6 +383,20 @@ export function PatientForm({
               />
               <FormError error={errors.fullName?.message} />
             </FormField>
+            <FormField label="Mobile Number">
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="Enter patient mobile number"
+                {...register("mobile", {
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\D/g, "");
+                  },
+                })}
+              />
+              <FormError error={errors.mobile?.message} />
+            </FormField>
             <FormField label="Branch" required>
               <SearchableSelect
                 value={watch("branchId")}

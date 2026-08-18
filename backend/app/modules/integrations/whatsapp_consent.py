@@ -7,9 +7,7 @@ from app.modules.home_care.models import HomeCareBooking
 from app.modules.lab.models import LabOrder
 from app.modules.patients.contact import patient_whatsapp_numbers
 from app.modules.patients.models import Patient, WhatsAppConsentStatus
-from app.infrastructure.integrations.adapters.messaging.http_template import (
-    normalize_mobile_number,
-)
+from app.infrastructure.integrations.ports.messaging import normalize_mobile_number
 
 
 def patient_for_notification_resource(

@@ -13,6 +13,15 @@ from app.infrastructure.integrations.ports.object_storage import (
     StorageObject,
     StorageObjectMetadata,
 )
+from app.infrastructure.integrations.ports.sms import (
+    SmsGateway,
+    SmsGatewayCredentials,
+    SmsGatewayMode,
+    SmsGatewayStatus,
+    SmsSendRequest,
+    SmsSendResult,
+    SmsTemplateReference,
+)
 
 __all__ = [
     "EmailAttachment",
@@ -22,6 +31,13 @@ __all__ = [
     "ObjectStorage",
     "StorageObject",
     "StorageObjectMetadata",
+    "SmsGateway",
+    "SmsGatewayCredentials",
+    "SmsGatewayMode",
+    "SmsGatewayStatus",
+    "SmsSendRequest",
+    "SmsSendResult",
+    "SmsTemplateReference",
     "TemplateMessageGateway",
     "TemplateMessageResult",
 ]

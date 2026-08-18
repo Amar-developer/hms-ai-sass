@@ -15,6 +15,7 @@ from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import (
     queue_notification_if_allowed,
+    queue_sms_template_if_allowed,
     queue_whatsapp_template_if_allowed,
     whatsapp_template_integration_enabled,
 )
@@ -108,6 +109,22 @@ def record_invoice_payment(
             dedupe_key=f"whatsapp:invoice:{invoice.id}:paid",
             queued_by_user_id=payload.collected_by_user_id,
         )
+        queue_sms_template_if_allowed(
+            session,
+            tenant_id=tenant_id,
+            branch_id=invoice.branch_id,
+            flow_key="payment_receipt_patient",
+            patient=patient,
+            resource_type="invoice",
+            resource_id=invoice.id,
+            dedupe_key=f"sms:invoice:{invoice.id}:receipt",
+            variables={
+                "patient_name": patient.full_name,
+                "invoice_number": invoice.invoice_number,
+                "total_amount": f"{invoice.total_amount:.2f}",
+            },
+            queued_by_user_id=payload.collected_by_user_id,
+        )
         if paid_event and paid_event.attempt_count == 0:
             # The SPA uploads the exact branded Print Invoice PDF immediately
             # after this response. Delay processing so the worker never races
@@ -116,17 +133,20 @@ def record_invoice_payment(
             session.add(paid_event)
             session.commit()
     elif invoice.balance_amount > 0 and patient:
-        queue_notification_if_allowed(
+        queue_sms_template_if_allowed(
             session,
             tenant_id=tenant_id,
             branch_id=invoice.branch_id,
-            provider=NotificationProvider.SMS,
-            event_type=NotificationEventType.PAYMENT_REMINDER,
-            recipient=patient.mobile,
-            subject="Payment pending",
-            message=f"Payment pending for invoice {invoice.invoice_number}: Rs. {invoice.balance_amount}.",
+            flow_key="payment_pending_patient",
+            patient=patient,
             resource_type="invoice",
             resource_id=invoice.id,
+            dedupe_key=f"sms:invoice:{invoice.id}:pending:{payment.id}",
+            variables={
+                "patient_name": patient.full_name,
+                "invoice_number": invoice.invoice_number,
+                "balance_amount": f"{invoice.balance_amount:.2f}",
+            },
             queued_by_user_id=payload.collected_by_user_id,
         )
         pending_template_event = queue_whatsapp_template_if_allowed(

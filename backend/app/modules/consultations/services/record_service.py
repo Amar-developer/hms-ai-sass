@@ -39,6 +39,7 @@ from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import (
     queue_notification_if_allowed,
+    queue_sms_template_if_allowed,
     queue_whatsapp_template_if_allowed,
     whatsapp_template_integration_enabled,
 )
@@ -359,17 +360,20 @@ class ConsultationRecordService:
             tenant_id, consultation.patient_id
         )
         if consultation.follow_up_advice and patient:
-            queue_notification_if_allowed(
+            # The clinician's free-text advice cannot go into a DLT-registered
+            # SMS body, which only substitutes pre-approved variable slots. SMS
+            # gets a generic "a follow-up is due" alert; the specific advice
+            # stays on WhatsApp and in-app, which are not DLT-restricted.
+            queue_sms_template_if_allowed(
                 self.session,
                 tenant_id=tenant_id,
                 branch_id=consultation.branch_id,
-                provider=NotificationProvider.SMS,
-                event_type=NotificationEventType.FOLLOW_UP_REMINDER,
-                recipient=patient.mobile,
-                subject="Follow-up reminder",
-                message=consultation.follow_up_advice,
+                flow_key="follow_up_reminder_patient",
+                patient=patient,
                 resource_type="consultation",
                 resource_id=consultation.id,
+                dedupe_key=f"sms:consultation:{consultation.id}:follow-up",
+                variables={"patient_name": patient.full_name},
                 queued_by_user_id=actor.id,
             )
             template_event = queue_whatsapp_template_if_allowed(
@@ -409,6 +413,20 @@ class ConsultationRecordService:
                 resource_type="consultation",
                 resource_id=consultation.id,
                 dedupe_key=f"whatsapp:consultation:{consultation.id}:prescription-ready",
+                queued_by_user_id=actor.id,
+            )
+            # As with follow_up_reminder_patient, the prescription text itself
+            # cannot go into a DLT-registered body - only a generic ready alert.
+            queue_sms_template_if_allowed(
+                self.session,
+                tenant_id=tenant_id,
+                branch_id=consultation.branch_id,
+                flow_key="document_ready_patient",
+                patient=patient,
+                resource_type="consultation",
+                resource_id=consultation.id,
+                dedupe_key=f"sms:consultation:{consultation.id}:document-ready",
+                variables={"patient_name": patient.full_name},
                 queued_by_user_id=actor.id,
             )
         return consultation
