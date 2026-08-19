@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from getpass import getpass
 import os
+import sys
 
 from sqlmodel import Session, select
 
@@ -13,11 +16,58 @@ from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 
 
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
-SUPER_ADMIN_NAME = os.getenv("MEDIZINHUB_SUPER_ADMIN_NAME", "Platform Super Admin")
-SUPER_ADMIN_EMAIL = os.getenv(
-    "MEDIZINHUB_SUPER_ADMIN_EMAIL", "amarnath.manivel@teanso.com"
-).lower()
-SUPER_ADMIN_PASSWORD = os.getenv("MEDIZINHUB_SUPER_ADMIN_PASSWORD", "Admin@123")
+DEFAULT_SUPER_ADMIN_NAME = "Platform Super Admin"
+SUPER_ADMIN_NAME_ENV = "MEDIZINHUB_SUPER_ADMIN_NAME"
+SUPER_ADMIN_EMAIL_ENV = "MEDIZINHUB_SUPER_ADMIN_EMAIL"
+SUPER_ADMIN_PASSWORD_ENV = "MEDIZINHUB_SUPER_ADMIN_PASSWORD"
+
+
+@dataclass(frozen=True)
+class SuperAdminCredentials:
+    name: str
+    email: str
+    password: str
+
+
+def _read_env_value(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _prompt_required(label: str, *, secret: bool = False) -> str:
+    if not sys.stdin.isatty():
+        raise SystemExit(
+            f"{label} is required. Set the corresponding environment variable when "
+            "running this command non-interactively."
+        )
+    value = getpass(f"{label}: ") if secret else input(f"{label}: ")
+    value = value.strip()
+    if not value:
+        raise SystemExit(f"{label} is required.")
+    return value
+
+
+def resolve_super_admin_credentials() -> SuperAdminCredentials:
+    name = _read_env_value(SUPER_ADMIN_NAME_ENV)
+    if name is None:
+        name = DEFAULT_SUPER_ADMIN_NAME
+
+    email = _read_env_value(SUPER_ADMIN_EMAIL_ENV)
+    if email is None:
+        email = _prompt_required("Super admin email")
+    email = email.lower()
+
+    password = _read_env_value(SUPER_ADMIN_PASSWORD_ENV)
+    if password is None:
+        password = _prompt_required("Super admin password", secret=True)
+        confirm_password = _prompt_required("Confirm super admin password", secret=True)
+        if password != confirm_password:
+            raise SystemExit("Super admin password confirmation does not match.")
+
+    return SuperAdminCredentials(name=name, email=email, password=password)
 
 
 def ensure_primary_tenant(session: Session) -> Tenant:
@@ -56,24 +106,26 @@ def ensure_permissions(session: Session) -> None:
     session.commit()
 
 
-def ensure_super_admin(session: Session, tenant: Tenant) -> User:
-    user = session.exec(select(User).where(User.email == SUPER_ADMIN_EMAIL)).first()
+def ensure_super_admin(
+    session: Session, tenant: Tenant, credentials: SuperAdminCredentials
+) -> User:
+    user = session.exec(select(User).where(User.email == credentials.email)).first()
     if not user:
         user = User(
             tenant_id=tenant.id,
             user_type="platform_admin",
-            name=SUPER_ADMIN_NAME,
-            email=SUPER_ADMIN_EMAIL,
-            password_hash=hash_password(SUPER_ADMIN_PASSWORD),
+            name=credentials.name,
+            email=credentials.email,
+            password_hash=hash_password(credentials.password),
             is_super_admin=True,
             is_active=True,
             must_change_password=False,
         )
     user.tenant_id = tenant.id
     user.user_type = "platform_admin"
-    user.name = SUPER_ADMIN_NAME
-    user.email = SUPER_ADMIN_EMAIL
-    user.password_hash = hash_password(SUPER_ADMIN_PASSWORD)
+    user.name = credentials.name
+    user.email = credentials.email
+    user.password_hash = hash_password(credentials.password)
     user.is_super_admin = True
     user.is_active = True
     user.must_change_password = False
@@ -170,15 +222,16 @@ def ensure_tenant_admin_template_role(
 
 
 def main() -> None:
+    credentials = resolve_super_admin_credentials()
     with Session(engine) as session:
         ensure_default_plans(session)
         tenant = ensure_primary_tenant(session)
-        user = ensure_super_admin(session, tenant)
+        user = ensure_super_admin(session, tenant, credentials)
         ensure_super_admin_role(session, tenant, user)
         ensure_tenant_admin_template_role(session, tenant, user)
         print("Super admin login repaired.")
-        print(f"Email: {SUPER_ADMIN_EMAIL}")
-        print(f"Password: {SUPER_ADMIN_PASSWORD}")
+        print(f"Email: {credentials.email}")
+        print("Password: <provided at runtime>")
         print(f"Tenant: {tenant.name} ({tenant.id})")
 
 

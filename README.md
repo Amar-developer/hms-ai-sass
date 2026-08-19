@@ -126,6 +126,27 @@ uvicorn app.main:app --reload --port 8000
 
 MedizinHub HMS is a tenant-based SaaS application. A fresh installation must have exactly one primary platform tenant and one super admin. The super admin logs in without selecting a customer tenant, then creates and manages customer tenants.
 
+Plain first-pull setup for team members using Docker:
+
+```text
+git clone https://github.com/teanso-tech/medizinhub-hms.git
+cd medizinhub-hms
+git checkout main
+git pull origin main
+sudo docker compose -f docker-compose.local.yml up --build
+```
+
+For an existing clone:
+
+```text
+cd medizinhub-hms
+git checkout main
+git pull origin main
+sudo docker compose -f docker-compose.local.yml up --build
+```
+
+PostgreSQL runs through Docker Compose in this setup. Team members do not need to manually install PostgreSQL.
+
 1. Start the backend and frontend.
 2. Create the first platform super admin once:
 
@@ -135,7 +156,7 @@ curl -X POST http://localhost:8000/api/v1/auth/bootstrap-super-admin \
   -d '{"name":"Platform Super Admin","email":"admin@medizinhub.local","password":"ChangeMe@123"}'
 ```
 
-If a super admin already exists, this endpoint returns `409`. Use the existing super admin login, or run `backend/scripts/reset_super_admin.py` only in a controlled development/support environment.
+If a super admin already exists, this endpoint returns `409`. Use the existing super admin login, or run `backend/database/reset_super_admin.py` only in a controlled development/support environment.
 
 3. Log in as the super admin. Do not pass `tenant_id` for this login:
 
@@ -383,16 +404,35 @@ END \$\$;"
 
 ## 7. Create / Reset Super Admin
 
+Interactive local run:
+
+```bash
+sudo docker compose exec backend python -m database.reset_super_admin
+```
+
+Non-interactive run:
+
 ```bash
 sudo docker compose exec \
   -e MEDIZINHUB_SUPER_ADMIN_EMAIL="YOUR_EMAIL" \
   -e MEDIZINHUB_SUPER_ADMIN_PASSWORD="YOUR_PASSWORD" \
-  backend python scripts/reset_super_admin.py
+  backend python -m database.reset_super_admin
 ```
 
 ---
 
 ## 8. Reset All Data & Recreate Super Admin
+
+Interactive local run:
+
+```bash
+# Deletes all rows, keeps only super admin + default plans
+sudo docker compose exec \
+  -e MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV \
+  backend python -m database.reset_demo_data
+```
+
+Non-interactive run:
 
 ```bash
 # Deletes all rows, keeps only super admin + default plans
@@ -400,7 +440,7 @@ sudo docker compose exec \
   -e MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV \
   -e MEDIZINHUB_SUPER_ADMIN_EMAIL="YOUR_EMAIL" \
   -e MEDIZINHUB_SUPER_ADMIN_PASSWORD="YOUR_PASSWORD" \
-  backend python scripts/reset_demo_data.py
+  backend python -m database.reset_demo_data
 ```
 
 ---
@@ -409,12 +449,14 @@ sudo docker compose exec \
 
 ```bash
 # Insert demo/test data
-sudo docker compose exec backend python scripts/seed_demo.py
+sudo docker compose exec backend python -m database.seed_demo_data
+```
 
+```bash
 # Delete demo data later
 sudo docker compose exec \
   -e MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV \
-  backend python scripts/reset_demo_data.py
+  backend python -m database.reset_demo_data
 ```
 
 ---
