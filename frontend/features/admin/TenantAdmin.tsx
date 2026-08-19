@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { tenantAdminSections, clinic_sections } from "./constants";
+import { tenantAdminSections, clinic_sections, sectionSlug } from "./constants";
+import { newSegment, editSegment } from "@/lib/routeSlugs";
 
 const allAdminSections = [...tenantAdminSections, ...clinic_sections];
 import { canUseTenantAdminSection } from "./permissions";
@@ -47,7 +48,7 @@ import { DepartmentForm } from "./forms/DepartmentForm";
 import { SupplierForm } from "./forms/SupplierForm";
 import { FilesPanel } from "./components/FilesPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
-  import { WhatsAppIntegrationSettings } from "./whatsapp_integration/WhatsAppIntegrationSettings";
+import { WhatsAppIntegrationSettings } from "./whatsapp_integration/WhatsAppIntegrationSettings";
 import { PatientIntelligenceSettings } from "./components/PatientIntelligenceSettings";
 import {
   BRANCH_COLUMNS,
@@ -94,20 +95,18 @@ export function TenantAdmin({
   }, [section]);
 
   const data = useAdminData();
-  const whatsappModuleEnabled = Boolean(
-    clinic?.modules?.includes("whatsapp"),
-  );
+  const whatsappModuleEnabled = Boolean(clinic?.modules?.includes("whatsapp"));
   const permissionKeys: string[] = apiSession?.user?.permissions || [];
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const hasAdminAction = (prefix: string, action: string) =>
     Boolean(
       apiSession?.user?.is_super_admin ||
-        permissionKeys.includes("*") ||
-        apiSession?.user?.roles?.includes("tenant_admin") ||
-        apiSession?.user?.user_type === "tenant_admin" ||
-        permissionKeys.includes(`${prefix}.manage`) ||
-        permissionKeys.includes(`${prefix}.${action}`),
+      permissionKeys.includes("*") ||
+      apiSession?.user?.roles?.includes("tenant_admin") ||
+      apiSession?.user?.user_type === "tenant_admin" ||
+      permissionKeys.includes(`${prefix}.manage`) ||
+      permissionKeys.includes(`${prefix}.${action}`),
     );
 
   function goTo(
@@ -116,11 +115,12 @@ export function TenantAdmin({
     nextId = "",
     opts: { replace?: boolean } = {},
   ) {
+    const slug = sectionSlug(nextSection);
     const path =
       nextView === "create"
-        ? `${basePath}/${nextSection}/new`
+        ? `${basePath}/${nextSection}/${newSegment(slug)}`
         : nextView === "edit"
-          ? `${basePath}/${nextSection}/${nextId}/edit`
+          ? `${basePath}/${nextSection}/${nextId}/${editSegment(slug)}`
           : nextView === "view"
             ? `${basePath}/${nextSection}/${nextId}`
             : `${basePath}/${nextSection}`;
@@ -205,7 +205,10 @@ export function TenantAdmin({
       const value = String(raw);
       if (!seen.has(value)) seen.set(value, labelFor ? labelFor(value) : value);
     });
-    return Array.from(seen.entries()).map(([value, label]) => ({ value, label }));
+    return Array.from(seen.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
   }
 
   const statusField = (rows: any[]): QueryFieldSchema => ({
@@ -567,9 +570,10 @@ export function TenantAdmin({
           onCreate={openCreate}
           loading={data.busy}
           columns={USER_COLUMNS}
-          render={(user: any) => (
+          render={(user: any, index: number) => (
             <UserRow
               key={user.id}
+              index={index}
               user={user}
               roles={data.roles}
               branches={data.branches}
@@ -629,9 +633,10 @@ export function TenantAdmin({
           onCreate={openCreate}
           loading={data.busy}
           columns={ROLE_COLUMNS}
-          render={(role: Role) => (
+          render={(role: Role, index: number) => (
             <RoleRow
               key={role.id}
+              index={index}
               role={role}
               canCopyIds={canCopyIds}
               canEdit={hasAdminAction("identity.roles", "edit")}
@@ -684,9 +689,10 @@ export function TenantAdmin({
           onCreate={openCreate}
           loading={data.busy}
           columns={DEPARTMENT_COLUMNS}
-          render={(department: any) => (
+          render={(department: any, index: number) => (
             <DepartmentRow
               key={department.id}
+              index={index}
               department={department}
               canEdit={hasAdminAction("departments", "edit")}
               canDelete={hasAdminAction("departments", "delete")}
@@ -748,9 +754,10 @@ export function TenantAdmin({
           onCreate={openCreate}
           loading={data.busy}
           columns={BRANCH_COLUMNS}
-          render={(branch: any) => (
+          render={(branch: any, index: number) => (
             <BranchRow
               key={branch.id}
+              index={index}
               branch={branch}
               canCopyIds={canCopyIds}
               canEdit={hasAdminAction("branches", "edit")}
@@ -805,9 +812,10 @@ export function TenantAdmin({
           onCreate={openCreate}
           loading={data.busy}
           columns={SUPPLIER_COLUMNS}
-          render={(supplier: any) => (
+          render={(supplier: any, index: number) => (
             <SupplierRow
               key={supplier.id}
+              index={index}
               supplier={supplier}
               canEdit={hasAdminAction("suppliers", "edit")}
               canDelete={hasAdminAction("suppliers", "delete")}
@@ -864,9 +872,10 @@ export function TenantAdmin({
           onCreate={openCreate}
           loading={data.busy}
           columns={TAX_RULE_COLUMNS}
-          render={(rule: any) => (
+          render={(rule: any, index: number) => (
             <TaxRuleRow
               key={rule.id}
+              index={index}
               rule={rule}
               canEdit={hasAdminAction("tax", "edit")}
               canDelete={hasAdminAction("tax", "delete")}
@@ -918,9 +927,10 @@ export function TenantAdmin({
           onCreate={openCreate}
           loading={data.busy}
           columns={DISCOUNT_OFFER_COLUMNS}
-          render={(offer: any) => (
+          render={(offer: any, index: number) => (
             <DiscountOfferRow
               key={offer.id}
+              index={index}
               offer={offer}
               canEdit={hasAdminAction("discounts", "edit")}
               canDelete={hasAdminAction("discounts", "delete")}
@@ -950,7 +960,9 @@ export function TenantAdmin({
         (view === "edit" || view === "view") &&
         selectedOffer && (
           <DiscountOfferForm
-            title={view === "view" ? "View Discount Offer" : "Edit Discount Offer"}
+            title={
+              view === "view" ? "View Discount Offer" : "Edit Discount Offer"
+            }
             offer={selectedOffer}
             branches={data.branches}
             busy={data.busy}
@@ -1041,7 +1053,8 @@ export function TenantAdmin({
           <Card>
             <h3 className="card-title font-bold">Patient Intelligence</h3>
             <p className="mt-2 text-sm text-slate-500">
-              This module is not enabled by the tenant&apos;s active subscription.
+              This module is not enabled by the tenant&apos;s active
+              subscription.
             </p>
           </Card>
         )}

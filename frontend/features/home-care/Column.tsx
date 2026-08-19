@@ -10,17 +10,17 @@ import { PatientFlagBadges } from "../patients/components/PatientFlagBadges";
 import { bookingStaffName, bookingTotal, isBookingLocked } from "./helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { RowActions } from "../admin/components/RowActions";
-import { Badge } from "@/app/components/common/ui"
+import { Badge } from "@/app/components/common/ui";
 
 type getBookingListColumnProps = {
-    canCopyIds:boolean,
- patientMap: Map<string, any>;
-  staffMap:Map<string, any>;
-  onView: (booking:any)=>void,
-  onEdit: (booking:any)=>void,
-  canManage:boolean,
-  onInvoice:(booking:any)=>void,
-}
+  canCopyIds: boolean;
+  patientMap: Map<string, any>;
+  staffMap: Map<string, any>;
+  onView: (booking: any) => void;
+  onEdit: (booking: any) => void;
+  canManage: boolean;
+  onInvoice: (booking: any) => void;
+};
 
 export function getBookingListColumn({
   canCopyIds,
@@ -30,8 +30,17 @@ export function getBookingListColumn({
   onEdit,
   canManage,
   onInvoice,
-}:getBookingListColumnProps): Column<any>[] {
+}: getBookingListColumnProps): Column<any>[] {
   return [
+    {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
     {
       key: "booking_number",
       header: "Booking ID",
@@ -51,8 +60,8 @@ export function getBookingListColumn({
     },
     {
       key: "service_count",
-      header: "Service Count",
-      width: "160px",
+      header: "Count",
+      width: "120px",
       render: (booking: any) => (
         <div>
           <p className="text-sm ">{booking.services?.length || 0} services</p>
@@ -67,10 +76,10 @@ export function getBookingListColumn({
       render: (booking: any) => {
         const patient: any = patientMap.get(booking.patient_id);
         return (
-          <div>
-            <span className="text-sm">
+          <div className="max-w-[150px]">
+            <p className="truncate font-semibold" title={capitalizeFirst(booking.patient_name || patientName(patient))}>
               {capitalizeFirst(booking.patient_name || patientName(patient))}
-            </span>
+            </p>
             <PatientFlagBadges patient={patient} className="mt-1" />
           </div>
         );
@@ -81,13 +90,15 @@ export function getBookingListColumn({
       header: "Staff",
       width: "160px",
       render: (booking: any) => (
-        <div className="text-sm">
-          {bookingStaffName(booking, staffMap)}
+        <div className="max-w-[150px] ">
+         <div className="truncate" title={bookingStaffName(booking, staffMap)}>
+           {bookingStaffName(booking, staffMap)}
           {booking.staff_type && (
             <p className="text-xs text-slate-500">
               {humanizeOptionLabel(booking.staff_type)}
             </p>
           )}
+         </div>
         </div>
       ),
     },
@@ -121,7 +132,7 @@ export function getBookingListColumn({
       render: (booking: any) => {
         return (
           <Badge
-            className="normal-badge"
+            className="normal-label"
             tone={`${String(
               booking.status == "requested"
                 ? "orange"

@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 
 import { ApiSession, apiFetch, uploadAssetUrl } from "@/lib/api";
-import { clinicalRecordsWithUniqueItems, displayPatientGender, fmtDate, patientDisplayMobile, uniqueClinicalRecords } from "../helpers";
+import {
+  clinicalRecordsWithUniqueItems,
+  displayPatientGender,
+  fmtDate,
+  patientDisplayMobile,
+  uniqueClinicalRecords,
+} from "../helpers";
 import { MembershipEnrollForm } from "../forms/PatientForms";
 import { CompactMetric } from "./CompactMetric";
 import {
@@ -34,10 +40,19 @@ import {
 import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
 import { DataTable } from "@/app/components/common/DataTable";
 import { Column } from "@/utils/types";
-import {
-  PatientFlagBadges,
-  patientValueTierFlags,
-} from "./PatientFlagBadges";
+import { PatientFlagBadges, patientValueTierFlags } from "./PatientFlagBadges";
+import { BmiTrendChart, type VitalReading } from "./workspace/BmiTrendChart";
+
+// Placeholder vitals — the patient schema has no height/weight/vitals model
+// yet, so the BMI trend renders illustrative data until that's added.
+const MOCK_VITALS: VitalReading[] = [
+  { date: "2026-03-01", heightCm: 168, weightKg: 82 },
+  { date: "2026-04-01", heightCm: 168, weightKg: 80 },
+  { date: "2026-05-01", heightCm: 168, weightKg: 78.5 },
+  { date: "2026-06-01", heightCm: 168, weightKg: 77 },
+  { date: "2026-07-01", heightCm: 168, weightKg: 75.5 },
+  { date: "2026-08-01", heightCm: 168, weightKg: 74 },
+];
 
 const familyRelationshipOptions = [
   { value: "father", label: "Father" },
@@ -82,6 +97,7 @@ export function PatientDetail({
   onSaveManualLabDate,
   onSendEngagementAction,
   setActive,
+  activeSection = "home",
 }: any & { apiSession?: ApiSession | null }) {
   const permissionKeys = apiSession?.user?.permissions || [];
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
@@ -350,6 +366,8 @@ export function PatientDetail({
     {
       key: "status",
       header: "Status",
+      className:'text-center',
+      width:'150px',
       render: (row) => <StatusBadge status={row.status} />,
     },
     {
@@ -374,7 +392,6 @@ export function PatientDetail({
       key: "invoice_number",
       header: "Invoice",
       render: (row) => <span className="font-black">{row.invoice_number}</span>,
-
     },
     {
       key: "source",
@@ -454,7 +471,7 @@ export function PatientDetail({
                 />
                 <Badge
                   tone={isAdmitted ? "amber" : "green"}
-                  className="normal-badge"
+                  className="normal-label"
                 >
                   {isAdmitted ? "Admitted" : "Outpatient"}
                 </Badge>
@@ -474,56 +491,62 @@ export function PatientDetail({
             >
               Back to Patients
             </button>
-            {canEditPatient && <Button onClick={onEdit} className="close-button">Edit Patient</Button>}
+            {canEditPatient && (
+              <Button onClick={onEdit} className="close-button">
+                Edit Patient
+              </Button>
+            )}
           </div>
         </div>
         <StatusToast message={message} onClose={onMessageClose} />
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <Info
-            title="Age / Gender"
-            value={`${patient.age_years ?? "-"} / ${displayPatientGender(patient.gender)}`}
-          />
-          <Info title="Blood Group" value={patient.blood_group || "-"} />
-          <Info title="Mobile" value={patient.mobile || "-"} />
-          <Info title="Address" value={patient.address || "-"} />
-          <Info
-            title="Secondary Mobile"
-            value={patient.alternate_mobile || "-"}
-          />
-          <Info
-            title="WhatsApp Preference"
-            value={String(patient.whatsapp_consent_status || "not_recorded")
-              .replaceAll("_", " ")
-              .replace(/\b\w/g, (letter) => letter.toUpperCase())}
-          />
-          <Info
-            title="Preference Source"
-            value={String(patient.whatsapp_consent_source || "-")
-              .replaceAll("_", " ")
-              .replace(/\b\w/g, (letter) => letter.toUpperCase())}
-          />
-          <Info
-            title="Message Language"
-            value={
-              {
-                tenant_default: "English",
-                en: "English",
-                hi: "Hindi",
-                mr: "Marathi",
-                gu: "Gujarati",
-                ta: "Tamil",
-                te: "Telugu",
-                kn: "Kannada",
-                ml: "Malayalam",
-                bn: "Bengali",
-                pa: "Punjabi",
-                ur: "Urdu",
-              }[String(patient.whatsapp_preferred_language || "en")] ||
-              String(patient.whatsapp_preferred_language)
-            }
-          />
-        </div>
-        {canReadMembership && (
+        {activeSection === "home" && (
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <Info
+              title="Age / Gender"
+              value={`${patient.age_years ?? "-"} / ${displayPatientGender(patient.gender)}`}
+            />
+            <Info title="Blood Group" value={patient.blood_group || "-"} />
+            <Info title="Mobile" value={patient.mobile || "-"} />
+            <Info title="Address" value={patient.address || "-"} />
+            <Info
+              title="Secondary Mobile"
+              value={patient.alternate_mobile || "-"}
+            />
+            <Info
+              title="WhatsApp Preference"
+              value={String(patient.whatsapp_consent_status || "not_recorded")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+            />
+            <Info
+              title="Preference Source"
+              value={String(patient.whatsapp_consent_source || "-")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+            />
+            <Info
+              title="Message Language"
+              value={
+                {
+                  tenant_default: "English",
+                  en: "English",
+                  hi: "Hindi",
+                  mr: "Marathi",
+                  gu: "Gujarati",
+                  ta: "Tamil",
+                  te: "Telugu",
+                  kn: "Kannada",
+                  ml: "Malayalam",
+                  bn: "Bengali",
+                  pa: "Punjabi",
+                  ur: "Urdu",
+                }[String(patient.whatsapp_preferred_language || "en")] ||
+                String(patient.whatsapp_preferred_language)
+              }
+            />
+          </div>
+        )}
+        {activeSection === "membership" && canReadMembership && (
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/40 p-3">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -596,113 +619,129 @@ export function PatientDetail({
             </div>
           </div>
         )}
-        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h5 className="text-sm font-black text-slate-950">
-                Family Relationships
-              </h5>
-              <p className="text-xs font-semibold text-slate-500">
-                Link existing patients so one membership benefit pool can be
-                used by any linked family member.
-              </p>
+        {activeSection === "family" && (
+          <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h5 className="text-sm font-black text-slate-950">
+                  Family Relationships
+                </h5>
+                <p className="text-xs font-semibold text-slate-500">
+                  Link existing patients so one membership benefit pool can be
+                  used by any linked family member.
+                </p>
+              </div>
+              <Badge tone="slate" className="normal-badge">
+                {familyRelationships.length} linked
+              </Badge>
             </div>
-            <Badge tone="slate" className="normal-badge">
-              {familyRelationships.length} linked
-            </Badge>
-          </div>
 
-          {canEditPatient && (
-            <div className="mt-3 grid gap-3 md:grid-cols-[1.2fr_180px_1fr_auto] md:items-end">
-              <FormField label="Family Patient">
-                <SearchableSelect
-                  value={familyPatientId}
-                  onChange={setFamilyPatientId}
-                  options={familyPatientOptions}
-                  loading={familyPatientSearchLoading}
-                  onSearchChange={searchFamilyPatients}
-                  placeholder="Search patient by name, ID, or mobile"
-                  searchPlaceholder="Search existing patients..."
-                  emptyText="No matching patient found."
-                />
-              </FormField>
-              <FormField label="Relationship">
-                <SearchableSelect
-                  value={familyRelationship}
-                  onChange={setFamilyRelationship}
-                  options={familyRelationshipOptions}
-                  searchable={false}
-                  placeholder="Select relationship"
-                />
-              </FormField>
-              <FormField label="Notes">
-                <Input
-                  value={familyNotes}
-                  onChange={(event: any) => setFamilyNotes(event.target.value)}
-                  placeholder="Optional note"
-                />
-              </FormField>
-              <Button
-                disabled={loading || !familyPatientId.trim()}
-                onClick={async () => {
-                  const ok = await onCreateFamilyRelationship?.({
-                    relatedPatientId: familyPatientId.trim(),
-                    relationship: familyRelationship.trim() || "family",
-                    notes: familyNotes.trim(),
-                  });
-                  if (ok) {
-                    setFamilyPatientId("");
-                    setFamilyRelationship("father");
-                    setFamilyNotes("");
-                    searchFamilyPatients();
-                  }
-                }}
-              >
-                Link Family
-              </Button>
-            </div>
-          )}
-
-          <div className="mt-3 space-y-2">
-            {familyRelationships.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-500">
-                No family relationships linked yet.
-              </p>
-            ) : (
-              familyRelationships.map((row: any) => (
-                <div
-                  key={row.id}
-                  className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+            {canEditPatient && (
+              <div className="mt-3 grid gap-3 md:grid-cols-[1.2fr_180px_1fr_auto] md:items-end">
+                <FormField label="Family Patient">
+                  <SearchableSelect
+                    value={familyPatientId}
+                    onChange={setFamilyPatientId}
+                    options={familyPatientOptions}
+                    loading={familyPatientSearchLoading}
+                    onSearchChange={searchFamilyPatients}
+                    placeholder="Search patient by name, ID, or mobile"
+                    searchPlaceholder="Search existing patients..."
+                    emptyText="No matching patient found."
+                  />
+                </FormField>
+                <FormField label="Relationship">
+                  <SearchableSelect
+                    value={familyRelationship}
+                    onChange={setFamilyRelationship}
+                    options={familyRelationshipOptions}
+                    searchable={false}
+                    placeholder="Select relationship"
+                  />
+                </FormField>
+                <FormField label="Notes">
+                  <Input
+                    value={familyNotes}
+                    onChange={(event: any) =>
+                      setFamilyNotes(event.target.value)
+                    }
+                    placeholder="Optional note"
+                  />
+                </FormField>
+                <Button
+                  disabled={loading || !familyPatientId.trim()}
+                  onClick={async () => {
+                    const ok = await onCreateFamilyRelationship?.({
+                      relatedPatientId: familyPatientId.trim(),
+                      relationship: familyRelationship.trim() || "family",
+                      notes: familyNotes.trim(),
+                    });
+                    if (ok) {
+                      setFamilyPatientId("");
+                      setFamilyRelationship("father");
+                      setFamilyNotes("");
+                      searchFamilyPatients();
+                    }
+                  }}
                 >
-                  <div>
-                    <p className="text-sm font-black text-slate-950">
-                      {row.related_patient_name || row.related_patient_id}
-                    </p>
-                    <p className="text-xs font-semibold text-slate-500">
-                      {row.related_patient_number || row.related_patient_id} ·{" "}
-                      {row.relationship || "family"}
-                    </p>
-                    {row.notes && (
-                      <p className="mt-1 text-xs text-slate-500">{row.notes}</p>
+                  Link Family
+                </Button>
+              </div>
+            )}
+
+            <div className="mt-3 space-y-2">
+              {familyRelationships.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-500">
+                  No family relationships linked yet.
+                </p>
+              ) : (
+                familyRelationships.map((row: any) => (
+                  <div
+                    key={row.id}
+                    className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="text-sm font-black text-slate-950">
+                        {row.related_patient_name || row.related_patient_id}
+                      </p>
+                      <p className="text-xs font-semibold text-slate-500">
+                        {row.related_patient_number || row.related_patient_id} ·{" "}
+                        {row.relationship || "family"}
+                      </p>
+                      {row.notes && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {row.notes}
+                        </p>
+                      )}
+                    </div>
+                    {canEditPatient && (
+                      <ActionButton
+                        tone="neutral"
+                        disabled={loading}
+                        onClick={() => onDeleteFamilyRelationship?.(row.id)}
+                      >
+                        Remove
+                      </ActionButton>
                     )}
                   </div>
-                  {canEditPatient && (
-                    <ActionButton
-                      tone="neutral"
-                      disabled={loading}
-                      onClick={() => onDeleteFamilyRelationship?.(row.id)}
-                    >
-                      Remove
-                    </ActionButton>
-                  )}
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </Card>
 
-      {patientIntelligence && (
+      {activeSection === "home" && (
+        <Card className="p-4">
+          <h3 className="mb-1 text-sm font-black text-slate-900">BMI Trend</h3>
+          <p className="mb-3 text-xs text-slate-500">
+            Updated to today from the patient&apos;s latest recorded vitals.
+          </p>
+          <BmiTrendChart readings={MOCK_VITALS} />
+        </Card>
+      )}
+
+      {activeSection === "home" && patientIntelligence && (
         <DetailSection
           title="Patient Intelligence"
           description="Explainable Patient 360 metrics calculated from existing HMS activity."
@@ -723,7 +762,9 @@ export function PatientDetail({
             />
             <CompactMetric
               label="365-day Collected"
-              value={money(patientIntelligence.metrics?.net_collected_365d || 0)}
+              value={money(
+                patientIntelligence.metrics?.net_collected_365d || 0,
+              )}
             />
             <CompactMetric
               label="Completed Visits"
@@ -832,14 +873,17 @@ export function PatientDetail({
                   Monthly Lab Tracking
                 </h5>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
-                  Set the next lab date and test used by configured reminder rules.
+                  Set the next lab date and test used by configured reminder
+                  rules.
                 </p>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <FormField label="Next Lab Date">
                     <Input
                       type="date"
                       value={manualLabDate}
-                      onChange={(event: any) => setManualLabDate(event.target.value)}
+                      onChange={(event: any) =>
+                        setManualLabDate(event.target.value)
+                      }
                     />
                   </FormField>
                   <FormField label="Lab Test">
@@ -854,7 +898,9 @@ export function PatientDetail({
                   <FormField label="Notes" className="md:col-span-2">
                     <Input
                       value={manualLabNotes}
-                      onChange={(event: any) => setManualLabNotes(event.target.value)}
+                      onChange={(event: any) =>
+                        setManualLabNotes(event.target.value)
+                      }
                       placeholder="Optional lab note"
                     />
                   </FormField>
@@ -876,7 +922,11 @@ export function PatientDetail({
                     <ActionButton
                       tone="danger"
                       onClick={() =>
-                        onSaveManualLabDate?.("", manualLabTestName, manualLabNotes)
+                        onSaveManualLabDate?.(
+                          "",
+                          manualLabTestName,
+                          manualLabNotes,
+                        )
                       }
                       disabled={loading}
                     >
@@ -926,19 +976,21 @@ export function PatientDetail({
         </DetailSection>
       )}
 
-      {!patientIntelligence && patientIntelligenceError && (
-        <DetailSection
-          title="Patient Intelligence"
-          description="Patient 360 metrics and explainable flags could not be loaded."
-          count={0}
-        >
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {patientIntelligenceError}
-          </div>
-        </DetailSection>
-      )}
+      {activeSection === "home" &&
+        !patientIntelligence &&
+        patientIntelligenceError && (
+          <DetailSection
+            title="Patient Intelligence"
+            description="Patient 360 metrics and explainable flags could not be loaded."
+            count={0}
+          >
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              {patientIntelligenceError}
+            </div>
+          </DetailSection>
+        )}
 
-      {(alerts.length > 0 || risks.length > 0) && (
+      {activeSection === "home" && (alerts.length > 0 || risks.length > 0) && (
         <div className="grid gap-5 lg:grid-cols-2">
           {alerts.length > 0 && (
             <DetailSection
@@ -969,7 +1021,7 @@ export function PatientDetail({
         </div>
       )}
 
-      {consultations.length > 0 && (
+      {activeSection === "consultations" && consultations.length > 0 && (
         <DetailSection
           title="Consultations"
           description="Click a consultation to open the consultation workspace."
@@ -984,8 +1036,8 @@ export function PatientDetail({
         </DetailSection>
       )}
 
-      {(labRows.length > 0 || medicineRows.length > 0) && (
-        <div className="grid gap-5 lg:grid-cols-2">
+      {activeSection === "labs" && (
+        <div className="grid gap-5">
           {labRows.length > 0 && (
             <DetailSection
               title="Lab & Service"
@@ -995,44 +1047,48 @@ export function PatientDetail({
               <div
                 className={`max-h-[300px] overflow-y-auto rounded-lg border border-slate-200 ${hiddenScrollbar}`}
               >
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase text-slate-500">
-                <tr>
-                  <th className="px-3 py-2.5">Date</th>
-                  <th className="px-3 py-2.5 text-right">Tests</th>
-                  <th className="px-3 py-2.5">Status</th>
-                  <th className="px-3 py-2.5 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {labRows.map(({ row: order, items }: any) => (
-                  <tr key={order.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-3 font-black text-slate-950">
-                      {fmtDate(order.created_at)}
-                    </td>
-                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
-                      {items.length} test(s)
-                    </td>
-                    <td className="px-3 py-3">
-                      <StatusBadge status={order.status} />
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => goToModule("lab")}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
-                      >
-                        Open
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                <table className="w-full min-w-[520px] text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2.5">Date</th>
+                      <th className="px-3 py-2.5 text-right">Tests</th>
+                      <th className="px-3 py-2.5">Status</th>
+                      <th className="px-3 py-2.5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {labRows.map(({ row: order, items }: any) => (
+                      <tr key={order.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-3 font-black text-slate-950">
+                          {fmtDate(order.created_at)}
+                        </td>
+                        <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
+                          {items.length} test(s)
+                        </td>
+                        <td className="px-3 py-3">
+                          <StatusBadge status={order.status} />
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => goToModule("lab")}
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
+                          >
+                            Open
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </DetailSection>
           )}
+        </div>
+      )}
 
+      {activeSection === "medicines" && (
+        <div className="grid gap-5">
           {medicineRows.length > 0 && (
             <DetailSection
               title="Medicines"
@@ -1042,255 +1098,268 @@ export function PatientDetail({
               <div
                 className={`max-h-[300px] overflow-y-auto rounded-lg border border-slate-200 ${hiddenScrollbar}`}
               >
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase text-slate-500">
-                <tr>
-                  <th className="px-3 py-2.5">Date</th>
-                  <th className="px-3 py-2.5 text-right">Items</th>
-                  <th className="px-3 py-2.5">Status</th>
-                  <th className="px-3 py-2.5 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {medicineRows.map(({ row: issue, items }: any) => (
-                  <tr key={issue.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-3 font-black text-slate-950">
-                      {fmtDate(issue.created_at)}
-                    </td>
-                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
-                      {items.length} item(s)
-                    </td>
-                    <td className="px-3 py-3">
-                      <StatusBadge status={issue.status} />
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => goToModule("pharmacy")}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
-                      >
-                        Open
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                <table className="w-full min-w-[520px] text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2.5">Date</th>
+                      <th className="px-3 py-2.5 text-right">Items</th>
+                      <th className="px-3 py-2.5">Status</th>
+                      <th className="px-3 py-2.5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {medicineRows.map(({ row: issue, items }: any) => (
+                      <tr key={issue.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-3 font-black text-slate-950">
+                          {fmtDate(issue.created_at)}
+                        </td>
+                        <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
+                          {items.length} item(s)
+                        </td>
+                        <td className="px-3 py-3">
+                          <StatusBadge status={issue.status} />
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => goToModule("pharmacy")}
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
+                          >
+                            Open
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </DetailSection>
           )}
         </div>
       )}
 
-      {physioCases.length > 0 && (
+      {activeSection === "consultations" && physioCases.length > 0 && (
         <DetailSection
           title="Physiotherapy"
           description="Cases, treatment goals, and planned sessions."
           count={physioCases.length}
         >
           <div className="grid gap-3 lg:grid-cols-2">
-          {physioCases.map((c: any) => (
-            <button
-              type="button"
-              key={c.id}
-              onClick={() => goToModule("physiotherapy")}
-              title="Open in Physiotherapy"
-              className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
-            >
-              <span className="font-bold">
-                {c.case_number || fmtDate(c.assessment_date)}
-              </span>
-              <StatusBadge status={c.status} />
-            </button>
-          ))}
+            {physioCases.map((c: any) => (
+              <button
+                type="button"
+                key={c.id}
+                onClick={() => goToModule("physiotherapy")}
+                title="Open in Physiotherapy"
+                className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
+              >
+                <span className="font-bold">
+                  {c.case_number || fmtDate(c.assessment_date)}
+                </span>
+                <StatusBadge status={c.status} />
+              </button>
+            ))}
           </div>
         </DetailSection>
       )}
 
-      {patientIpAdmissions.length > 0 && (
+      {activeSection === "consultations" && patientIpAdmissions.length > 0 && (
         <DetailSection
           title="IP Admissions"
           description="Admission, bed, diagnosis, and discharge status."
           count={patientIpAdmissions.length}
         >
           <div className="space-y-3">
-          {patientIpAdmissions.map((adm: any) => (
-            <button
-              type="button"
-              key={adm.id}
-              onClick={() => goToModule("ip")}
-              title="Open in IP Admission"
-              className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
-            >
-              <span className="font-bold">
-                {adm.admission_number || fmtDate(adm.admission_date)}
-              </span>
-              <StatusBadge status={adm.status} />
-            </button>
-          ))}
+            {patientIpAdmissions.map((adm: any) => (
+              <button
+                type="button"
+                key={adm.id}
+                onClick={() => goToModule("ip")}
+                title="Open in IP Admission"
+                className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
+              >
+                <span className="font-bold">
+                  {adm.admission_number || fmtDate(adm.admission_date)}
+                </span>
+                <StatusBadge status={adm.status} />
+              </button>
+            ))}
           </div>
         </DetailSection>
       )}
 
-      {canReadMembership && resolvedMembershipEnrollments.length > 0 && (
-        <DetailSection
-          title="Billing & Membership"
-          description="Membership plan history and benefit usage."
-          count={resolvedMembershipEnrollments.length}
-          defaultOpen={false}
-        >
-          <div className="grid gap-3 md:grid-cols-4">
-            <CompactMetric
-              label="Membership Saved"
-              value={money(membershipSavings)}
-            />
-          </div>
-
-          <div className="mt-3 rounded-lg border border-slate-200">
-            <div className="border-b border-slate-100 bg-slate-50 px-3 py-2">
-              <h5 className="text-sm font-black text-slate-950">
-                Membership History
-              </h5>
+      {activeSection === "membership" &&
+        canReadMembership &&
+        resolvedMembershipEnrollments.length > 0 && (
+          <DetailSection
+            title="Billing & Membership"
+            description="Membership plan history and benefit usage."
+            count={resolvedMembershipEnrollments.length}
+            defaultOpen={false}
+          >
+            <div className="grid gap-3 md:grid-cols-4">
+              <CompactMetric
+                label="Membership Saved"
+                value={money(membershipSavings)}
+              />
             </div>
-            <div className="space-y-2 p-3">
-              {resolvedMembershipEnrollments.length === 0 && (
-                <Empty text="No membership history." />
-              )}
-              {resolvedMembershipEnrollments.map((row: any) => {
-                const invoice = purchaseInvoiceFor(row);
-                const due = invoice
-                  ? invoicePatientDueAmount(invoice)
-                  : Math.max(
-                      Number(row.plan?.price_amount || 0) -
-                        Number(row.paid_amount || 0),
-                      0,
-                    );
-                const clickable = Boolean(invoice?.id);
-                return (
-                  <div
-                    key={row.id}
-                    role={clickable ? "button" : undefined}
-                    tabIndex={clickable ? 0 : undefined}
-                    onClick={clickable ? () => openInvoice(invoice) : undefined}
-                    title={clickable ? "Open purchase invoice" : undefined}
-                    className={`rounded-lg bg-slate-50 px-3 py-2 text-sm ${clickable ? "cursor-pointer hover:bg-slate-100" : ""}`}
-                  >
-                    <div className="flex justify-between gap-3">
-                      <b>{row.plan?.name || row.plan_id}</b>
-                      <Badge
-                        tone={due > 0 ? "amber" : "green"}
-                        className="normal-badge"
-                      >
-                        {due > 0 ? "payment due" : row.status}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      {row.status === "queued" ? "Expected: " : ""}
-                      {fmtDate(row.starts_on)} to {fmtDate(row.ends_on)} · paid{" "}
-                      {money(invoice?.paid_amount ?? row.paid_amount)} /{" "}
-                      {money(invoice?.total_amount ?? row.plan?.price_amount)}
-                    </p>
-                    {row.status === "queued" && (
-                      <p className="text-xs font-semibold text-amber-700">
-                        Activates after the current plan; dates are recalculated
-                        on actual activation.
-                      </p>
-                    )}
-                    <p className="text-xs text-slate-500">
-                      Purchase invoice:{" "}
-                      {invoice?.invoice_number ||
-                        row.purchase_invoice_id ||
-                        "-"}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
 
-          {canReadBilling && (
             <div className="mt-3 rounded-lg border border-slate-200">
-              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2">
-                <div>
-                  <h5 className="text-sm font-black text-slate-950">
-                    Membership Benefit Usage
-                  </h5>
-                  <p className="text-xs font-semibold text-slate-500">
-                    Free tests, free medicines, and discounts claimed on the
-                    invoices above.
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-xs font-black text-emerald-700 ring-1 ring-slate-200">
-                  Saved {money(membershipSavings)}
-                </span>
+              <div className="border-b border-slate-100 bg-slate-50 px-3 py-2">
+                <h5 className="text-sm font-black text-slate-950">
+                  Membership History
+                </h5>
               </div>
-              <div
-                className={`max-h-[320px] space-y-2 overflow-y-auto p-3 pr-1 ${hiddenScrollbar}`}
-              >
-                {membershipUsageInvoices.length === 0 && (
-                  <Empty text="No membership benefits used yet." />
+              <div className="space-y-2 p-3">
+                {resolvedMembershipEnrollments.length === 0 && (
+                  <Empty text="No membership history." />
                 )}
-                {membershipUsageInvoices.map((invoice: any) => {
-                  const { source, kind, saved } = benefitUsageLabel(invoice);
+                {resolvedMembershipEnrollments.map((row: any) => {
+                  const invoice = purchaseInvoiceFor(row);
+                  const due = invoice
+                    ? invoicePatientDueAmount(invoice)
+                    : Math.max(
+                        Number(row.plan?.price_amount || 0) -
+                          Number(row.paid_amount || 0),
+                        0,
+                      );
+                  const clickable = Boolean(invoice?.id);
                   return (
-                    <button
-                      type="button"
-                      key={invoice.id}
-                      onClick={() => openInvoice(invoice)}
-                      title="Open invoice"
-                      className="flex w-full items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-left text-sm hover:bg-slate-100"
+                    <div
+                      key={row.id}
+                      role={clickable ? "button" : undefined}
+                      tabIndex={clickable ? 0 : undefined}
+                      onClick={
+                        clickable ? () => openInvoice(invoice) : undefined
+                      }
+                      title={clickable ? "Open purchase invoice" : undefined}
+                      className={`rounded-lg bg-slate-50 px-3 py-2 text-sm ${clickable ? "cursor-pointer hover:bg-slate-100" : ""}`}
                     >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <b className=" decoration-slate-300 ">
-                            {invoice.invoice_number}
-                          </b>
-                          <span className="rounded bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500 ring-1 ring-slate-200">
-                            {source}
-                          </span>
-                          <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700">
-                            {kind}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {fmtDate(invoice.created_at)} · bill{" "}
-                          {money(invoice.total_amount)}
-                        </p>
+                      <div className="flex justify-between gap-3">
+                        <b>{row.plan?.name || row.plan_id}</b>
+                        <Badge
+                          tone={due > 0 ? "amber" : "green"}
+                          className="normal-badge"
+                        >
+                          {due > 0 ? "payment due" : row.status}
+                        </Badge>
                       </div>
-                      <span className="shrink-0 font-black tabular-nums text-emerald-700">
-                        -{money(saved)}
-                      </span>
-                    </button>
+                      <p className="text-xs text-slate-500">
+                        {row.status === "queued" ? "Expected: " : ""}
+                        {fmtDate(row.starts_on)} to {fmtDate(row.ends_on)} ·
+                        paid {money(invoice?.paid_amount ?? row.paid_amount)} /{" "}
+                        {money(invoice?.total_amount ?? row.plan?.price_amount)}
+                      </p>
+                      {row.status === "queued" && (
+                        <p className="text-xs font-semibold text-amber-700">
+                          Activates after the current plan; dates are
+                          recalculated on actual activation.
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-500">
+                        Purchase invoice:{" "}
+                        {invoice?.invoice_number ||
+                          row.purchase_invoice_id ||
+                          "-"}
+                      </p>
+                    </div>
                   );
                 })}
               </div>
             </div>
-          )}
-        </DetailSection>
-      )}
 
-      {canReadBilling && patientInvoices.length > 0 && (
-        <DetailSection
-          title="Billing Invoices"
-          description="Patient invoices, paid amount, and due amount."
-          count={patientInvoices.length}
-          defaultOpen={false}
-        >
-          <div className="mb-3 grid gap-3 md:grid-cols-3">
-            <CompactMetric label="Overall Billed" value={money(totalBilled)} />
-            <CompactMetric label="Overall Paid" value={money(totalPaid)} />
-            <CompactMetric label="Overall Due" value={money(totalDue)} />
-          </div>
-          <DataTable
-            columns={invoiceColumns}
-            data={patientInvoices}
-            emptyMessage="No billing invoices found."
-            onRowClick={openInvoice}
-          />
-        </DetailSection>
-      )}
+            {canReadBilling && (
+              <div className="mt-3 rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2">
+                  <div>
+                    <h5 className="text-sm font-black text-slate-950">
+                      Membership Benefit Usage
+                    </h5>
+                    <p className="text-xs font-semibold text-slate-500">
+                      Free tests, free medicines, and discounts claimed on the
+                      invoices above.
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-xs font-black text-emerald-700 ring-1 ring-slate-200">
+                    Saved {money(membershipSavings)}
+                  </span>
+                </div>
+                <div
+                  className={`max-h-[320px] space-y-2 overflow-y-auto p-3 pr-1 ${hiddenScrollbar}`}
+                >
+                  {membershipUsageInvoices.length === 0 && (
+                    <Empty text="No membership benefits used yet." />
+                  )}
+                  {membershipUsageInvoices.map((invoice: any) => {
+                    const { source, kind, saved } = benefitUsageLabel(invoice);
+                    return (
+                      <button
+                        type="button"
+                        key={invoice.id}
+                        onClick={() => openInvoice(invoice)}
+                        title="Open invoice"
+                        className="flex w-full items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-left text-sm hover:bg-slate-100"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <b className=" decoration-slate-300 ">
+                              {invoice.invoice_number}
+                            </b>
+                            <span className="rounded bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500 ring-1 ring-slate-200">
+                              {source}
+                            </span>
+                            <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700">
+                              {kind}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {fmtDate(invoice.created_at)} · bill{" "}
+                            {money(invoice.total_amount)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 font-black tabular-nums text-emerald-700">
+                          -{money(saved)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </DetailSection>
+        )}
 
-      <ActivityLog resourceType="patient" resourceId={patient?.id} apiSession={apiSession} />
+      {activeSection === "billing" &&
+        canReadBilling &&
+        patientInvoices.length > 0 && (
+          <DetailSection
+            title="Billing Invoices"
+            description="Patient invoices, paid amount, and due amount."
+            count={patientInvoices.length}
+            defaultOpen={false}
+          >
+            <div className="mb-3 grid gap-3 md:grid-cols-3">
+              <CompactMetric
+                label="Overall Billed"
+                value={money(totalBilled)}
+              />
+              <CompactMetric label="Overall Paid" value={money(totalPaid)} />
+              <CompactMetric label="Overall Due" value={money(totalDue)} />
+            </div>
+            <DataTable
+              columns={invoiceColumns}
+              data={patientInvoices}
+              emptyMessage="No billing invoices found."
+              onRowClick={openInvoice}
+            />
+          </DetailSection>
+        )}
+
+      <ActivityLog
+        resourceType="patient"
+        resourceId={patient?.id}
+        apiSession={apiSession}
+      />
     </div>
   );
 }

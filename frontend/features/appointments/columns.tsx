@@ -29,6 +29,15 @@ export function getAppointmentColumns({
 }): Column<any>[] {
   return [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "appointment",
       header: "Appointment",
       width: "190px",
@@ -47,9 +56,7 @@ export function getAppointmentColumns({
             }
             valueClassName="text-sm font-black"
           />
-          <p className="mt-1 text-xs font-semibold text-slate-600">
-            {appointment.patient}
-          </p>
+
           <PatientFlagBadges
             patient={patientMap.get(appointment.patientId)}
             className="mt-1"
@@ -58,9 +65,21 @@ export function getAppointmentColumns({
       ),
     },
     {
+      key: "patient",
+      header: "Patient",
+      width: "120px",
+      render: (appointment: any) => (
+        <div className="max-w-[100px]">
+          <p className="truncate" title={appointment.patient}>
+            {appointment.patient}
+          </p>
+        </div>
+      ),
+    },
+    {
       key: "token",
       header: "Token",
-      width:'80px',
+      width: "80px",
       render: (appointment: any) => (
         <p className="text-sm text-slate-500">
           {appointment.token || publicDisplayValue(appointment.id, "-")}
@@ -70,7 +89,7 @@ export function getAppointmentColumns({
     {
       key: "mobile",
       header: "Mobile",
-      width:'120px',
+      width: "120px",
       render: (appointment: any) => (
         <span className="text-sm">
           {patientMap.get(appointment.patientId)?.mobile || "-"}
@@ -80,30 +99,37 @@ export function getAppointmentColumns({
     {
       key: "department",
       header: "Department",
-      width:'160px',
+      width: "160px",
       render: (appointment: any) => (
         <span className="text-sm">
-          {departmentOptions.find(
-            (d: any) => d.id === appointment.departmentId,
-          )?.name || publicDisplayValue(appointment.departmentId)}
+          {departmentOptions.find((d: any) => d.id === appointment.departmentId)
+            ?.name || publicDisplayValue(appointment.departmentId)}
         </span>
       ),
     },
     {
       key: "doctor",
       header: "Doctor",
-      width:'140px',
+      width: "140px",
       render: (appointment: any) => (
-        <span className="text-sm">
-          {appointment.doctor ||
-            publicDisplayValue(appointment.doctorId, "Doctor")}
-        </span>
+        <div className="max-w-[130px]">
+          <p
+            className="truncate"
+            title={
+              appointment.doctor ||
+              publicDisplayValue(appointment.doctorId, "Doctor")
+            }
+          >
+            {appointment.doctor ||
+              publicDisplayValue(appointment.doctorId, "Doctor")}
+          </p>
+        </div>
       ),
     },
     {
       key: "date",
       header: "Date",
-      width:"180px",
+      width: "180px",
       render: (appointment: any) => (
         <span className="text-sm">
           {appointment.appointmentDate || "-"}
@@ -119,12 +145,12 @@ export function getAppointmentColumns({
       key: "status",
       header: "Status",
       className: "text-center",
-      width:'140px',
+      width: "110px",
       cellClassName: "text-center",
       render: (appointment: any) => (
         <Badge
           tone={appointmentStatusInfo(appointment).tone}
-          className="normal-badge text-xs"
+          className="normal-label"
         >
           {appointmentStatusInfo(appointment).label}
         </Badge>
@@ -134,7 +160,7 @@ export function getAppointmentColumns({
       key: "actions",
       header: "Actions",
       className: "text-right",
-      width:'100px',
+      width: "100px",
       cellClassName: "text-right",
       disableRowClick: true,
       render: (appointment: any) => (
@@ -152,7 +178,11 @@ export function getAppointmentColumns({
                     appointment.queueStatus,
                     appointment.consultationStatus,
                   ]
-                    .map((value) => String(value || "").trim().toLowerCase())
+                    .map((value) =>
+                      String(value || "")
+                        .trim()
+                        .toLowerCase(),
+                    )
                     .includes("in_consultation"),
               },
               {
@@ -185,9 +215,7 @@ export function getPlatformColumns({
       render: (row: any) => (
         <div>
           <b className="table-data">{row.tenant_name}</b>
-          <p className="text-sm lg:text-xs text-slate-500">
-            {row.branch_name}
-          </p>
+          <p className="text-sm lg:text-xs text-slate-500">{row.branch_name}</p>
         </div>
       ),
     },

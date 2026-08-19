@@ -453,6 +453,7 @@ export function Sidebar(props: SidebarProps) {
                             setPopupMenu(null);
                           }}
                           className={`flex w-full items-center gap-3 px-2 py-2 text-xs ${
+                            props.activePage === "clinic" &&
                             props.clinicSection === sectionId
                               ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"
                               : "py-3"
@@ -500,6 +501,7 @@ export function Sidebar(props: SidebarProps) {
                             });
                           }}
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
+                            props.activePage === "clinic" &&
                             props.clinicSection === sectionId
                               ? "bg-brand text-brand-fg"
                               : "text-slate-500 hover:bg-slate-50"

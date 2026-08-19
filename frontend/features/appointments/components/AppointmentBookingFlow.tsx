@@ -147,7 +147,7 @@ export function AppointmentBookingFlow(props: any) {
                 Patient
               </span>
               {selectedPatient ? (
-                <div className="flex flex-col justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 sm:flex-row sm:items-center">
+                <div className="flex flex-col justify-   gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 sm:flex-row sm:items-center">
                   <div>
                     <b className="text-xs text-slate-900">
                       {selectedPatient.full_name}

@@ -12,6 +12,7 @@ import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
 export function UserRow({
   user,
+  index,
   roles = [],
   branches,
   canCopyIds = false,
@@ -48,19 +49,16 @@ export function UserRow({
       className="border-b hover:bg-slate-50 cursor-pointer"
       onClick={canEdit ? onRowClick || onEdit : undefined}
     >
+      <td className="flex items-center justify-center  py-4">{index + 1}</td>
       <td className="px-4 py-3 font-bold whitespace-nowrap">
         <div className="flex items-center gap-2">
           <span>{user.name}</span>
-          <CopyIdButton
-            value={user.id}
-            label="User ID"
-            allowed={canCopyIds}
-          />
+          <CopyIdButton value={user.id} label="User ID" allowed={canCopyIds} />
         </div>
       </td>
 
       <td className="px-4 py-3 whitespace-nowrap">
-        <Badge tone={user.is_active ? "green" : "red"} className="normal-badge">
+        <Badge tone={user.is_active ? "green" : "red"} className="normal-label">
           {user.is_active ? "Active" : "Inactive"}
         </Badge>
       </td>
@@ -82,6 +80,7 @@ export function UserRow({
 
 export function RoleRow({
   role,
+  index,
   canCopyIds = false,
   onEdit,
   onRowClick,
@@ -116,49 +115,40 @@ export function RoleRow({
       onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
+      <td className="flex items-center justify-center  py-4">{index + 1}</td>
       <td className="px-4 py-3 text-sm">
         <div className="flex items-center gap-2">
           <b>{role.name}</b>
-          <CopyIdButton
-            value={role.id}
-            label="Role ID"
-            allowed={canCopyIds}
-          />
+          <CopyIdButton value={role.id} label="Role ID" allowed={canCopyIds} />
 
           {locked && (
             <Badge
               tone="purple"
-              className="rounded-full px-2 py-[2px] text-[10px]"
+              className="normal-label"
             >
               Locked
             </Badge>
           )}
         </div>
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">
         {roleKeyLabel(role.key)}
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">
-        <Badge tone="slate" className="rounded-full px-2 py-[2px]">
-          {Array.isArray(role.permission_keys) ? role.permission_keys.length : 0}
+        <Badge tone="slate" className="normal-label">
+          {Array.isArray(role.permission_keys)
+            ? role.permission_keys.length
+            : 0}
         </Badge>
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">
-        <Badge
-          tone={role.is_active ? "green" : "red"}
-          className="normal-badge"
-        >
+        <Badge tone={role.is_active ? "green" : "red"} className="normal-label">
           {role.is_active ? "Active" : "Inactive"}
         </Badge>
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">
         {formatDate(role.updated_at || role.created_at)}
       </td>
-
       <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
         <RowActions actions={actions} className="right-20 -bottom-5" />
       </td>
@@ -168,6 +158,7 @@ export function RoleRow({
 
 export function DepartmentRow({
   department,
+  index,
   onEdit,
   onRowClick,
   onStatus,
@@ -199,6 +190,7 @@ export function DepartmentRow({
       onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
+      <td className="flex items-center justify-center py-4">{index + 1}</td>
       <td className="px-4 py-3 text-sm">
         <div className="flex items-center gap-2">
           <span className="font-bold">{department.name}</span>
@@ -206,22 +198,18 @@ export function DepartmentRow({
           {department.locked && <Badge tone="purple">Locked</Badge>}
         </div>
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">{department.code}</td>
-
       <td className="px-4 py-3 text-sm">
         {department.branch_names || "All branches"}
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={department.is_active ? "green" : "red"}
-          className="rounded-full py-1"
+          className="normal-label"
         >
           {department.is_active ? "Active" : "Inactive"}
         </Badge>
       </td>
-
       <td className="px-4 py-3 text-sm">
         <RowActions actions={actions} className="right-28 -bottom-5" />
       </td>
@@ -231,6 +219,7 @@ export function DepartmentRow({
 
 export function BranchRow({
   branch,
+  index,
   canCopyIds = false,
   onEdit,
   onRowClick,
@@ -262,6 +251,7 @@ export function BranchRow({
       onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
+      <td className="flex items-center justify-center  py-4">{index + 1}</td>
       <td className="px-4 py-3 text-sm">
         <div className="flex items-center gap-2">
           <b>{branch.name}</b>
@@ -271,26 +261,22 @@ export function BranchRow({
             allowed={canCopyIds}
           />
 
-          {isLocked(branch) && <Badge tone="purple">Locked</Badge>}
+          {isLocked(branch) && <Badge tone="purple" className="normal-label">Locked</Badge>}
         </div>
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">{branch.code}</td>
-
       <td className="px-4 py-3 text-sm">
         {[branch.area, branch.city, branch.state].filter(Boolean).join(", ") ||
           "-"}
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={branch.is_active ? "green" : "red"}
-          className="rounded-full py-1"
+          className="normal-label"
         >
           {branch.is_active ? "Active" : "Inactive"}
         </Badge>
       </td>
-
       <td className="px-4 py-3 text-sm">
         <RowActions actions={actions} className="right-24 -bottom-5" />
       </td>
@@ -300,6 +286,7 @@ export function BranchRow({
 
 export function SupplierRow({
   supplier,
+  index,
   onEdit,
   onRowClick,
   onStatus,
@@ -330,14 +317,13 @@ export function SupplierRow({
       onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
+      <td className="flex items-center justify-center  py-4">{index + 1}</td>
       <td className="px-4 py-3 text-sm">
         <b>{supplier.name}</b>
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">
         {supplier.gstin || "-"}
       </td>
-
       <td className="px-4 py-3 text-sm">
         <div>
           <b>{supplier.phone || "-"}</b>
@@ -346,16 +332,14 @@ export function SupplierRow({
           </p>
         </div>
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={supplier.is_active ? "green" : "red"}
-          className="rounded-full py-1"
+          className="normal-label"
         >
           {supplier.is_active ? "Active" : "Inactive"}
         </Badge>
       </td>
-
       <td className="px-4 py-3 text-sm">
         <RowActions actions={actions} className="right-28 -bottom-5" />
       </td>
@@ -365,6 +349,7 @@ export function SupplierRow({
 
 export function TaxRuleRow({
   rule,
+  index,
   branches,
   onEdit,
   onRowClick,
@@ -397,30 +382,27 @@ export function TaxRuleRow({
       onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
+      <td className="flex items-center justify-center  py-4">{index + 1}</td>
       <td className="px-4 py-3 text-sm">
         <b>{rule.name}</b>
       </td>
-
       <td className="px-4 py-3 text-sm">
         {scopeLabel(rule.service_scope)} · {branch?.name || "All branches"}
       </td>
-
       <td className="px-4 py-3 text-sm">
         <div>
           <b>{rule.tax_percentage}%</b>
           <p className="text-slate-500">{rule.tax_label || "GST"}</p>
         </div>
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={rule.is_active ? "green" : "red"}
-          className="rounded-full py-1"
+          className="normal-label"
         >
           {rule.is_active ? "Active" : "Inactive"}
         </Badge>
       </td>
-
       <td className="px-4 py-3 text-sm">
         <RowActions actions={actions} className="right-28 -bottom-5" />
       </td>
@@ -430,6 +412,7 @@ export function TaxRuleRow({
 
 export function DiscountOfferRow({
   offer,
+  index,
   branches,
   onEdit,
   onRowClick,
@@ -469,14 +452,13 @@ export function DiscountOfferRow({
       onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
+      <td className="flex items-center justify-center  py-4">{index + 1}</td>
       <td className="px-4 py-3 text-sm">
         <b>{offer.name}</b>
       </td>
-
       <td className="px-4 py-3 text-sm">
         {scopeLabel(offer.service_scope)} · {branch?.name || "All branches"}
       </td>
-
       <td className="px-4 py-3 text-sm">
         <div>
           <b>{value}</b>
@@ -494,16 +476,14 @@ export function DiscountOfferRow({
           </p>
         </div>
       </td>
-
       <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={offer.is_active ? "green" : "red"}
-          className="rounded-full py-1"
+          className="normal-label"
         >
           {offer.is_active ? "Active" : "Inactive"}
         </Badge>
       </td>
-
       <td className="px-4 py-3 text-sm">
         <RowActions actions={actions} className="right-24 -bottom-5" />
       </td>

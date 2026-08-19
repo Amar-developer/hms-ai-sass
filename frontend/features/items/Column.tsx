@@ -18,6 +18,15 @@ export function getItemsColumns({
 }: getItemsColumnsProps): Column<any>[] {
   return [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "type",
       header: "Type",
       width: "180px",
@@ -31,7 +40,13 @@ export function getItemsColumns({
       header: "Item",
       width: "180px",
       sortable: true,
-      render: (row: any) => <b className="text-sm">{row.name}</b>,
+      render: (row: any) => (
+        <div className="max-w-[180px]">
+          <p className="truncate font-semibold" title={row.name}>
+            {row.name}
+          </p>
+        </div>
+      ),
     },
     {
       key: "supplier",

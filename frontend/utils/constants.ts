@@ -2,8 +2,8 @@ import { Column } from "@/features/admin/types";
 
 export const pageSize = 10;
 
-
 export const USER_COLUMNS: Column[] = [
+  { label: "S.No", width: "50px" },
   { label: "Name", width: "min-w-[180px]" },
   { label: "Status", width: "min-w-[120px]" },
   { label: "Roles", width: "min-w-[200px]" },
@@ -12,8 +12,8 @@ export const USER_COLUMNS: Column[] = [
   { label: "Actions", width: "min-w-[240px]" },
 ];
 
-
 export const ROLE_COLUMNS: Column[] = [
+  { label: "S.No", width: "50px" },
   { label: "Role", width: "min-w-[200px]" },
   { label: "Key", width: "min-w-[180px]" },
   { label: "Permissions", width: "min-w-[130px]" },
@@ -23,6 +23,7 @@ export const ROLE_COLUMNS: Column[] = [
 ];
 
 export const DEPARTMENT_COLUMNS = [
+  { label: "S.No", width: "30px" },
   { label: "Medical Department", width: "min-w-[200px]" },
   { label: "Code", width: "min-w-[160px]" },
   { label: "Branches", width: "min-w-[200px]" },
@@ -32,6 +33,7 @@ export const DEPARTMENT_COLUMNS = [
 
 // Branch
 export const BRANCH_COLUMNS: Column[] = [
+  { label: "S.No", width: "50px" },
   { label: "Name", width: "min-w-[200px]" },
   { label: "Code", width: "min-w-[100px]" },
   { label: "Location", width: "min-w-[260px]" },
@@ -41,6 +43,7 @@ export const BRANCH_COLUMNS: Column[] = [
 
 // Supplier
 export const SUPPLIER_COLUMNS: Column[] = [
+  { label: "S.No", width: "50px" },
   { label: "Name", width: "min-w-[220px]" },
   { label: "GSTIN", width: "min-w-[160px]" },
   { label: "Contact", width: "min-w-[260px]" },
@@ -50,6 +53,7 @@ export const SUPPLIER_COLUMNS: Column[] = [
 
 // Tax Rules
 export const TAX_RULE_COLUMNS: Column[] = [
+  { label: "S.No", width: "50px" },
   { label: "Name", width: "min-w-[180px]" },
   { label: "Scope", width: "min-w-[260px]" },
   { label: "Tax", width: "min-w-[140px]" },
@@ -59,13 +63,13 @@ export const TAX_RULE_COLUMNS: Column[] = [
 
 // Discount Offers
 export const DISCOUNT_OFFER_COLUMNS: Column[] = [
+  { label: "S.No", width: "50px" },
   { label: "Offer", width: "min-w-[140px]" },
   { label: "Scope", width: "min-w-[260px]" },
   { label: "Value", width: "min-w-[200px]" },
   { label: "Status", width: "min-w-[100px]" },
   { label: "Actions", width: "min-w-[160px]" },
 ];
-
 
 export const PLAN_COLUMNS: Column[] = [
   { label: "Plan", width: "min-w-[220px]" },
@@ -76,7 +80,6 @@ export const PLAN_COLUMNS: Column[] = [
   { label: "Actions", width: "min-w-[180px]" },
 ];
 
-
 export const STATUS_FILTER_OPTIONS = [
   { value: "all", label: "All Status" },
   { value: "active", label: "Active" },
@@ -84,14 +87,12 @@ export const STATUS_FILTER_OPTIONS = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
-
 export const ValidationMessages = {
   required: "This field is required.",
   email: "Please enter a valid email address.",
   passwordRequired: "Password is required.",
   passwordMin: "Password must be at least 8 characters.",
 };
-
 
 export const COLORS = [
   "bg-red-700",
@@ -111,5 +112,5 @@ export const COLORS = [
   "bg-fuchsia-700",
   "bg-pink-700",
   "bg-rose-700",
-] as const
-export const colorList =  Object.values(COLORS);
+] as const;
+export const colorList = Object.values(COLORS);

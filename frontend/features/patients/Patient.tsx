@@ -8,8 +8,9 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { type ApiSession } from "@/lib/api";
 import { readNotificationTarget } from "@/lib/notificationTarget";
+import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
-import { PatientDetail } from "./components/PatientDetail";
+import { PatientFlow, type PatientSectionId } from "./PatientFlow";
 import { mapPatient } from "@/lib/liveData";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
@@ -58,7 +59,8 @@ export function Patient({
   setPatients,
   view = "list",
   selectedId = "",
-}: PatientProps & { view?: string; selectedId?: string }) {
+  section = "home",
+}: PatientProps & { view?: string; selectedId?: string; section?: PatientSectionId }) {
   const router = useRouter();
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
@@ -310,9 +312,9 @@ export function Patient({
   function open(nextView: string, id = "") {
     const path =
       nextView === "create"
-        ? "/patients/new"
+        ? `/patients/${newSegment("patient")}`
         : nextView === "edit" && id
-          ? `/patients/${id}/edit`
+          ? `/patients/${id}/${editSegment("patient")}`
           : nextView === "detail" && id
             ? `/patients/${id}`
             : "/patients";
@@ -326,6 +328,11 @@ export function Patient({
   function openPatientEdit(id: string) {
     if (!id) return;
     open("edit", id);
+  }
+
+  function openPatientSection(id: string, nextSection: PatientSectionId) {
+    if (!id) return;
+    router.push(nextSection === "home" ? `/patients/${id}` : `/patients/${id}/${nextSection}`);
   }
 
   const {
@@ -406,7 +413,11 @@ export function Patient({
   }
   if (view === "detail" && selected)
     return (
-      <PatientDetail
+      <PatientFlow
+        activeSection={section}
+        onSectionChange={(nextSection: PatientSectionId) =>
+          openPatientSection(selected.id, nextSection)
+        }
         apiSession={scopedSession}
         patient={selected}
         summary={summary}

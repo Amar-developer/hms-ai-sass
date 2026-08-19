@@ -49,6 +49,23 @@ export const clinic_sections = [
   ["suppliers", "Suppliers", Truck],
 ] as const;
 
+// Singular slug for each section's create/edit URL segment (see
+// lib/routeSlugs.ts) — e.g. section "users" -> /clinic/users/new-user.
+const SECTION_SLUGS: Record<string, string> = {
+  users: "user",
+  branches: "branch",
+  departments: "department",
+  tax: "tax-rule",
+  offers: "offer",
+  suppliers: "supplier",
+  roles: "role",
+  membership: "subscription",
+};
+
+export function sectionSlug(id: string): string {
+  return SECTION_SLUGS[id] || id;
+}
+
 export const userTypes = [
   ["tenant_admin", "Tenant Admin"],
   ["doctor", "Doctor"],

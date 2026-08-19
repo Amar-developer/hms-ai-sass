@@ -17,6 +17,15 @@ export function getBranchColumns({
 }: BranchColumnsParams): Column<any>[] {
   return [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "name",
       header: "Branch",
       width: "250px",

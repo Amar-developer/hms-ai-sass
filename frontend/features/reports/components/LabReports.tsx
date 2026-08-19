@@ -3,8 +3,6 @@ import CollapsibleReportSection from "./CollapsibleReportSection";
 import { LabReportsProps } from "../types";
 import { DataTable } from "@/app/components/common/DataTable";
 
-
-
 const LabReports = ({
   labSettlementRows,
   openSections,
@@ -17,66 +15,94 @@ const LabReports = ({
     Number(value || 0) === 0 ? "-" : money(value);
   const columns = [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "supplier",
       header: "Supplier",
-      render: (row: any) => <b>{row.supplier}</b>,
-      width: '120px'
+      width: "120px",
+      render: (row: any) => (
+        <div className="max-w-[110px]">
+          <p className="truncate">{row.supplier}</p>
+        </div>
+      ),
     },
     {
       key: "item",
       header: "Lab / Package",
-      width: '160px'
+      width: "160px",
+      render: (row: any) => {
+        console.log(row,'row in lab report')
+        return (
+          <div className="max-w-[150px]">
+            <p className="truncate" title={row.item}>{row.item}</p>
+          </div>
+        );
+      },
     },
     {
       key: "orderCount",
       header: "Orders",
-      width: '90px'
+      width: "90px",
     },
     {
       key: "invoiceCount",
       header: "Invoices",
-      width: '90px'
+      width: "90px",
     },
     {
       key: "total",
       header: "Total",
       render: (row: any) => moneyOrDash(row.total),
-      width: '90px'
+      width: "90px",
     },
     {
       key: "revenue",
       header: "Paid",
       render: (row: any) => moneyOrDash(row.revenue),
-      width: '90px'
+      width: "90px",
     },
     {
       key: "balance",
-      header: "Amount Due",
+      header: "Due",
       render: (row: any) => moneyOrDash(row.balance),
-      width: '90px'
+      width: "90px",
     },
     {
       key: "approvedDiscount",
-      header: "Admin Discount",
-      width: '130px',
+      header: "Admin %",
+      width: "130px",
       render: (row: any) => moneyOrDash(row.approvedDiscount),
     },
     {
       key: "offerDiscount",
-      header: "Offer Discount",
-      width: '100px',
+      header: "Offer %",
+      width: "100px",
       render: (row: any) => moneyOrDash(row.offerDiscount),
     },
     {
       key: "membershipBenefit",
-      header: "Membership Benefit",
-      width: '120px',
+      header: "Membership",
+      width: "120px",
       render: (row: any) => moneyOrDash(row.membershipBenefit),
     },
     {
       key: "paymentMode",
-      header: "Payment Method",
+      header: "Payment",
       width: "130px",
+      render: (row:any) => (
+        <div className="max-w-[120px]">
+          <p className="truncate" title={row.paymentMode}>
+            {row.paymentMode}
+          </p>
+        </div>
+      )
     },
     {
       key: "tax",
@@ -86,22 +112,22 @@ const LabReports = ({
     },
     {
       key: "purchaseCost",
-      header: "Purchase Cost",
-      width: '120px',
+      header: "Purchase",
+      width: "120px",
       render: (row: any) => moneyOrDash(row.purchaseCost),
     },
     {
       key: "profit",
-      header: "Realized Profit",
+      header: "Profit",
       render: (row: any) => (
         <span className="font-bold">{moneyOrDash(row.profit)}</span>
       ),
-      width:'90px'
+      width: "90px",
     },
     {
       key: "profitMargin",
-      header: "Profit Margin",
-      width: "120px",
+      header: "Margin",
+      width: "100px",
       render: (row: any) => {
         const basis =
           Number(row.revenue || 0) - Number(row.tax || 0) ||
@@ -130,7 +156,7 @@ const LabReports = ({
             onRowClick={(row: any) => onOpenInvoices(row.invoices)}
             paginate
             emptyMessage="No paid lab invoices match this filter"
-            className='w-full min-w-[920px] text-left text-sm'
+            className="w-full min-w-[920px] text-left text-sm"
             loading={loading}
           />
         </div>

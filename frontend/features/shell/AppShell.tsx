@@ -31,6 +31,7 @@ import { ModuleSkeleton } from "@/app/components/common/loader/ModuleSkeleton";
 import { BreadcrumbBarSkeleton } from "@/app/components/common/loader/BreadcrumbBarSkeleton";
 import type { AppNavigationTarget } from "@/lib/navigationTarget";
 import { opdAppointmentPath } from "@/features/opd/routing";
+import { isNewSegment, isEditSegment } from "@/lib/routeSlugs";
 
 type ShellChromeValue = {
   navigatePage: (target: AppNavigationTarget) => void;
@@ -127,6 +128,12 @@ export function AppShell({
   const pathname = usePathname();
   const [pendingPage, setPendingPage] = useState("");
   const [clinicOpen, setClinicOpen] = useState(false);
+  // Doctors/Scheduling/Items are full standalone modules with their own
+  // routes, now rooted at /clinic/{id} — nested visually under the Clinic
+  // dropdown rather than moved into it, so they keep their existing
+  // permission gating (enabled("practitioners")/etc.).
+  const clinicModuleIds = ["practitioners", "scheduling", "items"];
+  const clinicModulePath = (id: string) => `/clinic/${id}`;
 
   // Sidebar navigation uses router.push() on click rather than <Link>, so it
   // gets none of Next.js's automatic hover/viewport prefetching — every
@@ -135,7 +142,9 @@ export function AppShell({
   // every reachable module route up front so clicks resolve instantly.
   useEffect(() => {
     for (const [id] of visibleNav) {
-      router.prefetch(`/${id}`);
+      router.prefetch(
+        clinicModuleIds.includes(id) ? clinicModulePath(id) : `/${id}`,
+      );
     }
     if (canAccessErrorLogs) {
       router.prefetch("/error_logs");
@@ -144,11 +153,20 @@ export function AppShell({
   }, [visibleNav.map(([id]: any) => id).join(","), canAccessErrorLogs]);
   const routeSegment =
     pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
+  const clinicRouteModuleId =
+    routeSegment === "clinic" &&
+    clinicModuleIds.includes(pathname.split("/")[2])
+      ? pathname.split("/")[2]
+      : "";
   const legacyOPDRoute = ["appointments", "consultation"].includes(
     routeSegment,
   );
   const effectiveRouteSegment =
-    routeSegment === "doctor" ? "queue" : legacyOPDRoute ? "opd" : routeSegment;
+    routeSegment === "doctor"
+      ? "queue"
+      : legacyOPDRoute
+        ? "opd"
+        : clinicRouteModuleId || routeSegment;
   const resolvedActivePage =
     effectiveRouteSegment === "error_logs" && canAccessErrorLogs
       ? effectiveRouteSegment
@@ -291,11 +309,6 @@ export function AppShell({
     : clinic_sections.filter(([sectionId]: any) =>
         canUseTenantAdminSection(sectionId, apiSession?.user),
       );
-  // Doctors/Scheduling/Items are full standalone modules with their own
-  // routes (/practitioners, /scheduling, /items) — nested visually under
-  // the Clinic dropdown rather than moved into it, so they keep their
-  // existing route and permission gating (enabled("practitioners")/etc.).
-  const clinicModuleIds = ["practitioners", "scheduling", "items"];
   const clinicModuleSections = nav.filter(
     ([id]: any) => clinicModuleIds.includes(id) && enabled(id),
   );
@@ -369,6 +382,17 @@ export function AppShell({
                 )?.[1] ?? "",
               )
             : "";
+
+  // The trailing "new-{slug}"/"edit-{slug}" URL segment self-describes its
+  // action for every module/submodule alike, so the breadcrumb's "Create"/
+  // "Edit" crumb is derived straight from the URL instead of needing each
+  // module to report its own view state up to the shell.
+  const lastPathSegment = pathname.split("/").filter(Boolean).pop() || "";
+  const activeViewLabel = isNewSegment(lastPathSegment)
+    ? "Create"
+    : isEditSegment(lastPathSegment)
+      ? "Edit"
+      : "";
 
   const searchItems = [
     ...visibleNav.map(([id, label]: any) => ({
@@ -504,7 +528,9 @@ export function AppShell({
                   ? `/reports/${reportsSection}`
                   : id === "superadmin"
                     ? superAdminPath(superAdminSection)
-                    : `/${id}`);
+                    : clinicModuleIds.includes(id)
+                      ? clinicModulePath(id)
+                      : `/${id}`);
 
     if (id === activePage && pathname === destinationPath) return;
 
@@ -526,10 +552,21 @@ export function AppShell({
           ? "/opd/appointments"
           : "/opd";
       router.replace(legacyDestination);
-    } else if (resolvedActivePage !== routeSegment) {
-      router.replace(`/${resolvedActivePage}`);
+    } else if (resolvedActivePage !== effectiveRouteSegment) {
+      router.replace(
+        clinicModuleIds.includes(resolvedActivePage)
+          ? clinicModulePath(resolvedActivePage)
+          : `/${resolvedActivePage}`,
+      );
     }
-  }, [legacyOPDRoute, pathname, resolvedActivePage, routeSegment, router]);
+  }, [
+    legacyOPDRoute,
+    pathname,
+    resolvedActivePage,
+    routeSegment,
+    effectiveRouteSegment,
+    router,
+  ]);
 
   useEffect(() => {
     setPendingPage("");
@@ -591,7 +628,9 @@ export function AppShell({
     ]);
     visibleNav.forEach(([id]: any) => {
       if (highTrafficRoutes.has(id) && id !== activePage) {
-        router.prefetch(`/${id}`);
+        router.prefetch(
+          clinicModuleIds.includes(id) ? clinicModulePath(id) : `/${id}`,
+        );
       }
     });
   }, [activePage, router, visibleNav.map(([id]: any) => id).join("|")]);
@@ -844,6 +883,15 @@ export function AppShell({
                         </span>
                       </>
                     )}
+
+                    {activeViewLabel && (
+                      <>
+                        <span className="text-slate-300">/</span>
+                        <span className="truncate text-[11px] font-bold text-slate-900">
+                          {activeViewLabel}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -871,7 +919,7 @@ export function AppShell({
                     </div>
                   )}
 
-                {activePage === "clinic" &&
+                {/* {activePage === "clinic" &&
                   visibleClinicSections.length > 0 && (
                     <div className="flex shrink-0 items-center justify-end gap-2">
                       <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
@@ -893,7 +941,7 @@ export function AppShell({
                         className="min-w-[200px] scrollbar-thin"
                       />
                     </div>
-                  )}
+                  )} */}
 
                 {pageNeedsDepartmentFilter && departmentOptions.length > 0 && (
                   <div className="flex shrink-0 items-center justify-end gap-2">

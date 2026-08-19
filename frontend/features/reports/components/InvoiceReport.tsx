@@ -1,5 +1,5 @@
 import React from "react";
-import { Card,Badge } from "@/app/components/common/ui";
+import { Card, Badge } from "@/app/components/common/ui";
 import {
   approvedDiscountUsage,
   offerDiscountUsage,
@@ -11,8 +11,6 @@ import { InvoiceProps } from "../types";
 import { DataTable } from "@/app/components/common/DataTable";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 import { invoicePatientDueAmount } from "@/features/billing/helpers";
-
-
 
 const InvoiceReport = ({
   filteredInvoices,
@@ -37,7 +35,6 @@ const InvoiceReport = ({
   setInvoicePage,
   onOpenInvoices,
   loading,
-
 }: InvoiceProps) => {
   const moneyOrDash = (value: any) => {
     const amount = Number(value || 0);
@@ -54,9 +51,7 @@ const InvoiceReport = ({
       totals.due += invoicePatientDueAmount(row);
       totals.adminDiscount += approvedDiscountUsage(row);
       totals.offerDiscount += offerDiscountUsage(row);
-      totals.membershipBenefit += numberValue(
-        row.membership_discount_amount,
-      );
+      totals.membershipBenefit += numberValue(row.membership_discount_amount);
       totals.doctorCost += invoiceDoctorFeeAmount(row);
       totals.paidGst += recognizedInvoiceTax(row);
       totals.settlement += invoiceSettlementAmount(row);
@@ -81,162 +76,183 @@ const InvoiceReport = ({
     ? `${Math.round((filteredTotals.profit / filteredProfitBasis) * 100)}%`
     : "-";
   const invoiceColumns = [
-  {
-    key: "invoice_number",
-    header: "Invoice No.",
-    width:'160px',
-    className:'text-center',
-    render: (row: any) => (
-      <>
-        <b>{row.invoice_number}</b>
-      </>
-    ),
-  },
-  {
-    key:"invoice_date",
-    header:'Invoice Date',
-    width:'100px',
-    render: (row:any)=> rowDate(row),
-    className:'text-center',
-  },
-  {
-    key: "type",
-    header: "Invoice Type",
-    width:'120px',
-    className:'text-center',
-    render: (row: any) => invoiceTypeLabel(invoiceType(row)),
+    {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
+      key: "invoice_number",
+      header: "Invoice No.",
+      width: "160px",
+      className: "text-center",
+      render: (row: any) => (
+        <>
+          <b>{row.invoice_number}</b>
+        </>
+      ),
+    },
+    {
+      key: "invoice_date",
+      header: "Date",
+      width: "100px",
+      render: (row: any) => rowDate(row),
+      className: "text-center",
+    },
+    {
+      key: "type",
+      header: "Type",
+      width: "160px",
+      className: "text-center",
+      render: (row: any) => invoiceTypeLabel(invoiceType(row)),
+    },
+    {
+      key: "patient",
+      header: "Patient",
+      width: "140px",
+      render: (row: any) => {
+        const patient = patientById.get(row.patient_id);
 
-  },
-  {
-    key: "patient",
-    header: "Patient",
-    width:'140px',
-    render: (row: any) => {
-      const patient = patientById.get(row.patient_id);
-
-      return (
-        <div>
-          <b>
-            {patient?.name ||
-              patient?.full_name ||
-              row.patient_name ||
-              publicDisplayValue(row.patient_id)}
-          </b>
-          <PatientFlagBadges patient={patient} className="mt-1" />
+        return (
+          <div className="max-w-[130px]">
+            <p className="truncate" title={patient?.name ||
+                patient?.full_name ||
+                row.patient_name ||
+                publicDisplayValue(row.patient_id)}>
+              {patient?.name ||
+                patient?.full_name ||
+                row.patient_name ||
+                publicDisplayValue(row.patient_id)}
+            </p>
+            <PatientFlagBadges patient={patient} className="mt-1" />
+          </div>
+        );
+      },
+    },
+    {
+      key: "doctor",
+      header: "Doctor / Staff",
+      width: "150px",
+      render: (row: any) => {
+        const value = invoiceDoctorStaffName(row);
+        return (
+          <div className="max-w-[140px]">
+            <p className="truncate" title={value}>
+              {value && value !== "Unassigned" ? value : "-"}
+            </p>
+          </div>
+        )
+      },
+    },
+    {
+      key: "status",
+      header: "Status",
+      width: "90px",
+      render: (row: any) => (
+        <Badge
+          tone={
+            row.status === "paid"
+              ? "green"
+              : row.status === "partially_paid"
+                ? "amber"
+                : "slate"
+          }
+          className="normal-label"
+        >
+          {humanizeOptionLabel(row.status)}
+        </Badge>
+      ),
+    },
+    {
+      key: "total_amount",
+      header: "Total",
+      width: "90px",
+      render: (row: any) => moneyOrDash(reportedInvoiceTotal(row)),
+    },
+    {
+      key: "paid_amount",
+      header: "Paid",
+      width: "90px",
+      render: (row: any) => moneyOrDash(numberValue(row.paid_amount)),
+    },
+    {
+      key: "balance_amount",
+      header: "Due",
+      width: "90px",
+      render: (row: any) => moneyOrDash(invoicePatientDueAmount(row)),
+    },
+    {
+      key: "approved_discount_amount",
+      header: "Admin %",
+      width: "125px",
+      render: (row: any) => moneyOrDash(approvedDiscountUsage(row)),
+    },
+    {
+      key: "offer_discount_amount",
+      header: "Offer %",
+      width: "105px",
+      render: (row: any) => moneyOrDash(offerDiscountUsage(row)),
+    },
+    {
+      key: "membership_discount_amount",
+      header: "Membership",
+      width: "110px",
+      render: (row: any) => moneyOrDash(row.membership_discount_amount),
+    },
+    {
+      key: "payment_mode",
+      header: "Payment Method",
+      width: "170px",
+      render: (row: any) =>(
+        <div className="max-w-[160px]">
+          <p className="truncate" title={ invoicePaymentMode(row)}>
+            { invoicePaymentMode(row)}
+          </p>
         </div>
-      );
+      ),
     },
-  },
-  {
-    key: "doctor",
-    header: "Doctor / Staff",
-    width:'140px',
-    render: (row: any) => {
-      const value = invoiceDoctorStaffName(row);
-      return value && value !== "Unassigned" ? value : "-";
+    {
+      key: "doctor_fee",
+      header: "Doctor Cost",
+      width: "140px",
+      render: (row: any) => moneyOrDash(invoiceDoctorFeeAmount(row)),
     },
-  },
-  {
-    key: "status",
-    header: "Payment Status",
-    width:'90px',
-    render: (row: any) => (
-      <Badge
-        tone={
-          row.status === "paid"
-            ? "green"
-            : row.status === "partially_paid"
-              ? "amber"
-              : "slate"
-        }
-        className="normal-badge"
-      >
-        {humanizeOptionLabel(row.status)}
-      </Badge>
-    ),
-  },
-  {
-    key: "total_amount",
-    header: "Total",
-    width:'90px',
-    render: (row: any) => moneyOrDash(reportedInvoiceTotal(row)),
-  },
-  {
-    key: "paid_amount",
-    header: "Paid",
-    width:'90px',
-    render: (row: any) => moneyOrDash(numberValue(row.paid_amount)),
-  },
-  {
-    key: "balance_amount",
-    header: "Amount Due",
-    width:'90px',
-    render: (row: any) => moneyOrDash(invoicePatientDueAmount(row)),
-  },
-  {
-    key: "approved_discount_amount",
-    header: "Admin Discount",
-    width:'125px',
-    render: (row: any) => moneyOrDash(approvedDiscountUsage(row)),
-  },
-  {
-    key: "offer_discount_amount",
-    header: "Offer Discount",
-    width:'105px',
-    render: (row: any) => moneyOrDash(offerDiscountUsage(row)),
-  },
-  {
-    key: "membership_discount_amount",
-    header: "Membership Benefit",
-    width:'100px',
-    render: (row: any) =>
-      moneyOrDash(row.membership_discount_amount),
-  },
-  {
-    key: "payment_mode",
-    header: "Payment Method",
-    width: "120px",
-    render: (row: any) => invoicePaymentMode(row),
-  },
-  {
-    key: "doctor_fee",
-    header: "Doctor Cost",
-    width:'120px',
-    render: (row: any) => moneyOrDash(invoiceDoctorFeeAmount(row)),
-  },
-  {
-    key: "tax_amount",
-    header: "Paid GST",
-    width: "110px",
-    render: (row: any) => moneyOrDash(recognizedInvoiceTax(row)),
-  },
-  {
-    key: "settlement",
-    header: "Settlement",
-    width:'120px',
-    render: (row: any) =>
-      moneyOrDash(invoiceSettlementAmount(row)),
-  },
+    {
+      key: "tax_amount",
+      header: "Paid GST",
+      width: "110px",
+      render: (row: any) => moneyOrDash(recognizedInvoiceTax(row)),
+    },
+    {
+      key: "settlement",
+      header: "Settlement",
+      width: "120px",
+      render: (row: any) => moneyOrDash(invoiceSettlementAmount(row)),
+    },
 
-  {
-    key: "clinic_profit",
-    header: "Realized Profit",
-    width:'90px',
-    render: (row: any) => {
-      return (
-        <span className="font-bold ">
-          {moneyOrDash(invoiceGrossProfit(row))}
-        </span>
-      );
+    {
+      key: "clinic_profit",
+      header: "Profit",
+      width: "90px",
+      render: (row: any) => {
+        return (
+          <span className="font-bold ">
+            {moneyOrDash(invoiceGrossProfit(row))}
+          </span>
+        );
+      },
     },
-  },
-  {
-    key: "clinic_profit_percentage",
-    header: "Profit Margin",
-    width: "100px",
-    render: (row: any) => profitPercentOrDash(row),
-  },
-];
+    {
+      key: "clinic_profit_percentage",
+      header: "Margin",
+      width: "100px",
+      render: (row: any) => profitPercentOrDash(row),
+    },
+  ];
   return (
     <Card>
       <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
@@ -246,7 +262,9 @@ const InvoiceReport = ({
             Paid invoice rows and totals update from the current filters.
           </p>
         </div>
-        <Badge tone="green" className="normal-badge">{filteredInvoices.length} paid invoices</Badge>
+        <Badge tone="green" className="normal-badge">
+          {filteredInvoices.length} paid invoices
+        </Badge>
       </div>
       <div className="mt-4 overflow-auto scrollbar-hidden rounded-lg border">
         <DataTable

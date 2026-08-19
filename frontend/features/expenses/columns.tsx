@@ -22,6 +22,15 @@ export function getExpenseColumns(
 ) {
   return [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "incurredOn",
       header: "Date",
       width: "110px",
@@ -50,7 +59,7 @@ export function getExpenseColumns(
     {
       key: "description",
       header: "Description",
-      width:"180px",
+      width: "180px",
       render: (row: Expense) => (
         <span className="text-sm">{row.description}</span>
       ),
@@ -76,9 +85,7 @@ export function getExpenseColumns(
       header: "Amount",
       width: "110px",
       sortable: true,
-      render: (row: Expense) => (
-        <b className="text-sm">{money(row.amount)}</b>
-      ),
+      render: (row: Expense) => <b className="text-sm">{money(row.amount)}</b>,
     },
     {
       key: "status",
@@ -88,7 +95,10 @@ export function getExpenseColumns(
       cellClassName: "text-center",
       sortable: true,
       render: (row: Expense) => (
-        <Badge tone={EXPENSE_STATUS_TONE[row.status]} className="normal-badge text-sm">
+        <Badge
+          tone={EXPENSE_STATUS_TONE[row.status]}
+          className="normal-badge text-sm"
+        >
           {EXPENSE_STATUS_LABEL[row.status]}
         </Badge>
       ),

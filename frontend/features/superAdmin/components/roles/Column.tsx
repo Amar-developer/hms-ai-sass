@@ -17,9 +17,18 @@ export function getRoleColumns({
 }: RoleColumnsParams): Column<any>[] {
   return [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "name",
       header: "Role",
-      width:'300px',
+      width: "300px",
       sortable: true,
       render: (role: any) => (
         <div className="flex flex-wrap items-center gap-2">
@@ -35,10 +44,7 @@ export function getRoleColumns({
             </Badge>
           )}
           {role.locked && (
-            <Badge
-              tone="purple"
-              className="normal-label"
-            >
+            <Badge tone="purple" className="normal-label">
               Locked
             </Badge>
           )}
@@ -48,7 +54,7 @@ export function getRoleColumns({
     {
       key: "display_key",
       header: "Scope",
-      width:'130px',
+      width: "130px",
       render: (role: any) => (
         <span className="text-xs lg:text-sm">{role.display_key}</span>
       ),
@@ -56,14 +62,11 @@ export function getRoleColumns({
     {
       key: "is_active",
       header: "Status",
-      width:'130px',
-      className:'text-center',
+      width: "130px",
+      className: "text-center",
       sortable: true,
       render: (role: any) => (
-        <Badge
-          tone={role.is_active ? "green" : "red"}
-          className="normal-badge"
-        >
+        <Badge tone={role.is_active ? "green" : "red"} className="normal-badge">
           {role.is_active ? "Active" : "Inactive"}
         </Badge>
       ),

@@ -5,8 +5,6 @@ import { rowDate } from "../helpers";
 import { DataTable } from "@/app/components/common/DataTable";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
-
-
 const HomeCareReports = ({
   homeCareReportRows,
   openSections,
@@ -19,107 +17,123 @@ const HomeCareReports = ({
     Number(value || 0) === 0 ? "-" : money(value);
   const columns = [
     {
-      key: "invoice",
-      header: "Invoice No",
-      render: (row: any) => (
-        <>
-          <b>{row.invoice}</b>
-        </>
-      ),
-      width:'120px'
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
     },
     {
-      key:'invoice_date',
-      header:'Date',
-      render: (row:any)=> row.date,
-      width:'100px'
+      key: "invoice",
+      header: "Invoice No",
+      width: "150px",
+      render: (row: any) => (
+        <div className="max-w-[140px]">
+          <p className="truncate font-semibold" title={row.invoice}>
+            {row.invoice}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "invoice_date",
+      header: "Date",
+      render: (row: any) => row.date,
+      width: "100px",
     },
     {
       key: "type",
       header: "Type",
-      width:'120px'
+      width: "120px",
     },
     {
       key: "patient",
       header: "Patient",
+      width: "120px",
       render: (row: any) => (
-        <div>
-          <b>{row.patient}</b>
+        <div className="max-w-[140px]">
+          <p className="truncate" title={row.patient}>{row.patient}</p>
           <PatientFlagBadges patient={row.patientReference} className="mt-1" />
         </div>
       ),
-      width:'120px'
     },
     {
       key: "staff",
       header: "Staff",
-      width:'140px'
+      width: "140px",
+      render: (row:any)=>(
+        <div className="max-w-[130px]">
+          <p className="truncate" title={row.staff}>{row.staff}</p>
+        </div>
+      )
     },
     {
       key: "totalAmount",
       header: "Total",
       render: (row: any) => moneyOrDash(row.totalAmount),
-      width:'90px'
+      width: "100px",
     },
     {
       key: "paidAmount",
       header: "Paid",
       render: (row: any) => moneyOrDash(row.paidAmount),
-      width:'90px'
+      width: "100px",
     },
     {
       key: "balance",
-      header: "Amount Due",
+      header: "Due",
       render: (row: any) => moneyOrDash(row.balance),
-      width:'90px'
+      width: "100px",
     },
     {
       key: "approvedDiscount",
-      header: "Admin Discount",
+      header: "Admin %",
+      width: "100px",
       render: (row: any) => moneyOrDash(row.approvedDiscount),
-      width:'130px'
     },
     {
       key: "offerDiscount",
-      header: "Offer Discount",
+      header: "Offer %",
+      width: "100px",
       render: (row: any) => moneyOrDash(row.offerDiscount),
-      width:'120px'
     },
     {
       key: "membershipBenefit",
-      header: "Membership Benefit",
+      header: "Membership",
       render: (row: any) => moneyOrDash(row.membershipBenefit),
-      width:'120px'
+      width: "120px",
     },
     {
       key: "paymentMode",
-      header: "Payment Method",
-      width:'130px'
+      header: "Payment",
+      width: "130px",
     },
     {
       key: "paidTax",
       header: "Paid GST",
       render: (row: any) => moneyOrDash(row.paidTax),
-      width:'100px'
+      width: "100px",
     },
     {
       key: "settlement",
       header: "Settlement",
       render: (row: any) => moneyOrDash(row.settlement),
-      width:'120px'
+      width: "120px",
     },
     {
       key: "grossProfit",
-      header: "Realized Profit",
+      header: "Profit",
       render: (row: any) => (
         <span className="font-bold">{moneyOrDash(row.grossProfit)}</span>
       ),
-      width:'140px'
+      width: "100px",
     },
     {
       key: "grossProfitPercent",
-      header: "Profit Margin",
-      width:'150px',
+      header: "Margin",
+      width: "100px",
       render: (row: any) =>
         Number(row.grossProfit || 0) === 0 ? "-" : row.grossProfitPercent,
     },

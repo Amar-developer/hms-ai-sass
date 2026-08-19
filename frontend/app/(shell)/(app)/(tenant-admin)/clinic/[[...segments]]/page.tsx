@@ -10,6 +10,7 @@ import { canUseTenantAdminSection } from "@/features/admin/permissions";
 import { SuperAdminDashboard } from "@/features/superAdmin/SuperAdminDashboard";
 import { parseSuperAdminSegments } from "@/features/superAdmin/routing";
 import { CLINIC_SECTION_IDS } from "@/lib/clinicSections";
+import { isNewSegment, isEditSegment } from "@/lib/routeSlugs";
 
 const SECTION_IDS = clinic_sections.map(([id]) => id);
 
@@ -102,13 +103,13 @@ function ClinicTenantAdmin({
   const section = SECTION_IDS.includes(rawSection as any)
     ? (rawSection as string)
     : defaultSection;
-  const isEditPath = third === "edit";
-  const isViewPath = Boolean(second) && second !== "new" && !third;
+  const isEditPath = isEditSegment(third);
+  const isViewPath = Boolean(second) && !isNewSegment(second) && !third;
   const view = isEditPath
     ? "edit"
     : isViewPath
       ? "view"
-      : second === "new"
+      : isNewSegment(second)
         ? "create"
         : "list";
   const selectedId = view === "edit" || view === "view" ? second : "";

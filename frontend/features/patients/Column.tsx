@@ -29,6 +29,15 @@ export function getPatientColumns({
 }: PatientColumnsParams): Column<any>[] {
   return [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "full_name",
       header: "Patient",
       width: "200px",
@@ -48,15 +57,11 @@ export function getPatientColumns({
       ),
     },
     {
-      key:"patient_number",
-      header:"Number",
-      width:"150px",
-      sortable:true,
-      render: (row:any)=>(
-        <p className="">
-          {row.patient_number}
-        </p>
-      )
+      key: "patient_number",
+      header: "Number",
+      width: "150px",
+      sortable: true,
+      render: (row: any) => <p className="">{row.patient_number}</p>,
     },
     {
       key: "mobile",
@@ -109,7 +114,7 @@ export function getPatientColumns({
     {
       key: "status",
       header: "Status",
-      width: "110px",
+      width: "100px",
       className: "text-center",
       cellClassName: "text-center",
       sortable: true,
@@ -122,7 +127,7 @@ export function getPatientColumns({
                 ? "purple"
                 : "red"
           }
-          className="normal-badge text-sm"
+         className="normal-label"
         >
           {row.status}
         </Badge>

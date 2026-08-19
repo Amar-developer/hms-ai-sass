@@ -28,6 +28,15 @@ export function getPrescriptionColumns({
 }): Column<any>[] {
   return [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "prescription",
       header: "Appointment ID",
       render: (a: any) => (
@@ -43,13 +52,13 @@ export function getPrescriptionColumns({
     {
       key: "patient",
       header: "Patient",
-      width:'120px',
+      width: "120px",
       render: (a: any) => <span className="font-semibold">{a.patient}</span>,
     },
     {
       key: "doctor",
       header: "Doctor",
-      width:'120px',
+      width: "120px",
       cellClassName: "text-slate-600",
       render: (a: any) =>
         a.doctor && a.doctor !== "Unassigned" ? a.doctor : "-",
@@ -58,7 +67,7 @@ export function getPrescriptionColumns({
       key: "date",
       header: "Date & Time",
       cellClassName: "whitespace-nowrap text-slate-600",
-      width:'220px',
+      width: "220px",
       render: (a: any) =>
         displayDateTime(
           a.consultationSignedAt ||
@@ -141,6 +150,34 @@ export function getPharmacyColumns({
       render: (_, index) => <b>{(safePage - 1) * pageSize + index + 1}</b>,
     },
     {
+      key: "patient",
+      header: "Patient",
+      width: "150px",
+      render: (issue: any) => {
+        const p: any = patientMap.get(issue.patient_id);
+
+        return (
+          <div className="text-sm max-w-[130px]">
+            <p
+              className="truncate"
+              title={capitalizeFirst(
+                issue.patient_name ||
+                  p?.name ||
+                  publicDisplayValue(issue.patient_id, "Patient"),
+              )}
+            >
+              {capitalizeFirst(
+                issue.patient_name ||
+                  p?.name ||
+                  publicDisplayValue(issue.patient_id, "Patient"),
+              )}
+            </p>
+            <PatientFlagBadges patient={p} className="mt-1" />
+          </div>
+        );
+      },
+    },
+    {
       key: "issue_number",
       header: "Issue ID",
       width: "190px",
@@ -151,7 +188,7 @@ export function getPharmacyColumns({
             label="Pharmacy Issue ID"
             allowed={canCopyIds}
             value={issue.issue_number || publicDisplayValue(issue.id, "Issue")}
-            valueClassName="text-xs"
+            valueClassName="text-sm"
           />
           <p className="text-xs text-slate-500">
             {new Date(issue.created_at).toLocaleTimeString([], {
@@ -162,42 +199,24 @@ export function getPharmacyColumns({
         </div>
       ),
     },
-     {
+    {
       key: "date",
       header: "Date",
-      className:'text-center',
+      className: "text-center",
       width: "100px",
-      render: (issue:any)=>(
-        <b className="text-xs">{displayDate(issue.created_at)}</b>
-      )
-     },
-    {
-      key: "patient",
-      header: "Patient",
-      width: "150px",
-      render: (issue: any) => {
-        const p: any = patientMap.get(issue.patient_id);
-
-        return (
-          <div className="text-xs">
-            <span>
-              {capitalizeFirst(issue.patient_name ||
-                p?.name ||
-                publicDisplayValue(issue.patient_id, "Patient"))}
-            </span>
-            <PatientFlagBadges patient={p} className="mt-1" />
-          </div>
-        );
-      },
+      render: (issue: any) => (
+        <p className="text-sm">{displayDate(issue.created_at)}</p>
+      ),
     },
+
     {
       key: "source",
       header: "Source",
-      width: "140px",
-      className:"text-center",
+      width: "120px",
+      className: "text-center",
       sortable: true,
       render: (issue: any) => (
-        <Badge className="normal-badge text-xs px-2">
+        <Badge className="normal-label">
           {humanizeOptionLabel(issue.source)}
         </Badge>
       ),
@@ -205,14 +224,17 @@ export function getPharmacyColumns({
     {
       key: "status",
       header: "Status",
-      width: "150px",
+      width: "120px",
+      className: "text-center",
       sortable: true,
       render: (issue: any) => {
         const dispensed = isDispensed(issue);
         const cancelled = isCancelledIssue(issue);
         const invoiced = invoicedIssueIds.has(issue.id);
         const billed = isBilledIssue(issue) || invoiced;
-        const statusLabel = billed ? "Billed" : humanizeOptionLabel(issue.status);
+        const statusLabel = billed
+          ? "Billed"
+          : humanizeOptionLabel(issue.status);
         const statusTone = billed
           ? "green"
           : dispensed
@@ -222,7 +244,7 @@ export function getPharmacyColumns({
               : "amber";
 
         return (
-          <Badge tone={statusTone as any} className="normal-badge w-[60%] text-xs">
+          <Badge tone={statusTone as any} className="normal-label">
             {statusLabel}
           </Badge>
         );
@@ -231,7 +253,7 @@ export function getPharmacyColumns({
     {
       key: "amount",
       header: "Amount",
-      width: "100px",
+      width: "180px",
       disableRowClick: true,
       sortable: true,
       render: (issue: any) => {
@@ -261,7 +283,7 @@ export function getPharmacyColumns({
                   cancelEditAmount();
                 }
               }}
-              className="w-20 rounded-xl border px-2 py-1 text-sm outline-none focus:border-slate-500"
+              className="w-16 rounded-xl border px-2 py-1 text-sm outline-none focus:border-slate-500"
             />
             <button
               type="button"
@@ -281,7 +303,7 @@ export function getPharmacyColumns({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <b className={hasAmount ? "" : "text-amber-700"}>
+            <b className={`text-xs ${hasAmount ? "" : "text-amber-700"}`}>
               {hasAmount ? `₹${issue.amount}` : "Enter amount"}
             </b>
             {canEditPharmacyIssue && (
@@ -301,7 +323,7 @@ export function getPharmacyColumns({
     {
       key: "action",
       header: "Action",
-      width: "80px",
+      width: "100px",
       className: "text-center",
       disableRowClick: true,
       render: (issue: any) => {
@@ -322,14 +344,22 @@ export function getPharmacyColumns({
                   label: "Partial dispense",
                   hidden: !canDispensePharmacyIssue,
                   disabled:
-                    dispensed || cancelled || invoiced || rowBusy || invoiceBusy,
+                    dispensed ||
+                    cancelled ||
+                    invoiced ||
+                    rowBusy ||
+                    invoiceBusy,
                   onClick: () => handleIssueAction(issue, "partial"),
                 },
                 {
                   label: "Dispense",
                   hidden: !canDispensePharmacyIssue,
                   disabled:
-                    dispensed || cancelled || invoiced || rowBusy || invoiceBusy,
+                    dispensed ||
+                    cancelled ||
+                    invoiced ||
+                    rowBusy ||
+                    invoiceBusy,
                   onClick: () => handleIssueAction(issue, "dispense"),
                 },
                 {
@@ -344,7 +374,11 @@ export function getPharmacyColumns({
                   label: "Cancel order",
                   hidden: !canDispensePharmacyIssue,
                   disabled:
-                    dispensed || cancelled || invoiced || rowBusy || invoiceBusy,
+                    dispensed ||
+                    cancelled ||
+                    invoiced ||
+                    rowBusy ||
+                    invoiceBusy,
                   danger: true,
                   onClick: () => handleIssueAction(issue, "cancel"),
                 },

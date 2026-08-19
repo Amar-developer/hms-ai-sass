@@ -54,7 +54,7 @@ export function DataTable<T>({
               <th
                 key={String(column.key)}
                 style={column.width ? { width: column.width } : undefined}
-                className={`px-4 py-3 text-sm ${column.className ?? ""}`}
+                className={`px-4 py-2 text-sm ${column.className ?? ""}`}
               >
                 {column.sortable && onSortChange ? (
                   <button

@@ -5,7 +5,7 @@ export function RoleList({ labels }: { labels: string[] }) {
       {labels.map((label) => (
         <span
           key={label}
-          className="max-w-full truncate rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700"
+          className="max-w-full truncate rounded-full bg-slate-100 normal-label  font-bold text-slate-700"
           title={labels.join(", ")}
         >
           {label}

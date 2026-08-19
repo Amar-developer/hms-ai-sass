@@ -3,8 +3,6 @@ import CollapsibleReportSection from "./CollapsibleReportSection";
 import { PharmacyReportsProps } from "../types";
 import { DataTable } from "@/app/components/common/DataTable";
 
-
-
 const PharmacyReports = ({
   pharmacySettlementRows,
   openSections,
@@ -17,70 +15,79 @@ const PharmacyReports = ({
     Number(value || 0) === 0 ? "-" : money(value);
   const columns = [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "supplier",
       header: "Supplier",
-      width:'160px',
+      width: "160px",
       render: (row: any) => <b>{row.supplier}</b>,
     },
     {
       key: "item",
       header: "Medicine",
-      width:'180px',
+      width: "180px",
     },
     {
       key: "issueCount",
       header: "Issues",
-      width:'90px',
+      width: "90px",
     },
     {
       key: "invoiceCount",
       header: "Invoices",
-       width:'90px',
+      width: "90px",
     },
     {
       key: "quantity",
       header: "Qty",
-       width:'90px',
+      width: "90px",
     },
     {
       key: "total",
       header: "Total",
       render: (row: any) => moneyOrDash(row.total),
-       width:'90px',
+      width: "90px",
     },
     {
       key: "revenue",
       header: "Paid",
       render: (row: any) => moneyOrDash(row.revenue),
-       width:'90px',
+      width: "90px",
     },
     {
       key: "balance",
-      header: "Amount Due",
+      header: "Due",
       render: (row: any) => moneyOrDash(row.balance),
-       width:'90px',
+      width: "90px",
     },
     {
       key: "approvedDiscount",
-      header: "Admin Discount",
-      width: '130px',
+      header: "Admin %",
+      width: "130px",
       render: (row: any) => moneyOrDash(row.approvedDiscount),
     },
     {
       key: "offerDiscount",
-      header: "Offer Discount",
-      width: '100px',
+      header: "Offer %",
+      width: "100px",
       render: (row: any) => moneyOrDash(row.offerDiscount),
     },
     {
       key: "membershipBenefit",
-      header: "Membership Benefit",
-      width: '130px',
+      header: "Membership",
+      width: "130px",
       render: (row: any) => moneyOrDash(row.membershipBenefit),
     },
     {
       key: "paymentMode",
-      header: "Payment Method",
+      header: "Payment",
       width: "130px",
     },
     {
@@ -91,21 +98,21 @@ const PharmacyReports = ({
     },
     {
       key: "purchaseCost",
-      header: "Purchase Cost",
+      header: "Purchase ",
       render: (row: any) => moneyOrDash(row.purchaseCost),
-       width:'160px',
+      width: "160px",
     },
     {
       key: "profit",
-      header: "Realized Profit",
-      width:'90px',
+      header: "Profit",
+      width: "90px",
       render: (row: any) => (
         <span className="font-bold">{moneyOrDash(row.profit)}</span>
       ),
     },
     {
       key: "profitMargin",
-      header: "Profit Margin",
+      header: "Margin",
       width: "120px",
       render: (row: any) => {
         const basis =

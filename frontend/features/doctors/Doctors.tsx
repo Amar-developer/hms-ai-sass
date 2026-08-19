@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
+import { newSegment, editSegment } from "@/lib/routeSlugs";
 import {
   Card,
   RefreshButton,
@@ -153,10 +154,10 @@ export function Doctors({
     const finish = () => {
       const path =
         nextView === "create"
-          ? "/practitioners/new"
+          ? `/clinic/practitioners/${newSegment("practitioner")}`
           : nextView === "edit"
-            ? `/practitioners/${id}/edit`
-            : "/practitioners";
+            ? `/clinic/practitioners/${id}/${editSegment("practitioner")}`
+            : "/clinic/practitioners";
       router.push(path);
       requestAnimationFrame(() =>
         window.scrollTo({ top: 0, behavior: "smooth" }),
@@ -208,7 +209,7 @@ export function Doctors({
   // finished.
   useEffect(() => {
     if (view !== "edit" || !selectedId || listLoading) return;
-    if (!selected) router.replace("/practitioners");
+    if (!selected) router.replace("/clinic/practitioners");
   }, [view, selectedId, listLoading, selected, router]);
 
   useEffect(() => {

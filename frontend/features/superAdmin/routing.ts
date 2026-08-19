@@ -5,6 +5,7 @@
  */
 
 import { CLINIC_SECTION_IDS } from "@/lib/clinicSections";
+import { newSegment, editSegment, isNewSegment, isEditSegment } from "@/lib/routeSlugs";
 
 const CLINIC_IDS: readonly string[] = CLINIC_SECTION_IDS;
 
@@ -67,17 +68,19 @@ export function superAdminPath(
     suffix: string,
   ) => {
     const base = basePathFor(segment);
-    return id ? `${base}/${segment}/${id}/${suffix}` : `${base}/${segment}`;
+    const finalSuffix =
+      suffix === "edit" ? editSegment(ENTITY_SEGMENTS[segment] || segment) : suffix;
+    return id ? `${base}/${segment}/${id}/${finalSuffix}` : `${base}/${segment}`;
   };
 
   switch (section) {
     // Tenant create is the one section that doesn't follow <entity><Verb>.
     case "createTenant":
-      return "/superadmin/tenants/new";
+      return `/superadmin/tenants/${newSegment(ENTITY_SEGMENTS.tenants)}`;
     case "tenantEdit":
       return detail("tenants", ids.tenantId, "edit");
     case "roleCreate":
-      return "/superadmin/roles/new";
+      return `/superadmin/roles/${newSegment(ENTITY_SEGMENTS.roles)}`;
     case "roleEdit":
       return detail("roles", ids.roleId, "edit");
     case "rolePermissions":
@@ -85,17 +88,17 @@ export function superAdminPath(
     case "roleAssign":
       return detail("roles", ids.roleId, "assign");
     case "userCreate":
-      return "/clinic/users/new";
+      return `/clinic/users/${newSegment(ENTITY_SEGMENTS.users)}`;
     case "userEdit":
       return detail("users", ids.userId, "edit");
     case "departmentCreate":
-      return "/clinic/departments/new";
+      return `/clinic/departments/${newSegment(ENTITY_SEGMENTS.departments)}`;
     case "departmentEdit":
       return detail("departments", ids.departmentId, "edit");
     case "departmentAssign":
       return detail("departments", ids.departmentId, "assign");
     case "branchCreate":
-      return "/clinic/branches/new";
+      return `/clinic/branches/${newSegment(ENTITY_SEGMENTS.branches)}`;
     case "branchEdit":
       return detail("branches", ids.branchId, "edit");
     case "branchAssign":
@@ -122,13 +125,17 @@ export function parseSuperAdminSegments(
 
   const entity = allowedSections.includes(first) ? ENTITY_SEGMENTS[first] : undefined;
   if (entity) {
-    if (second === "new") {
+    if (isNewSegment(second)) {
       return {
         section: entity === "tenant" ? "createTenant" : `${entity}Create`,
         id: "",
       };
     }
-    const suffix = third ? DETAIL_SUFFIXES[third] : undefined;
+    const suffix = third
+      ? isEditSegment(third)
+        ? DETAIL_SUFFIXES.edit
+        : DETAIL_SUFFIXES[third]
+      : undefined;
     if (second && suffix) {
       return { section: `${entity}${suffix}`, id: second };
     }

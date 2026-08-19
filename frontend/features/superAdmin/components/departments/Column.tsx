@@ -12,8 +12,17 @@ export function getDepartmentColumns({
   setSelectedDepartmentId,
   setSection,
   setConfirmAction,
-}: DepartmentColumnsParams) : Column<any>[]{
+}: DepartmentColumnsParams): Column<any>[] {
   return [
+    {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
     {
       key: "name",
       header: "Department",

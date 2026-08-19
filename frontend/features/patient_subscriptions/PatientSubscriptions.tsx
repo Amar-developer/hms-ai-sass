@@ -13,6 +13,7 @@ import { FormField } from "@/app/components/FormElements";
 import { canDeleteMembershipPlans } from "../patients/helpers";
 import { ActiveEnrollmentsTable } from "../patients/components/ActiveEnrollmentsTable";
 import { PlanDetailPage } from "../patients/components/PlanDetailPage";
+import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { PlanForm } from "../patients/components/PlanForm";
 import { money } from "@/utils/helper";
 import { QueuedEnrollmentsTable } from "../patients/components/QueuedEnrollmentsTable";
@@ -100,9 +101,9 @@ export function PatientSubscriptions({
   function goTo(nextView: string, id = "", opts: { replace?: boolean } = {}) {
     const path =
       nextView === "create"
-        ? "/admin/membership/new"
+        ? `/admin/membership/${newSegment("subscription")}`
         : nextView === "edit"
-          ? `/admin/membership/${id}/edit`
+          ? `/admin/membership/${id}/${editSegment("subscription")}`
           : nextView === "view"
             ? `/admin/membership/${id}`
             : "/admin/membership";

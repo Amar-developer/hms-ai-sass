@@ -22,10 +22,7 @@ import {
   percentLabel,
 } from "./helpers";
 
-function signedMoney(
-  value: any,
-  mode: "delta" | "debit" | "credit" = "delta",
-) {
+function signedMoney(value: any, mode: "delta" | "debit" | "credit" = "delta") {
   const amount = numberValue(value);
   if (amount === 0) return money(0);
   if (mode === "credit") return `+${money(Math.abs(amount))}`;
@@ -75,12 +72,12 @@ export function getInvoiceColumns({
           ? "amber"
           : status === "failed" || status === "cancelled"
             ? "red"
-            : status == 'not_sent'
-            ? "purple"
-            :'slate'
+            : status == "not_sent"
+              ? "purple"
+              : "slate";
 
     return (
-      <Badge tone={tone as any} className="normal-badge text-xs text-center">
+      <Badge tone={tone as any} className="normal-label">
         {label}
       </Badge>
     );
@@ -88,11 +85,13 @@ export function getInvoiceColumns({
 
   return [
     {
-      key: "index",
+      key: "s.no",
       header: "S.No",
-      width: "60px",
-      render: (_, index) => (safePage - 1) * pageSize + index + 1,
-      cellClassName: "font-semibold text-slate-500 text-center",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
     },
     {
       key: "invoice_number",
@@ -123,16 +122,13 @@ export function getInvoiceColumns({
     {
       key: "source",
       header: "Source",
-      width: "160px",
+      width: "140px",
       className: "text-center",
       render: (invoice) => {
         const source = invoiceSource(invoice);
 
         return (
-          <Badge
-            tone={source.tone as any}
-            className="normal-badge text-xs text-center "
-          >
+          <Badge tone={source.tone as any} className="normal-label">
             {source.label}
           </Badge>
         );
@@ -141,16 +137,23 @@ export function getInvoiceColumns({
     {
       key: "patient",
       header: "Patient",
-      width: "120px",
+      width: "130px",
       render: (invoice) => {
         const p: any = patientMap.get(invoice.patient_id);
 
         return (
-          <div>
-            {capitalizeFirst(
-              invoice.patient_name || p?.name || p?.full_name || "Patient",
-            )}
-            <PatientFlagBadges patient={p} className="mt-1" />
+          <div className="max-w-[120px]">
+            <p
+              className="truncate"
+              title={capitalizeFirst(
+                invoice.patient_name || p?.name || p?.full_name || "Patient",
+              )}
+            >
+              {capitalizeFirst(
+                invoice.patient_name || p?.name || p?.full_name || "Patient",
+              )}
+              <PatientFlagBadges patient={p} className="mt-1" />
+            </p>
           </div>
         );
       },
@@ -175,7 +178,7 @@ export function getInvoiceColumns({
                     ? "red"
                     : "slate"
           }
-          className="normal-badge text-xs text-center"
+          className="normal-label"
         >
           {capitalizeFirst(
             invoice.status === "partially_paid"
@@ -187,20 +190,7 @@ export function getInvoiceColumns({
         </Badge>
       ),
     },
-    {
-      key: "whatsapp_status",
-      header: "WhatsApp",
-      className: "text-center",
-      width: "120px",
-      render: renderWhatsAppStatus,
-    },
-    {
-      key: "total_amount",
-      header: "Total",
-      width: "100px",
-      render: (invoice) => money(invoice.total_amount),
-      cellClassName: "font-semibold tabular-nums",
-    },
+
     {
       key: "paid_amount",
       header: "Paid",
@@ -215,21 +205,35 @@ export function getInvoiceColumns({
       render: (invoice) => money(invoicePatientDueAmount(invoice)),
     },
     {
-      key: "actions",
-      header: "Actions",
-      width: "120px",
-      disableRowClick: true,
-      render: (invoice) => (
-        <ActionButton
-          onClick={() => openInvoiceDetail(invoice)}
-          disabled={detailLoading === invoice.id}
-        >
-          <ButtonLoader loading={detailLoading === invoice.id}>
-            {detailLoading === invoice.id ? "Loading..." : "View"}
-          </ButtonLoader>
-        </ActionButton>
-      ),
+      key: "total_amount",
+      header: "Total",
+      width: "100px",
+      render: (invoice) => money(invoice.total_amount),
+      cellClassName: "font-semibold tabular-nums",
     },
+    {
+      key: "whatsapp_status",
+      header: "WhatsApp",
+      className: "text-center",
+      width: "120px",
+      render: renderWhatsAppStatus,
+    },
+    // {
+    //   key: "actions",
+    //   header: "Actions",
+    //   width: "120px",
+    //   disableRowClick: true,
+    //   render: (invoice) => (
+    //     <ActionButton
+    //       onClick={() => openInvoiceDetail(invoice)}
+    //       disabled={detailLoading === invoice.id}
+    //     >
+    //       <ButtonLoader loading={detailLoading === invoice.id}>
+    //         {detailLoading === invoice.id ? "Loading..." : "View"}
+    //       </ButtonLoader>
+    //     </ActionButton>
+    //   ),
+    // },
   ];
 }
 
@@ -595,10 +599,7 @@ export function getAdjustmentRequestColumns({
             <ActionButton onClick={() => approveAdjustment?.(row)}>
               Approve
             </ActionButton>
-            <ActionButton
-              tone="danger"
-              onClick={() => rejectAdjustment?.(row)}
-            >
+            <ActionButton tone="danger" onClick={() => rejectAdjustment?.(row)}>
               Reject
             </ActionButton>
           </ActionGroup>
@@ -637,8 +638,12 @@ export function getHospitalLedgerColumns({
         const [date, time] = displayDateTime(entry.created_at).split(", ");
         return (
           <span className="block leading-5">
-            <span className="block whitespace-nowrap font-bold text-slate-900">{date}</span>
-            <span className="block whitespace-nowrap text-xs font-medium text-slate-500">{time}</span>
+            <span className="block whitespace-nowrap font-bold text-slate-900">
+              {date}
+            </span>
+            <span className="block whitespace-nowrap text-xs font-medium text-slate-500">
+              {time}
+            </span>
           </span>
         );
       },
@@ -660,7 +665,10 @@ export function getHospitalLedgerColumns({
       width: "170px",
       cellClassName: "align-top font-semibold text-slate-700",
       render: (entry: any) => (
-        <span className="block break-words leading-5" title={entry.actor_user_name || "Unknown user"}>
+        <span
+          className="block break-words leading-5"
+          title={entry.actor_user_name || "Unknown user"}
+        >
           {entry.actor_user_name || "Unknown user"}
         </span>
       ),
@@ -671,7 +679,9 @@ export function getHospitalLedgerColumns({
       width: "180px",
       cellClassName: "align-top font-semibold text-slate-700",
       render: (entry: any) => (
-        <span className="block break-words leading-5">{hospitalLedgerLine(entry).debitAccount}</span>
+        <span className="block break-words leading-5">
+          {hospitalLedgerLine(entry).debitAccount}
+        </span>
       ),
     },
     {
@@ -699,7 +709,9 @@ export function getHospitalLedgerColumns({
       width: "180px",
       cellClassName: "align-top font-semibold text-slate-700",
       render: (entry: any) => (
-        <span className="block break-words leading-5">{hospitalLedgerLine(entry).creditAccount}</span>
+        <span className="block break-words leading-5">
+          {hospitalLedgerLine(entry).creditAccount}
+        </span>
       ),
     },
     {
@@ -730,8 +742,7 @@ export function getHospitalLedgerColumns({
         "whitespace-nowrap text-right align-top font-black tabular-nums text-slate-700",
       render: (entry: any) =>
         money(
-          (ledgerRunningById.get(entry.id) || { invoiceTotal: 0 })
-            .invoiceTotal,
+          (ledgerRunningById.get(entry.id) || { invoiceTotal: 0 }).invoiceTotal,
         ),
     },
     {

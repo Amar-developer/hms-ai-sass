@@ -1,5 +1,5 @@
 import { Pagination } from "@/app/components/common/Pagination";
-import { Button, Card } from "@/app/components/common/ui";
+import { Card } from "@/app/components/common/ui";
 import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
@@ -65,7 +65,7 @@ export function ListCard({
               {columns.map((column: any) => (
                 <th
                   key={column.label}
-                  className={`whitespace-nowrap px-4 py-3 ${column.label =='Status'?'text-center':'text-left'} text-sm font-bold uppercase text-slate-500`}
+                  className={`whitespace-nowrap px-4 py-2 ${column.label =='Status' || column.label=='S.No' ?'text-center':'text-left'} text-sm font-bold uppercase text-slate-500`}
                 >
                   {column.label}
                 </th>
@@ -87,9 +87,9 @@ export function ListCard({
                   <tr>
                     <td
                       colSpan={columns.length}
-                      className="px-4 py-4 text-xs text-slate-500 lg:text-sm"
+                      className="p-4 text-xs text-slate-500 lg:text-sm"
                     >
-                      <div className="rounded-lg bg-slate-50 p-4">
+                      <div className="rounded-lg bg-slate-50 px-4 py-2">
                         No records match your search.
                       </div>
                     </td>

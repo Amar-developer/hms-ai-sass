@@ -6,6 +6,7 @@ import { TenantAdmin } from "@/features/admin/TenantAdmin";
 import { useWorkspace } from "@/features/shell/WorkspaceContext";
 import { tenantAdminSections } from "@/features/admin/constants";
 import { canUseTenantAdminSection } from "@/features/admin/permissions";
+import { isNewSegment, isEditSegment } from "@/lib/routeSlugs";
 
 const SECTION_IDS = tenantAdminSections.map(([id]) => id);
 
@@ -38,13 +39,13 @@ export default function AdminPage() {
   // record; /admin/{section}/{id}/edit (explicit Edit action) opens it for
   // editing. Same form component renders both — only whether its fields are
   // disabled differs (see TenantAdmin's `readOnly` wiring).
-  const isEditPath = third === "edit";
-  const isViewPath = Boolean(second) && second !== "new" && !third;
+  const isEditPath = isEditSegment(third);
+  const isViewPath = Boolean(second) && !isNewSegment(second) && !third;
   const view = isEditPath
     ? "edit"
     : isViewPath
       ? "view"
-      : second === "new"
+      : isNewSegment(second)
         ? "create"
         : "list";
   const selectedId = view === "edit" || view === "view" ? second : "";

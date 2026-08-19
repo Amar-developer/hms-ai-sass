@@ -8,6 +8,7 @@ import { selectedSchedulePayloadsFromRHF } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
 import { pageSize, weekdays } from "./constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { Pagination } from "@/app/components/common/Pagination";
 import { ScheduleFormValues } from "./schedule.schema";
 import { useSchedulingData, useSchedulingActions } from "./api";
@@ -85,16 +86,16 @@ export function Scheduling({
   // resolves to a real schedule, but only once loading has finished.
   useEffect(() => {
     if (view !== "edit" || !selectedId || loading) return;
-    if (!selected) router.replace("/scheduling");
+    if (!selected) router.replace("/clinic/scheduling");
   }, [view, selectedId, loading, selected, router]);
 
   function open(nextView: string, id = "") {
     const path =
       nextView === "create"
-        ? "/scheduling/new"
+        ? `/clinic/scheduling/${newSegment("schedule")}`
         : nextView === "edit"
-          ? `/scheduling/${encodeURIComponent(id)}/edit`
-          : "/scheduling";
+          ? `/clinic/scheduling/${encodeURIComponent(id)}/${editSegment("schedule")}`
+          : "/clinic/scheduling";
     router.push(path);
     setMessage("");
     requestAnimationFrame(() =>

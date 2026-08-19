@@ -43,6 +43,15 @@ export function getDoctorColumns({
   setConfirm,
 }: DoctorColumnsParams): Column<any>[] {
   return [
+   {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
     {
       key: "full_name",
       header: "Doctor",
@@ -204,7 +213,7 @@ export function getDoctorColumns({
       render: (row: any) => (
         <Badge
           tone={row.status === "active" ? "green" : "red"}
-          className="normal-badge text-sm"
+          className="normal-label"
         >
           {row.status === "active" ? "Active" : "Inactive"}
         </Badge>

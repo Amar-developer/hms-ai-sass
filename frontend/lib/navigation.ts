@@ -31,7 +31,7 @@
     ["items", "Items", PackageOpen],
     ["ip", "IP Admission", BedDouble],
     ["lab", "Lab & Service", FlaskConical],
-    ["pharmacy", "Prescription", Pill],
+    ["pharmacy", "Pharmacy", Pill],
     ["physiotherapy", "Physiotherapy", Dumbbell],
     ["home_care", "Home Care  Visit Booking", Home],
     ["billing", "Invoices", ReceiptIndianRupee],

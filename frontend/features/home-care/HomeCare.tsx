@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { humanizeOptionLabel } from "@/lib/options";
 import { today } from "@/utils/helper";
+import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { emptyLine, homeCareHourPrices } from "./constants";
 import { bookingTotal, isBookingLocked, patientCode, userName } from "./helpers";
 import { BookingsList } from "./components/BookingList";
@@ -315,7 +316,7 @@ export function HomeCare({
 
   function openCreate() {
     resetForm();
-    router.push("/home_care/new");
+    router.push(`/home_care/${newSegment("visit")}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -345,7 +346,7 @@ export function HomeCare({
       );
       return;
     }
-    router.push(`/home_care/${booking.id}/edit`);
+    router.push(`/home_care/${booking.id}/${editSegment("visit")}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 

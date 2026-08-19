@@ -25,9 +25,18 @@ export function getTenantColumns({
 }: TenantColumnsParams): Column<any>[] {
   return [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "tenant",
       header: "Tenant",
-      width:'230px',
+      width: "230px",
       sortable: true,
       render: (tenant: any) => (
         <div className="min-w-0">
@@ -50,7 +59,7 @@ export function getTenantColumns({
     {
       key: "tenant_type",
       header: "Type",
-      width:'150px',
+      width: "150px",
       sortable: true,
       render: (tenant: any) => (
         <p className="text-xs lg:text-sm">
@@ -61,8 +70,8 @@ export function getTenantColumns({
     {
       key: "status",
       header: "Status",
-      className:'text-center',
-      width:'100px',
+      className: "text-center",
+      width: "100px",
       sortable: true,
       render: (tenant: any) => (
         <Badge
@@ -82,7 +91,7 @@ export function getTenantColumns({
     {
       key: "contact",
       header: "Contact",
-      width:'200px',
+      width: "200px",
       sortable: true,
       render: (tenant: any) => (
         <div className="min-w-0">
@@ -96,7 +105,7 @@ export function getTenantColumns({
     {
       key: "created_at",
       header: "Created",
-      width:'120px',
+      width: "120px",
       sortable: true,
       render: (tenant: any) => (
         <span className="text-xs lg:text-sm">
@@ -107,7 +116,7 @@ export function getTenantColumns({
     {
       key: "updated_at",
       header: "Modified",
-       width:'120px',
+      width: "120px",
       sortable: true,
       render: (tenant: any) => (
         <span className="text-xs lg:text-sm">
@@ -118,7 +127,7 @@ export function getTenantColumns({
     {
       key: "actions",
       header: "Actions",
-       width:'100px',
+      width: "100px",
       className: "text-center",
       disableRowClick: true,
       render: (tenant: any) => (

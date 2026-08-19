@@ -19,8 +19,8 @@ export function RecordIdCell({
   valueClassName = "",
 }: RecordIdCellProps) {
   return (
-    <div className={`flex min-w-0 items-center gap-2 ${className}`}>
-      <b className={`block truncate ${valueClassName}`}>{value}</b>
+    <div className={`flex min-w-0 items-center gap-2 ${className}`} title={String(value)}>
+      <b className={`block truncate ${valueClassName}`} >{value}</b>
       <CopyIdButton value={id} label={label} allowed={allowed} />
     </div>
   );
