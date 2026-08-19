@@ -59,6 +59,8 @@ export function useHomeCareActions({
         age_years: data.ageYears ? Number(data.ageYears) : null,
         mobile: data.mobile || null,
         alternate_mobile: data.alternateMobile || null,
+        guardian_name: data.guardianName || null,
+        guardian_mobile: data.guardianMobile || null,
         email: data.email || null,
         area: data.area || null,
         address: data.address || null,
@@ -68,6 +70,7 @@ export function useHomeCareActions({
         ...saved,
         full_name: saved.full_name || data.fullName,
         mobile: saved.mobile || data.mobile,
+        guardian_mobile: saved.guardian_mobile || data.guardianMobile,
       };
       await loadLiveData?.(apiSession);
       setMessage("Patient created and selected.");

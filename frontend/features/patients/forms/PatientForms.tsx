@@ -7,6 +7,7 @@ import {
 import { FormField } from "../../../app/components/FormElements";
 import { NumberField, DateField } from "../../../app/components/FormElements";
 import { paymentMethodOptions } from "@/lib/options";
+import { ApiSession, apiFetch } from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateAgeYears,
@@ -19,6 +20,7 @@ import {
   bloodGroups,
   genders,
   language_options,
+  familyRelationshipOptions,
   source_options,
   statusOptions,
   whatsup_options,
@@ -37,7 +39,9 @@ export function PatientForm({
   error,
   onSubmit,
   back,
-}: any) {
+  apiSession,
+  familyRelationships = [],
+}: any & { apiSession?: ApiSession | null }) {
   const {
     register,
     getValues,
@@ -68,6 +72,10 @@ export function PatientForm({
         : String(patientField(patient, "age_years", "ageYears") || ""),
       alternateMobile:
         patientField(patient, "alternate_mobile", "alternateMobile") || "",
+      guardianName:
+        patientField(patient, "guardian_name", "guardianName") || "",
+      guardianMobile:
+        patientField(patient, "guardian_mobile", "guardianMobile") || "",
       email: patientField(patient, "email") || "",
       area: patientField(patient, "area") || "",
       bloodGroup: patientField(patient, "blood_group", "bloodGroup") || "",
@@ -112,11 +120,18 @@ export function PatientForm({
         patientField(patient, "monthly_lab_test_name", "monthlyLabTestName") || "",
       monthlyLabNotes:
         patientField(patient, "monthly_lab_notes", "monthlyLabNotes") || "",
+      familyRelatedPatientId: "",
+      familyRelationship: "father",
+      familyNotes: "",
     },
   });
   const today = todayInputValue();
   const updatingFromAge = useRef(false);
   const monthlyTrackingEnabled = Boolean(watch("monthlyTrackingEnabled"));
+  const familyRelatedPatientId = watch("familyRelatedPatientId");
+  const [familyPatientOptions, setFamilyPatientOptions] = useState<any[]>([]);
+  const [familyPatientSearchLoading, setFamilyPatientSearchLoading] =
+    useState(false);
   // Set right before the resync effect below calls reset(), so the DOB
   // watch-effect further down knows the resulting dateOfBirth change came
   // from server data, not the user — otherwise it would call setValue with
@@ -166,6 +181,10 @@ export function PatientForm({
         : String(patientField(patient, "age_years", "ageYears") || ""),
       alternateMobile:
         patientField(patient, "alternate_mobile", "alternateMobile") || "",
+      guardianName:
+        patientField(patient, "guardian_name", "guardianName") || "",
+      guardianMobile:
+        patientField(patient, "guardian_mobile", "guardianMobile") || "",
       email: patientField(patient, "email") || "",
       area: patientField(patient, "area") || "",
       bloodGroup: patientField(patient, "blood_group", "bloodGroup") || "",
@@ -210,8 +229,48 @@ export function PatientForm({
         patientField(patient, "monthly_lab_test_name", "monthlyLabTestName") || "",
       monthlyLabNotes:
         patientField(patient, "monthly_lab_notes", "monthlyLabNotes") || "",
+      familyRelatedPatientId: "",
+      familyRelationship: "father",
+      familyNotes: "",
     });
   }, [patient, defaultBranchId, reset]);
+
+  async function searchFamilyPatients(query = "") {
+    if (!apiSession) return;
+    setFamilyPatientSearchLoading(true);
+    try {
+      const params = new URLSearchParams({
+        limit: "25",
+        active_only: "true",
+      });
+      if (query.trim()) params.set("q", query.trim());
+      const rows = await apiFetch(`/patients?${params.toString()}`, apiSession);
+      const linkedIds = new Set(
+        familyRelationships.map((row: any) => row.related_patient_id),
+      );
+      setFamilyPatientOptions(
+        (Array.isArray(rows) ? rows : [])
+          .filter((row: any) => row.id !== patient?.id && !linkedIds.has(row.id))
+          .map((row: any) => ({
+            value: row.id,
+            label: row.full_name || row.patient_number || row.id,
+            sublabel: `${row.patient_number || row.id}${row.contact_mobile || row.mobile ? ` · ${row.contact_mobile || row.mobile}` : ""}`,
+          })),
+      );
+    } catch {
+      setFamilyPatientOptions([]);
+    } finally {
+      setFamilyPatientSearchLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    setValue("familyRelatedPatientId" as any, "", { shouldDirty: false });
+    setValue("familyRelationship" as any, "father", { shouldDirty: false });
+    setValue("familyNotes" as any, "", { shouldDirty: false });
+    searchFamilyPatients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient?.id, apiSession?.tenantId, familyRelationships.length]);
 
   useEffect(() => {
     const currentBranchId = getValues("branchId");
@@ -293,39 +352,19 @@ export function PatientForm({
       )}
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="mt-4 space-y-4"
+        className="mt-4 space-y-3"
       >
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <section className="rounded-lg border border-slate-200 bg-white p-3">
           <div>
             <h4 className="text-sm font-black text-slate-900">Basic Details</h4>
-            <p className="mt-1 text-xs font-semibold text-slate-500">
-              Patient identity, branch, contact, and demographic information.
-            </p>
           </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <FormField label="Full Name" required>
               <Input
                 {...register("fullName")}
                 placeholder="Enter patient full name"
               />
               <FormError error={errors.fullName?.message} />
-            </FormField>
-            <FormField label="Mobile Number">
-              <Input
-                type="text"
-                inputMode="numeric"
-                maxLength={10}
-                placeholder="Enter patient mobile number"
-                {...register("mobile", {
-                  onChange: (e) => {
-                    e.target.value = e.target.value.replace(/\D/g, "");
-                  },
-                })}
-              />
-              <FormError error={errors.mobile?.message} />
-              <p className="mt-1 text-[11px] text-slate-500">
-                Primary mobile numbers must be unique for each patient.
-              </p>
             </FormField>
             <FormField label="Branch" required>
               <SearchableSelect
@@ -366,16 +405,6 @@ export function PatientForm({
               />
               <FormError error={errors.gender?.message} />
             </FormField>
-            <FormField label="Date of Birth">
-              <Input
-                type="date"
-                max={today}
-                name={dateOfBirthRegistration.name}
-                value={dateOfBirth || ""}
-                onChange={dateOfBirthRegistration.onChange}
-                onBlur={dateOfBirthRegistration.onBlur}
-              />
-            </FormField>
             <FormField label="Age Years" required>
               <Input
                 type="number"
@@ -404,6 +433,41 @@ export function PatientForm({
               />
               <FormError error={errors.ageYears?.message} />
             </FormField>
+            <FormField label="Date of Birth">
+              <Input
+                type="date"
+                max={today}
+                name={dateOfBirthRegistration.name}
+                value={dateOfBirth || ""}
+                onChange={dateOfBirthRegistration.onChange}
+                onBlur={dateOfBirthRegistration.onBlur}
+              />
+            </FormField>
+            <FormField label="Blood Group">
+              <SearchableSelect
+                value={watch("bloodGroup")}
+                searchable={false}
+                options={bloodGroups.map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                onChange={(value) => setValue("bloodGroup", value)}
+              />
+            </FormField>
+            <FormField label="Mobile Number">
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="Enter patient mobile number"
+                {...register("mobile", {
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\D/g, "");
+                  },
+                })}
+              />
+              <FormError error={errors.mobile?.message} />
+            </FormField>
             <FormField label="Secondary Mobile Number">
               <Input
                 type="text"
@@ -417,25 +481,30 @@ export function PatientForm({
                 placeholder="Enter secondary patient mobile number"
               />
               <FormError error={errors.alternateMobile?.message} />
-              <p className="mt-1 text-[11px] text-slate-500">
-                Use this only as this patient&apos;s secondary contact number.
-                Family benefit sharing is configured in Family Relationships.
-              </p>
+            </FormField>
+            <FormField label="Guardian Name">
+              <Input
+                {...register("guardianName")}
+                placeholder="Enter guardian or caregiver name"
+              />
+            </FormField>
+            <FormField label="Guardian Mobile Number">
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={10}
+                {...register("guardianMobile", {
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\D/g, "");
+                  },
+                })}
+                placeholder="Enter guardian mobile number"
+              />
+              <FormError error={errors.guardianMobile?.message} />
             </FormField>
             <FormField label="Email">
               <Input {...register("email")} placeholder="Enter patient email" />
               <FormError error={errors.email?.message} />
-            </FormField>
-            <FormField label="Blood Group">
-              <SearchableSelect
-                value={watch("bloodGroup")}
-                searchable={false}
-                options={bloodGroups.map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-                onChange={(value) => setValue("bloodGroup", value)}
-              />
             </FormField>
             {Boolean(patient) && (
               <FormField label="Status">
@@ -459,16 +528,13 @@ export function PatientForm({
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <div>
             <h4 className="text-sm font-black text-slate-900">
               WhatsApp Preference
             </h4>
-            <p className="mt-1 text-xs font-semibold text-slate-500">
-              Controls patient consent and language for all WhatsApp messages.
-            </p>
           </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <FormField label="WhatsApp preference">
               <SearchableSelect
                 value={whatsappConsentStatus}
@@ -487,9 +553,6 @@ export function PatientForm({
                   }
                 }}
               />
-              <p className="mt-1 text-[11px] text-slate-500">
-                An explicit opt-out blocks every patient WhatsApp notification.
-              </p>
             </FormField>
             {whatsappConsentStatus !== "not_recorded" && (
               <FormField label="Preference source (optional)">
@@ -519,23 +582,16 @@ export function PatientForm({
                   })
                 }
               />
-              <p className="mt-1 text-[11px] text-slate-500">
-                English is used unless Tamil is selected for this patient.
-              </p>
             </FormField>
           </div>
         </section>
 
-        <section className="rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+        <section className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
             <div>
               <h4 className="text-sm font-black text-slate-900">
                 Monthly Patient Tracking
               </h4>
-              <p className="mt-1 text-xs font-semibold text-slate-500">
-                Enable only for patients who need recurring medicine refill or
-                lab reminder tracking.
-              </p>
             </div>
             <button
               type="button"
@@ -570,29 +626,67 @@ export function PatientForm({
             </button>
           </div>
           {monthlyTrackingEnabled ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
               <FormField label="Next monthly medicine refill">
                 <Input type="date" {...register("monthlyRefillOn")} />
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Patient Intelligence sends WhatsApp reminders from tenant
-                  rules; once crossed, this date rolls forward monthly.
-                </p>
               </FormField>
               <FormField label="Next monthly lab test">
                 <Input type="date" {...register("monthlyLabOn")} />
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Lab details are picked from the patient&apos;s latest lab order;
-                  staff only sets the next reminder date here.
-                </p>
               </FormField>
             </div>
           ) : (
-            <p className="mt-4 rounded-lg border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-500">
-              Monthly reminders are disabled for this patient. Turn this on only
-              for patients who need recurring refill or lab tracking.
-            </p>
+            null
           )}
         </section>
+
+        {apiSession && (
+          <section className="rounded-lg border border-slate-200 bg-white p-3">
+            <div>
+              <h4 className="text-sm font-black text-slate-900">
+                Family Relationship
+              </h4>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_180px_1fr]">
+              <FormField label="Family Patient">
+                <SearchableSelect
+                  value={familyRelatedPatientId || ""}
+                  onChange={(value) =>
+                    setValue("familyRelatedPatientId" as any, value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                  options={familyPatientOptions}
+                  loading={familyPatientSearchLoading}
+                  onSearchChange={searchFamilyPatients}
+                  placeholder="Select existing patient"
+                  searchPlaceholder="Search by name, ID, or mobile"
+                  emptyText="No matching patient found."
+                />
+              </FormField>
+              <FormField label="Relationship">
+                <SearchableSelect
+                  value={watch("familyRelationship" as any) || "father"}
+                  onChange={(value) =>
+                    setValue("familyRelationship" as any, value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                  options={familyRelationshipOptions}
+                  searchable={false}
+                  placeholder="Select relationship"
+                />
+              </FormField>
+              <FormField label="Notes">
+                <Input
+                  {...register("familyNotes" as any)}
+                  placeholder="Optional note"
+                />
+              </FormField>
+            </div>
+          </section>
+        )}
 
         <div className="flex flex-wrap gap-2">
           <Button disabled={busy} className='save-button'>

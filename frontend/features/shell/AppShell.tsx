@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
 import { SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
@@ -105,6 +105,7 @@ export function AppShell({
     switchTenant,
     liveSummary,
     isInitialLoading,
+    rememberWorkspacePath,
   } = props;
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canAccessPlatformWorkspace = Boolean(
@@ -126,6 +127,7 @@ export function AppShell({
   const canAccessErrorLogs = enabled("error_logs");
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [pendingPage, setPendingPage] = useState("");
   const [clinicOpen, setClinicOpen] = useState(false);
   // Doctors/Scheduling/Items are full standalone modules with their own
@@ -167,6 +169,11 @@ export function AppShell({
       : legacyOPDRoute
         ? "opd"
         : clinicRouteModuleId || routeSegment;
+  const knownRouteSegments = new Set([
+    ...nav.map(([id]: any) => id),
+    "error_logs",
+  ]);
+  const isKnownRouteSegment = knownRouteSegments.has(effectiveRouteSegment);
   const resolvedActivePage =
     effectiveRouteSegment === "error_logs" && canAccessErrorLogs
       ? effectiveRouteSegment
@@ -175,7 +182,8 @@ export function AppShell({
         : canAccessPlatformWorkspace
           ? "superadmin"
           : visibleNav[0]?.[0] || "dashboard";
-  const activePage = pendingPage || resolvedActivePage;
+  const activePage =
+    pendingPage || (isKnownRouteSegment ? effectiveRouteSegment : resolvedActivePage);
   // pendingPage is set the instant a nav click fires and cleared once the
   // pathname actually lands (see the effect below) — that window is exactly
   // "a route change or module switch is in flight", independent of the
@@ -552,7 +560,10 @@ export function AppShell({
           ? "/opd/appointments"
           : "/opd";
       router.replace(legacyDestination);
-    } else if (resolvedActivePage !== effectiveRouteSegment) {
+    } else if (
+      !isKnownRouteSegment &&
+      resolvedActivePage !== effectiveRouteSegment
+    ) {
       router.replace(
         clinicModuleIds.includes(resolvedActivePage)
           ? clinicModulePath(resolvedActivePage)
@@ -565,12 +576,19 @@ export function AppShell({
     resolvedActivePage,
     routeSegment,
     effectiveRouteSegment,
+    isKnownRouteSegment,
     router,
   ]);
 
   useEffect(() => {
     setPendingPage("");
   }, [pathname]);
+
+  useEffect(() => {
+    if (!rememberWorkspacePath || !pathname || pathname === "/login") return;
+    const query = searchParams.toString();
+    rememberWorkspacePath(query ? `${pathname}?${query}` : pathname);
+  }, [pathname, rememberWorkspacePath, searchParams]);
 
   // Direct/bookmarked navigation into Clinic (or into Doctors/Scheduling/
   // Items, now nested under it) should land with the dropdown already

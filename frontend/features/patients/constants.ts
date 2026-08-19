@@ -54,3 +54,17 @@ export const language_options = [
   { value: "en", label: "English (default)" },
   { value: "ta", label: "Tamil" },
 ];
+
+export const familyRelationshipOptions = [
+  { value: "father", label: "Father" },
+  { value: "mother", label: "Mother" },
+  { value: "son", label: "Son" },
+  { value: "daughter", label: "Daughter" },
+  { value: "spouse", label: "Spouse" },
+  { value: "brother", label: "Brother" },
+  { value: "sister", label: "Sister" },
+  { value: "grandfather", label: "Grandfather" },
+  { value: "grandmother", label: "Grandmother" },
+  { value: "guardian", label: "Guardian" },
+  { value: "other_family", label: "Other Family" },
+];

@@ -383,6 +383,7 @@ export function Patient({
         title="Create Patient"
         branches={branches}
         defaultBranchId={branchId || apiSession?.user?.branch_id || ""}
+        apiSession={scopedSession}
         busy={busy}
         error={message}
         onSubmit={createPatient}
@@ -404,6 +405,8 @@ export function Patient({
         patient={selected}
         branches={branches}
         defaultBranchId={branchId || apiSession?.user?.branch_id || ""}
+        apiSession={scopedSession}
+        familyRelationships={familyRelationships}
         busy={busy}
         error={message}
         onSubmit={updatePatient}

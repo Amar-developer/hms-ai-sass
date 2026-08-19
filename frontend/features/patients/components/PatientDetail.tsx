@@ -31,7 +31,7 @@ import { Info } from "@/app/components/common/Info";
 import { Empty } from "@/app/components/common/Empty";
 import { DetailSection } from "./DetailSection";
 import { AlertCard } from "./AlertCard";
-import { hiddenScrollbar } from "../constants";
+import { familyRelationshipOptions, hiddenScrollbar } from "../constants";
 import { money } from "@/utils/helper";
 import {
   canCopyDatabaseIds,
@@ -52,20 +52,6 @@ const MOCK_VITALS: VitalReading[] = [
   { date: "2026-06-01", heightCm: 168, weightKg: 77 },
   { date: "2026-07-01", heightCm: 168, weightKg: 75.5 },
   { date: "2026-08-01", heightCm: 168, weightKg: 74 },
-];
-
-const familyRelationshipOptions = [
-  { value: "father", label: "Father" },
-  { value: "mother", label: "Mother" },
-  { value: "son", label: "Son" },
-  { value: "daughter", label: "Daughter" },
-  { value: "spouse", label: "Spouse" },
-  { value: "brother", label: "Brother" },
-  { value: "sister", label: "Sister" },
-  { value: "grandfather", label: "Grandfather" },
-  { value: "grandmother", label: "Grandmother" },
-  { value: "guardian", label: "Guardian" },
-  { value: "other_family", label: "Other Family" },
 ];
 
 export function PatientDetail({

@@ -10,8 +10,21 @@ export default function RootRedirect() {
 
   useEffect(() => {
     if (initializing) return;
-    router.replace(authenticated ? `/${shellProps.active || "dashboard"}` : "/login");
-  }, [authenticated, initializing, shellProps.active, router]);
+    const restoredPath =
+      shellProps.lastPath &&
+      shellProps.lastPath.startsWith("/") &&
+      !shellProps.lastPath.startsWith("//") &&
+      !shellProps.lastPath.startsWith("/login")
+        ? shellProps.lastPath
+        : `/${shellProps.active || "dashboard"}`;
+    router.replace(authenticated ? restoredPath : "/login");
+  }, [
+    authenticated,
+    initializing,
+    router,
+    shellProps.active,
+    shellProps.lastPath,
+  ]);
 
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-white">

@@ -5,6 +5,8 @@ import { patientSchema } from "./patient.schema";
 const validPatient = {
   fullName: "Family Member",
   mobile: "9876543210",
+  guardianName: "",
+  guardianMobile: "",
   branchId: "branch_1",
   gender: "unknown",
   dateOfBirth: "",
@@ -29,6 +31,36 @@ describe("patientSchema mobile validation", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("allows a patient without their own mobile to use guardian mobile", () => {
+    const result = patientSchema.safeParse({
+      ...validPatient,
+      mobile: "",
+      alternateMobile: "",
+      guardianName: "Parent Patient",
+      guardianMobile: "9876543210",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("requires primary, secondary, or guardian mobile", () => {
+    const result = patientSchema.safeParse({
+      ...validPatient,
+      mobile: "",
+      alternateMobile: "",
+      guardianMobile: "",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toContainEqual(
+      expect.objectContaining({
+        path: ["mobile"],
+        message:
+          "Primary, secondary, or guardian mobile number is required",
+      }),
+    );
   });
 
   it("rejects the same number as primary and alternate", () => {

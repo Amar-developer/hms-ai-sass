@@ -69,10 +69,20 @@ class PatientService:
         tenant_id: str,
         mobile: str | None,
         alternate_mobile: str | None,
+        guardian_mobile: str | None,
         exclude_patient_id: str | None = None,
     ) -> None:
         normalized_mobile = normalize_mobile(mobile)
         normalized_alternate = normalize_mobile(alternate_mobile)
+        normalized_guardian = normalize_mobile(guardian_mobile)
+        if not any([normalized_mobile, normalized_alternate, normalized_guardian]):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "At least one contact number is required: primary mobile, "
+                    "secondary mobile, or guardian mobile."
+                ),
+            )
         if normalized_mobile and normalized_mobile == normalized_alternate:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -123,6 +133,7 @@ class PatientService:
             tenant_id=tenant_id,
             mobile=payload.mobile,
             alternate_mobile=payload.alternate_mobile,
+            guardian_mobile=payload.guardian_mobile,
         )
 
         duplicates = PatientDuplicateService(self.session).candidates(
@@ -352,6 +363,7 @@ class PatientService:
             tenant_id=tenant_id,
             mobile=updates.get("mobile", patient.mobile),
             alternate_mobile=updates.get("alternate_mobile", patient.alternate_mobile),
+            guardian_mobile=updates.get("guardian_mobile", patient.guardian_mobile),
             exclude_patient_id=patient.id,
         )
         before = {key: getattr(patient, key) for key in updates}

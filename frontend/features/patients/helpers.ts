@@ -184,6 +184,8 @@ export type PatientFormPayload = {
   fullName: string;
   mobile: string;
   alternateMobile: string;
+  guardianName: string;
+  guardianMobile: string;
   email: string;
   gender: string;
   dateOfBirth: string;
@@ -204,6 +206,8 @@ export function patientFormPayload(fd: FormData): PatientFormPayload {
     fullName: formValue(fd, "fullName"),
     mobile: formValue(fd, "mobile"),
     alternateMobile: formValue(fd, "alternateMobile"),
+    guardianName: formValue(fd, "guardianName"),
+    guardianMobile: formValue(fd, "guardianMobile"),
     email: formValue(fd, "email"),
     gender: formValue(fd, "gender") || "unknown",
     dateOfBirth: formValue(fd, "dateOfBirth"),
