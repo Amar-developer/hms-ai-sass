@@ -69,6 +69,8 @@ export function usePatientActions({
         full_name: data.fullName,
         mobile: data.mobile || null,
         alternate_mobile: data.alternateMobile || null,
+        guardian_name: data.guardianName || null,
+        guardian_mobile: data.guardianMobile || null,
         email: data.email || null,
         gender: data.gender || "unknown",
         date_of_birth: data.dateOfBirth || null,
@@ -80,13 +82,25 @@ export function usePatientActions({
         whatsapp_consent_source: data.whatsappConsentSource || null,
         whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
       });
+      if (data.familyRelatedPatientId) {
+        await patientsApi.createFamilyRelationship(scopedSession, created.id, {
+          related_patient_id: data.familyRelatedPatientId,
+          relationship: data.familyRelationship || "family",
+          notes: data.familyNotes || null,
+        });
+      }
       setRows((previous: any[]) => [
         toRow(created),
         ...previous.filter((row: any) => row.id !== created.id),
       ]);
       syncSharedPatient(created);
       await refreshPatients();
-      setPendingMessage(created.id, `Patient created: ${created.full_name}`);
+      setPendingMessage(
+        created.id,
+        data.familyRelatedPatientId
+          ? `Patient created and family relationship linked: ${created.full_name}`
+          : `Patient created: ${created.full_name}`,
+      );
       openDetail(created.id);
     } catch (err: any) {
       setMessage(err.message || "Could not create patient.");
@@ -108,6 +122,8 @@ export function usePatientActions({
           full_name: data.fullName,
           mobile: data.mobile || null,
           alternate_mobile: data.alternateMobile || null,
+          guardian_name: data.guardianName || null,
+          guardian_mobile: data.guardianMobile || null,
           email: data.email || null,
           gender: data.gender || "unknown",
           date_of_birth: data.dateOfBirth || null,
@@ -121,6 +137,13 @@ export function usePatientActions({
           whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
         },
       );
+      if (data.familyRelatedPatientId) {
+        await patientsApi.createFamilyRelationship(scopedSession, selectedId, {
+          related_patient_id: data.familyRelatedPatientId,
+          relationship: data.familyRelationship || "family",
+          notes: data.familyNotes || null,
+        });
+      }
       setRows((previous: any[]) => [
         toRow(updated),
         ...previous.filter((row: any) => row.id !== updated.id),
@@ -128,7 +151,12 @@ export function usePatientActions({
       syncSharedPatient(updated);
       setSelectedDetail(updated);
       await refreshPatients();
-      setPendingMessage(updated.id, "Patient updated.");
+      setPendingMessage(
+        updated.id,
+        data.familyRelatedPatientId
+          ? "Patient updated and family relationship linked."
+          : "Patient updated.",
+      );
       openDetail(updated.id);
     } catch (err: any) {
       setMessage(err.message || "Could not update patient.");

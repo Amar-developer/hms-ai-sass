@@ -24,6 +24,17 @@ export const patientSchema = z
       .optional()
       .or(z.literal("")),
 
+    guardianName: z.string().optional(),
+
+    guardianMobile: z
+      .string()
+      .regex(
+        /^[6-9]\d{9}$/,
+        "Guardian mobile number must be exactly 10 digits and start with 6, 7, 8 or 9",
+      )
+      .optional()
+      .or(z.literal("")),
+
     branchId: z.string().min(1, "Please select a branch"),
 
     gender: z
@@ -81,17 +92,24 @@ export const patientSchema = z
     monthlyLabTestName: z.string().optional(),
 
     monthlyLabNotes: z.string().optional(),
+
+    familyRelatedPatientId: z.string().optional(),
+
+    familyRelationship: z.string().optional(),
+
+    familyNotes: z.string().optional(),
   })
   .superRefine((values, context) => {
     const mobile = values.mobile?.trim();
     const alternateMobile = values.alternateMobile?.trim();
+    const guardianMobile = values.guardianMobile?.trim();
 
-    // At least one contact number is required
-    if (!mobile && !alternateMobile) {
+    if (!mobile && !alternateMobile && !guardianMobile) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["mobile"],
-        message: "Primary or secondary mobile number is required",
+        message:
+          "Primary, secondary, or guardian mobile number is required",
       });
     }
 

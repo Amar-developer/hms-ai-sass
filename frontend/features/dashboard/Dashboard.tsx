@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   CalendarDays,
@@ -39,6 +40,8 @@ export function Dashboard({
   branchId,
   clinic,
 }: any) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const intelligencePermissions = apiSession?.user?.permissions || [];
   const canReadIntelligence =
     intelligencePermissions.includes("*") ||
@@ -52,9 +55,23 @@ export function Dashboard({
   const intelligenceEnabled = Boolean(
     clinic?.modules?.includes("patient_intelligence") && canReadIntelligence,
   );
-  const [dashboardTab, setDashboardTab] = useState<"overview" | "intelligence">(
-    "overview",
-  );
+  const requestedDashboardTab = searchParams.get("tab");
+  const dashboardTab =
+    requestedDashboardTab === "intelligence" && intelligenceEnabled
+      ? "intelligence"
+      : "overview";
+  function setDashboardTab(tab: "overview" | "intelligence") {
+    router.push(tab === "intelligence" ? "/dashboard?tab=intelligence" : "/dashboard");
+  }
+  useEffect(() => {
+    if (requestedDashboardTab && requestedDashboardTab !== dashboardTab) {
+      router.replace(
+        dashboardTab === "intelligence"
+          ? "/dashboard?tab=intelligence"
+          : "/dashboard",
+      );
+    }
+  }, [dashboardTab, requestedDashboardTab, router]);
   const { livePractitioners } = usePractitionersQuery(apiSession);
   const now = new Date();
   const today = [

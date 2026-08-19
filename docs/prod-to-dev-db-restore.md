@@ -67,14 +67,17 @@ docker exec -t <postgres_container> psql -U <db_user> -d postgres -c "DROP DATAB
 docker exec -t <postgres_container> psql -U <db_user> -d postgres -c "CREATE DATABASE <db_name>;"
 ```
 
-Restore:
+Restore into the empty database:
 ```bash
 docker exec -t <postgres_container> pg_restore -U <db_user> -d <db_name> --no-owner --no-privileges /tmp/hms_prod_dump.sql
 ```
 
-to copy the sql file
+For a local restore from `/home/teanso/hms_local_dump_02.sql`, copy the dump
+into the container first, then restore the container path. Do not pass the host
+path to `pg_restore` inside `docker exec`:
 ```bash
-docker cp /tmp/hms_dev_dump_02.sql medizinhub-hms-local-postgres:/tmp/<sql_file_name>
+docker cp /home/teanso/hms_local_dump_02.sql medizinhub-hms-local-postgres:/tmp/hms_local_dump_02.sql
+docker exec -t medizinhub-hms-local-postgres pg_restore -U medizinhub -d medizinhub_hms --no-owner --no-privileges /tmp/hms_local_dump_02.sql
 ```
 
 Rebuild planner statistics — do not skip this:
@@ -123,3 +126,22 @@ docker logs <backend_container> --tail 50
 
 - This dump contains real patient and billing data (PHI). If dev access is less locked down than prod, consider scrubbing patient names/phone/email/DOB after restore so dev doesn't hold raw PHI longer than necessary.
 - Confirm dev's GitHub Actions / CI doesn't auto-reseed or migrate over this restored data unexpectedly on next deploy.
+
+
+sudo docker stop medizinhub-hms-local-backend medizinhub-hms-local-report-worker
+
+sudo docker cp /home/teanso/hms_local_dump_02.sql \
+  medizinhub-hms-local-postgres:/tmp/hms_local_dump_02.sql
+
+sudo docker exec -t medizinhub-hms-local-postgres \
+  psql -U medizinhub -d postgres -c "DROP DATABASE IF EXISTS medizinhub_hms;"
+
+sudo docker exec -t medizinhub-hms-local-postgres \
+  psql -U medizinhub -d postgres -c "CREATE DATABASE medizinhub_hms;"
+
+sudo docker exec -t medizinhub-hms-local-postgres \
+  pg_restore -U medizinhub -d medizinhub_hms --no-owner --no-privileges \
+  /tmp/hms_local_dump_02.sql
+
+sudo docker exec -t medizinhub-hms-local-postgres \
+  psql -U medizinhub -d medizinhub_hms -c "ANALYZE;"

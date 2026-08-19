@@ -66,6 +66,7 @@ type WorkspaceState = {
   active?: string;
   branchId?: string;
   departmentId?: string;
+  lastPath?: string;
 };
 
 function workspaceKey(session: ApiSession) {
@@ -127,6 +128,13 @@ export function useAppController() {
     activeRef.current = value;
     setActive(value);
     if (apiSession) saveWorkspace(apiSession, { active: value });
+  }
+
+  function rememberWorkspacePath(path: string) {
+    if (!apiSession) return;
+    if (!path || !path.startsWith("/") || path.startsWith("//")) return;
+    if (path.startsWith("/login")) return;
+    saveWorkspace(apiSession, { lastPath: path });
   }
 
   function updateDepartment(value: string) {
@@ -1136,6 +1144,8 @@ export function useAppController() {
     },
     shellProps: {
       active,
+      lastPath: apiSession ? readWorkspace(apiSession).lastPath : "",
+      rememberWorkspacePath,
       setActive: updateActive,
       nav,
       enabled,

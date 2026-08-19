@@ -120,6 +120,56 @@ def test_primary_mobile_is_unique_but_can_be_reused_as_alternate(
     assert shared_alternate.json()["alternate_mobile"] == first["mobile"]
 
 
+def test_guardian_mobile_can_be_contact_path_without_blocking_later_primary(
+    client: TestClient,
+):
+    tenant = create_tenant(client)
+    child = create_patient(
+        client,
+        tenant["id"],
+        full_name="Child Without Phone",
+        mobile=None,
+        alternate_mobile=None,
+        guardian_name="Parent Patient",
+        guardian_mobile="9000000044",
+    )
+
+    father = create_patient(
+        client,
+        tenant["id"],
+        full_name="Parent Patient",
+        mobile=child["guardian_mobile"],
+        guardian_name=None,
+        guardian_mobile=None,
+    )
+
+    assert child["mobile"] is None
+    assert child["alternate_mobile"] is None
+    assert child["guardian_mobile"] == "9000000044"
+    assert father["mobile"] == "9000000044"
+
+
+def test_patient_requires_primary_secondary_or_guardian_mobile(client: TestClient):
+    tenant = create_tenant(client)
+
+    response = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "No Contact Patient",
+            "mobile": None,
+            "alternate_mobile": None,
+            "guardian_mobile": None,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "At least one contact number is required: primary mobile, secondary "
+        "mobile, or guardian mobile."
+    )
+
+
 def test_patient_cannot_use_same_primary_and_alternate_number(client: TestClient):
     tenant = create_tenant(client)
 
