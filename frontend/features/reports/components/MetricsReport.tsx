@@ -314,9 +314,9 @@ function ClosedMonths({
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/60 text-left text-[11px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-100 bg-slate-50/60 text-left text-sm uppercase tracking-wide text-slate-500">
                 <th className="px-4 py-2 font-bold">Month</th>
                 <th className="px-4 py-2 text-right font-bold">Invoices</th>
                 <th className="px-4 py-2 text-right font-bold">Gross</th>

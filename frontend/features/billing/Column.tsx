@@ -89,7 +89,7 @@ export function getInvoiceColumns({
       header: "S.No",
       width: "50px",
       className: "text-center",
-      cellClassName: "text-center",
+      cellClassName: "text-center py-4",
       sortable: true,
       render: (_, index: number) => index + 1,
     },
@@ -258,9 +258,13 @@ export function getConsultationPendingColumns({
     {
       key: "doctor",
       header: "Doctor",
+      width: "100px",
       cellClassName: "text-slate-600",
-      render: (a: any) =>
-        a.doctor && a.doctor !== "Unassigned" ? a.doctor : "-",
+      render: (a: any) => (
+        <div className="max-w-[100px]">
+          <p>{a.doctor && a.doctor !== "Unassigned" ? a.doctor : "-"}</p>
+        </div>
+      ),
     },
     {
       key: "date",
@@ -340,6 +344,7 @@ export function getInvoiceItemColumns({
       key: "quantity",
       header: "Quantity",
       className: "text-right",
+      width: "100px",
       cellClassName: "text-right font-semibold tabular-nums text-slate-700",
       render: (item: any) => item.quantity,
     },
@@ -349,7 +354,7 @@ export function getInvoiceItemColumns({
     columns.push({
       key: "vendor",
       header: vendorLabel,
-      width: "150px",
+      width: "120px",
       render: (item: any) => {
         const itemSupplierOptions = supplierOptions[item.id] || [];
         const vendorName = item.vendor_name || item.supplier_id || "";
@@ -359,9 +364,14 @@ export function getInvoiceItemColumns({
           itemSupplierOptions.length > 0;
         if (!canPickSupplier)
           return (
-            <span className="font-medium text-slate-800">
-              {vendorName || "-"}
-            </span>
+            <div className="max-w-[110px]">
+              <p
+                className="truncate font-medium text-slate-800"
+                title={vendorName || "-"}
+              >
+                {vendorName || "-"}
+              </p>
+            </div>
           );
         return (
           <SearchableSelect
@@ -386,8 +396,8 @@ export function getInvoiceItemColumns({
     });
     columns.push({
       key: "vendor_amount",
-      header: vendorPriceLabel,
-      className: "text-right",
+      header: vendorPriceLabel == "Doctor Settlement" ? "Settlement" : "Price",
+      width: "100px",
       cellClassName: "text-right tabular-nums text-slate-700",
       render: (item: any) => {
         const itemSupplierOptions = supplierOptions[item.id] || [];
@@ -409,6 +419,7 @@ export function getInvoiceItemColumns({
     columns.push({
       key: "mrp",
       header: "MRP",
+      width: "100px",
       className: "text-right",
       cellClassName: "text-right tabular-nums text-slate-700",
       render: (item: any) => {
@@ -421,7 +432,8 @@ export function getInvoiceItemColumns({
   columns.push(
     {
       key: "rate",
-      header: "Rate (INR)",
+      header: "Rate (₹)",
+      width: "100px",
       className: "text-right",
       cellClassName: "text-right font-bold tabular-nums text-slate-800",
       render: (item: any) =>
@@ -430,6 +442,7 @@ export function getInvoiceItemColumns({
     {
       key: "discount_percent",
       header: "Discount %",
+      width: "130px",
       className: "text-right",
       cellClassName: "text-right tabular-nums text-slate-700",
       render: (item: any) => {
@@ -443,7 +456,8 @@ export function getInvoiceItemColumns({
     },
     {
       key: "discount_amount",
-      header: "Discount amount",
+      header: "Discount ₹",
+      width: "120px",
       className: "text-right",
       cellClassName: "text-right font-bold tabular-nums text-emerald-700",
       render: (item: any) => {
@@ -455,7 +469,8 @@ export function getInvoiceItemColumns({
     },
     {
       key: "payable",
-      header: "Payable (INR)",
+      header: "Payable (₹)",
+      width: "120px",
       className: "text-right",
       cellClassName: "text-right font-black tabular-nums text-slate-900",
       render: (item: any) =>
@@ -632,7 +647,7 @@ export function getHospitalLedgerColumns({
     {
       key: "created_at",
       header: "Date & Time",
-      width: "150px",
+      width: "120px",
       cellClassName: "align-top font-semibold text-slate-700",
       render: (entry: any) => {
         const [date, time] = displayDateTime(entry.created_at).split(", ");
@@ -654,9 +669,14 @@ export function getHospitalLedgerColumns({
       width: "145px",
       cellClassName: "align-top",
       render: (entry: any) => (
-        <span className="block break-words font-bold leading-5 text-slate-950">
-          {humanizeOptionLabel(entry.entry_type)}
-        </span>
+        <div className="max-w-[140px]">
+          <p
+            className="truncate block break-words font-bold leading-5 text-slate-950"
+            title={humanizeOptionLabel(entry.entry_type)}
+          >
+            {humanizeOptionLabel(entry.entry_type)}
+          </p>
+        </div>
       ),
     },
     {
@@ -679,9 +699,11 @@ export function getHospitalLedgerColumns({
       width: "180px",
       cellClassName: "align-top font-semibold text-slate-700",
       render: (entry: any) => (
-        <span className="block break-words leading-5">
-          {hospitalLedgerLine(entry).debitAccount}
-        </span>
+        <div className="max-w-[170px]">
+          <p className="block truncate break-words leading-5">
+            {hospitalLedgerLine(entry).debitAccount}
+          </p>
+        </div>
       ),
     },
     {
@@ -705,7 +727,7 @@ export function getHospitalLedgerColumns({
     },
     {
       key: "credit_account",
-      header: "Credit Account",
+      header: "Credit ₹",
       width: "180px",
       cellClassName: "align-top font-semibold text-slate-700",
       render: (entry: any) => (
@@ -735,7 +757,7 @@ export function getHospitalLedgerColumns({
     },
     {
       key: "bill_amount",
-      header: "Bill Amount",
+      header: "Bill ₹",
       width: "115px",
       className: "text-right",
       cellClassName:
@@ -778,7 +800,7 @@ export function getHospitalLedgerColumns({
       render: (entry: any) => (
         <Badge
           tone={entry.status_after === "cancelled" ? "amber" : "slate"}
-          className="normal-badge"
+          className="normal-label"
         >
           {humanizeOptionLabel(entry.status_after)}
         </Badge>

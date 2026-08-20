@@ -85,26 +85,25 @@ export function TokenQueue({
   );
   const selectedDateAppointments = scopedAppointments.filter(
     (appointment: any) => {
-        if (
-          dateKey(
-            appointment.appointmentDate || appointment.appointment_date,
-          ) !== selectedDate
-        )
-          return false;
-        if (doctorScope?.practitionerId) {
-          return (
-            appointment.doctorId === doctorScope.practitionerId ||
-            appointment.practitioner_id === doctorScope.practitionerId
-          );
-        }
-        if (
-          departmentId &&
-          appointment.departmentId !== departmentId &&
-          appointment.department_id !== departmentId
-        )
-          return false;
-        return true;
-      },
+      if (
+        dateKey(appointment.appointmentDate || appointment.appointment_date) !==
+        selectedDate
+      )
+        return false;
+      if (doctorScope?.practitionerId) {
+        return (
+          appointment.doctorId === doctorScope.practitionerId ||
+          appointment.practitioner_id === doctorScope.practitionerId
+        );
+      }
+      if (
+        departmentId &&
+        appointment.departmentId !== departmentId &&
+        appointment.department_id !== departmentId
+      )
+        return false;
+      return true;
+    },
   );
   const queue = sortByQueuePosition(
     sortQueue(selectedDateAppointments.filter(isActiveQueueAppointment)),
@@ -118,7 +117,10 @@ export function TokenQueue({
       appointment.consultation_status,
     ].some((value) =>
       ["cancelled", "canceled", "no_show"].includes(
-        String(value || "").trim().toLowerCase().replaceAll(" ", "_"),
+        String(value || "")
+          .trim()
+          .toLowerCase()
+          .replaceAll(" ", "_"),
       ),
     );
   const dayRows = selectedDateAppointments.filter(
@@ -294,39 +296,41 @@ export function TokenQueue({
             width="w-24"
             portal
             actions={[
-            {
-              label: "Patient",
-              onClick: () => openPatient(appointment),
-            },
-            {
-              label: "Call",
-              disabled:
-                busyId === appointment.id ||
-                isStatus(appointment, "in_consultation"),
-              onClick: () => transition(appointment, "call"),
-            },
+              {
+                label: "Patient",
+                onClick: () => openPatient(appointment),
+              },
+              {
+                label: "Call",
+                disabled:
+                  busyId === appointment.id ||
+                  isStatus(appointment, "in_consultation"),
+                onClick: () => transition(appointment, "call"),
+              },
 
-            {
-              label: "Skip",
-              disabled:
-                busyId === appointment.id || isStatus(appointment, "skipped"),
-              onClick: () => transition(appointment, "skip"),
-            },
+              {
+                label: "Skip",
+                disabled:
+                  busyId === appointment.id || isStatus(appointment, "skipped"),
+                onClick: () => transition(appointment, "skip"),
+              },
 
-            {
-              label: "Requeue",
-              disabled:
-                busyId === appointment.id || isStatus(appointment, "requeued"),
-              onClick: () => transition(appointment, "requeue"),
-            },
+              {
+                label: "Requeue",
+                disabled:
+                  busyId === appointment.id ||
+                  isStatus(appointment, "requeued"),
+                onClick: () => transition(appointment, "requeue"),
+              },
 
-            {
-              label: "Cancel",
-              danger: true,
-              disabled:
-                busyId === appointment.id || isStatus(appointment, "cancelled"),
-              onClick: () => transition(appointment, "cancel"),
-            },
+              {
+                label: "Cancel",
+                danger: true,
+                disabled:
+                  busyId === appointment.id ||
+                  isStatus(appointment, "cancelled"),
+                onClick: () => transition(appointment, "cancel"),
+              },
             ]}
           />
         </div>
@@ -335,21 +339,23 @@ export function TokenQueue({
   ];
 
   return (
-    <Card className="p-4">
-      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 xl:flex-row xl:items-end">
+    <Card className="">
+      <div className="flex flex-col justify-between gap-4 border p-2 rounded-lg border-slate-200 pb-4 xl:flex-row xl:items-end">
         <div className="flex items-center gap-2">
-          <div>
-            <h3 className="card-title font-bold">
-              Patient Queue & Token Priority
-            </h3>
+          <div className="">
+            <div className="card-title font-bold p-1 flex  justify-between">
+              Patient Queue & Token{" "}
+              <div className="flex justify-center  items-center">
+                {apiSession ? (
+                  <RefreshButton onRefresh={() => refetch()} />
+                ) : null}
+              </div>
+            </div>
             <p className="card-desc text-xs text-slate-500">
               {apiSession
                 ? "Reception can manually call, skip, requeue, or close remaining tokens at end of day."
                 : "Emergency tokens appear first. Skipped patients can be requeued."}
             </p>
-          </div>
-          <div className="flex justify-center  items-center">
-            {apiSession ? <RefreshButton onRefresh={() => refetch()} /> : null}
           </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[160px_180px_160px_auto] xl:items-end">
@@ -404,31 +410,35 @@ export function TokenQueue({
           ["Today", dayRows.length, CalendarDays, "bg-blue-50 text-blue-700"],
           ["Open", queue.length, ClipboardList, "bg-violet-50 text-violet-700"],
           ["Waiting", waitingCount, Clock3, "bg-amber-50 text-amber-700"],
-          ["Completed", completedCount, CheckCircle2, "bg-emerald-50 text-emerald-700"],
+          [
+            "Completed",
+            completedCount,
+            CheckCircle2,
+            "bg-emerald-50 text-emerald-700",
+          ],
         ].map(([label, value, Icon, tone]: any) => (
-          <div key={label} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
-            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${tone}`}>
+          <div
+            key={label}
+            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4"
+          >
+            <span
+              className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${tone}`}
+            >
               <Icon className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p>
-              <p className="mt-0.5 text-2xl font-black leading-none text-slate-950">{value}</p>
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                {label}
+              </p>
+              <p className="mt-0.5 text-2xl font-black leading-none text-slate-950">
+                {value}
+              </p>
             </div>
           </div>
         ))}
       </div>
-      <div className="mt-5 flex items-center justify-between gap-3">
-        <div>
-          <h4 className="text-sm font-black text-slate-950">Live Token Board</h4>
-          <p className="mt-0.5 text-[11px] text-slate-500">
-            Select a token to open the consultation workspace.
-          </p>
-        </div>
-        <Badge tone="green" className="rounded-full px-3 py-1.5 text-[10px]">
-          {visibleQueue.length} active
-        </Badge>
-      </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+
+      <div className="mt-0 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
         {displayLoading &&
           Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-[72px] w-full rounded-lg" />
@@ -445,7 +455,9 @@ export function TokenQueue({
                   className="rounded-xl bg-brand p-4 text-left text-brand-fg shadow-sm transition hover:bg-brand-hover"
                 >
                   <p className="flex items-center gap-2 text-lg font-black">
-                    <span className="shrink-0">{item.token_number || item.token}</span>
+                    <span className="shrink-0">
+                      {item.token_number || item.token}
+                    </span>
                     <span className="text-emerald-200">·</span>
                     <span className="min-w-0 truncate text-sm font-semibold text-white">
                       {appointment.patient ||
@@ -475,17 +487,7 @@ export function TokenQueue({
             },
           )}
       </div>
-      <div className="mt-5 flex items-center justify-between gap-3">
-        <div>
-          <h4 className="text-sm font-black text-slate-950">Queue List</h4>
-          <p className="mt-0.5 text-[11px] text-slate-500">
-            Open a visit directly or use more actions to call, skip, requeue, or cancel.
-          </p>
-        </div>
-        <span className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-700">
-          {visibleQueue.length} {visibleQueue.length === 1 ? "token" : "tokens"}
-        </span>
-      </div>
+
       <div className="mt-3">
         <DataTable
           columns={queueColumns}

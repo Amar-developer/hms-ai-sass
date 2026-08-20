@@ -65,6 +65,21 @@ export function getAppointmentColumns({
       ),
     },
     {
+      key: "status",
+      header: "Status",
+      className: "text-center",
+      width: "110px",
+      cellClassName: "text-center",
+      render: (appointment: any) => (
+        <Badge
+          tone={appointmentStatusInfo(appointment).tone}
+          className="normal-label"
+        >
+          {appointmentStatusInfo(appointment).label}
+        </Badge>
+      ),
+    },
+    {
       key: "patient",
       header: "Patient",
       width: "120px",
@@ -87,23 +102,27 @@ export function getAppointmentColumns({
       ),
     },
     {
+      key: "date",
+      header: "Date",
+      width: "180px",
+      render: (appointment: any) => (
+        <span className="text-sm">
+          {appointment.appointmentDate || "-"}
+          {appointment.appointmentTime || appointment.appointment_time
+            ? ` ${formatDisplayTime(
+                appointment.appointmentTime || appointment.appointment_time,
+              )}`
+            : ""}
+        </span>
+      ),
+    },
+    {
       key: "mobile",
       header: "Mobile",
       width: "120px",
       render: (appointment: any) => (
         <span className="text-sm">
           {patientMap.get(appointment.patientId)?.mobile || "-"}
-        </span>
-      ),
-    },
-    {
-      key: "department",
-      header: "Department",
-      width: "160px",
-      render: (appointment: any) => (
-        <span className="text-sm">
-          {departmentOptions.find((d: any) => d.id === appointment.departmentId)
-            ?.name || publicDisplayValue(appointment.departmentId)}
         </span>
       ),
     },
@@ -127,35 +146,17 @@ export function getAppointmentColumns({
       ),
     },
     {
-      key: "date",
-      header: "Date",
-      width: "180px",
+      key: "department",
+      header: "Department",
+      width: "160px",
       render: (appointment: any) => (
         <span className="text-sm">
-          {appointment.appointmentDate || "-"}
-          {appointment.appointmentTime || appointment.appointment_time
-            ? ` ${formatDisplayTime(
-                appointment.appointmentTime || appointment.appointment_time,
-              )}`
-            : ""}
+          {departmentOptions.find((d: any) => d.id === appointment.departmentId)
+            ?.name || publicDisplayValue(appointment.departmentId)}
         </span>
       ),
     },
-    {
-      key: "status",
-      header: "Status",
-      className: "text-center",
-      width: "110px",
-      cellClassName: "text-center",
-      render: (appointment: any) => (
-        <Badge
-          tone={appointmentStatusInfo(appointment).tone}
-          className="normal-label"
-        >
-          {appointmentStatusInfo(appointment).label}
-        </Badge>
-      ),
-    },
+
     {
       key: "actions",
       header: "Actions",

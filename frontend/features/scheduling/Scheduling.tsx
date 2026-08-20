@@ -353,7 +353,7 @@ export function Scheduling({
     onDelete: (row) => setConfirm({ row }),
   });
   return (
-    <Card>
+    <Card className="p-0">
       <BreadcrumbSlot>
         <div className="flex items-center gap-2">
           <AdaptiveResultCount
@@ -386,7 +386,7 @@ export function Scheduling({
           />
         </div>
       </BreadcrumbSlot>
-      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+      <div className="pb-3 rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="card-title font-bold">
             Doctor Scheduling & Availability
@@ -409,13 +409,13 @@ export function Scheduling({
       </div>
 
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-3 overflow-x-auto max-w-[1000px]">
+      <div className="mt-3 overflow-x-auto max-w-[1000px] rounded-lg">
         <DataTable
           columns={columns}
           data={pageRows}
           loading={loading}
           emptyMessage="No schedules available"
-          className=" rounded-2xl border border-slate-200 overflow-auto"
+          className=" rounded-lg border border-slate-200 overflow-auto"
           onRowClick={(row) => open("edit", row.id)}
           sort={sort ?? undefined}
           onSortChange={setSort}

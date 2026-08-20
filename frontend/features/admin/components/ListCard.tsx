@@ -34,10 +34,10 @@ export function ListCard({
   }, [rows.length]);
 
   return (
-    <Card>
+    <Card className="p-0">
       {/* HEADER */}
-      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div>
+      <div className="pb-3  flex flex-col rounded-lg justify-between gap-3 lg:flex-row lg:items-center">
+        <div className="flex flex-col justify-center">
           <h3 className="card-title font-bold">{title}</h3>
           <p className="card-desc text-slate-500">
             Latest created or updated records appear first. Click a row to open
@@ -58,7 +58,7 @@ export function ListCard({
       </div>
 
       {/* TABLE */}
-      <div className="mt-4 overflow-x-auto w-lg rounded-2xl border border-slate-200 ">
+      <div className="mt-4 overflow-x-auto  w-lg rounded-lg border border-slate-200 ">
         <table className="w-max min-w-full">
           <thead className="font-bold uppercase text-slate-500 ">
             <tr className="bg-slate-50">

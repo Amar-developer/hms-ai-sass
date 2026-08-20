@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button, Card } from "@/app/components/common/ui";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { X } from "lucide-react";
 
 interface ConfirmValues {
   reason: string;
@@ -93,9 +94,12 @@ export function ConfirmModal({
     (!requireReason || reason.trim().length > 0) &&
     (!requireAmount || (amountValue !== null && amountValue > 0));
 
+
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 ">
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm p-4">
+         <div className="flex justify-end cursor-pointer font-bold" onClick={onCancel}> <X size={16} /></div>
         <h3 className="text-lg font-bold">{title}</h3>
 
         <p className="mt-3 text-sm text-slate-600">{message}</p>
@@ -110,7 +114,7 @@ export function ConfirmModal({
               rows={3}
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className="mt-1 w-full max-h-[120px] overflow-y-auto rounded-lg border border-slate-200 px-3 py-2 text-sm"
               placeholder={reasonLabel}
             />
           </div>

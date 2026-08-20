@@ -627,7 +627,7 @@ export function Pharmacy({
         </div>
       </BreadcrumbSlot>
       {canCreatePharmacyIssue && (
-        <Card>
+        <Card className="p-0">
           <h3 className="card-title font-bold">
             Create Direct Prescription Order
           </h3>
@@ -749,7 +749,7 @@ export function Pharmacy({
           </form>
         </Card>
       )}
-      <Card>
+      <Card className="p-0 mt-2">
         <div className="flex items-center justify-between gap-2">
           <h3 className="card-title font-bold">Pharmacy Worklist</h3>
         </div>

@@ -658,7 +658,7 @@ export function Billing({
       {(canViewRevenueSummary || canViewSettlementSummary) && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {canViewRevenueSummary && (
-            <Card>
+            <Card className="border p-2">
               <p className="text-xs lg:text-sm text-slate-500">
                 Due Collection
               </p>
@@ -682,7 +682,7 @@ export function Billing({
             </Card>
           )}
           {canViewRevenueSummary && (
-            <Card>
+            <Card className="border p-2">
               <p className="text-xs lg:text-sm text-slate-500">
                 Billing Discounts
               </p>
@@ -698,7 +698,7 @@ export function Billing({
             </Card>
           )}
           {canViewRevenueSummary && (
-            <Card>
+            <Card className="border p-2">
               <p className="text-xs lg:text-sm text-slate-500">Revenue</p>
               <p className="mt-1 text-xl lg:text-2xl font-bold">
                 {money(
@@ -712,7 +712,7 @@ export function Billing({
             </Card>
           )}
           {canViewRevenueSummary && (
-            <Card>
+            <Card className="border p-2">
               <p className="text-xs lg:text-sm text-slate-500">Paid</p>
               <p className="mt-1 text-xl lg:text-2xl font-bold">
                 {money(collectionReport?.net_collected_amount)}
@@ -724,7 +724,7 @@ export function Billing({
             </Card>
           )}
           {canViewSettlementSummary && (
-            <Card>
+            <Card className="border p-2">
               <p className="text-xs lg:text-sm text-slate-500">Settlement</p>
               <p className="mt-1 text-xl font-bold lg:text-2xl">
                 {money(payableSettlement)}
@@ -770,7 +770,7 @@ export function Billing({
         </div>
       )}
 
-      <Card className="mt-3">
+      <Card className="mt-5">
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
           <div>
             <h3 className="card-title font-bold">Invoices & Payments</h3>

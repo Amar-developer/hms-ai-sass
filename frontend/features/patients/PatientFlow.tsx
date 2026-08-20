@@ -73,7 +73,7 @@ export function PatientFlow({
 }: PatientFlowProps) {
   return (
     <div className="grid gap-4">
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center gap-2 px-4 py-3">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-50 text-brand">
             <ClipboardList className="h-4 w-4" />

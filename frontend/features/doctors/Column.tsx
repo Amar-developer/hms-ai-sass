@@ -172,7 +172,7 @@ export function getDoctorColumns({
       width: "120px",
       render: (row: any) => (
         <span className="break-all text-sm">
-          {row.mobile || row.email || "-"}
+          {row.mobile || "-"}
         </span>
       ),
     },

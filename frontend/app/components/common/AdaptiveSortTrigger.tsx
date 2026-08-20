@@ -69,7 +69,7 @@ export function AdaptiveSortTrigger({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-bold transition ${
+        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-[12px] font-bold transition ${
           sort
             ? "border-emerald-200 bg-emerald-50 text-emerald-800"
             : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"

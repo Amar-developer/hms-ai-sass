@@ -107,8 +107,8 @@ export function WorklistDetailModal({
               No items found.
             </p>
           ) : (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <table className="w-full text-left text-sm rounded-lg">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500 rounded-lg">
                 <tr>
                   <th className="w-16 px-4 py-3">#</th>
                   <th className="px-4 py-3">Lab Test / Service</th>

@@ -59,71 +59,6 @@ export function getBookingListColumn({
       ),
     },
     {
-      key: "service_count",
-      header: "Count",
-      width: "120px",
-      render: (booking: any) => (
-        <div>
-          <p className="text-sm ">{booking.services?.length || 0} services</p>
-        </div>
-      ),
-    },
-    {
-      key: "patient",
-      header: "Patient",
-      width: "160px",
-      sortable: true,
-      render: (booking: any) => {
-        const patient: any = patientMap.get(booking.patient_id);
-        return (
-          <div className="max-w-[150px]">
-            <p className="truncate font-semibold" title={capitalizeFirst(booking.patient_name || patientName(patient))}>
-              {capitalizeFirst(booking.patient_name || patientName(patient))}
-            </p>
-            <PatientFlagBadges patient={patient} className="mt-1" />
-          </div>
-        );
-      },
-    },
-    {
-      key: "staff",
-      header: "Staff",
-      width: "160px",
-      render: (booking: any) => (
-        <div className="max-w-[150px] ">
-         <div className="truncate" title={bookingStaffName(booking, staffMap)}>
-           {bookingStaffName(booking, staffMap)}
-          {booking.staff_type && (
-            <p className="text-xs text-slate-500">
-              {humanizeOptionLabel(booking.staff_type)}
-            </p>
-          )}
-         </div>
-        </div>
-      ),
-    },
-    {
-      key: "date_range",
-      header: "Date Range",
-      width: "160px",
-      sortable: true,
-      render: (booking: any) => (
-        <div className="text-sm">
-          {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
-        </div>
-      ),
-    },
-    {
-      key: "recurrence",
-      header: "Recurrence",
-      width: "160px",
-      render: (booking: any) => (
-        <div className="text-sm">
-          {humanizeOptionLabel(booking.recurrence || "daily")}
-        </div>
-      ),
-    },
-    {
       key: "status",
       header: "Status",
       className: "text-center",
@@ -157,6 +92,57 @@ export function getBookingListColumn({
       },
     },
     {
+      key: "patient",
+      header: "Patient",
+      width: "160px",
+      sortable: true,
+      render: (booking: any) => {
+        const patient: any = patientMap.get(booking.patient_id);
+        return (
+          <div className="max-w-[150px]">
+            <p
+              className="truncate font-semibold"
+              title={capitalizeFirst(
+                booking.patient_name || patientName(patient),
+              )}
+            >
+              {capitalizeFirst(booking.patient_name || patientName(patient))}
+            </p>
+            <PatientFlagBadges patient={patient} className="mt-1" />
+          </div>
+        );
+      },
+    },
+    {
+      key: "staff",
+      header: "Staff",
+      width: "160px",
+      render: (booking: any) => (
+        <div className="max-w-[150px] ">
+          <div className="truncate" title={bookingStaffName(booking, staffMap)}>
+            {bookingStaffName(booking, staffMap)}
+            {booking.staff_type && (
+              <p className="text-xs text-slate-500">
+                {humanizeOptionLabel(booking.staff_type)}
+              </p>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "date_range",
+      header: "Date Range",
+      width: "220px",
+      sortable: true,
+      render: (booking: any) => (
+        <div className="text-sm">
+          {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
+        </div>
+      ),
+    },
+
+    {
       key: "total",
       header: "Total",
       width: "120px",
@@ -176,10 +162,6 @@ export function getBookingListColumn({
         <div className="flex justify-center">
           <RowActions
             actions={[
-              {
-                label: "View",
-                onClick: () => onView(booking),
-              },
               ...(canManage
                 ? [
                     {

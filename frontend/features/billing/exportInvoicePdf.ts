@@ -45,7 +45,7 @@ async function buildInvoicePdf(container: HTMLElement) {
         const style = clonedDoc.createElement("style");
         style.textContent = `
           [data-invoice-page] {
-            border-color: #05DA80!important;
+            border-color: #25FF46 !important;
             box-shadow: none !important;
             width: ${A4_WIDTH_MM}mm !important;
             min-height: ${A4_HEIGHT_MM}mm !important;

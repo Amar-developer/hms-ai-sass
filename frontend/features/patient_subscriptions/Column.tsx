@@ -36,6 +36,7 @@ export function getPlanColumns({
     {
       key: "name",
       header: "Plan",
+      width:"250px",
       render: (plan: any) => (
         <button
           type="button"

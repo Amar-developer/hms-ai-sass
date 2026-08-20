@@ -22,14 +22,14 @@ import { Children, isValidElement } from "react";
 
 export function Card({
   children,
-  className = "px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
+  className = "px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm shadow-sm",
 }: {
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div
-      className={`rounded-lg border border-slate-200 bg-white p-5 shadow-sm ${className}`}
+      className={`rounded-lg text-sm bg-white   ${className}`}
     >
       {children}
     </div>
@@ -1102,9 +1102,9 @@ export function RefreshButton({
       disabled={busy}
       title={title}
       aria-label={title}
-      className={`inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className ? className : "h-8"}`}
+      className={`inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-lg  bg-white px-2.5 lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className ? className : "h-8"}`}
     >
-      <RefreshCw className={`h-3.5 w-3.5  ${busy ? "animate-spin" : ""}`} />
+      <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
       {label ? <span>{label}</span> : null}
     </button>
   );

@@ -29,11 +29,11 @@ export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any
     : parsedMedicines;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="relative w-full max-w-3xl">
+      <Card className="relative w-full max-w-3xl p-3">
         {loading && <OverlayLoader />}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 ">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 ">
               <h3 className="text-xl font-bold">Medicine List</h3>
               <CopyIdButton
                 value={issue?.id}
@@ -54,7 +54,7 @@ export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any
           </p>
         )}
         {medicines.length > 0 ? (
-          <div className="mt-5 overflow-auto rounded-2xl border">
+          <div className="mt-5 overflow-auto rounded-lg border">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>

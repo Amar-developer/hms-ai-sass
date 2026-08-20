@@ -44,7 +44,7 @@ export function BookingsList({
     onInvoice,
   });
   return (
-    <Card>
+    <Card className="p-0">
       <div className="flex flex-col gap-3  lg:items-end lg:justify-between">
         <div className=" w-full flex justify-between">
           <div>

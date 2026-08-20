@@ -269,14 +269,14 @@ describe("invoice payment summary", () => {
       />,
     );
 
-    expect(screen.getByText("Payable (INR)")).toBeTruthy();
-    expect(screen.getByText("Rate (INR)")).toBeTruthy();
-    expect(screen.queryByText("Amount (INR)")).toBeNull();
-    const itemsTable = screen.getByText("Rate (INR)").closest("table");
+    expect(screen.getByText("Payable (₹)")).toBeTruthy();
+    expect(screen.getByText("Rate (₹)")).toBeTruthy();
+    expect(screen.queryByText("Amount (₹)")).toBeNull();
+    const itemsTable = screen.getByText("Rate (₹)").closest("table");
     expect(
       within(itemsTable as HTMLElement).getAllByRole("columnheader").at(-1)
         ?.textContent,
-    ).toBe("Payable (INR)");
+    ).toBe("Payable (₹)");
     expect(screen.getAllByText("₹200").length).toBeGreaterThan(0);
     expect(screen.getAllByText("₹190").length).toBeGreaterThan(0);
   });
@@ -336,9 +336,9 @@ describe("invoice payment summary", () => {
       />,
     );
 
-    expect(screen.getByText("Payable (INR)")).toBeTruthy();
-    expect(screen.getByText("Rate (INR)")).toBeTruthy();
-    expect(screen.queryByText("Amount (INR)")).toBeNull();
+    expect(screen.getByText("Payable (₹)")).toBeTruthy();
+    expect(screen.getByText("Rate (₹)")).toBeTruthy();
+    expect(screen.queryByText("Amount (₹)")).toBeNull();
     expect(screen.getAllByText("₹350").length).toBeGreaterThan(0);
     expect(screen.getAllByText("₹700").length).toBeGreaterThan(0);
   });

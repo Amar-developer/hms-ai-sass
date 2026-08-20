@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import { Clock3, ShieldCheck, UserRoundCog } from "lucide-react";
 
-import { Badge, Card, Input,Button } from "@/app/components/common/ui";
+import {
+  Badge,
+  Card,
+  Input,
+  Button,
+  SearchableSelect,
+} from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { displayDateTime } from "@/utils/helper";
 import { PlatformAdmins } from "./PlatformAdmins";
@@ -18,6 +24,19 @@ const permissionLabel = (key: string) =>
     .split(".")
     .map((part) => part.replaceAll("_", " "))
     .join(" / ");
+
+const ACCOUNT_TYPE_OPTIONS = [
+  { value: "platform_admin", label: "Platform Admin" },
+  { value: "support_admin", label: "Support Admin" },
+];
+
+const DURATION_OPTIONS = [
+  { value: "30", label: "30 minutes" },
+  { value: "60", label: "1 hour" },
+  { value: "120", label: "2 hours" },
+  { value: "240", label: "4 hours" },
+  { value: "480", label: "8 hours" },
+];
 
 function PermissionGrid({
   values,
@@ -80,6 +99,9 @@ export function PrivilegedAccess({
   >("platform_admin");
   const [accountPermissions, setAccountPermissions] = useState<string[]>([]);
   const [grantPermissions, setGrantPermissions] = useState<string[]>([]);
+  const [grantUserId, setGrantUserId] = useState("");
+  const [grantTenantId, setGrantTenantId] = useState("");
+  const [grantDurationMinutes, setGrantDurationMinutes] = useState("60");
 
   const supportAccounts = useMemo(
     () =>
@@ -129,16 +151,19 @@ export function PrivilegedAccess({
     const form = event.currentTarget;
     const data = new FormData(form);
     const granted = await createGrantRequest({
-      user_id: data.get("userId"),
-      tenant_id: data.get("tenantId"),
+      user_id: grantUserId,
+      tenant_id: grantTenantId,
       permission_keys: grantPermissions,
-      duration_minutes: Number(data.get("durationMinutes")),
+      duration_minutes: Number(grantDurationMinutes),
       current_password: data.get("currentPassword"),
       reason: data.get("reason"),
     });
     if (granted) {
       form.reset();
       setGrantPermissions([]);
+      setGrantUserId("");
+      setGrantTenantId("");
+      setGrantDurationMinutes("60");
     }
   }
 
@@ -157,20 +182,29 @@ export function PrivilegedAccess({
           <div>
             <h3 className="card-title font-bold">My Support Access</h3>
             <p className="card-desc text-slate-500">
-              Tenant access is read-only, reasoned, audited, and expires automatically.
+              Tenant access is read-only, reasoned, audited, and expires
+              automatically.
             </p>
           </div>
-          <button className="rounded-lg border px-3 py-2 font-bold" onClick={() => void load()}>
+          <button
+            className="rounded-lg border px-3 py-2 font-bold"
+            onClick={() => void load()}
+          >
             Refresh
           </button>
         </div>
         <div className="mt-4 grid gap-3">
           {grants.map((grant) => (
-            <div key={grant.id} className="grid gap-3 rounded-lg border p-4 md:grid-cols-[1fr_auto] md:items-center">
+            <div
+              key={grant.id}
+              className="grid gap-3 rounded-lg border p-4 md:grid-cols-[1fr_auto] md:items-center"
+            >
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <b>{grant.tenant_name || grant.tenant_id}</b>
-                  <Badge tone={grant.status === "active" ? "green" : "slate"}>{grant.status}</Badge>
+                  <Badge tone={grant.status === "active" ? "green" : "slate"}>
+                    {grant.status}
+                  </Badge>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
                   Expires {displayDateTime(grant.expires_at)} · {grant.reason}
@@ -182,13 +216,17 @@ export function PrivilegedAccess({
               <button
                 className="rounded-lg bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
                 disabled={grant.status !== "active"}
-                onClick={() => switchTenant(grant.tenant_id, grant.permission_keys)}
+                onClick={() =>
+                  switchTenant(grant.tenant_id, grant.permission_keys)
+                }
               >
                 Enter tenant
               </button>
             </div>
           ))}
-          {!grants.length && <p className="text-sm text-slate-500">No support access grants.</p>}
+          {!grants.length && (
+            <p className="text-sm text-slate-500">No support access grants.</p>
+          )}
         </div>
       </Card>
     );
@@ -202,7 +240,8 @@ export function PrivilegedAccess({
           <div>
             <h3 className="card-title font-bold">Scoped Platform Access</h3>
             <p className="card-desc text-slate-500">
-              Root Super Admin approval is required to create privileged accounts or issue support grants.
+              Root Super Admin approval is required to create privileged
+              accounts or issue support grants.
             </p>
           </div>
         </div>
@@ -223,33 +262,66 @@ export function PrivilegedAccess({
         <div className="flex items-start gap-3">
           <UserRoundCog className="mt-0.5" size={20} />
           <div>
-            <h3 className="card-title font-bold">Platform And Support Accounts</h3>
+            <h3 className="card-title font-bold">
+              Platform And Support Accounts
+            </h3>
             <p className="card-desc text-slate-500">
-              Platform Admin uses explicit platform permissions. Support Admin receives no tenant access until a temporary grant is issued.
+              Platform Admin uses explicit platform permissions. Support Admin
+              receives no tenant access until a temporary grant is issued.
             </p>
           </div>
         </div>
-        <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={createAccount}>
+        <form
+          className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+          onSubmit={createAccount}
+        >
           <FormField label="Account type">
-            <select className="form-select" value={accountType} onChange={(event) => setAccountType(event.target.value as typeof accountType)}>
-              <option value="platform_admin">Platform Admin</option>
-              <option value="support_admin">Support Admin</option>
-            </select>
+            <SearchableSelect
+              value={accountType}
+              onChange={(value) => setAccountType(value as typeof accountType)}
+              options={ACCOUNT_TYPE_OPTIONS}
+              searchable={false}
+            />
           </FormField>
-          <FormField label="Name"><Input name="name" required /></FormField>
-          <FormField label="Company email"><Input name="email" type="email" required /></FormField>
-          <FormField label="Mobile"><Input name="mobile" /></FormField>
-          <FormField label="Temporary password"><Input name="temporaryPassword" type="password" minLength={12} required /></FormField>
-          <FormField label="Your current password"><Input name="currentPassword" type="password" required /></FormField>
-          <FormField label="Access reason"><Input name="reason" minLength={3} required /></FormField>
+          <FormField label="Name">
+            <Input name="name" required />
+          </FormField>
+          <FormField label="Company email">
+            <Input name="email" type="email" required />
+          </FormField>
+          <FormField label="Mobile">
+            <Input name="mobile" />
+          </FormField>
+          <FormField label="Temporary password">
+            <Input
+              name="temporaryPassword"
+              type="password"
+              minLength={12}
+              required
+            />
+          </FormField>
+          <FormField label="Your current password">
+            <Input name="currentPassword" type="password" required />
+          </FormField>
+          <FormField label="Access reason">
+            <Input name="reason" minLength={3} required />
+          </FormField>
           {accountType === "platform_admin" && (
             <div className="md:col-span-2 xl:col-span-3">
-              <p className="mb-2 text-xs font-bold uppercase text-slate-500">Platform permissions</p>
-              <PermissionGrid values={options.platform_permission_keys} selected={accountPermissions} onChange={setAccountPermissions} />
+              <p className="mb-2 text-xs font-bold uppercase text-slate-500">
+                Platform permissions
+              </p>
+              <PermissionGrid
+                values={options.platform_permission_keys}
+                selected={accountPermissions}
+                onChange={setAccountPermissions}
+              />
             </div>
           )}
           <div className="md:col-span-2 xl:col-span-3">
-            <Button className="save-button disabled:opacity-40" disabled={busy}>Create account</Button>
+            <Button className="save-button disabled:opacity-40" disabled={busy}>
+              Create account
+            </Button>
           </div>
         </form>
 
@@ -260,16 +332,32 @@ export function PrivilegedAccess({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <b>{account.name}</b>
-                    <Badge tone={account.is_active ? "green" : "red"}>{account.is_active ? "Active" : "Inactive"}</Badge>
-                    <Badge tone="blue">{account.user_type === "platform_admin" ? "Platform Admin" : "Support Admin"}</Badge>
+                    <Badge tone={account.is_active ? "green" : "red"}>
+                      {account.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                    <Badge tone="blue">
+                      {account.user_type === "platform_admin"
+                        ? "Platform Admin"
+                        : "Support Admin"}
+                    </Badge>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">{account.email}</p>
                 </div>
                 <div className="flex gap-2">
                   {account.user_type === "platform_admin" && (
-                    <button className="rounded-lg border px-3 py-2 text-xs font-bold" onClick={() => void updateAccount(account)}>Save permissions</button>
+                    <button
+                      className="rounded-lg border px-3 py-2 text-xs font-bold"
+                      onClick={() => void updateAccount(account)}
+                    >
+                      Save permissions
+                    </button>
                   )}
-                  <button className="rounded-lg border px-3 py-2 text-xs font-bold" onClick={() => void updateAccount(account, !account.is_active)}>
+                  <button
+                    className="rounded-lg border px-3 py-2 text-xs font-bold"
+                    onClick={() =>
+                      void updateAccount(account, !account.is_active)
+                    }
+                  >
                     {account.is_active ? "Deactivate" : "Activate"}
                   </button>
                 </div>
@@ -279,7 +367,12 @@ export function PrivilegedAccess({
                   <PermissionGrid
                     values={options.platform_permission_keys}
                     selected={editablePermissions[account.id] || []}
-                    onChange={(next) => setEditablePermissions((current) => ({ ...current, [account.id]: next }))}
+                    onChange={(next) =>
+                      setEditablePermissions((current) => ({
+                        ...current,
+                        [account.id]: next,
+                      }))
+                    }
                   />
                 </div>
               )}
@@ -292,47 +385,119 @@ export function PrivilegedAccess({
         <div className="flex items-start gap-3">
           <Clock3 className="mt-0.5" size={20} />
           <div>
-            <h3 className="card-title font-bold">Temporary Tenant Support Grant</h3>
-            <p className="card-desc text-slate-500">Maximum eight hours. Read-only permissions and every grant/revocation are audited.</p>
+            <h3 className="card-title font-bold">
+              Temporary Tenant Support Grant
+            </h3>
+            <p className="card-desc text-slate-500">
+              Maximum eight hours. Read-only permissions and every
+              grant/revocation are audited.
+            </p>
           </div>
         </div>
-        <form className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4" onSubmit={createGrant}>
+        <form
+          className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+          onSubmit={createGrant}
+        >
           <FormField label="Support Admin">
-            <select className="form-select" name="userId" required defaultValue="">
-              <option value="" disabled>Select support account</option>
-              {supportAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-            </select>
+            <SearchableSelect
+              searchable={false}
+              name="userId"
+              value={grantUserId}
+              onChange={setGrantUserId}
+              options={supportAccounts.map((account) => ({
+                value: account.id,
+                label: account.name,
+              }))}
+              placeholder="Select support account"
+              required
+            />
           </FormField>
           <FormField label="Customer tenant">
-            <select className="form-select" name="tenantId" required defaultValue="">
-              <option value="" disabled>Select tenant</option>
-              {customerTenants.map((tenant: any) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
-            </select>
+            <SearchableSelect
+              searchable={false}
+              name="tenantId"
+              value={grantTenantId}
+              onChange={setGrantTenantId}
+              options={customerTenants.map((tenant: any) => ({
+                value: tenant.id,
+                label: tenant.name,
+              }))}
+              placeholder="Select tenant"
+              required
+            />
           </FormField>
           <FormField label="Duration">
-            <select className="form-select" name="durationMinutes" defaultValue="60">
-              <option value="30">30 minutes</option><option value="60">1 hour</option><option value="120">2 hours</option><option value="240">4 hours</option><option value="480">8 hours</option>
-            </select>
+            <SearchableSelect
+              name="durationMinutes"
+              value={grantDurationMinutes}
+              onChange={setGrantDurationMinutes}
+              options={DURATION_OPTIONS}
+              searchable={false}
+            />
           </FormField>
-          <FormField label="Your current password"><Input name="currentPassword" type="password" required /></FormField>
+          <FormField label="Your current password">
+            <Input name="currentPassword" type="password" required />
+          </FormField>
           <div className="md:col-span-2 xl:col-span-4">
-            <FormField label="Support reason"><Input name="reason" minLength={3} required /></FormField>
+            <FormField label="Support reason">
+              <Input name="reason" minLength={3} required />
+            </FormField>
           </div>
           <div className="md:col-span-2 xl:col-span-4">
-            <p className="mb-2 text-xs font-bold uppercase text-slate-500">Read-only tenant permissions</p>
-            <PermissionGrid values={options.support_permission_keys} selected={grantPermissions} onChange={setGrantPermissions} />
+            <p className="mb-2 text-xs font-bold uppercase text-slate-500">
+              Read-only tenant permissions
+            </p>
+            <PermissionGrid
+              values={options.support_permission_keys}
+              selected={grantPermissions}
+              onChange={setGrantPermissions}
+            />
           </div>
           <div className="md:col-span-2 xl:col-span-4">
-            <Button className="save-button disabled:opacity-40" disabled={busy}>Grant temporary access</Button>
+            <Button className="save-button disabled:opacity-40" disabled={busy}>
+              Grant temporary access
+            </Button>
           </div>
         </form>
 
         <div className="mt-5 overflow-x-auto rounded-lg border">
           <table className="w-full min-w-[850px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Support Admin</th><th className="px-4 py-3">Tenant</th><th className="px-4 py-3">Expires</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Action</th></tr></thead>
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Support Admin</th>
+                <th className="px-4 py-3">Tenant</th>
+                <th className="px-4 py-3">Expires</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Action</th>
+              </tr>
+            </thead>
             <tbody className="divide-y">
               {grants.map((grant) => (
-                <tr key={grant.id}><td className="px-4 py-3 font-bold">{grant.user_name || grant.user_id}</td><td className="px-4 py-3">{grant.tenant_name || grant.tenant_id}</td><td className="px-4 py-3">{displayDateTime(grant.expires_at)}</td><td className="px-4 py-3"><Badge tone={grant.status === "active" ? "green" : "slate"}>{grant.status}</Badge></td><td className="px-4 py-3"><button className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40" disabled={grant.status !== "active"} onClick={() => void revokeGrant(grant)}>Revoke</button></td></tr>
+                <tr key={grant.id}>
+                  <td className="px-4 py-3 font-bold">
+                    {grant.user_name || grant.user_id}
+                  </td>
+                  <td className="px-4 py-3">
+                    {grant.tenant_name || grant.tenant_id}
+                  </td>
+                  <td className="px-4 py-3">
+                    {displayDateTime(grant.expires_at)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone={grant.status === "active" ? "green" : "slate"}>
+                      {grant.status}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40"
+                      disabled={grant.status !== "active"}
+                      onClick={() => void revokeGrant(grant)}
+                    >
+                      Revoke
+                    </button>
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>

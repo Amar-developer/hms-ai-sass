@@ -150,6 +150,22 @@ export function getPharmacyColumns({
       render: (_, index) => <b>{(safePage - 1) * pageSize + index + 1}</b>,
     },
     {
+      key: "issue_number",
+      header: "Issue ID",
+      width: "190px",
+      render: (issue: any) => (
+        <div>
+          <RecordIdCell
+            id={issue.id}
+            label="Pharmacy Issue ID"
+            allowed={canCopyIds}
+            value={issue.issue_number || publicDisplayValue(issue.id, "Issue")}
+            valueClassName="text-sm"
+          />
+        </div>
+      ),
+    },
+    {
       key: "patient",
       header: "Patient",
       width: "150px",
@@ -177,28 +193,7 @@ export function getPharmacyColumns({
         );
       },
     },
-    {
-      key: "issue_number",
-      header: "Issue ID",
-      width: "190px",
-      render: (issue: any) => (
-        <div>
-          <RecordIdCell
-            id={issue.id}
-            label="Pharmacy Issue ID"
-            allowed={canCopyIds}
-            value={issue.issue_number || publicDisplayValue(issue.id, "Issue")}
-            valueClassName="text-sm"
-          />
-          <p className="text-xs text-slate-500">
-            {new Date(issue.created_at).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </p>
-        </div>
-      ),
-    },
+
     {
       key: "date",
       header: "Date",

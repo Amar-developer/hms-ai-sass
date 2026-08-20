@@ -50,6 +50,20 @@ export function AdaptiveFilterTrigger({
   queryFilters,
   onQueryFiltersChange,
 }: AdaptiveFilterTriggerProps) {
+  console.log(schema,'schema')
+  // console.log(query,'query')
+  // console.log(setQuery,'setQuery')
+  // console.log(showSearch,'showSearch')
+  // console.log(filterValues,'filterValues')
+  // console.log(sort,'sort')
+  // console.log(onSortChange,'onSortChange')
+  // console.log(showSort,'showSort')
+  // console.log(onReset,'onReset')
+  // console.log(children,'children')
+  // console.log(queryFields,'queryFields')
+  // console.log(queryFilters,'queryFilters')
+  // console.log(onQueryFiltersChange,'onQueryFiltersChange')
+
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -92,7 +106,7 @@ export function AdaptiveFilterTrigger({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-bold transition ${
+        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-[12px] font-bold transition ${
           activeCount > 0
             ? "border-emerald-200 bg-emerald-50 text-emerald-800"
             : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"

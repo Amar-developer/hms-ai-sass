@@ -411,11 +411,16 @@ export function ConsultationWorkspace(props: any) {
                 onClick={() => openPatientDetails?.()}
                 className="truncate text-left text-sm font-black text-teal-800 hover:underline"
               >
-                {patient?.name || patient?.full_name || selected?.patient || "Patient"}
+                {patient?.name ||
+                  patient?.full_name ||
+                  selected?.patient ||
+                  "Patient"}
               </button>
               <PatientFlagBadges patient={patient} />
               <span className="text-[11px] font-medium text-slate-500">
-                {patient?.patient_number || selected?.patient_number || "No patient ID"}
+                {patient?.patient_number ||
+                  selected?.patient_number ||
+                  "No patient ID"}
                 {patient?.age_years != null || patient?.age != null
                   ? ` · ${patient.age_years ?? patient.age} yrs`
                   : ""}
@@ -462,7 +467,10 @@ export function ConsultationWorkspace(props: any) {
             >
               {availableTemplates.length > 0 && (
                 <div className="flex flex-col gap-2 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 sm:flex-row sm:items-end">
-                  <FormField label="Clinical Template" className="min-w-0 flex-1">
+                  <FormField
+                    label="Clinical Template"
+                    className="min-w-0 flex-1"
+                  >
                     <SearchableSelect
                       value={selectedTemplateId}
                       onChange={setSelectedTemplateId}
@@ -563,7 +571,6 @@ export function ConsultationWorkspace(props: any) {
                     }`}
                     placeholder="Fever | 2 days | medium"
                   />
-
                 </FormField>
                 <FormField label="Diagnosis" required error={diagnosisError}>
                   <textarea
@@ -599,9 +606,11 @@ export function ConsultationWorkspace(props: any) {
               <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                 <div className="mb-3">
                   <p className="text-sm font-black text-slate-900">Medicines</p>
-                  <p className="text-xs text-slate-500">Add dosage instructions, then review the prescription list.</p>
+                  <p className="text-xs text-slate-500">
+                    Add dosage instructions, then review the prescription list.
+                  </p>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.45fr)_minmax(90px,.7fr)_minmax(105px,.8fr)_minmax(95px,.7fr)_minmax(115px,.9fr)_auto] xl:items-start">
+                <div className="grid gap-3 sm:grid-cols-[2fr_.5fr_1fr_1fr_1fr_1fr] ">
                   <FormField
                     label="Medicine"
                     required
@@ -690,7 +699,7 @@ export function ConsultationWorkspace(props: any) {
                           label: value,
                         }))}
                       placeholder="Select frequency"
-                      searchable
+                      searchable={false}
                       required
                     />
                   </FormField>
@@ -726,11 +735,12 @@ export function ConsultationWorkspace(props: any) {
                         }))}
                       placeholder="Select instruction"
                       searchable
+                      className="text-xs"
                     />
                   </FormField>
                   <Button
                     type="button"
-                    className="inline-flex h-10 items-center justify-center self-end whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover sm:w-fit xl:mt-[23px] xl:w-full xl:self-start"
+                    className="inline-flex h-10 items-center justify-center self-end whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover sm:w-fit xl:mt-[16px] xl:w-full xl:self-start"
                     onClick={addDraftMedicine}
                   >
                     Add
@@ -808,8 +818,12 @@ export function ConsultationWorkspace(props: any) {
               <div className="grid gap-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                   <div className="mb-3">
-                    <p className="text-sm font-black text-slate-900">Lab &amp; Services</p>
-                    <p className="text-xs text-slate-500">Add required investigations or clinical services.</p>
+                    <p className="text-sm font-black text-slate-900">
+                      Lab &amp; Services
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Add required investigations or clinical services.
+                    </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(240px,2fr)_minmax(140px,1fr)_auto] xl:items-start">
                     <FormField
@@ -877,13 +891,15 @@ export function ConsultationWorkspace(props: any) {
                         required
                       />
                     </FormField>
-                    <Button
-                      type="button"
-                      className="inline-flex h-10 items-center justify-center self-end whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover sm:w-fit xl:mt-[23px] xl:self-start"
-                      onClick={addDraftLabTest}
-                    >
-                      Add Lab Test
-                    </Button>
+                    <div className="pt-4 flex items-end">
+                      <Button
+                        type="button"
+                        className="inline-flex h-10 items-center justify-center self-end whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover sm:w-fit"
+                        onClick={addDraftLabTest}
+                      >
+                        Add Lab Test
+                      </Button>
+                    </div>
                   </div>
                   <div className="mt-4">
                     <FormField label="Lab & Service">

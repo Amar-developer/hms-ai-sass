@@ -57,7 +57,7 @@ export default function Invoice({
   if (pages.length === 0) pages.push([]);
 
   return (
-    <div className="mx-auto w-full max-w-[900px] bg-white text-slate-900 print:max-w-full">
+    <div className="mx-auto w-full max-w-[900px] border-2 border-[#25FF46] bg-white text-slate-900 print:max-w-full">
       {pages.map((pageItems, pageIndex) => {
         const isFirstPage = pageIndex === 0;
         const isLastPage = pageIndex === pages.length - 1;
@@ -66,12 +66,12 @@ export default function Invoice({
           <div
             key={pageIndex}
             data-invoice-page
-            className="relative flex flex-col border-2 border-[#25FF46] print:border-black print:min-h-[297mm] print:w-[210mm] print:mx-auto print:shadow-none"
+            className="relative flex flex-col border-2 border-[#25FF46] print:border-[#25FF46] print:min-h-[297mm] print:w-[210mm] print:mx-auto print:shadow-none"
           >
             <InvoiceHeader company={company} />
 
             {isFirstPage && company.tagline && (
-              <p className="px-6 py-1 flex justify-center items-center text-sm font-semibold text-emerald-600 border-b-2 border-[#00AD00]">
+              <p className="px-6 py-1 flex justify-center items-center text-sm font-semibold text-emerald-600 border-b-2 border-[#25FF46]">
                 {company.tagline}
               </p>
             )}
@@ -90,7 +90,7 @@ export default function Invoice({
 
             {/* Items Table */}
             <div className="flex flex-col">
-              <div className="border border-[#25FF46] flex flex-col overflow-hidden">
+              <div className="border border-x-[#25FF46] flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] border-y-2 border-[#25FF46] text-[12.5px] font-bold  shrink-0">
                   <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-2 pb-5">
@@ -120,7 +120,7 @@ export default function Invoice({
                       key={idx}
                       className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] min-h-[38px]"
                     >
-                      <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-1.5">
+                      <div className="border-r-2 flex justify-center items-center border-[#25FF46] pl-0 p-1.5">
                         {item.srNo}
                       </div>
                       <div className="border-r-2 flex items-center border-[#25FF46] p-1.5 break-words">
@@ -129,7 +129,7 @@ export default function Invoice({
                       <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-1.5">
                         {item.qty}
                       </div>
-                      <div className="border-r-2 flex justify-end items-center border-[#25FF46] p-1.5">
+                      <div className="border-r-2 flex justify-end items-center border-[#25FF46]">
                         {toNumber(item.mrp) > 0
                           ? formatMoney(item.mrp, currencySymbol)
                           : "-"}
@@ -331,7 +331,7 @@ export default function Invoice({
             </div>
 
             {isLastPage && footerNote && (
-              <div className="flex justify-center items-center text-center text-xs text-slate-600 border-b-2 border-[#25FF46] py-2">
+              <div className="flex justify-center items-center text-center text-xs text-slate-600 py-2">
                 {footerNote}
               </div>
             )}

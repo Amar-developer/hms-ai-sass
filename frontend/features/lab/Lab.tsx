@@ -819,7 +819,7 @@ export function Lab({
         </div>
       </BreadcrumbSlot>
       {canCreateLabOrder && (
-        <Card>
+        <Card className="p-0 ">
           <h3 className="card-title font-bold">
             Create Direct Lab &amp; Service Order
           </h3>
@@ -868,7 +868,7 @@ export function Lab({
           />
         </Card>
       )}
-      <Card className="mt-3">
+      <Card className="mt-5">
         <div className="flex items-center justify-between gap-2">
           <h3 className="card-title font-bold">Lab / Service Worklist</h3>
         </div>

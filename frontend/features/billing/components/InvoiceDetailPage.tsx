@@ -530,8 +530,8 @@ export function InvoiceDetailPage({
   );
   return (
     <div className="">
-      <Card>
-        <div className="-mx-6 -mt-6 border-b border-slate-200 bg-white px-6 py-5">
+      <Card className="p-0">
+        <div className=" border p-2 rounded-lg border-slate-200 bg-white ">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -551,7 +551,7 @@ export function InvoiceDetailPage({
                             ? "red"
                             : "slate"
                   }
-                  className="normal-badge"
+                  className="normal-label"
                 >
                   {humanizeOptionLabel(invoice.status)}
                 </Badge>
@@ -590,7 +590,7 @@ export function InvoiceDetailPage({
         </div>
 
         <div className="pt-5">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
             <div className="grid gap-3 text-sm md:grid-cols-4">
               <InvoiceMeta label="Type" value={source.label} />
               <InvoiceMeta label="Source" value={linkedRecord} />
@@ -612,13 +612,13 @@ export function InvoiceDetailPage({
           </div>
 
           <div className="mt-5 ">
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h4 className="card-title font-bold">
                     {source.label} Bill Items
                   </h4>
-                  <p className="table-data text-slate-500">
+                  <p className="card-desc text-slate-500">
                     Line items linked to this invoice.
                   </p>
                 </div>
@@ -1140,7 +1140,7 @@ export function InvoiceDetailPage({
           </div>
 
           <div className="mt-5 rounded-lg border border-slate-200">
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+            <div className=" rounded-lg border-slate-200 bg-slate-50 px-4 py-3">
               <h4 className="card-title font-bold">Settlement History</h4>
             </div>
             <div className="overflow-auto">
@@ -1153,7 +1153,7 @@ export function InvoiceDetailPage({
           </div>
 
           <div className="mt-5 rounded-lg border border-slate-200">
-            <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 lg:flex-row lg:items-center sm:justify-between">
+            <div className="rounded-lg flex flex-col gap-3 border-slate-200 bg-slate-50 px-4 py-3 lg:flex-row lg:items-center sm:justify-between">
               <div>
                 <h4 className="card-title font-bold">
                   Discount, Refund & Cancellation Requests
@@ -1201,6 +1201,7 @@ export function InvoiceDetailPage({
                   executeAdjustment,
                 })}
                 data={adjustmentRequests}
+                className="rounded-none"
                 emptyMessage="No refund or cancellation requests yet."
               />
             </div>
@@ -1208,7 +1209,7 @@ export function InvoiceDetailPage({
 
           {canReviewAnyAdjustment && (
             <div className="mt-5 rounded-lg border border-slate-200">
-              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="rounded-lg border-slate-200 bg-slate-50 px-4 py-3">
                 <h4 className="card-title font-bold">
                   Hospital Accounting Ledger
                 </h4>
@@ -1225,6 +1226,7 @@ export function InvoiceDetailPage({
                   })}
                   data={financialLedgerEntries}
                   emptyMessage="No financial ledger entries recorded yet."
+                  className="rounded-none"
                   tableClassName="min-w-[1480px]"
                   rowClassName="odd:bg-white even:bg-slate-50/40 hover:bg-emerald-50/30"
                 />

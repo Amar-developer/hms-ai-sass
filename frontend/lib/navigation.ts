@@ -22,7 +22,7 @@
   export const nav = [
     ["dashboard", "Dashboard", HeartPulse],
     ["superadmin", "Settings", Building2],
-    ["clinic", "Clinic", Hospital],
+    ["clinic", "Clinic Setup", Hospital],
     ["opd", "OPD Workspace", Stethoscope],
     ["queue", "Token Queue", Clock],
     ["patients", "EMR / Patient Management", Users],

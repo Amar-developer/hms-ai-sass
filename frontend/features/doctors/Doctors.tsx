@@ -322,7 +322,7 @@ export function Doctors({
   });
 
   return (
-    <Card>
+    <Card className="p-0">
       <BreadcrumbSlot>
         <div className="flex items-center gap-2">
           <AdaptiveResultCount
@@ -369,7 +369,7 @@ export function Doctors({
           />
         </div>
       </BreadcrumbSlot>
-      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+      <div className="pb-3 rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="card-title font-bold">Doctor Management</h3>
           <p className="card-desc text-slate-500">
@@ -391,7 +391,7 @@ export function Doctors({
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+      <div className="mt-4 overflow-x-auto scrollbar-thin rounded-lg border border-slate-200">
         <div className="min-w-[1080px]">
           <DataTable
             columns={doctorColumns}

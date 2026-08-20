@@ -100,8 +100,8 @@ export function BookingDetail({
   );
   return (
     <div className="grid gap-4">
-      <Card>
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
+      <Card className="p-0">
+        <div className="border p-2 rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-bold">{booking.booking_number}</h3>
@@ -135,9 +135,28 @@ export function BookingDetail({
                 />
               </div>
             ) : (
-              <Badge className="normal-badge">
-                {humanizeOptionLabel(booking.status)}
-              </Badge>
+              <div className=" pb-2">
+                <Badge
+                  className="normal-label"
+                  tone={String(
+                    booking.status == "requested"
+                      ? "orange"
+                      : booking.status == "paid"
+                        ? "green"
+                        : booking.status == "invoiced"
+                          ? "skyblue"
+                          : booking.status == "scheduled"
+                            ? "purple"
+                            : booking.status == "in_progress"
+                              ? "blue"
+                              : booking.status == "cancelled"
+                                ? "red"
+                                : "slate  ",
+                  )}
+                >
+                  {humanizeOptionLabel(booking.status)}
+                </Badge>
+              </div>
             )}
             <ActionButton onClick={onBack}>Back to list</ActionButton>
           </div>
@@ -172,7 +191,7 @@ export function BookingDetail({
             )}
           </div>
         )}
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 md:max-w-2xl lg:max-w-5xl">
+        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 md:max-w-2xl lg:max-w-5xl">
           <div className="mb-3">
             <p className="text-xs font-bold uppercase text-slate-500">
               Requested Services
@@ -191,7 +210,7 @@ export function BookingDetail({
               {(booking.services || []).map((row: any, index: number) => (
                 <div
                   key={row.id || `${row.description}-${index}`}
-                  className="rounded-xl bg-slate-50 px-4 py-3 font-bold text-slate-900"
+                  className="rounded-lg bg-slate-50 px-4 py-3 font-bold text-slate-900"
                 >
                   {row.description || "Requested service"}
                 </div>
@@ -199,18 +218,18 @@ export function BookingDetail({
             </div>
           )}
         </div>
-        <div className="mt-4 rounded-2xl bg-slate-50 p-4 md:max-w-2xl lg:max-w-5xl">
+        <div className="mt-4 rounded-lg bg-slate-50 p-4 md:max-w-2xl lg:max-w-5xl">
           <div className="mb-3 flex flex-col justify-between gap-2 md:flex-row md:items-center">
             <div>
-              <p className="text-xs font-bold uppercase text-slate-500">
+              <p className="card-title font-bold uppercase text-slate-900">
                 Actual Service Logs
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="card-desc text-slate-500">
                 Bill only completed visits. Missed or cancelled days stay
                 tracked with zero amount.
               </p>
             </div>
-            <Badge tone="blue" className="normal-badge">
+            <Badge tone="blue" className="normal-label">
               Billable total {money(actualTotal)}
             </Badge>
           </div>
@@ -504,10 +523,10 @@ export function BookingDetail({
           )}
         </div>
       </Card>
-      <Card>
+      <Card className="p-0">
         <h3 className="text-base font-bold">Billing Summary</h3>
         {invoiceDetail?.invoice ? (
-          <div className="mt-4 rounded-2xl border p-4 text-sm">
+          <div className="mt-4 rounded-lg border p-4 text-sm">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <b>{invoiceDetail.invoice.invoice_number}</b>

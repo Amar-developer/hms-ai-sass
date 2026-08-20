@@ -385,7 +385,7 @@ export function Items({ apiSession, branchId }: any) {
           />
         </div>
       </BreadcrumbSlot>
-      <Card>
+      <Card className="p-0">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Items</h3>
@@ -409,7 +409,7 @@ export function Items({ apiSession, branchId }: any) {
       </Card>
 
       {/* Item List */}
-      <Card>
+      <Card className="p-0 shadow-none">
         <div className="flex flex-col gap-4">
           <div>
             <h3 className="card-title font-bold">Item List</h3>

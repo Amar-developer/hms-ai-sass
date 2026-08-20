@@ -144,7 +144,6 @@ export function getPatientColumns({
         <div className="flex justify-center">
           <RowActions
             actions={[
-              { label: "View", onClick: () => onView(row.id) },
               {
                 label: "Edit",
                 onClick: () => onEdit(row.id),
