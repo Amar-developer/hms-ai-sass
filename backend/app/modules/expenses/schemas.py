@@ -46,6 +46,8 @@ class ExpenseRead(BaseModel):
     status: ExpenseStatus
     submitted_by: str
     approved_by: str | None
+    created_by_user_id: str | None
+    updated_by_user_id: str | None
     rejection_reason: str | None
     receipt_file_id: str | None
     created_at: datetime

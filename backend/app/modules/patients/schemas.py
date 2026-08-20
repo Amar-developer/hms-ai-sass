@@ -125,6 +125,8 @@ class PatientRead(BaseModel):
     monthly_lab_on: date | None = None
     monthly_lab_test_name: str | None = None
     monthly_lab_notes: str | None = None
+    created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -198,6 +200,8 @@ class PatientSearchResult(BaseModel):
     gender: Gender
     age_years: int | None
     status: PatientStatus
+    created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
     active_alert_count: int

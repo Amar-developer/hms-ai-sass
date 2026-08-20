@@ -1,5 +1,10 @@
 import type { TableSchema } from "@/app/components/common/AdaptiveFilterBar";
-import type { QueryFieldSchema } from "@/utils/queryFilter";
+import {
+  optionMapValues,
+  standardAuditQueryFields,
+  type QueryFieldOption,
+  type QueryFieldSchema,
+} from "@/utils/queryFilter";
 import { status_options } from "../superAdmin/constants";
 import { doctorTypes } from "./constants";
 
@@ -71,8 +76,10 @@ function distinctFieldOptions(
 
 export function getDoctorQueryFields({
   rows,
+  filterOptions,
 }: {
   rows: any[];
+  filterOptions?: Record<string, QueryFieldOption[]>;
 }): QueryFieldSchema[] {
   const typeLabel = (value: string) =>
     doctorTypes.find(([v]) => v === value)?.[1] || value;
@@ -80,6 +87,7 @@ export function getDoctorQueryFields({
     status_options.find((o) => o.value === value)?.label || value;
 
   return [
+    { key: "practitioner_number", label: "Doctor ID", type: "text" },
     { key: "full_name", label: "Doctor Name", type: "text" },
     { key: "primary_specialty", label: "Primary Specialty", type: "text" },
     { key: "registration_number", label: "Registration Number", type: "text" },
@@ -89,15 +97,30 @@ export function getDoctorQueryFields({
       key: "practitioner_type",
       label: "Type",
       type: "select",
-      options: distinctFieldOptions(rows, "practitioner_type", typeLabel),
+      options: optionMapValues(
+        filterOptions,
+        "practitioner_type",
+        distinctFieldOptions(rows, "practitioner_type", typeLabel),
+        typeLabel,
+      ),
     },
     {
       key: "status",
       label: "Status",
       type: "select",
-      options: distinctFieldOptions(rows, "status", statusLabel),
+      options: optionMapValues(
+        filterOptions,
+        "status",
+        distinctFieldOptions(rows, "status", statusLabel),
+        statusLabel,
+      ),
     },
-    { key: "created_at", label: "Created On", type: "date" },
-    { key: "updated_at", label: "Last Updated", type: "date" },
+    {
+      key: "user_id",
+      label: "Linked User",
+      type: "select",
+      options: optionMapValues(filterOptions, "user_id"),
+    },
+    ...standardAuditQueryFields({ rows, filterOptions, includeUpdatedBy: true }),
   ];
 }

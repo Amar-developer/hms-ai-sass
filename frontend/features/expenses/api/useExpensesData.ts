@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiSession } from "@/lib/api";
 import { fetchExpensePage } from "./expenses.api";
+import type { QueryFilterRow } from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
 
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 10;
@@ -10,7 +12,31 @@ export type ExpenseListFilters = {
   category?: string;
   query?: string;
   branchId?: string;
+  queryFilters?: QueryFilterRow[];
+  sort?: SortState | null;
 };
+
+const FIELD_MAP: Record<string, string> = {
+  branchId: "branch_id",
+  submittedBy: "submitted_by",
+  approvedBy: "approved_by",
+  incurredOn: "incurred_on",
+  createdAt: "created_at",
+  updatedAt: "updated_at",
+  createdByUserId: "created_by_user_id",
+  updatedByUserId: "updated_by_user_id",
+};
+
+function toBackendField(field: string) {
+  return FIELD_MAP[field] || field;
+}
+
+function backendFilters(filters: QueryFilterRow[] = []) {
+  return filters.map((filter) => ({
+    ...filter,
+    field: toBackendField(filter.field),
+  }));
+}
 
 export function useExpensesData(
   apiSession: ApiSession | null | undefined,
@@ -43,6 +69,16 @@ export function useExpensesData(
         }
         if (filters.query) params.set("q", filters.query);
         if (filters.branchId) params.set("branch_id", filters.branchId);
+        const dynamicFilters = backendFilters(filters.queryFilters);
+        if (dynamicFilters.length) {
+          params.set("filters", JSON.stringify(dynamicFilters));
+        }
+        if (filters.sort) {
+          params.set(
+            "sort",
+            JSON.stringify({ ...filters.sort, key: toBackendField(filters.sort.key) }),
+          );
+        }
 
         const result = await fetchExpensePage(apiSession, params);
         if (sequence !== sequenceRef.current) return;
@@ -71,6 +107,9 @@ export function useExpensesData(
     filters.category,
     filters.query,
     filters.branchId,
+    JSON.stringify(filters.queryFilters || []),
+    filters.sort?.key,
+    filters.sort?.dir,
   ]);
 
   return { rawExpenses, total, loading, error, reload: load };

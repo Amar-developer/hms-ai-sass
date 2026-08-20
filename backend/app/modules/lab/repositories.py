@@ -1,11 +1,30 @@
+from datetime import date, datetime, time, timedelta
+
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
+from app.core.list_filters import (
+    ListFilter,
+    ListFilterOption,
+    ListSort,
+    apply_list_filters,
+    apply_list_sort,
+    labeled_filter_options,
+    list_filter_options,
+    tenant_user_filter_options,
+)
 from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.appointments.models import Appointment
 from app.modules.consultations.models import (
     Consultation,
     ConsultationReferral,
     ConsultationStatus,
+)
+from app.modules.identity.models import User
+from app.modules.lab.listing import (
+    LAB_ORDER_LIST_SPEC,
+    LAB_TEST_CATALOG_LIST_SPEC,
+    LAB_TEST_PACKAGE_LIST_SPEC,
 )
 from app.modules.lab.models import (
     LabOrder,
@@ -19,6 +38,7 @@ from app.modules.lab.models import (
     LabTestPackageItem,
 )
 from app.modules.patients.models import Patient
+from app.modules.pharmacy.models import PharmacySupplier
 from app.modules.practitioners.models import Practitioner
 from app.modules.queue.models import QueueEntry
 from app.modules.tenants.models import Branch
@@ -76,6 +96,54 @@ class LabCatalogRepository:
             )
         return list(self.session.exec(statement.order_by(LabTestCatalog.name)).all())
 
+    def list_test_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
+    ) -> list[LabTestCatalog]:
+        statement = self._test_list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            LAB_TEST_CATALOG_LIST_SPEC,
+            list_sort,
+            default_order=[
+                LabTestCatalog.updated_at.desc(),
+                LabTestCatalog.created_at.desc(),
+            ],
+        )
+        return list(self.session.exec(statement.offset(offset).limit(limit)).all())
+
+    def count_test_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._test_list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
     def get_package(self, package_id: str) -> LabTestPackage | None:
         return self.session.get(LabTestPackage, package_id)
 
@@ -103,6 +171,114 @@ class LabCatalogRepository:
                 | (LabTestPackage.code.ilike(pattern))
             )
         return list(self.session.exec(statement.order_by(LabTestPackage.name)).all())
+
+    def list_package_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
+    ) -> list[LabTestPackage]:
+        statement = self._package_list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            LAB_TEST_PACKAGE_LIST_SPEC,
+            list_sort,
+            default_order=[
+                LabTestPackage.updated_at.desc(),
+                LabTestPackage.created_at.desc(),
+            ],
+        )
+        return list(self.session.exec(statement.offset(offset).limit(limit)).all())
+
+    def count_package_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._package_list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def catalog_filter_options(
+        self, *, tenant_id: str, catalog: str
+    ) -> dict[str, list[ListFilterOption]]:
+        branches = (
+            select(Branch.id, Branch.name)
+            .where(Branch.tenant_id == tenant_id)
+            .order_by(Branch.name)
+        )
+        suppliers = (
+            select(PharmacySupplier.id, PharmacySupplier.name)
+            .where(PharmacySupplier.tenant_id == tenant_id)
+            .order_by(PharmacySupplier.name)
+        )
+        options = {
+            "branch_id": labeled_filter_options(
+                list(self.session.exec(branches).all())
+            ),
+            "supplier_id": labeled_filter_options(
+                list(self.session.exec(suppliers).all())
+            ),
+            "is_active": [
+                ListFilterOption(value="true", label="Active"),
+                ListFilterOption(value="false", label="Inactive"),
+            ],
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
+        if catalog == "tests":
+            departments = (
+                select(LabTestCatalog.department)
+                .where(LabTestCatalog.tenant_id == tenant_id)
+                .distinct()
+                .order_by(LabTestCatalog.department)
+            )
+            sample_types = (
+                select(LabTestCatalog.sample_type)
+                .where(LabTestCatalog.tenant_id == tenant_id)
+                .distinct()
+                .order_by(LabTestCatalog.sample_type)
+            )
+            options.update(
+                {
+                    "department": list_filter_options(
+                        list(self.session.exec(departments).all())
+                    ),
+                    "sample_type": list_filter_options(
+                        list(self.session.exec(sample_types).all())
+                    ),
+                }
+            )
+        return options
 
     def packages_for_tenant(
         self, *, tenant_id: str, package_ids: set[str], active_only: bool = False
@@ -171,6 +347,104 @@ class LabCatalogRepository:
                 package_id=package_id,
                 test_id=test_id,
             )
+
+    def _test_list_statement(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None,
+        list_filters: list[ListFilter] | None,
+    ):
+        statement = (
+            select(LabTestCatalog)
+            .outerjoin(Branch, LabTestCatalog.branch_id == Branch.id)
+            .outerjoin(
+                PharmacySupplier, LabTestCatalog.supplier_id == PharmacySupplier.id
+            )
+            .where(LabTestCatalog.tenant_id == tenant_id)
+        )
+        if branch_id:
+            statement = statement.where(
+                (LabTestCatalog.branch_id == branch_id)
+                | (LabTestCatalog.branch_id.is_(None))
+            )
+        if not include_inactive:
+            statement = statement.where(LabTestCatalog.is_active == True)  # noqa: E712
+        if q:
+            term = q.strip().lower()
+            statement = statement.where(
+                or_(
+                    func.lower(LabTestCatalog.code).contains(term, autoescape=True),
+                    func.lower(LabTestCatalog.name).contains(term, autoescape=True),
+                    func.lower(LabTestCatalog.department).contains(
+                        term,
+                        autoescape=True,
+                    ),
+                    func.lower(LabTestCatalog.sample_type).contains(
+                        term,
+                        autoescape=True,
+                    ),
+                    func.lower(LabTestCatalog.instructions).contains(
+                        term,
+                        autoescape=True,
+                    ),
+                    func.lower(PharmacySupplier.name).contains(term, autoescape=True),
+                )
+            )
+        if list_filters:
+            statement = apply_list_filters(
+                statement,
+                LAB_TEST_CATALOG_LIST_SPEC,
+                list_filters,
+            )
+        return statement
+
+    def _package_list_statement(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None,
+        list_filters: list[ListFilter] | None,
+    ):
+        statement = (
+            select(LabTestPackage)
+            .outerjoin(Branch, LabTestPackage.branch_id == Branch.id)
+            .outerjoin(
+                PharmacySupplier, LabTestPackage.supplier_id == PharmacySupplier.id
+            )
+            .where(LabTestPackage.tenant_id == tenant_id)
+        )
+        if branch_id:
+            statement = statement.where(
+                (LabTestPackage.branch_id == branch_id)
+                | (LabTestPackage.branch_id.is_(None))
+            )
+        if not include_inactive:
+            statement = statement.where(LabTestPackage.is_active == True)  # noqa: E712
+        if q:
+            term = q.strip().lower()
+            statement = statement.where(
+                or_(
+                    func.lower(LabTestPackage.code).contains(term, autoescape=True),
+                    func.lower(LabTestPackage.name).contains(term, autoescape=True),
+                    func.lower(LabTestPackage.description).contains(
+                        term,
+                        autoescape=True,
+                    ),
+                    func.lower(PharmacySupplier.name).contains(term, autoescape=True),
+                )
+            )
+        if list_filters:
+            statement = apply_list_filters(
+                statement,
+                LAB_TEST_PACKAGE_LIST_SPEC,
+                list_filters,
+            )
+        return statement
 
 
 class LabReferenceRepository:
@@ -292,23 +566,190 @@ class LabOrderRepository:
         branch_id: str | None,
         patient_id: str | None,
         status_filter: LabOrderStatus | None,
+        q: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
         limit: int = DEFAULT_LIST_LIMIT,
         offset: int = 0,
     ) -> list[LabOrder]:
-        statement = select(LabOrder).where(LabOrder.tenant_id == tenant_id)
+        statement = self._order_list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=patient_id,
+            status_filter=status_filter,
+            q=q,
+            from_date=from_date,
+            to_date=to_date,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            LAB_ORDER_LIST_SPEC,
+            list_sort,
+            default_order=[LabOrder.created_at.desc()],
+        )
+        return list(self.session.exec(statement.offset(offset).limit(limit)).all())
+
+    def count_orders(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        patient_id: str | None,
+        status_filter: LabOrderStatus | None,
+        q: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._order_list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=patient_id,
+            status_filter=status_filter,
+            q=q,
+            from_date=from_date,
+            to_date=to_date,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def filter_options(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        patient_id: str | None = None,
+    ) -> dict[str, list[ListFilterOption]]:
+        scope = (
+            select(
+                LabOrder.id,
+                LabOrder.branch_id,
+                LabOrder.patient_id,
+                LabOrder.acquisition_source,
+                LabOrder.source,
+                LabOrder.status,
+                LabOrder.priority,
+                LabOrder.ordered_by_user_id,
+            )
+            .where(LabOrder.tenant_id == tenant_id)
+            .subquery()
+        )
+        if branch_id or patient_id:
+            scoped_statement = select(scope).select_from(scope)
+            if branch_id:
+                scoped_statement = scoped_statement.where(
+                    scope.c.branch_id == branch_id
+                )
+            if patient_id:
+                scoped_statement = scoped_statement.where(
+                    scope.c.patient_id == patient_id
+                )
+            scope = scoped_statement.subquery()
+
+        return {
+            "acquisition_source": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.acquisition_source)
+                        .distinct()
+                        .order_by(scope.c.acquisition_source)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "source": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.source)
+                        .distinct()
+                        .order_by(scope.c.source)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "status": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.status)
+                        .distinct()
+                        .order_by(scope.c.status)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "priority": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.priority)
+                        .distinct()
+                        .order_by(scope.c.priority)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
+
+    def _order_list_statement(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        patient_id: str | None,
+        status_filter: LabOrderStatus | None,
+        q: str | None,
+        from_date: date | None,
+        to_date: date | None,
+        list_filters: list[ListFilter] | None = None,
+    ):
+        statement = (
+            select(LabOrder)
+            .join(Patient, Patient.id == LabOrder.patient_id)
+            .where(LabOrder.tenant_id == tenant_id)
+        )
         if branch_id:
             statement = statement.where(LabOrder.branch_id == branch_id)
         if patient_id:
             statement = statement.where(LabOrder.patient_id == patient_id)
         if status_filter:
             statement = statement.where(LabOrder.status == status_filter)
-        return list(
-            self.session.exec(
-                statement.order_by(LabOrder.created_at.desc())
-                .offset(offset)
-                .limit(limit)
-            ).all()
-        )
+        if from_date:
+            statement = statement.where(
+                LabOrder.created_at >= datetime.combine(from_date, time.min)
+            )
+        if to_date:
+            statement = statement.where(
+                LabOrder.created_at
+                < datetime.combine(to_date + timedelta(days=1), time.min)
+            )
+        if q:
+            term = q.strip().lower()
+            statement = statement.where(
+                or_(
+                    func.lower(LabOrder.lab_order_number).contains(
+                        term, autoescape=True
+                    ),
+                    func.lower(LabOrder.tests).contains(term, autoescape=True),
+                    func.lower(Patient.patient_number).contains(term, autoescape=True),
+                    func.lower(Patient.full_name).contains(term, autoescape=True),
+                    func.lower(Patient.mobile).contains(term, autoescape=True),
+                )
+            )
+        if list_filters:
+            statement = apply_list_filters(statement, LAB_ORDER_LIST_SPEC, list_filters)
+        return statement
 
     def list_order_items(self, *, tenant_id: str, order_id: str) -> list[LabOrderItem]:
         return list(

@@ -31,11 +31,14 @@ import {
   usePharmacyActions,
   usePharmacyWorkspace,
 } from "./api";
+import {
+  fetchPharmacyIssueFilterOptions,
+  fetchPharmacyIssuePage,
+} from "./api/pharmacy.api";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { getPharmacyColumns, getPrescriptionColumns } from "./Column";
 import { getPharmacyTableSchema, getPharmacyQueryFields } from "./filterSchema";
-import { sortRows } from "@/utils/sortRows";
-import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
+import { type QueryFieldOption, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 
 const pageSize = 10;
@@ -103,6 +106,14 @@ export function Pharmacy({
   const [worklistQueryFilters, setWorklistQueryFilters] = useState<
     QueryFilterRow[]
   >([]);
+  const [issuePageRows, setIssuePageRows] = useState<PharmacyIssueSummary[]>(
+    [],
+  );
+  const [issueTotal, setIssueTotal] = useState(0);
+  const [issueLoading, setIssueLoading] = useState(false);
+  const [filterOptions, setFilterOptions] = useState<
+    Record<string, QueryFieldOption[]>
+  >({});
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
   const [worklistFromDate, setWorklistFromDate] = useState("");
@@ -223,74 +234,73 @@ export function Pharmacy({
       getPharmacyQueryFields({
         sourceOptions: worklistSourceOptions,
         statusOptions: worklistStatusOptions,
+        rows: issuePageRows,
+        filterOptions,
       }),
-    [worklistSourceOptions, worklistStatusOptions],
+    [worklistSourceOptions, worklistStatusOptions, issuePageRows, filterOptions],
   );
 
 
   const { patients, patientMap } = usePatientReferencesQuery(
     apiSession,
-    issues.map((issue: any) => issue.patient_id),
+    [...issues, ...issuePageRows].map((issue: any) => issue.patient_id),
   );
 
-  const filteredIssues = useMemo(() => {
-    const q = worklistQuery.trim().toLowerCase();
-    const min = amountMin.trim() === "" ? null : Number(amountMin);
-    const max = amountMax.trim() === "" ? null : Number(amountMax);
-    const from = worklistFromDate
-      ? new Date(worklistFromDate).getTime()
-      : null;
-    const to = worklistToDate
-      ? new Date(`${worklistToDate}T23:59:59`).getTime()
-      : null;
-
-    const matching = issues.filter((issue: any) => {
-      if (q) {
-        const name = String(
-          issue.patient_name ||
-            (patientMap.get(issue.patient_id) as any)?.name ||
-            "",
-        ).toLowerCase();
-        if (!name.includes(q)) return false;
-      }
-
-      const amount = Number(issue.amount);
-      if (min !== null && amount < min) return false;
-      if (max !== null && amount > max) return false;
-
-      const createdAt = issue.created_at
-        ? new Date(issue.created_at).getTime()
-        : null;
-      if (from !== null && (createdAt === null || createdAt < from))
-        return false;
-      if (to !== null && (createdAt === null || createdAt > to)) return false;
-
-      return true;
+  async function loadPharmacyIssuePage(nextPage = page) {
+    if (!apiSession) return;
+    setIssueLoading(true);
+    const params = new URLSearchParams({
+      limit: String(pageSize),
+      offset: String((nextPage - 1) * pageSize),
     });
+    if (branchId) params.set("branch_id", branchId);
+    if (worklistQuery.trim()) params.set("q", worklistQuery.trim());
+    if (worklistFromDate) params.set("from_date", worklistFromDate);
+    if (worklistToDate) params.set("to_date", worklistToDate);
+    const filters = [...worklistQueryFilters];
+    if (amountMin.trim()) {
+      filters.push({
+        id: "amount-min",
+        field: "amount",
+        operator: "gte",
+        value: amountMin.trim(),
+      });
+    }
+    if (amountMax.trim()) {
+      filters.push({
+        id: "amount-max",
+        field: "amount",
+        operator: "lte",
+        value: amountMax.trim(),
+      });
+    }
+    if (filters.length) params.set("filters", JSON.stringify(filters));
+    if (worklistSort) params.set("sort", JSON.stringify(worklistSort));
+    try {
+      const result = await fetchPharmacyIssuePage(apiSession, params);
+      setIssuePageRows(result?.items || []);
+      setIssueTotal(Number(result?.total || 0));
+    } catch (err: any) {
+      setMessage(err.message || "Could not load pharmacy issues.");
+    } finally {
+      setIssueLoading(false);
+    }
+  }
 
-    return sortRows(
-      applyQueryFilters(matching, pharmacyQueryFields, worklistQueryFilters),
-      worklistSort,
-    );
-  }, [
-    issues,
-    worklistQuery,
-    worklistSort,
-    amountMin,
-    amountMax,
-    worklistFromDate,
-    worklistToDate,
-    patientMap,
-    pharmacyQueryFields,
-    worklistQueryFilters,
-  ]);
+  async function loadPharmacyFilterOptions() {
+    if (!apiSession) return;
+    const params = new URLSearchParams();
+    if (branchId) params.set("branch_id", branchId);
+    const result = await fetchPharmacyIssueFilterOptions(
+      apiSession,
+      params,
+    ).catch(() => ({}));
+    setFilterOptions(result || {});
+  }
 
-  const totalPages = Math.max(1, Math.ceil(filteredIssues.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(issueTotal / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pharmacyPageRows = filteredIssues.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
-  );
+  const pharmacyPageRows = issuePageRows;
   useEffect(() => {
     if (!medicineId && medicines[0]?.id) setMedicineId(medicines[0].id);
   }, [medicines, medicineId]);
@@ -305,6 +315,27 @@ export function Pharmacy({
     setPage(1);
   }, [
     worklistQuery,
+    worklistQueryFilters,
+    worklistSort,
+    amountMin,
+    amountMax,
+    worklistFromDate,
+    worklistToDate,
+  ]);
+  useEffect(() => {
+    if (!apiSession) return;
+    const timer = window.setTimeout(() => {
+      void loadPharmacyIssuePage(page);
+      void loadPharmacyFilterOptions();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [
+    apiSession?.tenantId,
+    branchId,
+    page,
+    worklistQuery,
+    worklistQueryFilters,
+    worklistSort,
     amountMin,
     amountMax,
     worklistFromDate,
@@ -320,6 +351,23 @@ export function Pharmacy({
   useEffect(() => {
     if (consultDetailError) setMessage(consultDetailError);
   }, [consultDetailError]);
+
+  function resetWorklistFilters() {
+    setWorklistQuery("");
+    setWorklistQueryFilters([]);
+    setWorklistSort(null);
+    setAmountMin("");
+    setAmountMax("");
+    setWorklistFromDate("");
+    setWorklistToDate("");
+    setPage(1);
+  }
+
+  function refreshPharmacyWorkspace() {
+    void load();
+    void loadPharmacyIssuePage(page);
+    void loadPharmacyFilterOptions();
+  }
 
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
@@ -392,6 +440,9 @@ export function Pharmacy({
       setIssueItems([]);
       setSelectedMedicineId("");
       setMedicineSearch("");
+      setPage(1);
+      void loadPharmacyIssuePage(1);
+      void loadPharmacyFilterOptions();
     }
   }
 
@@ -563,11 +614,11 @@ export function Pharmacy({
         <div className="flex items-center gap-2">
           <AdaptiveResultCount
             shown={pharmacyPageRows.length}
-            total={filteredIssues.length}
+            total={issueTotal}
             noun="issues"
           />
           <RefreshButton
-            onRefresh={load}
+            onRefresh={refreshPharmacyWorkspace}
             className="h-auto rounded-md px-2.5 py-1 text-[11px]"
           />
           <AdaptiveFilterTrigger
@@ -578,12 +629,7 @@ export function Pharmacy({
             sort={worklistSort}
             onSortChange={setWorklistSort}
             showSort={false}
-            onReset={() => {
-              setAmountMin("");
-              setAmountMax("");
-              setWorklistFromDate("");
-              setWorklistToDate("");
-            }}
+            onReset={resetWorklistFilters}
             queryFields={pharmacyQueryFields}
             queryFilters={worklistQueryFilters}
             onQueryFiltersChange={setWorklistQueryFilters}
@@ -754,7 +800,7 @@ export function Pharmacy({
           <h3 className="card-title font-bold">Pharmacy Worklist</h3>
         </div>
         <div className="mt-4">
-          {!issuesLoaded ? (
+          {!issuesLoaded || issueLoading ? (
             <div className="overflow-auto rounded-lg border">
               <TableSkeleton rows={8} />
             </div>
@@ -773,7 +819,7 @@ export function Pharmacy({
           <Pagination
             page={safePage}
             totalPages={totalPages}
-            total={filteredIssues.length}
+            total={issueTotal}
             onPage={setPage}
           />
         )}

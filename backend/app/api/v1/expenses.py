@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
 from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.expenses.models import ExpenseCategory, ExpenseStatus
@@ -19,6 +20,7 @@ from app.modules.expenses.services.expense import (
     attach_receipt,
     update_expense,
     list_expenses,
+    list_expense_filter_options,
     reject_expense,
     reimburse_expense,
     get_expense,
@@ -40,6 +42,8 @@ def list_expenses_endpoint(
     from_date: date | None = Query(default=None),
     to_date: date | None = Query(default=None),
     q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     tenant_id: str = Depends(require_tenant_id),
@@ -61,9 +65,28 @@ def list_expenses_endpoint(
         query=q,
         limit=limit,
         offset=offset,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
     )
 
     return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/filter-options", response_model=dict[str, list[ListFilterOption]])
+def list_expense_filter_options_endpoint(
+    branch_id: str | None = Query(default=None),
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(permissions.EXPENSES_MANAGE, permissions.EXPENSES_READ)
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return list_expense_filter_options(
+        session,
+        tenant_id=tenant_id,
+        actor=current_user,
+        branch_id=branch_id,
+    )
 
 
 @router.get("/subcategories/recent", response_model=list[str])

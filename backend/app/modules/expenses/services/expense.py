@@ -2,6 +2,7 @@ import json
 from fastapi import HTTPException, status
 from sqlmodel import Session
 from app.core.access_control import require_user_branch_access, scoped_branch_id
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
 from app.modules.audit.service import record_audit_event
 from app.modules.expenses.models import Expense, ExpenseStatus
 from app.modules.expenses.repositories.expense_repository import ExpenseRepository
@@ -46,6 +47,8 @@ def list_expenses(
     query: str | None,
     limit: int,
     offset: int,
+    list_filters: list[ListFilter] | None = None,
+    list_sort: ListSort | None = None,
 ) -> tuple[list[ExpenseRead], int]:
     repo = ExpenseRepository(session=session)
     rows, total = repo.list_for_tenant(
@@ -57,11 +60,27 @@ def list_expenses(
         from_date=from_date,
         to_date=to_date,
         query=query,
+        list_filters=list_filters,
+        list_sort=list_sort,
         limit=limit,
         offset=offset,
     )
 
     return [_read(row) for row in rows], total
+
+
+def list_expense_filter_options(
+    session: Session,
+    *,
+    actor: User,
+    tenant_id: str,
+    branch_id: str | None,
+) -> dict[str, list[ListFilterOption]]:
+    repo = ExpenseRepository(session=session)
+    return repo.filter_options(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch_id(actor, branch_id=branch_id),
+    )
 
 
 def get_expense(session: Session, *, tenant_id: str, expense_id: str):
@@ -91,6 +110,8 @@ def create_expense(
         incurred_on=payload.incurred_on,
         description=payload.description,
         submitted_by=actor.id,
+        created_by_user_id=actor.id,
+        updated_by_user_id=actor.id,
     )
     repo.add(expense)
     session.commit()
@@ -137,6 +158,7 @@ def update_expense(
     updates = payload.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(expense, field, value)
+    expense.updated_by_user_id = actor.id
     session.add(expense)
     session.commit()
     session.refresh(expense)
@@ -160,6 +182,7 @@ def attach_receipt(
         )
 
     expense.receipt_file_id = payload.reciept_file_id
+    expense.updated_by_user_id = actor.id
     session.add(expense)
     session.commit()
     session.refresh(expense)
@@ -180,6 +203,7 @@ def approve_expense(
         )
     expense.status = ExpenseStatus.APPROVED
     expense.approved_by = actor.id
+    expense.updated_by_user_id = actor.id
     session.add(expense)
     session.commit()
     session.refresh(expense)
@@ -214,6 +238,7 @@ def reject_expense(
         )
     expense.status = ExpenseStatus.REJECTED
     expense.rejection_reason = payload.reason
+    expense.updated_by_user_id = actor.id
     session.add(expense)
     session.commit()
     session.refresh(expense)
@@ -243,6 +268,7 @@ def reimburse_expense(
             detail="Only approved expenses can be reimbursed",
         )
     expense.status = ExpenseStatus.REIMBURSED
+    expense.updated_by_user_id = actor.id
     session.add(expense)
     session.commit()
     session.refresh(expense)

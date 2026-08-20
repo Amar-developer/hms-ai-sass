@@ -11,7 +11,12 @@ import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { Pagination } from "@/app/components/common/Pagination";
 import { ScheduleFormValues } from "./schedule.schema";
-import { useSchedulingData, useSchedulingActions } from "./api";
+import {
+  getScheduleFilterOptions,
+  getSchedulePage,
+  useSchedulingData,
+  useSchedulingActions,
+} from "./api";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
 import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
@@ -19,8 +24,7 @@ import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getScheduleColumns } from "./column";
 import { getScheduleTableSchema, getScheduleQueryFields } from "./filterSchema";
-import { sortRows } from "@/utils/sortRows";
-import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
+import type { QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 
 export function Scheduling({
@@ -57,6 +61,11 @@ export function Scheduling({
   const [page, setPage] = useState(1);
   const [message, setMessage] = useState("");
   const [confirm, setConfirm] = useState<any>(null);
+  const [schedulePage, setSchedulePage] = useState<any>(null);
+  const [schedulePageLoading, setSchedulePageLoading] = useState(true);
+  const [scheduleFilterOptions, setScheduleFilterOptions] = useState<
+    Record<string, { value: string; label: string }[]>
+  >({});
 
   const scopedSession =
     apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
@@ -80,7 +89,54 @@ export function Scheduling({
   const resetScheduleFilters = () => {
     setFilterWeekday("all");
     setSort({ key: "updated_at", dir: "desc" });
+    setQuery("");
+    setQueryFilters([]);
   };
+
+  async function loadSchedulePage() {
+    if (!scopedSession) {
+      setSchedulePageLoading(false);
+      return;
+    }
+    setSchedulePageLoading(true);
+    try {
+      const result = await getSchedulePage(scopedSession, {
+        q: query,
+        weekday: filterWeekday,
+        queryFilters,
+        sort,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      setSchedulePage(result);
+    } catch (err: any) {
+      setMessage(err.message || "Could not load schedules.");
+    } finally {
+      setSchedulePageLoading(false);
+    }
+  }
+
+  async function loadScheduleFilterOptions() {
+    if (!scopedSession) return;
+    try {
+      const result = await getScheduleFilterOptions(scopedSession);
+      setScheduleFilterOptions(result || {});
+    } catch (err: any) {
+      setMessage(err.message || "Could not load schedule filter options.");
+    }
+  }
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, filterWeekday, queryFilters, sort]);
+
+  useEffect(() => {
+    void loadSchedulePage();
+  }, [tenantId, query, filterWeekday, queryFilters, sort, page]);
+
+  useEffect(() => {
+    void loadScheduleFilterOptions();
+  }, [tenantId]);
 
   // Bounce back to the list if a direct/bookmarked edit link no longer
   // resolves to a real schedule, but only once loading has finished.
@@ -155,6 +211,7 @@ export function Scheduling({
 
       open("list");
       await reload();
+      await loadSchedulePage();
       setMessage(
         `${createdRows.length} schedule${createdRows.length === 1 ? "" : "s"} created.`,
       );
@@ -218,6 +275,7 @@ export function Scheduling({
 
       open("list");
       await reload();
+      await loadSchedulePage();
       setMessage(
         extraPayloads.length
           ? `Schedule updated and ${extraPayloads.length} extra schedule${
@@ -239,6 +297,7 @@ export function Scheduling({
       await remove(row.id, scopedSession);
       setMessage("Schedule deleted.");
       await reload();
+      await loadSchedulePage();
     } catch (err: any) {
       setMessage(err.message || "Could not delete schedule.");
     } finally {
@@ -289,62 +348,12 @@ export function Scheduling({
     rows,
     branches,
     departments,
+    filterOptions: scheduleFilterOptions,
   });
-  const filteredRows = sortRows(
-    applyQueryFilters(
-      rows.filter((row: any) => {
-        const doctor = doctors.find(
-          (item: any) => item.id === row.practitioner_id,
-        );
-        const department = departments.find(
-          (item: any) => item.id === row.department_id,
-        );
-        const text = [
-          row.practitioner_full_name || doctor?.full_name,
-          row.department_name || department?.name,
-        ]
-          .join(" ")
-          .toLowerCase();
-        return (
-          (!query || text.includes(query.toLowerCase())) &&
-          (filterWeekday === "all" ||
-            (row.weekdays || []).includes(Number(filterWeekday)))
-        );
-      }),
-      scheduleQueryFields,
-      queryFilters,
-    ),
-    sort,
-    (row, key) => {
-      if (key === "updated_at") return row.updated_at || row.created_at;
-      if (key === "doctor")
-        return (
-          row.practitioner_full_name ||
-          doctors.find((item: any) => item.id === row.practitioner_id)
-            ?.full_name
-        );
-      if (key === "branch")
-        return (
-          row.branch_name ||
-          branches.find((item: any) => item.id === row.branch_id)?.name
-        );
-      if (key === "department")
-        return (
-          row.department_name ||
-          departments.find((item: any) => item.id === row.department_id)
-            ?.name
-        );
-      if (key === "status") return row.is_active ? 1 : 0;
-      return row[key];
-    },
-  );
-
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const pageRows = schedulePage?.items || [];
+  const totalRowsCount = Number(schedulePage?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(totalRowsCount / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageRows = filteredRows.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
-  );
   const columns = getScheduleColumns({
     doctors,
     branches,
@@ -358,11 +367,15 @@ export function Scheduling({
         <div className="flex items-center gap-2">
           <AdaptiveResultCount
             shown={pageRows.length}
-            total={filteredRows.length}
+            total={totalRowsCount}
             noun="schedules"
           />
           <RefreshButton
-            onRefresh={reload}
+            onRefresh={async () => {
+              await reload();
+              await loadSchedulePage();
+              await loadScheduleFilterOptions();
+            }}
             className="h-auto rounded-md px-2.5 py-1 text-[11px]"
           />
           <AdaptiveFilterTrigger
@@ -413,7 +426,7 @@ export function Scheduling({
         <DataTable
           columns={columns}
           data={pageRows}
-          loading={loading}
+          loading={loading || schedulePageLoading}
           emptyMessage="No schedules available"
           className=" rounded-lg border border-slate-200 overflow-auto"
           onRowClick={(row) => open("edit", row.id)}
@@ -425,7 +438,7 @@ export function Scheduling({
       <Pagination
         page={safePage}
         totalPages={totalPages}
-        total={filteredRows.length}
+        total={totalRowsCount}
         onPage={setPage}
       />
 

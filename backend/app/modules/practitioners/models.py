@@ -34,6 +34,8 @@ class Practitioner(SQLModel, table=True):
     email: str | None = Field(default=None, max_length=220)
     signature_url: str | None = Field(default=None, max_length=500)
     status: PractitionerStatus = Field(default=PractitionerStatus.ACTIVE, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -74,6 +76,8 @@ class PractitionerSchedule(SQLModel, table=True):
     end_time: time
     slot_minutes: int = Field(default=15, ge=1, le=240)
     is_active: bool = Field(default=True, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -89,6 +93,8 @@ class PractitionerLeave(SQLModel, table=True):
     end_time: time | None = None
     reason: str | None = Field(default=None, max_length=300)
     is_active: bool = Field(default=True, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -105,5 +111,7 @@ class PractitionerRoomAssignment(SQLModel, table=True):
     start_time: time
     end_time: time
     is_active: bool = Field(default=True, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)

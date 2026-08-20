@@ -4,6 +4,13 @@ export function fetchExpensePage(session: ApiSession, params: URLSearchParams) {
   return apiFetch(`/expenses?${params.toString()}`, session);
 }
 
+export function fetchExpenseFilterOptions(
+  session: ApiSession,
+  params: URLSearchParams,
+) {
+  return apiFetch(`/expenses/filter-options?${params.toString()}`, session);
+}
+
 export function fetchExpense(session: ApiSession, expenseId: string) {
   return apiFetch(`/expenses/${expenseId}`, session);
 }

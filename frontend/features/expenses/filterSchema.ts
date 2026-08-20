@@ -1,5 +1,9 @@
 import type { TableSchema } from "@/app/components/common/AdaptiveFilterBar";
-import type { QueryFieldSchema } from "@/utils/queryFilter";
+import {
+  optionMapValues,
+  type QueryFieldOption,
+  type QueryFieldSchema,
+} from "@/utils/queryFilter";
 import {
   EXPENSE_CATEGORY_OPTIONS,
   EXPENSE_STATUS_FILTER_OPTIONS,
@@ -59,6 +63,7 @@ function distinctFieldOptions(
 export function getExpenseQueryFields(
   view: "months" | "expenses",
   rows: any[],
+  filterOptions?: Record<string, QueryFieldOption[]>,
 ): QueryFieldSchema[] {
   if (view === "months") {
     return [
@@ -70,15 +75,67 @@ export function getExpenseQueryFields(
   return [
     { key: "description", label: "Description", type: "text" },
     { key: "subcategory", label: "Subcategory", type: "text" },
-    { key: "submittedBy", label: "Submitted By", type: "text" },
     {
-      key: "branchName",
+      key: "submittedBy",
+      label: "Submitted By",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "submitted_by",
+        distinctFieldOptions(rows, "submittedBy"),
+      ),
+    },
+    {
+      key: "approvedBy",
+      label: "Approved By",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "approved_by",
+        distinctFieldOptions(rows, "approvedBy"),
+      ),
+    },
+    {
+      key: "branchId",
       label: "Branch",
       type: "select",
-      options: distinctFieldOptions(rows, "branchName"),
+      options: optionMapValues(
+        filterOptions,
+        "branch_id",
+        distinctFieldOptions(rows, "branchId"),
+      ),
+    },
+    {
+      key: "category",
+      label: "Category",
+      type: "select",
+      options: optionMapValues(filterOptions, "category", EXPENSE_CATEGORY_OPTIONS),
+    },
+    {
+      key: "status",
+      label: "Status",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "status",
+        EXPENSE_STATUS_FILTER_OPTIONS.filter((option) => option.value !== "all"),
+      ),
     },
     { key: "amount", label: "Amount", type: "number" },
     { key: "incurredOn", label: "Incurred On", type: "date" },
     { key: "createdAt", label: "Created On", type: "date" },
+    {
+      key: "createdByUserId",
+      label: "Created By",
+      type: "select",
+      options: optionMapValues(filterOptions, "created_by_user_id"),
+    },
+    { key: "updatedAt", label: "Last Updated On", type: "date" },
+    {
+      key: "updatedByUserId",
+      label: "Last Updated By",
+      type: "select",
+      options: optionMapValues(filterOptions, "updated_by_user_id"),
+    },
   ];
 }

@@ -86,6 +86,7 @@ class TaxRule(SQLModel, table=True):
     service_scope: str = Field(default="all", index=True, max_length=40)
     is_active: bool = Field(default=True, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
 
 
@@ -331,6 +332,7 @@ class DiscountOffer(SQLModel, table=True):
     valid_until: datetime | None = Field(default=None, index=True)
     is_active: bool = Field(default=True, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
 
 

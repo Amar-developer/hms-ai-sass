@@ -6,6 +6,8 @@ from app.core.access_control import (
     require_user_branch_access,
     scoped_branch_id,
 )
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
+from app.core.pagination import Page
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.identity.models import User
 from app.modules.item_catalog_validation import validate_unique_item_name
@@ -13,6 +15,7 @@ from app.modules.physiotherapy.models import PhysiotherapyEquipment
 from app.modules.physiotherapy.repositories import PhysiotherapyEquipmentRepository
 from app.modules.physiotherapy.schemas import (
     PhysiotherapyEquipmentCreate,
+    PhysiotherapyEquipmentRead,
     PhysiotherapyEquipmentUpdate,
 )
 from app.modules.subscriptions.service import enforce_module_enabled
@@ -30,6 +33,54 @@ class PhysiotherapyEquipmentService:
         enforce_module_enabled(self.session, tenant_id, "physiotherapy")
         branch_scope = scoped_branch_id(actor, branch_id)
         return self.equipment.list_active(tenant_id=tenant_id, branch_id=branch_scope)
+
+    def list_equipment_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None,
+        list_filters: list[ListFilter],
+        list_sort: ListSort | None,
+        limit: int,
+        offset: int,
+        actor: User,
+    ) -> Page[PhysiotherapyEquipmentRead]:
+        enforce_module_enabled(self.session, tenant_id, "physiotherapy")
+        branch_scope = scoped_branch_id(actor, branch_id)
+        rows = self.equipment.list_page(
+            tenant_id=tenant_id,
+            branch_id=branch_scope,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+            list_sort=list_sort,
+            limit=limit,
+            offset=offset,
+        )
+        total = self.equipment.count_page(
+            tenant_id=tenant_id,
+            branch_id=branch_scope,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+        )
+        return Page(
+            items=[
+                PhysiotherapyEquipmentRead.model_validate(row, from_attributes=True)
+                for row in rows
+            ],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    def list_equipment_filter_options(
+        self, *, tenant_id: str
+    ) -> dict[str, list[ListFilterOption]]:
+        enforce_module_enabled(self.session, tenant_id, "physiotherapy")
+        return self.equipment.filter_options(tenant_id=tenant_id)
 
     def create_equipment(
         self, *, tenant_id: str, payload: PhysiotherapyEquipmentCreate, actor: User

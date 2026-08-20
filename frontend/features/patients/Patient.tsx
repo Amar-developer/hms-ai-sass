@@ -27,8 +27,7 @@ import {
 } from "./api";
 import { getPatientColumns } from "./Column";
 import { getPatientTableSchema, getPatientQueryFields } from "./filterSchema";
-import { sortRows } from "@/utils/sortRows";
-import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
+import { type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 import {
   fetchPatientIntelligence,
@@ -109,7 +108,16 @@ export function Patient({
   const scopedSession =
     apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
 
-  const { tenants, branches, rows, totalRows, setRows, loadTenants, loadData } =
+  const {
+    tenants,
+    branches,
+    rows,
+    totalRows,
+    filterOptions,
+    setRows,
+    loadTenants,
+    loadData,
+  } =
     usePatientListData({ apiSession, tenantId, setTenantId, setBusy, setMessage });
 
   const {
@@ -140,7 +148,11 @@ export function Patient({
   const selected = selectedDetail || rows.find((row: any) => row.id === selectedId);
 
   const patientSchema = getPatientTableSchema({ isSuperAdmin, tenants });
-  const patientQueryFields = getPatientQueryFields({ rows, branches });
+  const patientQueryFields = getPatientQueryFields({
+    rows,
+    branches,
+    filterOptions,
+  });
 
   const filterValues = {
     tenant: tenantId,
@@ -180,6 +192,7 @@ export function Patient({
     setBranchFilter("all");
     setFromDate("");
     setToDate("");
+    setQueryFilters([]);
     setSort(DEFAULT_SORT);
     setPage(1);
     setMessage("");
@@ -190,6 +203,8 @@ export function Patient({
       branchFilter: "all",
       fromDate: "",
       toDate: "",
+      queryFilters: [],
+      sort: DEFAULT_SORT,
     });
   }
 
@@ -215,7 +230,41 @@ export function Patient({
       branchFilter,
       fromDate,
       toDate,
+      queryFilters,
+      sort,
       ...overrides,
+    });
+  }
+
+  function handleQueryFiltersChange(nextFilters: QueryFilterRow[]) {
+    setQueryFilters(nextFilters);
+    setPage(1);
+    setMessage("");
+    loadData(tenantId, 1, {
+      query,
+      status,
+      gender,
+      branchFilter,
+      fromDate,
+      toDate,
+      queryFilters: nextFilters,
+      sort,
+    });
+  }
+
+  function handleSortChange(nextSort: SortState | null) {
+    setSort(nextSort);
+    setPage(1);
+    setMessage("");
+    loadData(tenantId, 1, {
+      query,
+      status,
+      gender,
+      branchFilter,
+      fromDate,
+      toDate,
+      queryFilters,
+      sort: nextSort,
     });
   }
 
@@ -454,10 +503,7 @@ export function Patient({
 
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageRows = sortRows(
-    applyQueryFilters(rows, patientQueryFields, queryFilters),
-    sort,
-  );
+  const pageRows = rows;
 
   const patientColumns = getPatientColumns({
     branches,
@@ -493,17 +539,17 @@ export function Patient({
             filterValues={filterValues}
             onFilterChange={handleFilterChange}
             sort={sort}
-            onSortChange={setSort}
+            onSortChange={handleSortChange}
             showSort={false}
             onReset={resetPatientFilters}
             queryFields={patientQueryFields}
             queryFilters={queryFilters}
-            onQueryFiltersChange={setQueryFilters}
+            onQueryFiltersChange={handleQueryFiltersChange}
           />
           <AdaptiveSortTrigger
             fields={patientSchema.sortFields}
             sort={sort}
-            onSortChange={setSort}
+            onSortChange={handleSortChange}
           />
         </div>
       </BreadcrumbSlot>
@@ -538,7 +584,7 @@ export function Patient({
             emptyMessage="No patients match your search."
             onRowClick={(row: any) => open("detail", row.id)}
             sort={sort ?? undefined}
-            onSortChange={setSort}
+            onSortChange={handleSortChange}
           />
         </div>
       </div>

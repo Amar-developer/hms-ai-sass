@@ -1,17 +1,28 @@
+import json
 from datetime import date
+from decimal import Decimal
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment, AppointmentType
-from app.modules.billing.models import DoctorFeeRule, InvoiceItem
+from app.core.list_filters import parse_list_filters, parse_list_sort
+from app.modules.billing.models import (
+    DoctorFeeRule,
+    Invoice,
+    InvoiceItem,
+    InvoiceStatus,
+)
+from app.modules.billing.repositories.read_repository import BillingReadRepository
 from app.modules.billing.services.consultation_invoice import (
     consultation_item_description,
     doctor_share_after_patient_benefits,
 )
 from app.modules.billing.services.rules import calculate_fee_split
 from app.modules.billing.services.service_invoices import create_service_invoice
-from app.modules.tenants.models import Department
+from app.modules.identity.models import User
+from app.modules.patients.models import Patient
+from app.modules.tenants.models import Branch, Department, Tenant
 
 
 def test_full_membership_benefit_preserves_contractual_doctor_share():
@@ -154,6 +165,234 @@ def test_service_invoice_posts_full_multiline_total_to_ledger(test_engine):
     assert ledger_entries[0]["invoice_total_delta"] == 700
     assert ledger_entries[0]["balance_amount_delta"] == 700
     assert ledger_entries[0]["commit"] is False
+
+
+def test_billing_invoice_repository_applies_dynamic_filter_before_pagination(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Billing Filter Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        session.add(branch)
+        session.commit()
+        session.refresh(branch)
+        first_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-BILL-1",
+            full_name="Asha Billing",
+            mobile="9000000101",
+        )
+        second_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-BILL-2",
+            full_name="Ravi Billing",
+            mobile="9000000102",
+        )
+        session.add(first_patient)
+        session.add(second_patient)
+        session.commit()
+        session.refresh(first_patient)
+        session.refresh(second_patient)
+        session.add(
+            Invoice(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=first_patient.id,
+                invoice_number="INV-BILL-1",
+                total_amount=Decimal("500"),
+                paid_amount=Decimal("0"),
+                balance_amount=Decimal("500"),
+            )
+        )
+        session.add(
+            Invoice(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=second_patient.id,
+                invoice_number="INV-BILL-2",
+                total_amount=Decimal("1200"),
+                paid_amount=Decimal("1200"),
+                balance_amount=Decimal("0"),
+            )
+        )
+        session.commit()
+
+        repo = BillingReadRepository(session)
+        filters = parse_list_filters(
+            json.dumps(
+                [
+                    {
+                        "field": "patient_name",
+                        "operator": "like",
+                        "value": "asha",
+                    }
+                ]
+            )
+        )
+        rows = repo.list_invoices(
+            tenant_id=tenant.id,
+            branch_id=None,
+            patient_id=None,
+            list_filters=filters,
+            offset=0,
+            limit=1,
+        )
+        total = repo.count_invoices(
+            tenant_id=tenant.id,
+            branch_id=None,
+            patient_id=None,
+            list_filters=filters,
+        )
+
+    assert total == 1
+    assert [row.invoice_number for row in rows] == ["INV-BILL-1"]
+
+
+def test_billing_invoice_repository_applies_dynamic_sort_before_pagination(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Billing Sort Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-BILL-SORT",
+            full_name="Sort Patient",
+            mobile="9000000111",
+        )
+        session.add(branch)
+        session.add(patient)
+        session.commit()
+        session.refresh(branch)
+        session.refresh(patient)
+        session.add(
+            Invoice(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=patient.id,
+                invoice_number="INV-SMALL",
+                total_amount=Decimal("300"),
+                paid_amount=Decimal("0"),
+                balance_amount=Decimal("300"),
+            )
+        )
+        session.add(
+            Invoice(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=patient.id,
+                invoice_number="INV-LARGE",
+                total_amount=Decimal("900"),
+                paid_amount=Decimal("0"),
+                balance_amount=Decimal("900"),
+            )
+        )
+        session.commit()
+
+        rows = BillingReadRepository(session).list_invoices(
+            tenant_id=tenant.id,
+            branch_id=None,
+            patient_id=None,
+            list_sort=parse_list_sort(
+                json.dumps({"key": "total_amount", "dir": "desc"})
+            ),
+            offset=0,
+            limit=1,
+        )
+
+    assert [row.invoice_number for row in rows] == ["INV-LARGE"]
+
+
+def test_billing_invoice_filter_options_are_data_backed_and_branch_scoped(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Billing Options Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        main_branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        side_branch = Branch(tenant_id=tenant.id, name="Side Branch", code="SIDE")
+        main_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            patient_number="PAT-BILL-OPT-1",
+            full_name="Main Billing Patient",
+            mobile="9000000301",
+        )
+        side_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=side_branch.id,
+            patient_number="PAT-BILL-OPT-2",
+            full_name="Side Billing Patient",
+            mobile="9000000302",
+        )
+        session.add(main_branch)
+        session.add(side_branch)
+        session.add(main_patient)
+        session.add(side_patient)
+        session.commit()
+        session.refresh(main_branch)
+        session.refresh(side_branch)
+        session.refresh(main_patient)
+        session.refresh(side_patient)
+        creator = User(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            name="Billing User",
+            email="billing@example.test",
+        )
+        session.add(creator)
+        session.commit()
+        session.refresh(creator)
+        creator_id = creator.id
+        session.add(
+            Invoice(
+                tenant_id=tenant.id,
+                branch_id=main_branch.id,
+                patient_id=main_patient.id,
+                invoice_number="INV-OPT-DIRECT",
+                status=InvoiceStatus.PAID,
+                created_by_user_id=creator_id,
+                total_amount=Decimal("500"),
+                paid_amount=Decimal("500"),
+                balance_amount=Decimal("0"),
+            )
+        )
+        session.add(
+            Invoice(
+                tenant_id=tenant.id,
+                branch_id=side_branch.id,
+                patient_id=side_patient.id,
+                invoice_number="INV-OPT-LAB",
+                status=InvoiceStatus.DRAFT,
+                lab_order_id="lab_order_other_branch",
+                total_amount=Decimal("700"),
+                paid_amount=Decimal("0"),
+                balance_amount=Decimal("700"),
+            )
+        )
+        session.commit()
+
+        options = BillingReadRepository(session).invoice_filter_options(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+        )
+
+    assert [row.value for row in options["source"]] == ["direct"]
+    assert [row.value for row in options["status"]] == ["paid"]
+    assert [row.model_dump() for row in options["created_by_user_id"]] == [
+        {"value": creator_id, "label": "Billing User"}
+    ]
 
 
 def setup_signed_consultation(

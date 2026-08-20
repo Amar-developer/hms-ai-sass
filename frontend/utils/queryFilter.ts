@@ -13,6 +13,71 @@ export type QueryFieldSchema = {
   options?: QueryFieldOption[];
 };
 
+export function optionMapValues(
+  options: Record<string, QueryFieldOption[]> | undefined,
+  key: string,
+  fallback: QueryFieldOption[] = [],
+  labelFor?: (value: string) => string,
+) {
+  const values = options?.[key]?.length ? options[key] : fallback;
+  return values.map((option) => ({
+    ...option,
+    label: labelFor ? labelFor(option.value) : option.label,
+  }));
+}
+
+export function standardAuditQueryFields({
+  rows,
+  filterOptions,
+  includeUpdatedBy = false,
+}: {
+  rows?: any[];
+  filterOptions?: Record<string, QueryFieldOption[]>;
+  includeUpdatedBy?: boolean;
+} = {}): QueryFieldSchema[] {
+  const rowOptions = (key: string) => {
+    const seen = new Map<string, string>();
+    (rows || []).forEach((row) => {
+      const raw = row[key];
+      if (raw === null || raw === undefined || raw === "") return;
+      const value = String(raw);
+      if (!seen.has(value)) seen.set(value, value);
+    });
+    return Array.from(seen.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
+  };
+  return [
+    { key: "created_at", label: "Created On", type: "date" },
+    {
+      key: "created_by_user_id",
+      label: "Created By",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "created_by_user_id",
+        rowOptions("created_by_user_id"),
+      ),
+    },
+    { key: "updated_at", label: "Last Updated On", type: "date" },
+    ...(includeUpdatedBy
+      ? [
+          {
+            key: "updated_by_user_id",
+            label: "Last Updated By",
+            type: "select" as const,
+            options: optionMapValues(
+              filterOptions,
+              "updated_by_user_id",
+              rowOptions("updated_by_user_id"),
+            ),
+          },
+        ]
+      : []),
+  ];
+}
+
 export type QueryOperator =
   | "equals"
   | "not_equals"

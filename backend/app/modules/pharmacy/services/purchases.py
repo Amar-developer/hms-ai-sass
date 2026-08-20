@@ -47,6 +47,8 @@ def purchase_read(
         gst_amount=purchase.gst_amount,
         total_amount=purchase.total_amount,
         purchased_by_user_id=purchase.purchased_by_user_id,
+        created_by_user_id=purchase.created_by_user_id,
+        updated_by_user_id=purchase.updated_by_user_id,
         created_at=purchase.created_at,
         updated_at=purchase.updated_at,
         batches=[
@@ -69,7 +71,9 @@ def create_purchase_record(
         invoice_number=payload.invoice_number,
         purchase_date=payload.purchase_date or datetime.now(timezone.utc),
         discount_percentage=payload.discount_percentage,
-        purchased_by_user_id=payload.purchased_by_user_id,
+        purchased_by_user_id=payload.purchased_by_user_id or actor.id,
+        created_by_user_id=actor.id,
+        updated_by_user_id=actor.id,
     )
     session.add(purchase)
     session.commit()
@@ -145,7 +149,7 @@ def create_purchase_record(
             quantity_delta=item.quantity,
             reference_type="pharmacy_purchase",
             reference_id=purchase.id,
-            actor_user_id=payload.purchased_by_user_id,
+            actor_user_id=purchase.purchased_by_user_id,
         )
     purchase_discount = round(taxable_total * payload.discount_percentage / 100)
     purchase.discount_amount = line_discount_total + purchase_discount
@@ -158,6 +162,7 @@ def create_purchase_record(
     purchase.gst_amount = cgst_total + sgst_total
     purchase.total_amount = purchase.taxable_amount + purchase.gst_amount
     purchase.updated_at = datetime.now(timezone.utc)
+    purchase.updated_by_user_id = actor.id
     session.add(purchase)
     session.commit()
     session.refresh(purchase)
@@ -165,7 +170,7 @@ def create_purchase_record(
         session,
         tenant_id=tenant_id,
         branch_id=payload.branch_id,
-        actor_user_id=payload.purchased_by_user_id,
+        actor_user_id=purchase.created_by_user_id,
         action="pharmacy_purchase.created",
         resource_type="pharmacy_purchase",
         resource_id=purchase.id,
@@ -186,7 +191,9 @@ def create_pharmacy_return_record(
         supplier_id=payload.supplier_id,
         purchase_id=payload.purchase_id,
         reason=payload.reason,
-        returned_by_user_id=payload.returned_by_user_id,
+        returned_by_user_id=payload.returned_by_user_id or actor.id,
+        created_by_user_id=actor.id,
+        updated_by_user_id=actor.id,
     )
     session.add(return_record)
     session.commit()
@@ -239,9 +246,10 @@ def create_pharmacy_return_record(
             quantity_delta=-item.quantity,
             reference_type="pharmacy_return",
             reference_id=return_record.id,
-            actor_user_id=payload.returned_by_user_id,
+            actor_user_id=return_record.returned_by_user_id,
         )
     return_record.total_amount = total
+    return_record.updated_by_user_id = actor.id
     session.add(return_record)
     session.commit()
     session.refresh(return_record)
@@ -249,7 +257,7 @@ def create_pharmacy_return_record(
         session,
         tenant_id=tenant_id,
         branch_id=payload.branch_id,
-        actor_user_id=payload.returned_by_user_id,
+        actor_user_id=return_record.created_by_user_id,
         action="pharmacy_return.created",
         resource_type="pharmacy_return",
         resource_id=return_record.id,

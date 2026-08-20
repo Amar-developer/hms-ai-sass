@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ApiSession } from "@/lib/api";
+import type { QueryFieldOption } from "@/utils/queryFilter";
 import * as itemsApi from "./items.api";
 
 type UseItemsDataParams = {
@@ -23,6 +24,19 @@ export function useItemsData({ apiSession, branchId }: UseItemsDataParams) {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [homeCareServices, setHomeCareServices] = useState<any[]>([]);
   const [stockSuppliers, setStockSuppliers] = useState<any[]>([]);
+  const [medicineFilterOptions, setMedicineFilterOptions] = useState<
+    Record<string, QueryFieldOption[]>
+  >({});
+  const [labTestFilterOptions, setLabTestFilterOptions] = useState<
+    Record<string, QueryFieldOption[]>
+  >({});
+  const [labPackageFilterOptions, setLabPackageFilterOptions] = useState<
+    Record<string, QueryFieldOption[]>
+  >({});
+  const [physioEquipmentFilterOptions, setPhysioEquipmentFilterOptions] =
+    useState<Record<string, QueryFieldOption[]>>({});
+  const [homeCareServiceFilterOptions, setHomeCareServiceFilterOptions] =
+    useState<Record<string, QueryFieldOption[]>>({});
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
 
@@ -37,6 +51,11 @@ export function useItemsData({ apiSession, branchId }: UseItemsDataParams) {
         equipmentRows,
         homeCareServiceRows,
         supplierRows,
+        medicineOptions,
+        labTestOptions,
+        labPackageOptions,
+        physioEquipmentOptions,
+        homeCareServiceOptions,
       ] = await Promise.all([
         itemsApi.listMedicines(apiSession).catch(() => []),
         itemsApi.listLabTests(apiSession).catch(() => []),
@@ -44,6 +63,15 @@ export function useItemsData({ apiSession, branchId }: UseItemsDataParams) {
         itemsApi.listPhysioEquipment(apiSession).catch(() => []),
         itemsApi.listHomeCareServices(apiSession).catch(() => []),
         itemsApi.listSuppliers(apiSession).catch(() => []),
+        itemsApi.listMedicineFilterOptions(apiSession).catch(() => ({})),
+        itemsApi.listLabTestFilterOptions(apiSession).catch(() => ({})),
+        itemsApi.listLabPackageFilterOptions(apiSession).catch(() => ({})),
+        itemsApi
+          .listPhysioEquipmentFilterOptions(apiSession)
+          .catch(() => ({})),
+        itemsApi
+          .listHomeCareServiceFilterOptions(apiSession)
+          .catch(() => ({})),
       ]);
       setMedicines(medicineRows);
       setTests(testRows);
@@ -51,6 +79,11 @@ export function useItemsData({ apiSession, branchId }: UseItemsDataParams) {
       setEquipment(equipmentRows);
       setHomeCareServices(homeCareServiceRows);
       setStockSuppliers(supplierRows);
+      setMedicineFilterOptions(medicineOptions || {});
+      setLabTestFilterOptions(labTestOptions || {});
+      setLabPackageFilterOptions(labPackageOptions || {});
+      setPhysioEquipmentFilterOptions(physioEquipmentOptions || {});
+      setHomeCareServiceFilterOptions(homeCareServiceOptions || {});
     } catch (err: any) {
       setLoadError(err.message || "Could not load items.");
     } finally {
@@ -69,6 +102,11 @@ export function useItemsData({ apiSession, branchId }: UseItemsDataParams) {
     equipment,
     homeCareServices,
     stockSuppliers,
+    medicineFilterOptions,
+    labTestFilterOptions,
+    labPackageFilterOptions,
+    physioEquipmentFilterOptions,
+    homeCareServiceFilterOptions,
     loading,
     loadError,
     load,

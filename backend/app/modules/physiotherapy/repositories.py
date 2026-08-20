@@ -1,6 +1,17 @@
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
-from sqlalchemy import func
 
+from app.core.list_filters import (
+    ListFilter,
+    ListFilterOption,
+    ListSort,
+    apply_list_filters,
+    apply_list_sort,
+    labeled_filter_options,
+    list_filter_options,
+    tenant_user_filter_options,
+)
+from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.appointments.models import Appointment, AppointmentType
 from app.modules.billing.models import (
     DoctorFeeRule,
@@ -11,12 +22,16 @@ from app.modules.billing.models import (
 )
 from app.modules.ip.models import IPAdmission
 from app.modules.patients.models import Patient
+from app.modules.pharmacy.models import PharmacySupplier
+from app.modules.physiotherapy.listing import PHYSIOTHERAPY_EQUIPMENT_LIST_SPEC
 from app.modules.physiotherapy.models import (
     PhysiotherapyCase,
     PhysiotherapyEquipment,
     PhysiotherapySession,
 )
 from app.modules.practitioners.models import Practitioner, PractitionerType
+from app.modules.identity.models import User
+from app.modules.tenants.models import Branch
 
 
 class PhysiotherapyEquipmentRepository:
@@ -50,6 +65,172 @@ class PhysiotherapyEquipmentRepository:
         return list(
             self.session.exec(statement.order_by(PhysiotherapyEquipment.name)).all()
         )
+
+    def list_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
+    ) -> list[PhysiotherapyEquipment]:
+        statement = self._list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            PHYSIOTHERAPY_EQUIPMENT_LIST_SPEC,
+            list_sort,
+            default_order=[
+                PhysiotherapyEquipment.updated_at.desc(),
+                PhysiotherapyEquipment.created_at.desc(),
+            ],
+        )
+        return list(self.session.exec(statement.offset(offset).limit(limit)).all())
+
+    def count_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def filter_options(self, *, tenant_id: str) -> dict[str, list[ListFilterOption]]:
+        branches = (
+            select(Branch.id, Branch.name)
+            .where(Branch.tenant_id == tenant_id)
+            .order_by(Branch.name)
+        )
+        suppliers = (
+            select(PharmacySupplier.id, PharmacySupplier.name)
+            .where(PharmacySupplier.tenant_id == tenant_id)
+            .order_by(PharmacySupplier.name)
+        )
+        modality_types = (
+            select(PhysiotherapyEquipment.modality_type)
+            .where(PhysiotherapyEquipment.tenant_id == tenant_id)
+            .distinct()
+            .order_by(PhysiotherapyEquipment.modality_type)
+        )
+        manufacturers = (
+            select(PhysiotherapyEquipment.manufacturer)
+            .where(PhysiotherapyEquipment.tenant_id == tenant_id)
+            .distinct()
+            .order_by(PhysiotherapyEquipment.manufacturer)
+        )
+        return {
+            "branch_id": labeled_filter_options(
+                list(self.session.exec(branches).all())
+            ),
+            "supplier_id": labeled_filter_options(
+                list(self.session.exec(suppliers).all())
+            ),
+            "modality_type": list_filter_options(
+                list(self.session.exec(modality_types).all())
+            ),
+            "manufacturer": list_filter_options(
+                list(self.session.exec(manufacturers).all())
+            ),
+            "is_portable": [
+                ListFilterOption(value="true", label="Portable"),
+                ListFilterOption(value="false", label="Fixed"),
+            ],
+            "is_active": [
+                ListFilterOption(value="true", label="Active"),
+                ListFilterOption(value="false", label="Inactive"),
+            ],
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
+
+    def _list_statement(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None,
+        list_filters: list[ListFilter] | None,
+    ):
+        statement = (
+            select(PhysiotherapyEquipment)
+            .outerjoin(Branch, PhysiotherapyEquipment.branch_id == Branch.id)
+            .outerjoin(
+                PharmacySupplier,
+                PhysiotherapyEquipment.supplier_id == PharmacySupplier.id,
+            )
+            .where(PhysiotherapyEquipment.tenant_id == tenant_id)
+        )
+        if branch_id:
+            statement = statement.where(
+                (PhysiotherapyEquipment.branch_id == branch_id)
+                | (PhysiotherapyEquipment.branch_id.is_(None))
+            )
+        if not include_inactive:
+            statement = statement.where(
+                PhysiotherapyEquipment.is_active == True  # noqa: E712
+            )
+        if q:
+            term = q.strip().lower()
+            statement = statement.where(
+                or_(
+                    func.lower(PhysiotherapyEquipment.name).contains(
+                        term,
+                        autoescape=True,
+                    ),
+                    func.lower(PhysiotherapyEquipment.modality_type).contains(
+                        term,
+                        autoescape=True,
+                    ),
+                    func.lower(PhysiotherapyEquipment.manufacturer).contains(
+                        term,
+                        autoescape=True,
+                    ),
+                    func.lower(PhysiotherapyEquipment.model_number).contains(
+                        term,
+                        autoescape=True,
+                    ),
+                    func.lower(PhysiotherapyEquipment.serial_number).contains(
+                        term,
+                        autoescape=True,
+                    ),
+                    func.lower(PharmacySupplier.name).contains(term, autoescape=True),
+                )
+            )
+        if list_filters:
+            statement = apply_list_filters(
+                statement,
+                PHYSIOTHERAPY_EQUIPMENT_LIST_SPEC,
+                list_filters,
+            )
+        return statement
 
 
 class PhysiotherapyCaseRepository:

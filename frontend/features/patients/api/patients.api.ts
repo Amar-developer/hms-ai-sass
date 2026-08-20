@@ -8,6 +8,13 @@ export function fetchPatientsPage(session: ApiSession, params: URLSearchParams) 
   return apiFetch(`/patients/page?${params.toString()}`, session);
 }
 
+export function fetchPatientFilterOptions(
+  session: ApiSession,
+  params: URLSearchParams,
+) {
+  return apiFetch(`/patients/filter-options?${params.toString()}`, session);
+}
+
 export function fetchPatient(session: ApiSession, patientId: string) {
   return apiFetch(`/patients/${patientId}`, session);
 }

@@ -90,6 +90,7 @@ class AppointmentRead(BaseModel):
     intake_vitals: str | None
     intake_complaints: str | None
     created_by_user_id: str | None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -132,6 +133,7 @@ class AppointmentGridRead(BaseModel):
     status: AppointmentStatus
     consultation_status: str | None
     created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

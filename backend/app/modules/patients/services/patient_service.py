@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session
 
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
 from app.core.access_control import (
     current_doctor_practitioner_id,
     enforce_entitlement,
@@ -168,6 +169,8 @@ class PatientService:
             update={
                 "tenant_id": tenant_id,
                 "patient_number": patient_number,
+                "created_by_user_id": actor.id,
+                "updated_by_user_id": actor.id,
                 "whatsapp_consent_updated_at": (
                     now_utc()
                     if payload.whatsapp_consent_status.value != "not_recorded"
@@ -253,6 +256,8 @@ class PatientService:
         gender: str | None,
         from_date: date | None,
         to_date: date | None,
+        list_filters: list[ListFilter],
+        list_sort: ListSort | None,
         offset: int,
         limit: int,
     ) -> Page[PatientSearchResult]:
@@ -268,9 +273,22 @@ class PatientService:
             gender=gender,
             from_date=from_date,
             to_date=to_date,
+            list_filters=list_filters,
+            list_sort=list_sort,
             offset=offset,
             limit=limit,
         )
+
+    def patient_filter_options(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None = None,
+    ) -> dict[str, list[ListFilterOption]]:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        if branch_id:
+            require_branch_in_tenant(self.session, tenant_id, branch_id)
+        return self.patients.filter_options(tenant_id=tenant_id, branch_id=branch_id)
 
     def patient_references(
         self, *, tenant_id: str, patient_ids: list[str]
@@ -369,6 +387,7 @@ class PatientService:
         before = {key: getattr(patient, key) for key in updates}
         for key, value in updates.items():
             setattr(patient, key, value)
+        patient.updated_by_user_id = actor.id
         patient.updated_at = now_utc()
         self.session.add(patient)
         self.session.commit()
@@ -392,6 +411,7 @@ class PatientService:
         enforce_entitlement(self.session, tenant_id, "patients")
         patient = self._get_or_404(tenant_id, patient_id)
         patient.status = PatientStatus.INACTIVE
+        patient.updated_by_user_id = actor.id
         patient.updated_at = now_utc()
         self.session.add(patient)
         self.session.commit()

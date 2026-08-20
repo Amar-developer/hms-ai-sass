@@ -1,9 +1,42 @@
 import type { TableSchema } from "@/app/components/common/AdaptiveFilterBar";
-import type { QueryFieldSchema } from "@/utils/queryFilter";
+import {
+  optionMapValues,
+  standardAuditQueryFields,
+  type QueryFieldOption,
+  type QueryFieldSchema,
+} from "@/utils/queryFilter";
 import { invoiceSourceOptions } from "./helpers";
 import { status_options } from "./contants";
 
-export function getBillingTableSchema(): TableSchema {
+function labelOptions(
+  options: QueryFieldOption[],
+  labelFor: (value: string) => string,
+) {
+  return options.map((option) => ({
+    ...option,
+    label: labelFor(option.value),
+  }));
+}
+
+function invoiceSourceLabel(value: string) {
+  return invoiceSourceOptions.find((source) => source.key === value)?.label || value;
+}
+
+function invoiceStatusLabel(value: string) {
+  return status_options.find((option) => option.value === value)?.label || value;
+}
+
+export function getBillingTableSchema({
+  filterOptions,
+}: {
+  filterOptions?: Record<string, QueryFieldOption[]>;
+} = {}): TableSchema {
+  const sourceOptions = filterOptions?.source?.length
+    ? labelOptions(filterOptions.source, invoiceSourceLabel)
+    : invoiceSourceOptions.map((source) => ({
+        value: source.key,
+        label: source.label,
+      }));
   return {
     id: "billing",
     searchLabel: "Invoices",
@@ -12,10 +45,7 @@ export function getBillingTableSchema(): TableSchema {
       {
         key: "source",
         label: "Source",
-        options: [
-          { value: "all", label: "All sources" },
-          ...invoiceSourceOptions.map((s) => ({ value: s.key, label: s.label })),
-        ],
+        options: [{ value: "all", label: "All sources" }, ...sourceOptions],
       },
       {
         key: "paidStatus",
@@ -31,6 +61,9 @@ export function getBillingTableSchema(): TableSchema {
       { key: "total_amount", label: "Total" },
       { key: "paid_amount", label: "Paid" },
       { key: "due", label: "Due" },
+      { key: "created_at", label: "Created On" },
+      { key: "created_by_user_id", label: "Created By" },
+      { key: "updated_at", label: "Last Updated On" },
     ],
   };
 }
@@ -50,32 +83,44 @@ function distinctFieldOptions(
   return Array.from(seen.entries()).map(([value, label]) => ({ value, label }));
 }
 
-// Source/paidStatus are server-side query params and stay as the fixed
-// dropdowns above; From/To already cover invoice_date range filtering.
-// invoice_date is still declared here (as "date") specifically so the
-// "Fiscal Year" operator becomes available for it — invoices are financial
-// records and that operator assumes an April–March fiscal year (see
-// fiscalYearRange in utils/queryFilter.ts), same convention the rest of
-// the app's billing/reporting uses; flagging since this is billing data.
-// Invoices are also server-paginated (see Billing.tsx's loadInvoicePage),
-// so — per the accepted scope limitation for this rollout — this ad-hoc
-// builder only filters the current page's rows, not the full invoice set.
 export function getBillingQueryFields({
   rows,
+  filterOptions,
 }: {
   rows: any[];
+  filterOptions?: Record<string, QueryFieldOption[]>;
 }): QueryFieldSchema[] {
   return [
     { key: "invoice_number", label: "Invoice Number", type: "text" },
     { key: "patient_name", label: "Patient Name", type: "text" },
+    { key: "patient_number", label: "Patient Number", type: "text" },
+    {
+      key: "source",
+      label: "Source",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "source",
+        distinctFieldOptions(rows, "source"),
+        invoiceSourceLabel,
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "status",
+        distinctFieldOptions(rows, "status"),
+        invoiceStatusLabel,
+      ),
+    },
     { key: "total_amount", label: "Total Amount", type: "number" },
     { key: "paid_amount", label: "Paid Amount", type: "number" },
-    {
-      key: "whatsapp_status",
-      label: "WhatsApp Status",
-      type: "select",
-      options: distinctFieldOptions(rows, "whatsapp_status"),
-    },
+    { key: "balance_amount", label: "Balance Amount", type: "number" },
+    { key: "due", label: "Due", type: "number" },
     { key: "invoice_date", label: "Invoice Date", type: "date" },
+    ...standardAuditQueryFields({ rows, filterOptions }),
   ];
 }

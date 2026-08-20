@@ -23,7 +23,10 @@ export type Expense = {
   approvedBy?: string;
   rejectionReason?: string;
   receiptName?: string;
+  createdByUserId?: string | null;
+  updatedByUserId?: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type ExpenseFormValues = {

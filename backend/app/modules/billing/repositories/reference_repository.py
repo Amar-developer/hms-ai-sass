@@ -1,15 +1,29 @@
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.core.list_filters import (
+    ListFilter,
+    ListFilterOption,
+    ListSort,
+    apply_list_filters,
+    apply_list_sort,
+    labeled_filter_options,
+    list_filter_options,
+    tenant_user_filter_options,
+)
+from app.core.pagination import DEFAULT_LIST_LIMIT
+from app.modules.billing.listing import DISCOUNT_OFFER_LIST_SPEC, TAX_RULE_LIST_SPEC
 from app.modules.billing.models import (
     DiscountApproval,
     DiscountOffer,
     DoctorFeeRule,
     TaxRule,
 )
+from app.modules.identity.models import User
 from app.modules.lab.models import LabTestCatalog, LabTestPackage
 from app.modules.pharmacy.models import PharmacySupplier
 from app.modules.practitioners.models import Practitioner, PractitionerDepartment
+from app.modules.tenants.models import Branch
 
 
 class BillingReferenceRepository:
@@ -97,6 +111,135 @@ class BillingReferenceRepository:
             self.session.exec(statement.order_by(TaxRule.created_at.desc())).all()
         )
 
+    def list_tax_rule_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
+    ) -> list[TaxRule]:
+        statement = self._tax_rule_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            q=q,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            TAX_RULE_LIST_SPEC,
+            list_sort,
+            default_order=[TaxRule.created_at.desc()],
+        )
+        return list(self.session.exec(statement.offset(offset).limit(limit)).all())
+
+    def count_tax_rule_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._tax_rule_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            q=q,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def tax_rule_filter_options(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+    ) -> dict[str, list[ListFilterOption]]:
+        scope = (
+            select(
+                TaxRule.branch_id,
+                Branch.name.label("branch_name"),
+                TaxRule.service_scope,
+                TaxRule.tax_label,
+            )
+            .outerjoin(Branch, Branch.id == TaxRule.branch_id)
+            .where(TaxRule.tenant_id == tenant_id)
+        )
+        if branch_id:
+            scope = scope.where(TaxRule.branch_id == branch_id)
+        scoped = scope.subquery()
+        return {
+            "branch_id": labeled_filter_options(
+                list(
+                    self.session.exec(
+                        select(scoped.c.branch_id, scoped.c.branch_name)
+                        .distinct()
+                        .order_by(scoped.c.branch_name)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "service_scope": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scoped.c.service_scope)
+                        .distinct()
+                        .order_by(scoped.c.service_scope)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "tax_label": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scoped.c.tax_label)
+                        .distinct()
+                        .order_by(scoped.c.tax_label)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "is_active": [
+                ListFilterOption(value="true", label="Active"),
+                ListFilterOption(value="false", label="Inactive"),
+            ],
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
+
+    def _tax_rule_statement(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        q: str | None,
+        list_filters: list[ListFilter] | None,
+    ):
+        statement = select(TaxRule).where(TaxRule.tenant_id == tenant_id)
+        if branch_id:
+            statement = statement.where(TaxRule.branch_id == branch_id)
+        if q:
+            term = q.strip().lower()
+            statement = statement.where(
+                (func.lower(TaxRule.name).contains(term, autoescape=True))
+                | (func.lower(TaxRule.tax_label).contains(term, autoescape=True))
+                | (func.lower(TaxRule.service_scope).contains(term, autoescape=True))
+            )
+        if list_filters:
+            statement = apply_list_filters(statement, TAX_RULE_LIST_SPEC, list_filters)
+        return statement
+
     def get_discount_approval(self, approval_id: str) -> DiscountApproval | None:
         return self.session.get(DiscountApproval, approval_id)
 
@@ -125,6 +268,150 @@ class BillingReferenceRepository:
         return list(
             self.session.exec(statement.order_by(DiscountOffer.created_at.desc())).all()
         )
+
+    def list_discount_offer_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
+    ) -> list[DiscountOffer]:
+        statement = self._discount_offer_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            q=q,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            DISCOUNT_OFFER_LIST_SPEC,
+            list_sort,
+            default_order=[DiscountOffer.created_at.desc()],
+        )
+        return list(self.session.exec(statement.offset(offset).limit(limit)).all())
+
+    def count_discount_offer_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._discount_offer_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            q=q,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def discount_offer_filter_options(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+    ) -> dict[str, list[ListFilterOption]]:
+        scope = (
+            select(
+                DiscountOffer.branch_id,
+                Branch.name.label("branch_name"),
+                DiscountOffer.service_scope,
+                DiscountOffer.discount_type,
+            )
+            .outerjoin(Branch, Branch.id == DiscountOffer.branch_id)
+            .where(DiscountOffer.tenant_id == tenant_id)
+        )
+        if branch_id:
+            scope = scope.where(
+                (DiscountOffer.branch_id == branch_id)
+                | (DiscountOffer.branch_id.is_(None))
+            )
+        scoped = scope.subquery()
+        return {
+            "branch_id": labeled_filter_options(
+                list(
+                    self.session.exec(
+                        select(scoped.c.branch_id, scoped.c.branch_name)
+                        .distinct()
+                        .order_by(scoped.c.branch_name)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "service_scope": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scoped.c.service_scope)
+                        .distinct()
+                        .order_by(scoped.c.service_scope)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "discount_type": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scoped.c.discount_type)
+                        .distinct()
+                        .order_by(scoped.c.discount_type)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "is_active": [
+                ListFilterOption(value="true", label="Active"),
+                ListFilterOption(value="false", label="Inactive"),
+            ],
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
+
+    def _discount_offer_statement(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        q: str | None,
+        list_filters: list[ListFilter] | None,
+    ):
+        statement = select(DiscountOffer).where(DiscountOffer.tenant_id == tenant_id)
+        if branch_id:
+            statement = statement.where(
+                (DiscountOffer.branch_id == branch_id)
+                | (DiscountOffer.branch_id.is_(None))
+            )
+        if q:
+            term = q.strip().lower()
+            statement = statement.where(
+                (func.lower(DiscountOffer.name).contains(term, autoescape=True))
+                | (func.lower(DiscountOffer.code).contains(term, autoescape=True))
+                | (
+                    func.lower(DiscountOffer.service_scope).contains(
+                        term,
+                        autoescape=True,
+                    )
+                )
+            )
+        if list_filters:
+            statement = apply_list_filters(
+                statement,
+                DISCOUNT_OFFER_LIST_SPEC,
+                list_filters,
+            )
+        return statement
 
     def list_lab_catalog_supplier_options(
         self, *, tenant_id: str, item_code: str | None, name: str | None

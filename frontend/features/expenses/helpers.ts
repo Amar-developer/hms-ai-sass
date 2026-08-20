@@ -25,7 +25,10 @@ export function mapExpense(
     approvedBy: raw.approved_by ?? undefined,
     rejectionReason: raw.rejection_reason ?? undefined,
     receiptName: raw.receipt_file_id ?? undefined,
+    createdByUserId: raw.created_by_user_id ?? null,
+    updatedByUserId: raw.updated_by_user_id ?? null,
     createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
   };
 }
 

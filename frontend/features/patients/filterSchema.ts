@@ -1,5 +1,10 @@
 import type { TableSchema } from "@/app/components/common/AdaptiveFilterBar";
-import type { QueryFieldSchema } from "@/utils/queryFilter";
+import {
+  optionMapValues,
+  standardAuditQueryFields,
+  type QueryFieldOption,
+  type QueryFieldSchema,
+} from "@/utils/queryFilter";
 import { genders, patient_status_options } from "./constants";
 
 type PatientSchemaParams = {
@@ -34,6 +39,7 @@ export function getPatientTableSchema({
       { key: "branch_id", label: "Branch" },
       { key: "gender", label: "Gender" },
       { key: "status", label: "Status" },
+      { key: "created_by_user_id", label: "Created By" },
       { key: "age_years", label: "Age" },
       { key: "created_at", label: "Created On" },
       { key: "updated_at", label: "Last Modified" },
@@ -59,9 +65,11 @@ function distinctFieldOptions(
 export function getPatientQueryFields({
   rows,
   branches,
+  filterOptions,
 }: {
   rows: any[];
   branches: any[];
+  filterOptions?: Record<string, QueryFieldOption[]>;
 }): QueryFieldSchema[] {
   const genderLabel = (value: string) =>
     genders.find(([v]) => v === value)?.[1] || value;
@@ -83,36 +91,57 @@ export function getPatientQueryFields({
       key: "branch_id",
       label: "Branch",
       type: "select",
-      options: distinctFieldOptions(rows, "branch_id", branchLabel),
+      options: optionMapValues(
+        filterOptions,
+        "branch_id",
+        distinctFieldOptions(rows, "branch_id", branchLabel),
+      ),
     },
     {
       key: "gender",
       label: "Gender",
       type: "select",
-      options: distinctFieldOptions(rows, "gender", genderLabel),
+      options: optionMapValues(
+        filterOptions,
+        "gender",
+        distinctFieldOptions(rows, "gender", genderLabel),
+        genderLabel,
+      ),
     },
     {
       key: "status",
       label: "Status",
       type: "select",
-      options: distinctFieldOptions(rows, "status", statusLabel),
+      options: optionMapValues(
+        filterOptions,
+        "status",
+        distinctFieldOptions(rows, "status", statusLabel),
+        statusLabel,
+      ),
     },
     {
       key: "subscription_plan_name",
       label: "Membership Plan",
       type: "select",
-      options: distinctFieldOptions(rows, "subscription_plan_name"),
+      options: optionMapValues(
+        filterOptions,
+        "subscription_plan_name",
+        distinctFieldOptions(rows, "subscription_plan_name"),
+      ),
     },
     {
       key: "subscription_status",
       label: "Membership Status",
       type: "select",
-      options: distinctFieldOptions(rows, "subscription_status"),
+      options: optionMapValues(
+        filterOptions,
+        "subscription_status",
+        distinctFieldOptions(rows, "subscription_status"),
+      ),
     },
+    ...standardAuditQueryFields({ rows, filterOptions, includeUpdatedBy: true }),
     { key: "age_years", label: "Age", type: "number" },
     { key: "active_alert_count", label: "Active Alerts", type: "number" },
     { key: "critical_alert_count", label: "Critical Alerts", type: "number" },
-    { key: "created_at", label: "Created On", type: "date" },
-    { key: "updated_at", label: "Last Updated", type: "date" },
   ];
 }

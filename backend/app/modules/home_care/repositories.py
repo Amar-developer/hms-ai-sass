@@ -1,5 +1,16 @@
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
+from app.core.list_filters import (
+    ListFilter,
+    ListFilterOption,
+    ListSort,
+    apply_list_filters,
+    apply_list_sort,
+    labeled_filter_options,
+    tenant_user_filter_options,
+)
+from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.billing.models import (
     Invoice,
     InvoiceItem,
@@ -7,6 +18,7 @@ from app.modules.billing.models import (
     Payment,
     TaxRule,
 )
+from app.modules.home_care.listing import HOME_CARE_SERVICE_LIST_SPEC
 from app.modules.home_care.models import (
     HomeCareBooking,
     HomeCareBookingItem,
@@ -15,6 +27,7 @@ from app.modules.home_care.models import (
 )
 from app.modules.identity.models import User
 from app.modules.patients.models import Patient
+from app.modules.tenants.models import Branch
 
 
 class HomeCareServiceRepository:
@@ -50,6 +63,121 @@ class HomeCareServiceRepository:
                 .order_by(HomeCareService.name)
             ).all()
         )
+
+    def list_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
+    ) -> list[HomeCareService]:
+        statement = self._list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            HOME_CARE_SERVICE_LIST_SPEC,
+            list_sort,
+            default_order=[
+                HomeCareService.updated_at.desc(),
+                HomeCareService.created_at.desc(),
+            ],
+        )
+        return list(self.session.exec(statement.offset(offset).limit(limit)).all())
+
+    def count_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def filter_options(self, *, tenant_id: str) -> dict[str, list[ListFilterOption]]:
+        branches = (
+            select(Branch.id, Branch.name)
+            .where(Branch.tenant_id == tenant_id)
+            .order_by(Branch.name)
+        )
+        return {
+            "branch_id": labeled_filter_options(
+                list(self.session.exec(branches).all())
+            ),
+            "is_active": [
+                ListFilterOption(value="true", label="Active"),
+                ListFilterOption(value="false", label="Inactive"),
+            ],
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
+
+    def _list_statement(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None,
+        list_filters: list[ListFilter] | None,
+    ):
+        statement = (
+            select(HomeCareService)
+            .outerjoin(Branch, HomeCareService.branch_id == Branch.id)
+            .where(HomeCareService.tenant_id == tenant_id)
+        )
+        if branch_id:
+            statement = statement.where(
+                (HomeCareService.branch_id == branch_id)
+                | (HomeCareService.branch_id.is_(None))
+            )
+        if not include_inactive:
+            statement = statement.where(HomeCareService.is_active == True)  # noqa: E712
+        if q:
+            term = q.strip().lower()
+            statement = statement.where(
+                or_(
+                    func.lower(HomeCareService.code).contains(term, autoescape=True),
+                    func.lower(HomeCareService.name).contains(term, autoescape=True),
+                    func.lower(HomeCareService.description).contains(
+                        term,
+                        autoescape=True,
+                    ),
+                )
+            )
+        if list_filters:
+            statement = apply_list_filters(
+                statement,
+                HOME_CARE_SERVICE_LIST_SPEC,
+                list_filters,
+            )
+        return statement
 
     def list_by_ids(
         self, *, tenant_id: str, service_ids: list[str]

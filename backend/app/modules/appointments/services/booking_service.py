@@ -280,10 +280,13 @@ class AppointmentBookingService:
         custom_fee_amount = self.billing.resolve_custom_fee_amount(
             is_billable=is_billable, payload=payload
         )
+        actor_user_id = payload.created_by_user_id or actor.id
         appointment = Appointment.model_validate(
             payload,
             update={
                 "tenant_id": tenant_id,
+                "created_by_user_id": actor_user_id,
+                "updated_by_user_id": actor_user_id,
                 "appointment_number": next_document_number(
                     self.session,
                     tenant_id=tenant_id,
@@ -303,7 +306,7 @@ class AppointmentBookingService:
                 self.session,
                 tenant_id=tenant_id,
                 branch_id=appointment.branch_id,
-                actor_user_id=payload.created_by_user_id or actor.id,
+                actor_user_id=actor_user_id,
                 action="appointment.emergency_override",
                 resource_type="appointment",
                 resource_id=appointment.id,
@@ -319,7 +322,7 @@ class AppointmentBookingService:
                 self.session,
                 tenant_id=tenant_id,
                 branch_id=appointment.branch_id,
-                actor_user_id=payload.created_by_user_id or actor.id,
+                actor_user_id=actor_user_id,
                 action=f"appointment.{appointment.appointment_type.value}_booked",
                 resource_type="appointment",
                 resource_id=appointment.id,
@@ -335,7 +338,7 @@ class AppointmentBookingService:
             self.session,
             tenant_id=tenant_id,
             branch_id=appointment.branch_id,
-            actor_user_id=payload.created_by_user_id,
+            actor_user_id=actor_user_id,
             action="appointment.booked",
             resource_type="appointment",
             resource_id=appointment.id,
@@ -354,7 +357,7 @@ class AppointmentBookingService:
             message=f"Your appointment token is {queue_entry.token_number}.",
             resource_type="appointment",
             resource_id=appointment.id,
-            queued_by_user_id=payload.created_by_user_id,
+            queued_by_user_id=actor_user_id,
         )
         patient_template_event = queue_whatsapp_template_if_allowed(
             self.session,
@@ -365,7 +368,7 @@ class AppointmentBookingService:
             resource_type="appointment",
             resource_id=appointment.id,
             dedupe_key=f"whatsapp:appointment:{appointment.id}:patient",
-            queued_by_user_id=payload.created_by_user_id,
+            queued_by_user_id=actor_user_id,
         )
         if not patient_template_event and not whatsapp_template_integration_enabled(
             self.session, tenant_id
@@ -381,7 +384,7 @@ class AppointmentBookingService:
                 message=f"Your appointment token is {queue_entry.token_number}.",
                 resource_type="appointment",
                 resource_id=appointment.id,
-                queued_by_user_id=payload.created_by_user_id,
+                queued_by_user_id=actor_user_id,
             )
         if practitioner:
             queue_whatsapp_template_if_allowed(
@@ -393,7 +396,7 @@ class AppointmentBookingService:
                 resource_type="appointment",
                 resource_id=appointment.id,
                 dedupe_key=f"whatsapp:appointment:{appointment.id}:doctor",
-                queued_by_user_id=payload.created_by_user_id,
+                queued_by_user_id=actor_user_id,
             )
         notify_appointment_booked(
             self.session,
@@ -547,6 +550,7 @@ class AppointmentBookingService:
         appointment.appointment_time = appointment_time
         appointment.status = AppointmentStatus.WAITING
         appointment.updated_at = now_utc()
+        appointment.updated_by_user_id = actor.id
         self.session.add(appointment)
         self.session.flush()
 
@@ -570,6 +574,7 @@ class AppointmentBookingService:
             queue_entry.called_at = None
             queue_entry.completed_at = None
             queue_entry.updated_at = now_utc()
+            queue_entry.updated_by_user_id = actor.id
             self.session.add(queue_entry)
             record_queue_event(
                 self.session,
@@ -648,11 +653,14 @@ class AppointmentBookingService:
             billing_note=payload.billing_note,
             created_by_user_id=payload.created_by_user_id or actor.id,
         )
+        actor_user_id = follow_up_payload.created_by_user_id or actor.id
         DuplicatePatientBookingRule(self.session).check(tenant_id, follow_up_payload)
         appointment = Appointment.model_validate(
             follow_up_payload,
             update={
                 "tenant_id": tenant_id,
+                "created_by_user_id": actor_user_id,
+                "updated_by_user_id": actor_user_id,
                 "appointment_number": next_document_number(
                     self.session,
                     tenant_id=tenant_id,
@@ -668,7 +676,7 @@ class AppointmentBookingService:
             self.session,
             tenant_id=tenant_id,
             branch_id=appointment.branch_id,
-            actor_user_id=follow_up_payload.created_by_user_id,
+            actor_user_id=actor_user_id,
             action="appointment.follow_up_booked",
             resource_type="appointment",
             resource_id=appointment.id,

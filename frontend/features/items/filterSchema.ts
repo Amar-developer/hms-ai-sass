@@ -1,5 +1,10 @@
 import type { TableSchema } from "@/app/components/common/AdaptiveFilterBar";
-import type { QueryFieldSchema } from "@/utils/queryFilter";
+import {
+  optionMapValues,
+  standardAuditQueryFields,
+  type QueryFieldOption,
+  type QueryFieldSchema,
+} from "@/utils/queryFilter";
 
 export function getItemsTableSchema(): TableSchema {
   return {
@@ -13,10 +18,16 @@ export function getItemsTableSchema(): TableSchema {
     sortFields: [
       { key: "name", label: "Name" },
       { key: "created_at", label: "Recently added" },
+      { key: "updated_at", label: "Last modified" },
       { key: "type", label: "Type" },
       { key: "code", label: "Code" },
+      { key: "department", label: "Department" },
+      { key: "sample_type", label: "Sample Type" },
+      { key: "modality_type", label: "Modality" },
       { key: "mrp_price", label: "MRP" },
       { key: "price", label: "Sale price" },
+      { key: "created_by_user_id", label: "Created By" },
+      { key: "updated_by_user_id", label: "Updated By" },
     ],
   };
 }
@@ -36,7 +47,13 @@ function distinctFieldOptions(
   return Array.from(seen.entries()).map(([value, label]) => ({ value, label }));
 }
 
-export function getItemsQueryFields({ rows }: { rows: any[] }): QueryFieldSchema[] {
+export function getItemsQueryFields({
+  rows,
+  filterOptions,
+}: {
+  rows: any[];
+  filterOptions?: Record<string, QueryFieldOption[]>;
+}): QueryFieldSchema[] {
   return [
     { key: "name", label: "Name", type: "text" },
     { key: "code", label: "Code", type: "text" },
@@ -47,17 +64,95 @@ export function getItemsQueryFields({ rows }: { rows: any[] }): QueryFieldSchema
       options: distinctFieldOptions(rows, "kind"),
     },
     {
-      key: "supplier",
+      key: "supplier_id",
       label: "Supplier",
       type: "select",
-      options: distinctFieldOptions(rows, "supplier").filter(
-        (option) => option.value !== "-",
+      options: optionMapValues(
+        filterOptions,
+        "supplier_id",
+        distinctFieldOptions(rows, "supplier_id", (id) => {
+          const row = rows.find((item: any) => String(item.supplier_id) === id);
+          return row?.supplier || id;
+        }),
+      ),
+    },
+    {
+      key: "branch_id",
+      label: "Branch",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "branch_id",
+        distinctFieldOptions(rows, "branch_id"),
+      ),
+    },
+    {
+      key: "form",
+      label: "Form",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "form",
+        distinctFieldOptions(rows, "form"),
+      ),
+    },
+    {
+      key: "department",
+      label: "Department",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "department",
+        distinctFieldOptions(rows, "department"),
+      ),
+    },
+    {
+      key: "sample_type",
+      label: "Sample Type",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "sample_type",
+        distinctFieldOptions(rows, "sample_type"),
+      ),
+    },
+    {
+      key: "manufacturer",
+      label: "Manufacturer",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "manufacturer",
+        distinctFieldOptions(rows, "manufacturer"),
+      ),
+    },
+    {
+      key: "modality_type",
+      label: "Modality",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "modality_type",
+        distinctFieldOptions(rows, "modality_type"),
+      ),
+    },
+    {
+      key: "is_portable",
+      label: "Portability",
+      type: "select",
+      options: optionMapValues(
+        filterOptions,
+        "is_portable",
+        distinctFieldOptions(rows, "is_portable", (value) =>
+          value === "true" ? "Portable" : "Fixed",
+        ),
       ),
     },
     { key: "meta", label: "Details", type: "text" },
+    { key: "generic_name", label: "Generic Name", type: "text" },
     { key: "mrp_price", label: "MRP", type: "number" },
     { key: "price", label: "Sale Price", type: "number" },
     { key: "purchase_price", label: "Purchase Price", type: "number" },
-    { key: "created_at", label: "Added On", type: "date" },
+    ...standardAuditQueryFields({ rows, filterOptions, includeUpdatedBy: true }),
   ];
 }

@@ -34,6 +34,8 @@ def patient_search_result(
         gender=patient.gender,
         age_years=patient.age_years,
         status=patient.status,
+        created_by_user_id=patient.created_by_user_id,
+        updated_by_user_id=patient.updated_by_user_id,
         created_at=patient.created_at,
         updated_at=patient.updated_at,
         active_alert_count=(alert_counts or {}).get(patient.id, 0),

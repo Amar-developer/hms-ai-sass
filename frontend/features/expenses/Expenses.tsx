@@ -18,6 +18,7 @@ import { FormField } from "@/app/components/FormElements";
 import { getExpenseTableSchema, getExpenseQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
 import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
+import type { QueryFieldOption } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 import { ExpenseSummaryTiles } from "./components/ExpenseSummaryTiles";
 import { ExpenseDetail } from "./components/ExpenseDetail";
@@ -26,6 +27,7 @@ import { getExpenseColumns } from "./columns";
 import { getMonthColumns } from "./monthColumns";
 import { groupExpensesByMonth, mapExpense, monthLabel } from "./helpers";
 import { useExpenseActions, useExpensesData, useRecentSubcategories } from "./api";
+import { fetchExpenseFilterOptions } from "./api/expenses.api";
 import type { Expense } from "./types";
 import type { ExpenseFormSchemaValues } from "./expenses.schema";
 
@@ -46,6 +48,9 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [receiptTargetExpense, setReceiptTargetExpense] = useState<Expense | null>(null);
   const [receiptFileId, setReceiptFileId] = useState("");
+  const [filterOptions, setFilterOptions] = useState<
+    Record<string, QueryFieldOption[]>
+  >({});
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 300);
@@ -56,6 +61,8 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
     status: filterStatus,
     category: filterCategory,
     query: debouncedQuery,
+    queryFilters: selectedMonth ? queryFilters : [],
+    sort: selectedMonth ? sort : null,
   });
   const {
     busy,
@@ -104,8 +111,9 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
       getExpenseQueryFields(
         selectedMonth ? "expenses" : "months",
         selectedMonth ? rawMonthRows : rawMonthGroups,
+        filterOptions,
       ),
-    [selectedMonth, rawMonthRows, rawMonthGroups],
+    [selectedMonth, rawMonthRows, rawMonthGroups, filterOptions],
   );
 
   // Query filters are field-key based and the two views have different
@@ -126,12 +134,10 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
   const monthRows = useMemo(
     () =>
       sortRows(
-        selectedMonth
-          ? applyQueryFilters(rawMonthRows, expenseQueryFields, queryFilters)
-          : [],
+        selectedMonth ? rawMonthRows : [],
         selectedMonth ? sort : null,
       ),
-    [rawMonthRows, expenseQueryFields, queryFilters, selectedMonth, sort],
+    [rawMonthRows, selectedMonth, sort],
   );
 
   const expenseSchema = getExpenseTableSchema(selectedMonth ? "expenses" : "months");
@@ -146,7 +152,16 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
     setFilterStatus("all");
     setFilterCategory("all");
     setSort(null);
+    setQueryFilters([]);
   };
+
+  useEffect(() => {
+    if (!apiSession) return;
+    const params = new URLSearchParams();
+    void fetchExpenseFilterOptions(apiSession, params)
+      .then((result) => setFilterOptions(result || {}))
+      .catch(() => setFilterOptions({}));
+  }, [apiSession?.tenantId]);
 
   async function handleCreate(values: ExpenseFormSchemaValues) {
     const ok = await createExpense({

@@ -360,6 +360,7 @@ class TaxRuleRead(TaxRuleCreate):
     id: str
     tenant_id: str
     is_active: bool
+    updated_by_user_id: UserId | None = None
     created_at: datetime
 
 
@@ -410,6 +411,7 @@ class DiscountOfferRead(DiscountOfferCreate):
     id: str
     tenant_id: str
     is_active: bool
+    updated_by_user_id: UserId | None = None
     created_at: datetime
 
 

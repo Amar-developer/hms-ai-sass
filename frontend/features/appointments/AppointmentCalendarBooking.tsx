@@ -2,17 +2,29 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 
 import { searchPatients } from "@/lib/hmsLogic";
 import { usePatientSearch } from "@/features/patients/components/PatientSearchSelect";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { publicDisplayValue, uniqueDepartmentRows } from "@/lib/options";
+import { mapAppointment } from "@/lib/liveData";
 import { displayDate, today } from "@/utils/helper";
 import { useAppointmentBookingData } from "./api/useAppointmentBookingData";
+import {
+  fetchAppointmentFilterOptions,
+  fetchAppointmentPage,
+} from "./api/appointmentWorkspaceQueries";
 import { useAppointmentBookingActions } from "./api/useAppointmentBookingActions";
 import { useAppointmentMentionResolver } from "./api/useAppointmentMentionResolver";
 import { useAppointmentReschedule } from "./api/useAppointmentReschedule";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { RefreshButton, Input, SearchableSelect } from "@/app/components/common/ui";
+import { FormField } from "@/app/components/FormElements";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { BookingStep, type Props } from "./types";
 import {
   appointmentStatusInfo,
@@ -22,8 +34,15 @@ import {
 import { getAppointmentColumns, getPlatformColumns } from "./columns";
 import { AppointmentBookingFlow } from "./components/AppointmentBookingFlow";
 import { AppointmentList } from "./components/AppointmentList";
+import {
+  getAppointmentQueryFields,
+  getAppointmentTableSchema,
+} from "./filterSchema";
+import type { QueryFilterRow } from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
 
 const pageSize = 8;
+const DEFAULT_SORT: SortState = { key: "updated_at", dir: "desc" };
 
 export function AppointmentCalendarBooking(props: Props) {
   const {
@@ -103,6 +122,8 @@ export function AppointmentCalendarBooking(props: Props) {
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
+  const [sort, setSort] = useState<SortState | null>(DEFAULT_SORT);
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const appointmentPermissions = apiSession?.user?.permissions || [];
@@ -178,6 +199,77 @@ export function AppointmentCalendarBooking(props: Props) {
       row.department_name === platformDepartment
     );
   });
+  const effectiveAppointmentFilters = useMemo(() => {
+    const rows = [...queryFilters];
+    if (filterStatus !== "all") {
+      rows.push({
+        id: "status-fixed-filter",
+        field: "status",
+        operator: "equals",
+        value: filterStatus,
+      });
+    }
+    return rows;
+  }, [queryFilters, filterStatus]);
+  const appointmentPageQuery = useQuery({
+    queryKey: [
+      "appointments",
+      "page",
+      apiSession?.tenantId,
+      branchId,
+      filterDepartment,
+      filterDate,
+      query,
+      effectiveAppointmentFilters,
+      sort,
+      page,
+    ],
+    queryFn: () =>
+      fetchAppointmentPage(apiSession!, {
+        q: query,
+        branchId,
+        departmentId: filterDepartment,
+        appointmentDate: filterDate,
+        queryFilters: effectiveAppointmentFilters,
+        sort,
+        offset: (page - 1) * pageSize,
+        limit: pageSize,
+      }),
+    enabled: Boolean(apiSession && !isSuperAdmin && mode === "list"),
+    staleTime: 10_000,
+  });
+  const appointmentFilterOptionsQuery = useQuery({
+    queryKey: ["appointments", "filter-options", apiSession?.tenantId],
+    queryFn: () => fetchAppointmentFilterOptions(apiSession!),
+    enabled: Boolean(apiSession && !isSuperAdmin && mode === "list"),
+    staleTime: 60_000,
+  });
+  const practitionerMap = useMemo(
+    () => new Map(liveDoctors.map((doctor: any) => [doctor.id, doctor])),
+    [liveDoctors],
+  );
+  const serverAppointments = useMemo(
+    () =>
+      (appointmentPageQuery.data?.items ?? []).map((row: any) =>
+        mapAppointment(
+          row,
+          [],
+          [],
+          patientMap,
+          practitionerMap,
+          apiSession?.tenantId || clinic?.id || "",
+          branchId || "",
+        ),
+      ),
+    [
+      appointmentPageQuery.data?.items,
+      apiSession?.tenantId,
+      branchId,
+      clinic?.id,
+      patientMap,
+      practitionerMap,
+    ],
+  );
   const filteredAppointments = appointments.filter((appointment: any) => {
     const patient = patientMap.get(
       appointment.patientId || appointment.patient_id,
@@ -230,16 +322,28 @@ export function AppointmentCalendarBooking(props: Props) {
     new Date(a.updated_at || a.created_at || 0).getTime();
   const sortedAppointments = [...filteredAppointments].sort(byModifiedFirst);
   const sortedPlatformRows = [...filteredPlatformRows].sort(byModifiedFirst);
-  const listRecords = isSuperAdmin ? sortedPlatformRows : sortedAppointments;
-  const totalPages = Math.max(1, Math.ceil(listRecords.length / pageSize));
+  const serverBackedList = Boolean(apiSession && !isSuperAdmin);
+  const listRecords = isSuperAdmin
+    ? sortedPlatformRows
+    : serverBackedList
+      ? serverAppointments
+      : sortedAppointments;
+  const totalRecords = serverBackedList
+    ? appointmentPageQuery.data?.total ?? 0
+    : listRecords.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
   const safePage = Math.min(page, totalPages);
-  const rows = listRecords.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
-  );
+  const rows = serverBackedList
+    ? listRecords
+    : listRecords.slice((safePage - 1) * pageSize, safePage * pageSize);
   const rowsLoading = isSuperAdmin
     ? platformLoading
-    : Boolean(isInitialLoading);
+    : Boolean(isInitialLoading || appointmentPageQuery.isLoading);
+  const appointmentSchema = getAppointmentTableSchema();
+  const appointmentQueryFields = getAppointmentQueryFields({
+    rows: listRecords,
+    filterOptions: appointmentFilterOptionsQuery.data,
+  });
 
   function openConsultation(appointment: any) {
     if (!appointment?.id || isSuperAdmin) return;
@@ -326,7 +430,15 @@ export function AppointmentCalendarBooking(props: Props) {
 
   useEffect(
     () => setPage(1),
-    [query, filterDate, filterDepartment, filterStatus, appointments.length],
+    [
+      query,
+      filterDate,
+      filterDepartment,
+      filterStatus,
+      appointments.length,
+      queryFilters,
+      sort,
+    ],
   );
   useEffect(
     () => setPage(1),
@@ -672,43 +784,147 @@ export function AppointmentCalendarBooking(props: Props) {
     printTokenSlipForRow,
   });
   const platformColumns = getPlatformColumns({ canCopyIds });
+  const appointmentFilterValues = {
+    department: filterDepartment,
+    status: filterStatus,
+  };
+
+  function resetAppointmentFilters() {
+    setPlatformTenantId("");
+    setQuery("");
+    setFilterDate("");
+    setFilterDepartment("all");
+    setPlatformDepartment("all");
+    setFilterStatus("all");
+    setQueryFilters([]);
+    setSort(DEFAULT_SORT);
+    setPage(1);
+  }
+
+  function handleAppointmentFilterChange(key: string, value: string) {
+    setPage(1);
+    if (key === "department") {
+      if (isSuperAdmin) setPlatformDepartment(value);
+      else setFilterDepartment(value);
+      return;
+    }
+    if (key === "status") setFilterStatus(value);
+  }
+
+  const refreshAppointmentRows = () => {
+    setMessage("");
+    if (serverBackedList) {
+      appointmentPageQuery.refetch();
+      return;
+    }
+    if (isSuperAdmin) {
+      setListRefreshKey((value) => value + 1);
+      return;
+    }
+    refreshAppointmentList();
+  };
 
   return (
-    <AppointmentList
-      message={message}
-      setMessage={setMessage}
-      isSuperAdmin={isSuperAdmin}
-      rescheduleAppointment={rescheduleAppointment}
-      setRescheduleAppointment={setRescheduleAppointment}
-      rescheduleDate={rescheduleDate}
-      setRescheduleDate={setRescheduleDate}
-      rescheduleBusy={rescheduleBusy}
-      saveReschedule={saveReschedule}
-      openBooking={openBooking}
-      showBookingAction={routeBase === "/appointments"}
-      platformTenantId={platformTenantId}
-      setPlatformTenantId={setPlatformTenantId}
-      platformTenants={platformTenants}
-      query={query}
-      setQuery={setQuery}
-      filterDate={filterDate}
-      setFilterDate={setFilterDate}
-      platformDepartment={platformDepartment}
-      setPlatformDepartment={setPlatformDepartment}
-      normalizedPlatformDepartmentOptions={normalizedPlatformDepartmentOptions}
-      filterDepartment={filterDepartment}
-      setFilterDepartment={setFilterDepartment}
-      normalizedDepartmentOptions={normalizedDepartmentOptions}
-      filterStatus={filterStatus}
-      setFilterStatus={setFilterStatus}
-      columns={isSuperAdmin ? platformColumns : appointmentColumns}
-      rows={rows}
-      rowsLoading={rowsLoading}
-      onRowClick={isSuperAdmin ? undefined : openConsultation}
-      safePage={safePage}
-      totalPages={totalPages}
-      total={listRecords.length}
-      setPage={setPage}
-    />
+    <>
+      <BreadcrumbSlot>
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={rows.length}
+            total={totalRecords}
+            noun="appointments"
+          />
+          <RefreshButton
+            onRefresh={refreshAppointmentRows}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={getAppointmentTableSchema({
+              departmentOptions: isSuperAdmin
+                ? normalizedPlatformDepartmentOptions
+                : normalizedDepartmentOptions,
+              includeStatus: !isSuperAdmin,
+            })}
+            query={query}
+            setQuery={setQuery}
+            filterValues={
+              isSuperAdmin
+                ? { department: platformDepartment }
+                : appointmentFilterValues
+            }
+            onFilterChange={handleAppointmentFilterChange}
+            showSort={false}
+            onReset={resetAppointmentFilters}
+            queryFields={isSuperAdmin ? [] : appointmentQueryFields}
+            queryFilters={isSuperAdmin ? [] : queryFilters}
+            onQueryFiltersChange={(nextFilters) => {
+              setPage(1);
+              setQueryFilters(nextFilters);
+            }}
+          >
+            {isSuperAdmin && (
+              <FormField label="Clinic / Tenant">
+                <SearchableSelect
+                  value={platformTenantId}
+                  onChange={(value: string) => {
+                    setPage(1);
+                    setPlatformTenantId(value);
+                  }}
+                  options={[
+                    { value: "", label: "All tenants" },
+                    ...platformTenants
+                      .filter((tenant: any) => !tenant.is_primary)
+                      .map((tenant: any) => ({
+                        value: tenant.id,
+                        label: tenant.name,
+                      })),
+                  ]}
+                />
+              </FormField>
+            )}
+            <FormField label="Select Date">
+              <Input
+                type="date"
+                value={filterDate}
+                onChange={(event: any) => {
+                  setPage(1);
+                  setFilterDate(event.target.value);
+                }}
+              />
+            </FormField>
+          </AdaptiveFilterTrigger>
+          {!isSuperAdmin && (
+            <AdaptiveSortTrigger
+              fields={appointmentSchema.sortFields}
+              sort={sort}
+              onSortChange={(nextSort) => {
+                setPage(1);
+                setSort(nextSort);
+              }}
+            />
+          )}
+        </div>
+      </BreadcrumbSlot>
+      <AppointmentList
+        message={message}
+        setMessage={setMessage}
+        isSuperAdmin={isSuperAdmin}
+        rescheduleAppointment={rescheduleAppointment}
+        setRescheduleAppointment={setRescheduleAppointment}
+        rescheduleDate={rescheduleDate}
+        setRescheduleDate={setRescheduleDate}
+        rescheduleBusy={rescheduleBusy}
+        saveReschedule={saveReschedule}
+        openBooking={openBooking}
+        showBookingAction={routeBase === "/appointments"}
+        columns={isSuperAdmin ? platformColumns : appointmentColumns}
+        rows={rows}
+        rowsLoading={rowsLoading}
+        onRowClick={isSuperAdmin ? undefined : openConsultation}
+        safePage={safePage}
+        totalPages={totalPages}
+        total={totalRecords}
+        setPage={setPage}
+      />
+    </>
   );
 }

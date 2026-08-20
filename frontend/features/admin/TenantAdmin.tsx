@@ -21,6 +21,8 @@ import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { sortRows } from "@/utils/sortRows";
 import {
   applyQueryFilters,
+  standardAuditQueryFields,
+  type QueryFieldOption,
   type QueryFieldSchema,
   type QueryFilterRow,
 } from "@/utils/queryFilter";
@@ -193,6 +195,17 @@ export function TenantAdmin({
     setReportBusy,
   });
 
+  const userAuditOptions: Record<string, QueryFieldOption[]> = {
+    created_by_user_id: data.users.map((user: any) => ({
+      value: user.id,
+      label: user.name || user.email || user.id,
+    })),
+    updated_by_user_id: data.users.map((user: any) => ({
+      value: user.id,
+      label: user.name || user.email || user.id,
+    })),
+  };
+
   function distinctFieldOptions(
     rows: any[],
     key: string,
@@ -273,6 +286,11 @@ export function TenantAdmin({
         { key: "description", label: "Description", type: "text" },
         { key: "branch_names", label: "Branches", type: "text" },
         statusField(data.departments),
+        ...standardAuditQueryFields({
+          rows: data.departments,
+          filterOptions: userAuditOptions,
+          includeUpdatedBy: true,
+        }),
       ],
     },
     branches: {
@@ -284,6 +302,11 @@ export function TenantAdmin({
         { key: "city", label: "City", type: "text" },
         { key: "state", label: "State", type: "text" },
         statusField(data.branches),
+        ...standardAuditQueryFields({
+          rows: data.branches,
+          filterOptions: userAuditOptions,
+          includeUpdatedBy: true,
+        }),
       ],
     },
     suppliers: {
@@ -296,6 +319,11 @@ export function TenantAdmin({
         { key: "email", label: "Email", type: "text" },
         { key: "address", label: "Address", type: "text" },
         statusField(data.suppliers),
+        ...standardAuditQueryFields({
+          rows: data.suppliers,
+          filterOptions: userAuditOptions,
+          includeUpdatedBy: true,
+        }),
       ],
     },
     tax: {
@@ -312,6 +340,19 @@ export function TenantAdmin({
           options: distinctFieldOptions(data.taxRules, "service_scope"),
         },
         statusField(data.taxRules),
+        { key: "created_at", label: "Created On", type: "date" },
+        {
+          key: "created_by_user_id",
+          label: "Created By",
+          type: "select",
+          options: userAuditOptions.created_by_user_id,
+        },
+        {
+          key: "updated_by_user_id",
+          label: "Last Updated By",
+          type: "select",
+          options: userAuditOptions.updated_by_user_id,
+        },
       ],
     },
     offers: {
@@ -333,6 +374,19 @@ export function TenantAdmin({
           options: distinctFieldOptions(data.discountOffers, "service_scope"),
         },
         statusField(data.discountOffers),
+        { key: "created_at", label: "Created On", type: "date" },
+        {
+          key: "created_by_user_id",
+          label: "Created By",
+          type: "select",
+          options: userAuditOptions.created_by_user_id,
+        },
+        {
+          key: "updated_by_user_id",
+          label: "Last Updated By",
+          type: "select",
+          options: userAuditOptions.updated_by_user_id,
+        },
       ],
     },
   };

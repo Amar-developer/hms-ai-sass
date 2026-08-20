@@ -167,9 +167,12 @@ class ConsultationRecordService:
                 "patient_id": appointment.patient_id,
                 "practitioner_id": appointment.practitioner_id,
                 "status": ConsultationStatus.DRAFT,
+                "created_by_user_id": payload.created_by_user_id or actor.id,
+                "updated_by_user_id": payload.created_by_user_id or actor.id,
             },
         )
         appointment.status = AppointmentStatus.IN_CONSULTATION
+        appointment.updated_by_user_id = actor.id
         self.consultations.add(consultation)
         self.references.add_appointment(appointment)
         try:
@@ -232,8 +235,10 @@ class ConsultationRecordService:
             if key in STRUCTURED_FIELD_NAMES:
                 continue
             setattr(consultation, key, value)
+        now = datetime.now(timezone.utc)
         consultation.status = ConsultationStatus.IN_PROGRESS
-        consultation.updated_at = datetime.now(timezone.utc)
+        consultation.updated_at = now
+        consultation.updated_by_user_id = actor.id
         self.consultations.add(consultation)
         self.structured_rows.replace_from_payload(consultation, payload)
         self.session.commit()
@@ -292,6 +297,7 @@ class ConsultationRecordService:
         now = datetime.now(timezone.utc)
         consultation.status = ConsultationStatus.SIGNED
         consultation.signed_by_user_id = actor.id
+        consultation.updated_by_user_id = actor.id
         consultation.signed_at = now
         consultation.updated_at = now
 
@@ -301,6 +307,7 @@ class ConsultationRecordService:
         if appointment:
             appointment.status = AppointmentStatus.CONSULTATION_COMPLETED
             appointment.updated_at = now
+            appointment.updated_by_user_id = actor.id
             self.references.add_appointment(appointment)
 
         queue_entry = self.references.get_queue_entry_for_appointment(

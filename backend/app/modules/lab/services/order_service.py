@@ -67,6 +67,9 @@ def create_lab_order_record(
         payload,
         update={
             "tenant_id": tenant_id,
+            "ordered_by_user_id": payload.ordered_by_user_id or current_user.id,
+            "created_by_user_id": current_user.id,
+            "updated_by_user_id": current_user.id,
             "lab_order_number": next_document_number(
                 session,
                 tenant_id=tenant_id,
@@ -94,7 +97,7 @@ def create_lab_order_record(
         session,
         tenant_id=tenant_id,
         branch_id=order.branch_id,
-        actor_user_id=payload.ordered_by_user_id,
+        actor_user_id=order.created_by_user_id,
         action="lab_order.created",
         resource_type="lab_order",
         resource_id=order.id,
@@ -151,7 +154,9 @@ def create_lab_order_from_consultation_record(
         priority=payload.priority,
         tests=consultation.lab_referral_text,
         amount=payload.amount,
-        ordered_by_user_id=payload.ordered_by_user_id,
+        ordered_by_user_id=payload.ordered_by_user_id or current_user.id,
+        created_by_user_id=current_user.id,
+        updated_by_user_id=current_user.id,
     )
     session.add(order)
     session.commit()
@@ -217,7 +222,7 @@ def create_lab_order_from_consultation_record(
         session,
         tenant_id=tenant_id,
         branch_id=order.branch_id,
-        actor_user_id=payload.ordered_by_user_id,
+        actor_user_id=order.created_by_user_id,
         action="lab_order.created_from_consultation",
         resource_type="lab_order",
         resource_id=order.id,
@@ -245,6 +250,7 @@ def update_lab_order_status_record(
     now = datetime.now(timezone.utc)
     order.status = payload.status
     order.updated_at = now
+    order.updated_by_user_id = current_user.id
     if payload.notes is not None:
         order.notes = payload.notes
     if payload.status == LabOrderStatus.SAMPLE_COLLECTED:
@@ -270,7 +276,7 @@ def update_lab_order_status_record(
         session,
         tenant_id=tenant_id,
         branch_id=order.branch_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=payload.actor_user_id or current_user.id,
         action=f"lab_order.{payload.status.value}",
         resource_type="lab_order",
         resource_id=order.id,
