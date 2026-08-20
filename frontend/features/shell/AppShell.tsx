@@ -10,7 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
+import { ChevronRight, HeartPulse, Home } from "lucide-react";
 import { SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { canUseTenantAdminSection } from "../admin/permissions";
@@ -30,7 +30,10 @@ import { useNavigationSkeleton } from "@/app/components/common/loader/useNavigat
 import { ModuleSkeleton } from "@/app/components/common/loader/ModuleSkeleton";
 import { BreadcrumbBarSkeleton } from "@/app/components/common/loader/BreadcrumbBarSkeleton";
 import type { AppNavigationTarget } from "@/lib/navigationTarget";
-import { opdAppointmentPath } from "@/features/opd/routing";
+import {
+  opdAppointmentPath,
+  opdSectionFromSegment,
+} from "@/features/opd/routing";
 import { isNewSegment, isEditSegment } from "@/lib/routeSlugs";
 
 type ShellChromeValue = {
@@ -75,6 +78,75 @@ export function BreadcrumbSlot({ children }: { children: ReactNode }) {
   if (!breadcrumbSlotEl) return null;
   return createPortal(children, breadcrumbSlotEl);
 }
+
+function BreadcrumbSeparator({ className = "" }: { className?: string }) {
+  return (
+    <ChevronRight
+      aria-hidden="true"
+      size={12}
+      className={`shrink-0 text-slate-900 ${className}`}
+    />
+  );
+}
+
+function humanizeRouteSlug(value: string): string {
+  return value
+    .replace(/^(new|edit)-/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function routeActionLabel(segment: string, fallbackEntity = ""): string {
+  if (segment === "new") return `Create ${fallbackEntity}`.trim();
+  if (isNewSegment(segment)) return `Create ${humanizeRouteSlug(segment)}`;
+  if (isEditSegment(segment)) return `Edit ${humanizeRouteSlug(segment)}`;
+  return "";
+}
+
+function BreadcrumbCrumb({
+  label,
+  onClick,
+  current = false,
+  className = "",
+}: {
+  label: string;
+  onClick: () => void;
+  current?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={current}
+      className={`truncate rounded-md px-1.5 py-1 text-[11px] font-bold text-brand hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent ${className}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+const OPD_SECTION_LABELS: Record<string, string> = {
+  appointments: "Appointments",
+  schedule: "Doctor Schedule",
+  consultation: "Consultation",
+  "lab-services": "Lab & Services",
+  prescriptions: "Prescriptions",
+  invoices: "Billing",
+  payments: "Payments",
+  templates: "Templates",
+};
+
+const OPD_SECTION_HREFS: Record<string, string> = {
+  appointments: "/opd/appointments",
+  schedule: "/opd/schedule",
+  consultation: "/opd/consultation",
+  "lab-services": "/opd/lab-services",
+  prescriptions: "/opd/prescriptions",
+  invoices: "/opd/billing",
+  payments: "/opd/payments",
+  templates: "/opd/templates",
+};
 
 export function AppShell({
   children,
@@ -355,13 +427,22 @@ export function AppShell({
   const [isDesktop, setIsDesktop] = useState(false);
   const profileOpenRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const pathSegments = pathname.split("/").filter(Boolean);
   const activeNavLabel =
     activePage === "error_logs"
       ? "Error Logs"
       : visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
+  const activeOPDSection =
+    activePage === "opd"
+      ? opdSectionFromSegment(pathSegments[1])
+      : "";
+  const activeOPDBreadcrumbSection =
+    activeOPDSection === "new" ? "appointments" : activeOPDSection;
 
   const activeSectionLabel =
-    activePage === "superadmin"
+    activePage === "opd"
+      ? OPD_SECTION_LABELS[activeOPDBreadcrumbSection] || ""
+      : activePage === "superadmin"
       ? String(
           visiblePlatformSections.find(
             ([id]: any) =>
@@ -390,17 +471,51 @@ export function AppShell({
                 )?.[1] ?? "",
               )
             : "";
+  const activeSectionHref =
+    activePage === "opd"
+      ? OPD_SECTION_HREFS[activeOPDBreadcrumbSection] || "/opd/consultation"
+      : activePage === "superadmin"
+        ? superAdminPath(
+            superAdminSectionParents[activeSuperAdminSection] ||
+              activeSuperAdminSection,
+          )
+        : activePage === "admin"
+          ? `/admin/${activeTenantAdminSection}`
+          : activePage === "clinic"
+            ? `/clinic/${activeClinicSection}`
+            : activePage === "reports"
+              ? `/reports/${reportsSection}`
+              : "";
+  const activeModuleHref =
+    activePage === "error_logs"
+      ? "/error_logs"
+      : activePage === "opd"
+        ? "/opd/consultation"
+        : activePage === "admin"
+          ? "/admin"
+          : activePage === "clinic"
+            ? "/clinic"
+            : activePage === "reports"
+              ? "/reports"
+              : activePage === "superadmin"
+                ? "/superadmin"
+                : clinicModuleIds.includes(activePage)
+                  ? clinicModulePath(activePage)
+                  : `/${activePage}`;
 
   // The trailing "new-{slug}"/"edit-{slug}" URL segment self-describes its
   // action for every module/submodule alike, so the breadcrumb's "Create"/
   // "Edit" crumb is derived straight from the URL instead of needing each
   // module to report its own view state up to the shell.
-  const lastPathSegment = pathname.split("/").filter(Boolean).pop() || "";
-  const activeViewLabel = isNewSegment(lastPathSegment)
-    ? "Create"
-    : isEditSegment(lastPathSegment)
-      ? "Edit"
-      : "";
+  const lastPathSegment = pathSegments.at(-1) || "";
+  const activeViewLabel =
+    activePage === "opd" && activeOPDSection === "new"
+      ? "Create Appointment"
+      : routeActionLabel(lastPathSegment);
+  function navigateBreadcrumb(href: string) {
+    if (!href || href === pathname) return;
+    router.push(href);
+  }
 
   const searchItems = [
     ...visibleNav.map(([id, label]: any) => ({
@@ -470,7 +585,7 @@ export function AppShell({
 
     const legacyOPDPath: Record<string, string> = {
       appointments: "/opd/appointments",
-      consultation: "/opd",
+      consultation: "/opd/consultation",
     };
     const id =
       requestedId === "doctor"
@@ -538,6 +653,8 @@ export function AppShell({
                     ? superAdminPath(superAdminSection)
                     : clinicModuleIds.includes(id)
                       ? clinicModulePath(id)
+                      : id === "opd"
+                        ? "/opd/consultation"
                       : `/${id}`);
 
     if (id === activePage && pathname === destinationPath) return;
@@ -558,7 +675,7 @@ export function AppShell({
         ? "/opd/new"
         : routeSegment === "appointments"
           ? "/opd/appointments"
-          : "/opd";
+          : "/opd/consultation";
       router.replace(legacyDestination);
     } else if (
       !isKnownRouteSegment &&
@@ -567,6 +684,8 @@ export function AppShell({
       router.replace(
         clinicModuleIds.includes(resolvedActivePage)
           ? clinicModulePath(resolvedActivePage)
+          : resolvedActivePage === "opd"
+            ? "/opd/consultation"
           : `/${resolvedActivePage}`,
       );
     }
@@ -877,34 +996,37 @@ export function AppShell({
                       disabled={
                         activePage === "dashboard" || !enabled("dashboard")
                       }
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold text-brand hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
                     >
                       <Home size={14} /> Dashboard
                     </button>
 
                     {activePage !== "dashboard" && (
                       <>
-                        <span className="text-slate-300">/</span>
-                        <span className="truncate text-[11px] font-bold text-slate-900">
-                          {activeNavLabel}
-                        </span>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbCrumb
+                          label={activeNavLabel}
+                          onClick={() => navigateBreadcrumb(activeModuleHref)}
+                          current={!activeSectionLabel && !activeViewLabel}
+                        />
                       </>
                     )}
 
                     {activeSectionLabel && (
                       <>
-                        <span className="hidden text-slate-300 sm:inline">
-                          /
-                        </span>
-                        <span className="hidden truncate text-[11px] text-slate-500 sm:inline">
-                          {activeSectionLabel}
-                        </span>
+                        <BreadcrumbSeparator className="hidden sm:block" />
+                        <BreadcrumbCrumb
+                          label={activeSectionLabel}
+                          onClick={() => navigateBreadcrumb(activeSectionHref)}
+                          current={!activeViewLabel}
+                          className="hidden sm:inline"
+                        />
                       </>
                     )}
 
                     {activeViewLabel && (
                       <>
-                        <span className="text-slate-300">/</span>
+                        <BreadcrumbSeparator />
                         <span className="truncate text-[11px] font-bold text-slate-900">
                           {activeViewLabel}
                         </span>

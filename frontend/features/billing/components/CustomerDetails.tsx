@@ -1,4 +1,3 @@
-import React from "react";
 import { FieldRow } from "./FieldRow";
 
 const CustomerDetails = ({customer,company,invoiceDate,invoiceNo}) => {

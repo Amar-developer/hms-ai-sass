@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SlidersHorizontal,X } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import {
   AdaptiveFilterBar,
   type TableSchema,
@@ -50,20 +50,6 @@ export function AdaptiveFilterTrigger({
   queryFilters,
   onQueryFiltersChange,
 }: AdaptiveFilterTriggerProps) {
-  console.log(schema,'schema')
-  // console.log(query,'query')
-  // console.log(setQuery,'setQuery')
-  // console.log(showSearch,'showSearch')
-  // console.log(filterValues,'filterValues')
-  // console.log(sort,'sort')
-  // console.log(onSortChange,'onSortChange')
-  // console.log(showSort,'showSort')
-  // console.log(onReset,'onReset')
-  // console.log(children,'children')
-  // console.log(queryFields,'queryFields')
-  // console.log(queryFilters,'queryFilters')
-  // console.log(onQueryFiltersChange,'onQueryFiltersChange')
-
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 

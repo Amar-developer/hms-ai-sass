@@ -1,13 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  Badge,
-  Card,
-  Input,
-  RefreshButton,
-  StatusToast,
-} from "@/app/components/common/ui";
+import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
 import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
@@ -30,8 +24,7 @@ import {
 } from "./api";
 import { fetchInvoiceFilterOptions, fetchInvoicePage } from "./api/billing.api";
 import { DataTable } from "@/app/components/common/DataTable";
-import { getConsultationPendingColumns, getInvoiceColumns } from "./Column";
-import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
+import { getInvoiceColumns } from "./Column";
 import { getBillingTableSchema, getBillingQueryFields } from "./filterSchema";
 import { type QueryFieldOption, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";

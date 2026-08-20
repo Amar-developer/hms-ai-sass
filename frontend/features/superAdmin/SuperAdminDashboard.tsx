@@ -75,7 +75,6 @@ export function SuperAdminDashboard({
   };
 
   function changeSection(nextSection: string) {
-    console.log('changeSection is called')
     router.push(superAdminPath(nextSection, pendingIds.current));
   }
   const [confirmAction, setConfirmAction] = useState<any>(null);
@@ -262,15 +261,6 @@ export function SuperAdminDashboard({
       },
     };
     const route = detailRoutes[currentSection];
-    // console.log("[superadmin-detail-guard]", {
-    //   currentSection,
-    //   selectedDetailId,
-    //   busy: data.busy,
-    //   tenantAccessLoading: data.tenantAccessLoading,
-    //   usersCount: data.users.length,
-    //   userIds: data.users.map((u: any) => u.id),
-    //   route,
-    // });
     if (route && !route?.exists) router.replace(superAdminPath(route.list));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [

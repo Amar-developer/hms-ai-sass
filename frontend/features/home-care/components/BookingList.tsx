@@ -1,19 +1,8 @@
-import { Card, Button, Badge } from "@/app/components/common/ui";
-import {
-  capitalizeFirst,
-  displayDate,
-  money,
-  patientName,
-} from "@/utils/helper";
-import { bookingTotal, isBookingLocked, bookingStaffName } from "../helpers";
-import { humanizeOptionLabel } from "@/lib/options";
+import { Card, Button } from "@/app/components/common/ui";
 import { Pagination } from "@/app/components/common/Pagination";
-import { CopyIdButton } from "@/app/components/common/CopyIdButton";
-import { RowActions } from "@/features/admin/components/RowActions";
 import { DataTable } from "@/app/components/common/DataTable";
-import { Column } from "@/utils/types";
-import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 import { getBookingListColumn } from "../Column";
+import { Plus } from "lucide-react";
 
 export function BookingsList({
   bookings,
@@ -56,8 +45,8 @@ export function BookingsList({
           </div>
           <div className="mt-2 flex items-center gap-2">
             {canCreate && (
-              <Button type="button" onClick={onCreate} className="save-button">
-                New Booking
+              <Button type="button" onClick={onCreate} className="save-button  primary-action shrink-0 gap-2 px-5 py-3 text-xs shadow-sm">
+                <Plus size={16} /> New Booking
               </Button>
             )}
           </div>

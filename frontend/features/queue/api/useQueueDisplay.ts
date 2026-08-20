@@ -1,5 +1,5 @@
 import { fetchDisplayMode } from "./queue.api";
-import { apiFetch, type ApiSession } from "@/lib/api";
+import { type ApiSession } from "@/lib/api";
 import { useState, useEffect } from "react";
 
 export function useQueueDisplay(

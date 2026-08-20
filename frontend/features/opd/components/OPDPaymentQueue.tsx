@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, CreditCard, ReceiptText } from "lucide-react";
+import { CheckCircle2, CreditCard } from "lucide-react";
 
 import { Button, Card, StatusToast } from "@/app/components/common/ui";
 import { fetchOPDPaymentQueueRows } from "../opdBillingQueue";

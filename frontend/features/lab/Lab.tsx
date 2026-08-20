@@ -23,7 +23,6 @@ import { ConsultReferralModal } from "./components/ConsultReferralModal";
 import { WorklistDetailModal } from "./components/WorklistDetailModal";
 import { Pagination } from "@/app/components/common/Pagination";
 import { LabOrderForm } from "@/features/lab/forms/LabForms";
-import { LabOrderFormValues } from "@/features/lab/lab.schema";
 import type { LabOrderSummary } from "@/lib/contracts";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function ConsultationWorkflowPage() {
-  redirect("/opd");
+  redirect("/opd/consultation");
 }

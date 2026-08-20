@@ -4,7 +4,7 @@ import {
   doctypeFetchPaths,
   fileCategoryRules,
 } from "../constants";
-import { apiFetch, apiUpload, uploadAssetUrl } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
 import { FormField } from "@/app/components/FormElements";
 import {
   Card,
@@ -15,8 +15,6 @@ import {
   ActionButton,
 } from "@/app/components/common/ui";
 import { asOptionList, patientLabel } from "../helpers";
-import { humanizeOptionLabel } from "@/lib/options";
-import { capitalizeFirst, displayDateTime } from "@/utils/helper";
 import { PatientSearchSelect } from "@/features/patients/components/PatientSearchSelect";
 import { useForm } from "react-hook-form";
 import {
@@ -27,12 +25,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
-import { RowActions } from "./RowActions";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { DataTable } from "@/app/components/common/DataTable";
-import { Column } from "@/utils/types";
 import { getFileColumns } from "../column";
 
 export function FilesPanel({

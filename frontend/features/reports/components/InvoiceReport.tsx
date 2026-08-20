@@ -1,4 +1,3 @@
-import React from "react";
 import { Card, Badge } from "@/app/components/common/ui";
 import {
   approvedDiscountUsage,

@@ -2,8 +2,8 @@ import type { OPDSection } from "./OPDWorkspace";
 
 export function opdAppointmentPath(appointmentId: unknown) {
   const id = String(appointmentId || "").trim();
-  if (!id) return "/opd";
-  return `/opd?${new URLSearchParams({ appointment: id }).toString()}`;
+  if (!id) return "/opd/consultation";
+  return `/opd/consultation?${new URLSearchParams({ appointment: id }).toString()}`;
 }
 
 export function opdSectionFromSegment(segment: unknown): OPDSection {
@@ -14,6 +14,8 @@ export function opdSectionFromSegment(segment: unknown): OPDSection {
       return "appointments";
     case "schedule":
       return "schedule";
+    case "consultation":
+      return "consultation";
     case "lab-services":
       return "lab-services";
     case "prescriptions":
