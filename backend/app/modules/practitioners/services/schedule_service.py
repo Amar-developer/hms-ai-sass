@@ -3,6 +3,8 @@ from datetime import datetime, time, timezone
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
+from app.core.pagination import Page
 from app.modules.audit.service import record_audit_event
 from app.modules.practitioners.models import (
     PractitionerLeave,
@@ -46,6 +48,10 @@ def _times_overlap(start_a: time, end_a: time, start_b: time, end_b: time) -> bo
     exactly when the next begins) do not count as overlapping, so a doctor
     can run consecutive sessions."""
     return start_a < end_b and start_b < end_a
+
+
+def _actor_id(payload_actor_id: str | None, actor: object | None = None) -> str | None:
+    return getattr(actor, "id", None) or payload_actor_id
 
 
 _DUPLICATE_SCHEDULE_DETAIL = (
@@ -94,13 +100,73 @@ def list_all_schedules(
     return enrich_schedules(session, schedules)
 
 
+def list_schedule_page(
+    session: Session,
+    *,
+    tenant_id: str,
+    practitioner_id: str | None,
+    branch_id: str | None,
+    department_id: str | None,
+    is_active: bool | None,
+    weekday: int | None,
+    q: str | None,
+    list_filters: list[ListFilter],
+    list_sort: ListSort | None,
+    limit: int,
+    offset: int,
+) -> Page[PractitionerScheduleRead]:
+    department_ids = None
+    if department_id:
+        department_ids = department_filter_ids(session, tenant_id, department_id)
+    repository = PractitionerScheduleRepository(session)
+    schedules = repository.list_page(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+        department_ids=department_ids,
+        is_active=is_active,
+        weekday=weekday,
+        q=q,
+        list_filters=list_filters,
+        list_sort=list_sort,
+        limit=limit,
+        offset=offset,
+    )
+    total = repository.count_page(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+        department_ids=department_ids,
+        is_active=is_active,
+        weekday=weekday,
+        q=q,
+        list_filters=list_filters,
+    )
+    return Page(
+        items=enrich_schedules(session, schedules),
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def list_schedule_filter_options(
+    session: Session,
+    *,
+    tenant_id: str,
+) -> dict[str, list[ListFilterOption]]:
+    return PractitionerScheduleRepository(session).filter_options(tenant_id=tenant_id)
+
+
 def update_schedule(
     session: Session,
     *,
     tenant_id: str,
     schedule_id: str,
     payload: PractitionerScheduleUpdate,
+    actor=None,
 ) -> PractitionerScheduleRead:
+    actor_user_id = _actor_id(payload.actor_user_id, actor)
     schedule = get_schedule_or_404(session, tenant_id, schedule_id)
     updates = payload.model_dump(exclude_unset=True, exclude={"actor_user_id"})
     practitioner_id = updates.get("practitioner_id", schedule.practitioner_id)
@@ -155,6 +221,7 @@ def update_schedule(
         setattr(schedule, key, value)
     schedule.mode = mode
     schedule.weekdays_json = dump_weekdays(resolved_weekdays)
+    schedule.updated_by_user_id = actor_user_id
     schedule.updated_at = datetime.now(timezone.utc)
     PractitionerScheduleRepository(session).add(schedule)
     session.commit()
@@ -163,7 +230,7 @@ def update_schedule(
         session,
         tenant_id=tenant_id,
         branch_id=schedule.branch_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=actor_user_id,
         action="practitioner.schedule.updated",
         resource_type="practitioner_schedule",
         resource_id=schedule.id,
@@ -178,6 +245,7 @@ def delete_schedule(
     schedule = get_schedule_or_404(session, tenant_id, schedule_id)
     branch_id = schedule.branch_id
     schedule.is_active = False
+    schedule.updated_by_user_id = actor_user_id
     schedule.updated_at = datetime.now(timezone.utc)
     PractitionerScheduleRepository(session).add(schedule)
     session.commit()
@@ -200,7 +268,9 @@ def create_schedule(
     tenant_id: str,
     practitioner_id: str,
     payload: PractitionerScheduleCreate,
+    actor=None,
 ) -> PractitionerScheduleRead:
+    actor_user_id = _actor_id(payload.actor_user_id, actor)
     get_practitioner_or_404(session, tenant_id, practitioner_id)
     validate_links(
         session,
@@ -245,6 +315,8 @@ def create_schedule(
             "practitioner_id": practitioner_id,
             "mode": mode_value(payload.mode),
             "weekdays_json": dump_weekdays(resolved_weekdays),
+            "created_by_user_id": actor_user_id,
+            "updated_by_user_id": actor_user_id,
         },
     )
     PractitionerScheduleRepository(session).add(schedule)
@@ -254,7 +326,7 @@ def create_schedule(
         session,
         tenant_id=tenant_id,
         branch_id=schedule.branch_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=actor_user_id,
         action="practitioner.schedule.created",
         resource_type="practitioner_schedule",
         resource_id=schedule.id,
@@ -280,7 +352,9 @@ def create_leave(
     tenant_id: str,
     practitioner_id: str,
     payload: PractitionerLeaveCreate,
+    actor=None,
 ) -> PractitionerLeave:
+    actor_user_id = _actor_id(payload.actor_user_id, actor)
     get_practitioner_or_404(session, tenant_id, practitioner_id)
     if payload.branch_id:
         validate_links(session, tenant_id, [payload.branch_id], [])
@@ -297,7 +371,13 @@ def create_leave(
     if payload.start_time and payload.end_time:
         validate_time_window(payload.start_time, payload.end_time)
     leave = PractitionerLeave.model_validate(
-        payload, update={"tenant_id": tenant_id, "practitioner_id": practitioner_id}
+        payload,
+        update={
+            "tenant_id": tenant_id,
+            "practitioner_id": practitioner_id,
+            "created_by_user_id": actor_user_id,
+            "updated_by_user_id": actor_user_id,
+        },
     )
     PractitionerLeaveRepository(session).add(leave)
     session.commit()
@@ -306,7 +386,7 @@ def create_leave(
         session,
         tenant_id=tenant_id,
         branch_id=leave.branch_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=actor_user_id,
         action="practitioner.leave.created",
         resource_type="practitioner_leave",
         resource_id=leave.id,
@@ -331,7 +411,9 @@ def create_room_assignment(
     tenant_id: str,
     practitioner_id: str,
     payload: PractitionerRoomAssignmentCreate,
+    actor=None,
 ) -> PractitionerRoomAssignment:
+    actor_user_id = _actor_id(payload.actor_user_id, actor)
     get_practitioner_or_404(session, tenant_id, practitioner_id)
     validate_links(session, tenant_id, [payload.branch_id], [])
     validate_time_window(payload.start_time, payload.end_time)
@@ -356,7 +438,12 @@ def create_room_assignment(
         )
     assignment = PractitionerRoomAssignment.model_validate(
         payload,
-        update={"tenant_id": tenant_id, "practitioner_id": practitioner_id},
+        update={
+            "tenant_id": tenant_id,
+            "practitioner_id": practitioner_id,
+            "created_by_user_id": actor_user_id,
+            "updated_by_user_id": actor_user_id,
+        },
     )
     PractitionerRoomAssignmentRepository(session).add(assignment)
     session.commit()
@@ -365,7 +452,7 @@ def create_room_assignment(
         session,
         tenant_id=tenant_id,
         branch_id=assignment.branch_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=actor_user_id,
         action="practitioner.room_assignment.created",
         resource_type="practitioner_room_assignment",
         resource_id=assignment.id,

@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
+from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.billing.models import (
     DiscountApproval,
@@ -29,7 +31,11 @@ from app.modules.billing.services.configuration import (
     create_tax_rule,
     decide_discount_approval,
     list_accessible_discount_offers,
+    list_accessible_discount_offer_filter_options,
+    list_accessible_discount_offer_page,
     list_accessible_doctor_fee_rules,
+    list_accessible_tax_rule_filter_options,
+    list_accessible_tax_rule_page,
     list_accessible_tax_rules,
     request_discount_approval,
     update_discount_offer,
@@ -125,6 +131,56 @@ def list_tax_rules_endpoint(
     )
 
 
+@router.get("/tax-rules/page", response_model=Page[TaxRuleRead])
+def list_tax_rule_page_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.TAX_MANAGE, permissions.TAX_READ, permissions.BILLING_MANAGE
+        )
+    ),
+) -> Page[TaxRuleRead]:
+    return list_accessible_tax_rule_page(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/tax-rules/filter-options", response_model=dict[str, list[ListFilterOption]]
+)
+def list_tax_rule_filter_options_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.TAX_MANAGE, permissions.TAX_READ, permissions.BILLING_MANAGE
+        )
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return list_accessible_tax_rule_filter_options(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        actor=current_user,
+    )
+
+
 @router.patch("/tax-rules/{rule_id}", response_model=TaxRuleRead)
 def update_tax_rule_endpoint(
     rule_id: str,
@@ -167,6 +223,49 @@ def list_discount_offers_endpoint(
 ) -> list[DiscountOffer]:
     return list_accessible_discount_offers(
         session, tenant_id=tenant_id, branch_id=branch_id, actor=current_user
+    )
+
+
+@router.get("/discount-offers/page", response_model=Page[DiscountOfferRead])
+def list_discount_offer_page_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> Page[DiscountOfferRead]:
+    return list_accessible_discount_offer_page(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/discount-offers/filter-options",
+    response_model=dict[str, list[ListFilterOption]],
+)
+def list_discount_offer_filter_options_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> dict[str, list[ListFilterOption]]:
+    return list_accessible_discount_offer_filter_options(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        actor=current_user,
     )
 
 

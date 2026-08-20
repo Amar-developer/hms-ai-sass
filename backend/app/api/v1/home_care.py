@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
+from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.billing.schemas import InvoiceDetailRead
 from app.modules.home_care.models import HomeCareService
@@ -41,6 +43,61 @@ def list_services(
 ) -> list[HomeCareService]:
     return HomeCareCatalogService(session).list_services(
         tenant_id=tenant_id, branch_id=branch_id, actor=current_user
+    )
+
+
+@router.get("/services/page", response_model=Page[HomeCareServiceRead])
+def list_service_page(
+    branch_id: str | None = None,
+    include_inactive: bool = False,
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.HOME_CARE_READ,
+            permissions.HOME_CARE_MANAGE,
+            permissions.SERVICE_ITEMS_READ,
+            permissions.SERVICE_ITEMS_MANAGE,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> Page[HomeCareServiceRead]:
+    return HomeCareCatalogService(session).list_service_page(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        include_inactive=include_inactive,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/services/filter-options", response_model=dict[str, list[ListFilterOption]]
+)
+def list_service_filter_options(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.HOME_CARE_READ,
+            permissions.HOME_CARE_MANAGE,
+            permissions.SERVICE_ITEMS_READ,
+            permissions.SERVICE_ITEMS_MANAGE,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return HomeCareCatalogService(session).list_service_filter_options(
+        tenant_id=tenant_id
     )
 
 

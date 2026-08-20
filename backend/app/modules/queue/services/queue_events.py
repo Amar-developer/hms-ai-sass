@@ -40,9 +40,15 @@ def create_queue_entry_for_appointment(
             branch_id=appointment.branch_id,
         ),
         status=AppointmentStatus.WAITING,
+        created_by_user_id=appointment.created_by_user_id,
+        updated_by_user_id=appointment.updated_by_user_id
+        or appointment.created_by_user_id,
     )
     appointment.status = AppointmentStatus.WAITING
     appointment.updated_at = now_utc()
+    appointment.updated_by_user_id = (
+        appointment.updated_by_user_id or appointment.created_by_user_id
+    )
     session.add(entry)
     session.add(appointment)
     session.commit()
@@ -91,6 +97,7 @@ def record_queue_event(
         to_status=to_status,
         reason=reason,
         actor_user_id=actor_user_id,
+        created_by_user_id=actor_user_id,
     )
     session.add(event)
     record_audit_event(

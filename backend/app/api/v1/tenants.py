@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Header, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, Query, UploadFile, status
 from sqlmodel import Session
 
 from app.core.auth import (
@@ -10,6 +10,8 @@ from app.core.auth import (
     require_super_admin,
 )
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
+from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
@@ -216,6 +218,63 @@ def list_branches(
     )
 
 
+@router.get("/{tenant_id}/branches/page", response_model=Page[BranchRead])
+def list_branch_page(
+    tenant_id: str,
+    request_tenant_id: str = Depends(require_tenant_id),
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_READ,
+            permissions.BRANCHES_MANAGE,
+            permissions.BRANCHES_READ,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> Page[BranchRead]:
+    return branch_service.list_branch_page_for_request(
+        session,
+        tenant_id=tenant_id,
+        request_tenant_id=request_tenant_id,
+        current_user=current_user,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/{tenant_id}/branches/filter-options",
+    response_model=dict[str, list[ListFilterOption]],
+)
+def list_branch_filter_options(
+    tenant_id: str,
+    request_tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_READ,
+            permissions.BRANCHES_MANAGE,
+            permissions.BRANCHES_READ,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> dict[str, list[ListFilterOption]]:
+    return branch_service.list_branch_filter_options_for_request(
+        session,
+        tenant_id=tenant_id,
+        request_tenant_id=request_tenant_id,
+        current_user=current_user,
+    )
+
+
 @router.patch("/{tenant_id}/branches/{branch_id}", response_model=BranchRead)
 def update_branch(
     tenant_id: str,
@@ -368,6 +427,61 @@ def list_departments(
 ) -> list[Department]:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
     return department_service.list_departments(session, tenant_id=tenant_id)
+
+
+@router.get("/{tenant_id}/departments/page", response_model=Page[DepartmentRead])
+def list_department_page(
+    tenant_id: str,
+    x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_READ,
+            permissions.DEPARTMENTS_MANAGE,
+            permissions.DEPARTMENTS_READ,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> Page[DepartmentRead]:
+    _assert_tenant_access(current_user, tenant_id, x_tenant_id)
+    return department_service.list_department_page(
+        session,
+        tenant_id=tenant_id,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/{tenant_id}/departments/filter-options",
+    response_model=dict[str, list[ListFilterOption]],
+)
+def list_department_filter_options(
+    tenant_id: str,
+    x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_READ,
+            permissions.DEPARTMENTS_MANAGE,
+            permissions.DEPARTMENTS_READ,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> dict[str, list[ListFilterOption]]:
+    _assert_tenant_access(current_user, tenant_id, x_tenant_id)
+    return department_service.list_department_filter_options(
+        session,
+        tenant_id=tenant_id,
+    )
 
 
 @router.get("/{tenant_id}/departments/{department_id}", response_model=DepartmentRead)

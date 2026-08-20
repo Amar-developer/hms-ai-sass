@@ -63,5 +63,7 @@ class DocumentSequence(SQLModel, table=True):
     entity_code: str = Field(index=True, min_length=1, max_length=40)
     digits: int = Field(default=5, ge=1, le=12)
     current_value: int = Field(default=0, ge=0)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)

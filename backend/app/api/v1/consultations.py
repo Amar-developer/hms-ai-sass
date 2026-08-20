@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
+from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.consultations.models import Consultation, ConsultationAddendum
 from app.modules.consultations.schemas import (
@@ -65,6 +67,7 @@ def list_consultations(
     patient_id: str | None = None,
     appointment_id: str | None = None,
     branch_id: str | None = None,
+    q: str | None = Query(default=None, max_length=120),
     current_user: User = Depends(require_permission(permissions.CONSULTATIONS_READ)),
     session: Session = Depends(get_session),
 ) -> list[Consultation]:
@@ -73,7 +76,54 @@ def list_consultations(
         patient_id=patient_id,
         appointment_id=appointment_id,
         branch_id=branch_id,
+        q=q,
         actor=current_user,
+    )
+
+
+@router.get(
+    "/page",
+    response_model=Page[ConsultationRead],
+    dependencies=[Depends(require_permission(permissions.CONSULTATIONS_READ))],
+)
+def list_consultation_page(
+    tenant_id: str = Depends(require_tenant_id),
+    patient_id: str | None = None,
+    appointment_id: str | None = None,
+    branch_id: str | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(require_permission(permissions.CONSULTATIONS_READ)),
+    session: Session = Depends(get_session),
+) -> Page[ConsultationRead]:
+    return ConsultationQueryService(session).list_consultation_page(
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        appointment_id=appointment_id,
+        branch_id=branch_id,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/filter-options",
+    response_model=dict[str, list[ListFilterOption]],
+    dependencies=[Depends(require_permission(permissions.CONSULTATIONS_READ))],
+)
+def list_consultation_filter_options(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+) -> dict[str, list[ListFilterOption]]:
+    return ConsultationQueryService(session).list_consultation_filter_options(
+        tenant_id=tenant_id
     )
 
 

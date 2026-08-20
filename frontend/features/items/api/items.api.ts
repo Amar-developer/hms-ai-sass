@@ -5,20 +5,40 @@ export function listMedicines(session: ApiSession) {
   return apiFetch("/pharmacy/medicines", session);
 }
 
+export function listMedicineFilterOptions(session: ApiSession) {
+  return apiFetch("/pharmacy/medicines/filter-options", session);
+}
+
 export function listLabTests(session: ApiSession) {
   return apiFetch("/lab/catalog/tests", session);
+}
+
+export function listLabTestFilterOptions(session: ApiSession) {
+  return apiFetch("/lab/catalog/tests/filter-options", session);
 }
 
 export function listLabPackages(session: ApiSession) {
   return apiFetch("/lab/catalog/packages", session);
 }
 
+export function listLabPackageFilterOptions(session: ApiSession) {
+  return apiFetch("/lab/catalog/packages/filter-options", session);
+}
+
 export function listPhysioEquipment(session: ApiSession) {
   return apiFetch("/physiotherapy/equipment", session);
 }
 
+export function listPhysioEquipmentFilterOptions(session: ApiSession) {
+  return apiFetch("/physiotherapy/equipment/filter-options", session);
+}
+
 export function listHomeCareServices(session: ApiSession) {
   return apiFetch("/home-care/services", session);
+}
+
+export function listHomeCareServiceFilterOptions(session: ApiSession) {
+  return apiFetch("/home-care/services/filter-options", session);
 }
 
 export function listSuppliers(session: ApiSession) {

@@ -32,6 +32,7 @@ class Consultation(SQLModel, table=True):
     follow_up_advice: str | None = Field(default=None, max_length=2000)
     patient_remarks: str | None = Field(default=None, max_length=2000)
     created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     signed_by_user_id: str | None = Field(default=None, index=True)
     signed_at: datetime | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)

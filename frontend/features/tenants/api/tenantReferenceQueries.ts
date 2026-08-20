@@ -1,5 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { apiFetch, type ApiSession } from "@/lib/api";
+import type { QueryFilterRow } from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
 
 // Branches and departments are small tenant reference lists. They are shared
 // across workspace screens and invalidated by their own mutations, so a short
@@ -33,6 +35,80 @@ export function fetchTenantDepartments(
     ...session,
     tenantId,
   });
+}
+
+type TenantReferencePageParams = {
+  q?: string;
+  queryFilters?: QueryFilterRow[];
+  sort?: SortState | null;
+  limit: number;
+  offset: number;
+};
+
+function tenantReferencePageQuery(
+  params: TenantReferencePageParams,
+): URLSearchParams {
+  const search = new URLSearchParams();
+  if (params.q?.trim()) search.set("q", params.q.trim());
+  if (params.queryFilters?.length)
+    search.set("filters", JSON.stringify(params.queryFilters));
+  if (params.sort) search.set("sort", JSON.stringify(params.sort));
+  search.set("limit", String(params.limit));
+  search.set("offset", String(params.offset));
+  return search;
+}
+
+export function fetchTenantBranchPage(
+  session: ApiSession,
+  params: TenantReferencePageParams,
+  tenantId = session.tenantId,
+) {
+  const search = tenantReferencePageQuery(params);
+  return apiFetch<any>(`/tenants/${tenantId}/branches/page?${search.toString()}`, {
+    ...session,
+    tenantId,
+  });
+}
+
+export function fetchTenantDepartmentPage(
+  session: ApiSession,
+  params: TenantReferencePageParams,
+  tenantId = session.tenantId,
+) {
+  const search = tenantReferencePageQuery(params);
+  return apiFetch<any>(
+    `/tenants/${tenantId}/departments/page?${search.toString()}`,
+    {
+      ...session,
+      tenantId,
+    },
+  );
+}
+
+export function fetchTenantBranchFilterOptions(
+  session: ApiSession,
+  tenantId = session.tenantId,
+) {
+  return apiFetch<Record<string, { value: string; label: string }[]>>(
+    `/tenants/${tenantId}/branches/filter-options`,
+    {
+      ...session,
+      tenantId,
+    },
+  );
+}
+
+export function fetchTenantDepartmentFilterOptions(
+  session: ApiSession,
+  tenantId = session.tenantId,
+) {
+  return apiFetch<Record<string, { value: string; label: string }[]>>(
+    `/tenants/${tenantId}/departments/filter-options`,
+    {
+      ...session,
+      tenantId,
+    },
+  );
 }
 
 export function getTenantBranches(

@@ -4,6 +4,9 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ApiSession } from "@/lib/api";
 import { activeTenantOptions } from "@/utils/helper";
+import type { QueryFilterRow } from "@/utils/queryFilter";
+import type { QueryFieldOption } from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
 import { getTenantBranches } from "@/features/tenants/api/tenantReferenceQueries";
 import * as patientsApi from "./patients.api";
 
@@ -16,6 +19,8 @@ export type PatientListFilters = {
   branchFilter: string;
   fromDate: string;
   toDate: string;
+  queryFilters?: QueryFilterRow[];
+  sort?: SortState | null;
 };
 
 type UsePatientListDataParams = {
@@ -41,6 +46,9 @@ export function usePatientListData({
   const queryClient = useQueryClient();
   const [tenants, setTenants] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
+  const [filterOptions, setFilterOptions] = useState<
+    Record<string, QueryFieldOption[]>
+  >({});
   const [rows, setRows] = useState<any[]>([]);
   const [totalRows, setTotalRows] = useState(0);
 
@@ -81,11 +89,21 @@ export function usePatientListData({
         params.set("branch_id", filters.branchFilter);
       if (filters.fromDate) params.set("from_date", filters.fromDate);
       if (filters.toDate) params.set("to_date", filters.toDate);
-      const [branchRows, patientRows] = await Promise.all([
+      if (filters.queryFilters?.length)
+        params.set("filters", JSON.stringify(filters.queryFilters));
+      if (filters.sort) params.set("sort", JSON.stringify(filters.sort));
+      const optionParams = new URLSearchParams();
+      if (filters.branchFilter && filters.branchFilter !== "all")
+        optionParams.set("branch_id", filters.branchFilter);
+      const [branchRows, options, patientRows] = await Promise.all([
         getTenantBranches(queryClient, session, nextTenantId).catch(() => []),
+        patientsApi.fetchPatientFilterOptions(session, optionParams).catch(
+          () => ({}),
+        ),
         patientsApi.fetchPatientsPage(session, params),
       ]);
       setBranches(branchRows);
+      setFilterOptions(options || {});
       setRows(patientRows.items || []);
       setTotalRows(patientRows.total || 0);
     } catch (err: any) {
@@ -100,6 +118,7 @@ export function usePatientListData({
     branches,
     rows,
     totalRows,
+    filterOptions,
     setRows,
     loadTenants,
     loadData,

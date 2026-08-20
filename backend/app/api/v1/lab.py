@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
+from datetime import date
 from io import BytesIO
 
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission
 from app.core.database import get_session
-from app.core.pagination import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
+from app.core.pagination import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
@@ -23,6 +25,10 @@ from app.modules.lab.services.catalog_service import (
     create_result_template_record,
     delete_lab_package_record,
     delete_lab_test_record,
+    list_lab_package_filter_options,
+    list_lab_package_page,
+    list_lab_test_filter_options,
+    list_lab_test_page,
     update_lab_package_record,
     update_lab_test_record,
 )
@@ -41,6 +47,8 @@ from app.modules.lab.services.order_service import (
 )
 from app.modules.lab.services.order_queries import (
     get_lab_order_detail,
+    list_lab_order_filter_options,
+    list_lab_order_page,
     list_lab_orders_records,
 )
 from app.modules.lab.services.file_service import (
@@ -208,7 +216,12 @@ def create_lab_test(
         )
     ),
 ) -> LabTestCatalog:
-    return create_lab_test_record(session, tenant_id=tenant_id, payload=payload)
+    return create_lab_test_record(
+        session,
+        tenant_id=tenant_id,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 @router.get("/catalog/tests", response_model=list[LabTestCatalogRead])
@@ -235,6 +248,63 @@ def list_lab_tests(
         current_user=current_user,
         module_enabled_checker=enforce_module_enabled,
     )
+
+
+@router.get("/catalog/tests/page", response_model=Page[LabTestCatalogRead])
+def list_lab_test_page_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    include_inactive: bool = False,
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.SERVICE_ITEMS_MANAGE,
+            permissions.SERVICE_ITEMS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> Page[LabTestCatalogRead]:
+    return list_lab_test_page(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        include_inactive=include_inactive,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+        current_user=current_user,
+    )
+
+
+@router.get(
+    "/catalog/tests/filter-options",
+    response_model=dict[str, list[ListFilterOption]],
+)
+def list_lab_test_filter_options_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.SERVICE_ITEMS_MANAGE,
+            permissions.SERVICE_ITEMS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return list_lab_test_filter_options(session, tenant_id=tenant_id)
 
 
 @router.patch("/catalog/tests/{test_id}", response_model=LabTestCatalogRead)
@@ -283,7 +353,12 @@ def create_lab_package(
         require_any_permission(permissions.LAB_MANAGE, permissions.LAB_CREATE)
     ),
 ) -> LabTestPackageRead:
-    return create_lab_package_record(session, tenant_id=tenant_id, payload=payload)
+    return create_lab_package_record(
+        session,
+        tenant_id=tenant_id,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 @router.get("/catalog/packages", response_model=list[LabTestPackageRead])
@@ -302,6 +377,63 @@ def list_lab_packages(
         current_user=current_user,
         module_enabled_checker=enforce_module_enabled,
     )
+
+
+@router.get("/catalog/packages/page", response_model=Page[LabTestPackageRead])
+def list_lab_package_page_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    include_inactive: bool = False,
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.SERVICE_ITEMS_MANAGE,
+            permissions.SERVICE_ITEMS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> Page[LabTestPackageRead]:
+    return list_lab_package_page(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        include_inactive=include_inactive,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+        current_user=current_user,
+    )
+
+
+@router.get(
+    "/catalog/packages/filter-options",
+    response_model=dict[str, list[ListFilterOption]],
+)
+def list_lab_package_filter_options_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.SERVICE_ITEMS_MANAGE,
+            permissions.SERVICE_ITEMS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return list_lab_package_filter_options(session, tenant_id=tenant_id)
 
 
 @router.patch("/catalog/packages/{package_id}", response_model=LabTestPackageRead)
@@ -437,6 +569,60 @@ def list_lab_orders(
         status_filter=status_filter,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/orders/page", response_model=Page[LabOrderRead])
+def list_lab_orders_page(
+    tenant_id: str = Depends(require_tenant_id),
+    patient_id: str | None = None,
+    status_filter: LabOrderStatus | None = None,
+    branch_id: str | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    filters: str | None = Query(default=None, max_length=8000),
+    sort: str | None = Query(default=None, max_length=1000),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_READ)
+    ),
+) -> Page[LabOrderRead]:
+    branch_id = scoped_branch_id(current_user, branch_id)
+    return list_lab_order_page(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
+        status_filter=status_filter,
+        q=q,
+        from_date=from_date,
+        to_date=to_date,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/orders/filter-options", response_model=dict[str, list[ListFilterOption]])
+def list_lab_orders_filter_options(
+    tenant_id: str = Depends(require_tenant_id),
+    patient_id: str | None = None,
+    branch_id: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_READ)
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    branch_id = scoped_branch_id(current_user, branch_id)
+    return list_lab_order_filter_options(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
     )
 
 

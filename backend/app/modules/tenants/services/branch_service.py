@@ -1,13 +1,15 @@
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
+from app.core.pagination import Page
 from app.modules.audit.models import AuditEvent
 from app.modules.audit.repositories import AuditEventRepository
 from app.modules.identity.models import User
 from app.modules.subscriptions.service import get_active_subscription
 from app.modules.tenants.models import Branch, now_utc
 from app.modules.tenants.repositories import BranchRepository, TenantRepository
-from app.modules.tenants.schemas import BranchCreate, BranchUpdate
+from app.modules.tenants.schemas import BranchCreate, BranchRead, BranchUpdate
 from app.modules.tenants.services.helpers import (
     assert_branch_editable_by_actor,
     get_branch_or_404,
@@ -73,6 +75,78 @@ def list_branches_for_request(
     request_tenant_id: str,
     current_user: User,
 ) -> list[Branch]:
+    _assert_cross_tenant_branch_access(
+        session,
+        tenant_id=tenant_id,
+        request_tenant_id=request_tenant_id,
+        current_user=current_user,
+    )
+    return BranchRepository(session).list_for_tenant(tenant_id)
+
+
+def list_branch_page_for_request(
+    session: Session,
+    *,
+    tenant_id: str,
+    request_tenant_id: str,
+    current_user: User,
+    q: str | None,
+    list_filters: list[ListFilter],
+    list_sort: ListSort | None,
+    limit: int,
+    offset: int,
+) -> Page[BranchRead]:
+    _assert_cross_tenant_branch_access(
+        session,
+        tenant_id=tenant_id,
+        request_tenant_id=request_tenant_id,
+        current_user=current_user,
+    )
+    repository = BranchRepository(session)
+    rows = repository.list_page(
+        tenant_id=tenant_id,
+        q=q,
+        list_filters=list_filters,
+        list_sort=list_sort,
+        limit=limit,
+        offset=offset,
+    )
+    total = repository.count_page(
+        tenant_id=tenant_id,
+        q=q,
+        list_filters=list_filters,
+    )
+    return Page(
+        items=[BranchRead.model_validate(row, from_attributes=True) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def list_branch_filter_options_for_request(
+    session: Session,
+    *,
+    tenant_id: str,
+    request_tenant_id: str,
+    current_user: User,
+) -> dict[str, list[ListFilterOption]]:
+    _assert_cross_tenant_branch_access(
+        session,
+        tenant_id=tenant_id,
+        request_tenant_id=request_tenant_id,
+        current_user=current_user,
+    )
+    return BranchRepository(session).filter_options(tenant_id=tenant_id)
+
+
+def _assert_cross_tenant_branch_access(
+    session: Session,
+    *,
+    tenant_id: str,
+    request_tenant_id: str,
+    current_user: User,
+) -> None:
     can_cross_scope = False
     if current_user.is_super_admin and request_tenant_id != tenant_id:
         request_tenant = TenantRepository(session).get(request_tenant_id)
@@ -82,7 +156,6 @@ def list_branches_for_request(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cross-tenant branch access is not allowed",
         )
-    return BranchRepository(session).list_for_tenant(tenant_id)
 
 
 def update_branch(

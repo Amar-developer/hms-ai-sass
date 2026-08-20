@@ -5,6 +5,7 @@ from sqlmodel import Session
 
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
 from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
@@ -109,6 +110,8 @@ def search_patient_page(
     gender: Gender | None = Query(default=None),
     from_date: date | None = Query(default=None),
     to_date: date | None = Query(default=None),
+    filters: str | None = Query(default=None, max_length=8000),
+    sort: str | None = Query(default=None, max_length=1000),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
     session: Session = Depends(get_session),
@@ -122,8 +125,26 @@ def search_patient_page(
         gender=gender,
         from_date=from_date,
         to_date=to_date,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
         offset=offset,
         limit=limit,
+    )
+
+
+@router.get(
+    "/filter-options",
+    response_model=dict[str, list[ListFilterOption]],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
+def patient_filter_options(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> dict[str, list[ListFilterOption]]:
+    return PatientService(session).patient_filter_options(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
     )
 
 

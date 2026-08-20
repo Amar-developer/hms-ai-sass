@@ -204,6 +204,9 @@ def create_pharmacy_issue_record(
         payload,
         update={
             "tenant_id": tenant_id,
+            "issued_by_user_id": payload.issued_by_user_id or actor.id,
+            "created_by_user_id": actor.id,
+            "updated_by_user_id": actor.id,
             "issue_number": next_document_number(
                 session,
                 tenant_id=tenant_id,
@@ -223,7 +226,7 @@ def create_pharmacy_issue_record(
         session,
         tenant_id=tenant_id,
         branch_id=issue.branch_id,
-        actor_user_id=payload.issued_by_user_id,
+        actor_user_id=issue.created_by_user_id,
         action="pharmacy_issue.created",
         resource_type="pharmacy_issue",
         resource_id=issue.id,
@@ -279,7 +282,9 @@ def create_pharmacy_issue_from_consultation_record(
         source=PharmacyIssueSource.CONSULTATION,
         medicine_text=consultation.prescription_text,
         amount=payload.amount,
-        issued_by_user_id=payload.issued_by_user_id,
+        issued_by_user_id=payload.issued_by_user_id or actor.id,
+        created_by_user_id=actor.id,
+        updated_by_user_id=actor.id,
     )
     session.add(issue)
     session.commit()
@@ -303,7 +308,7 @@ def create_pharmacy_issue_from_consultation_record(
         session,
         tenant_id=tenant_id,
         branch_id=issue.branch_id,
-        actor_user_id=payload.issued_by_user_id,
+        actor_user_id=issue.created_by_user_id,
         action="pharmacy_issue.created_from_consultation",
         resource_type="pharmacy_issue",
         resource_id=issue.id,
@@ -331,6 +336,7 @@ def update_pharmacy_issue_status_record(
     now = datetime.now(timezone.utc)
     issue.status = payload.status
     issue.updated_at = now
+    issue.updated_by_user_id = actor.id
     if payload.notes is not None:
         issue.notes = payload.notes
     if payload.status == PharmacyIssueStatus.DISPENSED:
@@ -339,7 +345,7 @@ def update_pharmacy_issue_status_record(
             tenant_id=tenant_id,
             issue=issue,
             payload_items=payload.items,
-            actor_user_id=payload.actor_user_id,
+            actor_user_id=payload.actor_user_id or actor.id,
             now=now,
         )
     if payload.status == PharmacyIssueStatus.CANCELLED:
@@ -361,7 +367,7 @@ def update_pharmacy_issue_status_record(
         session,
         tenant_id=tenant_id,
         branch_id=issue.branch_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=payload.actor_user_id or actor.id,
         action=f"pharmacy_issue.{payload.status.value}",
         resource_type="pharmacy_issue",
         resource_id=issue.id,
@@ -386,6 +392,7 @@ def update_pharmacy_issue_amount_record(
     previous_amount = issue.amount
     issue.amount = payload.amount
     issue.updated_at = datetime.now(timezone.utc)
+    issue.updated_by_user_id = actor.id
     note = f"Amount updated from Rs. {previous_amount} to Rs. {payload.amount}." + (
         f" Reason: {payload.reason}" if payload.reason else ""
     )
@@ -398,7 +405,7 @@ def update_pharmacy_issue_amount_record(
         session,
         tenant_id=tenant_id,
         branch_id=issue.branch_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=payload.actor_user_id or actor.id,
         action="pharmacy_issue.amount_updated",
         resource_type="pharmacy_issue",
         resource_id=issue.id,
@@ -429,6 +436,7 @@ def link_pharmacy_billing_record(
     before = {"billing_invoice_id": issue.billing_invoice_id}
     issue.billing_invoice_id = payload.billing_invoice_id
     issue.updated_at = datetime.now(timezone.utc)
+    issue.updated_by_user_id = actor.id
     session.add(issue)
     session.commit()
     session.refresh(issue)
@@ -437,7 +445,7 @@ def link_pharmacy_billing_record(
         session,
         tenant_id=tenant_id,
         branch_id=issue.branch_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=payload.actor_user_id or actor.id,
         action="pharmacy_issue.billing_linked",
         resource_type="pharmacy_issue",
         resource_id=issue.id,

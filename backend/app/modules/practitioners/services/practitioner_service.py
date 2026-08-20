@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 
 from sqlmodel import Session
 
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
+from app.core.pagination import Page
 from app.modules.audit.service import record_audit_event
 from app.modules.practitioners.models import Practitioner
 from app.modules.practitioners.repositories import (
@@ -27,9 +29,14 @@ from app.modules.practitioners.services.validation import (
 from app.modules.settings.numbering import next_document_number
 
 
+def _actor_id(payload_actor_id: str | None, actor: object | None = None) -> str | None:
+    return getattr(actor, "id", None) or payload_actor_id
+
+
 def create_practitioner(
-    session: Session, *, tenant_id: str, payload: PractitionerCreate
+    session: Session, *, tenant_id: str, payload: PractitionerCreate, actor=None
 ) -> PractitionerRead:
+    actor_user_id = _actor_id(payload.actor_user_id, actor)
     validate_doctor_login_user(session, tenant_id, payload.user_id)
     validate_links(session, tenant_id, payload.branch_ids, payload.department_ids)
     branch_id = payload.branch_ids[0] if payload.branch_ids else None
@@ -40,6 +47,8 @@ def create_practitioner(
             "practitioner_number": next_document_number(
                 session, tenant_id=tenant_id, branch_id=branch_id, entity="doctor"
             ),
+            "created_by_user_id": actor_user_id,
+            "updated_by_user_id": actor_user_id,
         },
     )
     PractitionerRepository(session).add(practitioner)
@@ -55,7 +64,7 @@ def create_practitioner(
     record_audit_event(
         session,
         tenant_id=tenant_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=actor_user_id,
         action="practitioner.created",
         resource_type="practitioner",
         resource_id=practitioner.id,
@@ -111,6 +120,73 @@ def list_practitioners(
     ]
 
 
+def list_practitioner_page(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    department_id: str | None,
+    doctor_practitioner_id: str | None,
+    q: str | None,
+    list_filters: list[ListFilter],
+    list_sort: ListSort | None,
+    limit: int,
+    offset: int,
+) -> Page[PractitionerRead]:
+    repository = PractitionerRepository(session)
+    department_ids = (
+        department_filter_ids(session, tenant_id, department_id)
+        if department_id
+        else None
+    )
+    practitioners = repository.list_page(
+        tenant_id=tenant_id,
+        practitioner_id=doctor_practitioner_id,
+        branch_id=branch_id,
+        department_ids=department_ids,
+        q=q,
+        list_filters=list_filters,
+        list_sort=list_sort,
+        limit=limit,
+        offset=offset,
+    )
+    links = PractitionerLinkRepository(session)
+    practitioner_ids = {practitioner.id for practitioner in practitioners}
+    branch_ids_by_practitioner = links.active_branch_ids_by_practitioner(
+        tenant_id=tenant_id,
+        practitioner_ids=practitioner_ids,
+    )
+    department_ids_by_practitioner = links.active_department_ids_by_practitioner(
+        tenant_id=tenant_id,
+        practitioner_ids=practitioner_ids,
+    )
+    items = [
+        practitioner_read_with_links(
+            practitioner,
+            branch_ids=branch_ids_by_practitioner.get(practitioner.id, []),
+            department_ids=department_ids_by_practitioner.get(practitioner.id, []),
+        )
+        for practitioner in practitioners
+    ]
+    total = repository.count_page(
+        tenant_id=tenant_id,
+        practitioner_id=doctor_practitioner_id,
+        branch_id=branch_id,
+        department_ids=department_ids,
+        q=q,
+        list_filters=list_filters,
+    )
+    return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+def list_practitioner_filter_options(
+    session: Session,
+    *,
+    tenant_id: str,
+) -> dict[str, list[ListFilterOption]]:
+    return PractitionerRepository(session).filter_options(tenant_id=tenant_id)
+
+
 def get_practitioner_read(
     session: Session, *, tenant_id: str, practitioner_id: str
 ) -> PractitionerRead:
@@ -125,7 +201,9 @@ def update_practitioner(
     tenant_id: str,
     practitioner_id: str,
     payload: PractitionerUpdate,
+    actor=None,
 ) -> PractitionerRead:
+    actor_user_id = _actor_id(payload.actor_user_id, actor)
     practitioner = get_practitioner_or_404(session, tenant_id, practitioner_id)
     if "user_id" in payload.model_fields_set:
         validate_doctor_login_user(session, tenant_id, payload.user_id, practitioner_id)
@@ -136,6 +214,7 @@ def update_practitioner(
         exclude_unset=True, exclude={"branch_ids", "department_ids", "actor_user_id"}
     ).items():
         setattr(practitioner, key, value)
+    practitioner.updated_by_user_id = actor_user_id
     practitioner.updated_at = datetime.now(timezone.utc)
     PractitionerRepository(session).add(practitioner)
     session.commit()
@@ -150,7 +229,7 @@ def update_practitioner(
     record_audit_event(
         session,
         tenant_id=tenant_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=actor_user_id,
         action="practitioner.updated",
         resource_type="practitioner",
         resource_id=practitioner.id,
@@ -164,6 +243,7 @@ def delete_practitioner(
 ) -> dict[str, bool | str]:
     practitioner = get_practitioner_or_404(session, tenant_id, practitioner_id)
     practitioner.status = "inactive"
+    practitioner.updated_by_user_id = actor_user_id
     practitioner.updated_at = datetime.now(timezone.utc)
     PractitionerRepository(session).add(practitioner)
     session.commit()

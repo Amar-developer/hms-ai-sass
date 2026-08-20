@@ -2,8 +2,11 @@ from datetime import date
 
 from sqlmodel import Session, select
 
+from app.core.list_filters import parse_list_filters, parse_list_sort
+from app.modules.identity.models import User
 from app.modules.settings.models import SettingKey, SettingScope
 from app.modules.settings.service import upsert_setting
+from app.modules.lab.repositories import LabOrderRepository
 from app.modules.lab.models import (
     LabOrder,
     LabOrderItem,
@@ -12,7 +15,446 @@ from app.modules.lab.models import (
     LabTestCatalog,
     LabTestPackage,
 )
-from app.modules.identity.models import User
+from app.modules.patients.models import Patient
+from app.modules.pharmacy.models import PharmacyIssue, PharmacyIssueStatus
+from app.modules.pharmacy.repositories import PharmacyIssueRepository
+from app.modules.tenants.models import Branch, Tenant
+
+
+def test_lab_order_repository_applies_dynamic_filter_before_pagination(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Lab Filter Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        session.add(branch)
+        session.commit()
+        session.refresh(branch)
+        first_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-LAB-1",
+            full_name="Asha Lab",
+            mobile="9000000401",
+        )
+        second_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-LAB-2",
+            full_name="Ravi Lab",
+            mobile="9000000402",
+        )
+        session.add(first_patient)
+        session.add(second_patient)
+        session.commit()
+        session.refresh(first_patient)
+        session.refresh(second_patient)
+        session.add(
+            LabOrder(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=first_patient.id,
+                lab_order_number="LAB-FILTER-1",
+                tests="CBC",
+                amount=300,
+            )
+        )
+        session.add(
+            LabOrder(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=second_patient.id,
+                lab_order_number="LAB-FILTER-2",
+                tests="Thyroid",
+                amount=800,
+            )
+        )
+        session.commit()
+
+        repo = LabOrderRepository(session)
+        filters = parse_list_filters(
+            '[{"field":"patient_name","operator":"like","value":"asha"}]'
+        )
+        rows = repo.list_orders(
+            tenant_id=tenant.id,
+            branch_id=None,
+            patient_id=None,
+            status_filter=None,
+            list_filters=filters,
+            offset=0,
+            limit=1,
+        )
+        total = repo.count_orders(
+            tenant_id=tenant.id,
+            branch_id=None,
+            patient_id=None,
+            status_filter=None,
+            list_filters=filters,
+        )
+
+    assert total == 1
+    assert [row.lab_order_number for row in rows] == ["LAB-FILTER-1"]
+
+
+def test_lab_order_repository_applies_dynamic_sort_before_pagination(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Lab Sort Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-LAB-SORT",
+            full_name="Sort Lab Patient",
+            mobile="9000000411",
+        )
+        session.add(branch)
+        session.add(patient)
+        session.commit()
+        session.refresh(branch)
+        session.refresh(patient)
+        session.add(
+            LabOrder(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=patient.id,
+                lab_order_number="LAB-SMALL",
+                tests="CBC",
+                amount=300,
+            )
+        )
+        session.add(
+            LabOrder(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=patient.id,
+                lab_order_number="LAB-LARGE",
+                tests="Thyroid",
+                amount=900,
+            )
+        )
+        session.commit()
+
+        rows = LabOrderRepository(session).list_orders(
+            tenant_id=tenant.id,
+            branch_id=None,
+            patient_id=None,
+            status_filter=None,
+            list_sort=parse_list_sort('{"key":"amount","dir":"desc"}'),
+            offset=0,
+            limit=1,
+        )
+
+    assert [row.lab_order_number for row in rows] == ["LAB-LARGE"]
+
+
+def test_lab_order_filter_options_are_data_backed_and_branch_scoped(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Lab Options Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        main_branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        side_branch = Branch(tenant_id=tenant.id, name="Side Branch", code="SIDE")
+        session.add(main_branch)
+        session.add(side_branch)
+        session.commit()
+        session.refresh(main_branch)
+        session.refresh(side_branch)
+        creator = User(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            name="Lab User",
+            email="lab@example.test",
+        )
+        session.add(creator)
+        session.commit()
+        session.refresh(creator)
+        creator_id = creator.id
+        main_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            patient_number="PAT-LAB-OPT-1",
+            full_name="Main Lab Patient",
+            mobile="9000000421",
+        )
+        side_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=side_branch.id,
+            patient_number="PAT-LAB-OPT-2",
+            full_name="Side Lab Patient",
+            mobile="9000000422",
+        )
+        session.add(main_patient)
+        session.add(side_patient)
+        session.commit()
+        session.refresh(main_patient)
+        session.refresh(side_patient)
+        session.add(
+            LabOrder(
+                tenant_id=tenant.id,
+                branch_id=main_branch.id,
+                patient_id=main_patient.id,
+                lab_order_number="LAB-OPT-MAIN",
+                acquisition_source="op_direct",
+                status=LabOrderStatus.ORDERED,
+                tests="CBC",
+                amount=300,
+                ordered_by_user_id=creator_id,
+            )
+        )
+        session.add(
+            LabOrder(
+                tenant_id=tenant.id,
+                branch_id=side_branch.id,
+                patient_id=side_patient.id,
+                lab_order_number="LAB-OPT-SIDE",
+                acquisition_source="external_referral",
+                status=LabOrderStatus.RESULT_READY,
+                tests="Thyroid",
+                amount=800,
+            )
+        )
+        session.commit()
+
+        options = LabOrderRepository(session).filter_options(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+        )
+
+    assert [row.value for row in options["acquisition_source"]] == ["op_direct"]
+    assert [row.value for row in options["status"]] == ["ordered"]
+    assert [row.model_dump() for row in options["created_by_user_id"]] == [
+        {"value": creator_id, "label": "Lab User"}
+    ]
+
+
+def test_pharmacy_issue_repository_applies_dynamic_filter_before_pagination(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Pharmacy Filter Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        session.add(branch)
+        session.commit()
+        session.refresh(branch)
+        first_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-PHARM-1",
+            full_name="Asha Pharmacy",
+            mobile="9000000501",
+        )
+        second_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-PHARM-2",
+            full_name="Ravi Pharmacy",
+            mobile="9000000502",
+        )
+        session.add(first_patient)
+        session.add(second_patient)
+        session.commit()
+        session.refresh(first_patient)
+        session.refresh(second_patient)
+        session.add(
+            PharmacyIssue(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=first_patient.id,
+                issue_number="PHARM-FILTER-1",
+                medicine_text="Paracetamol",
+                amount=120,
+            )
+        )
+        session.add(
+            PharmacyIssue(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=second_patient.id,
+                issue_number="PHARM-FILTER-2",
+                medicine_text="Amoxicillin",
+                amount=450,
+            )
+        )
+        session.commit()
+
+        repo = PharmacyIssueRepository(session)
+        filters = parse_list_filters(
+            '[{"field":"patient_name","operator":"like","value":"asha"}]'
+        )
+        rows = repo.list_issues(
+            tenant_id=tenant.id,
+            branch_id=None,
+            patient_id=None,
+            status_filter=None,
+            list_filters=filters,
+            offset=0,
+            limit=1,
+        )
+        total = repo.count_issues(
+            tenant_id=tenant.id,
+            branch_id=None,
+            patient_id=None,
+            status_filter=None,
+            list_filters=filters,
+        )
+
+    assert total == 1
+    assert [row.issue_number for row in rows] == ["PHARM-FILTER-1"]
+
+
+def test_pharmacy_issue_repository_applies_dynamic_sort_before_pagination(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Pharmacy Sort Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-PHARM-SORT",
+            full_name="Sort Pharmacy Patient",
+            mobile="9000000511",
+        )
+        session.add(branch)
+        session.add(patient)
+        session.commit()
+        session.refresh(branch)
+        session.refresh(patient)
+        session.add(
+            PharmacyIssue(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=patient.id,
+                issue_number="PHARM-SMALL",
+                medicine_text="Paracetamol",
+                amount=120,
+            )
+        )
+        session.add(
+            PharmacyIssue(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_id=patient.id,
+                issue_number="PHARM-LARGE",
+                medicine_text="Amoxicillin",
+                amount=450,
+            )
+        )
+        session.commit()
+
+        rows = PharmacyIssueRepository(session).list_issues(
+            tenant_id=tenant.id,
+            branch_id=None,
+            patient_id=None,
+            status_filter=None,
+            list_sort=parse_list_sort('{"key":"amount","dir":"desc"}'),
+            offset=0,
+            limit=1,
+        )
+
+    assert [row.issue_number for row in rows] == ["PHARM-LARGE"]
+
+
+def test_pharmacy_issue_filter_options_are_data_backed_and_branch_scoped(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Pharmacy Options Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        main_branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        side_branch = Branch(tenant_id=tenant.id, name="Side Branch", code="SIDE")
+        session.add(main_branch)
+        session.add(side_branch)
+        session.commit()
+        session.refresh(main_branch)
+        session.refresh(side_branch)
+        issuer = User(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            name="Pharmacy User",
+            email="pharmacy@example.test",
+        )
+        dispenser = User(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            name="Dispensing User",
+            email="dispensing@example.test",
+        )
+        session.add(issuer)
+        session.add(dispenser)
+        session.commit()
+        session.refresh(issuer)
+        session.refresh(dispenser)
+        issuer_id = issuer.id
+        dispenser_id = dispenser.id
+        main_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            patient_number="PAT-PHARM-OPT-1",
+            full_name="Main Pharmacy Patient",
+            mobile="9000000521",
+        )
+        side_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=side_branch.id,
+            patient_number="PAT-PHARM-OPT-2",
+            full_name="Side Pharmacy Patient",
+            mobile="9000000522",
+        )
+        session.add(main_patient)
+        session.add(side_patient)
+        session.commit()
+        session.refresh(main_patient)
+        session.refresh(side_patient)
+        session.add(
+            PharmacyIssue(
+                tenant_id=tenant.id,
+                branch_id=main_branch.id,
+                patient_id=main_patient.id,
+                issue_number="PHARM-OPT-MAIN",
+                medicine_text="Paracetamol",
+                status=PharmacyIssueStatus.REQUESTED,
+                issued_by_user_id=issuer_id,
+                dispensed_by_user_id=dispenser_id,
+            )
+        )
+        session.add(
+            PharmacyIssue(
+                tenant_id=tenant.id,
+                branch_id=side_branch.id,
+                patient_id=side_patient.id,
+                issue_number="PHARM-OPT-SIDE",
+                medicine_text="Amoxicillin",
+                status=PharmacyIssueStatus.DISPENSED,
+            )
+        )
+        session.commit()
+
+        options = PharmacyIssueRepository(session).filter_options(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+        )
+
+    assert [row.value for row in options["status"]] == ["requested"]
+    assert {"value": issuer_id, "label": "Pharmacy User"} in [
+        row.model_dump() for row in options["created_by_user_id"]
+    ]
+    assert {"value": dispenser_id, "label": "Dispensing User"} in [
+        row.model_dump() for row in options["dispensed_by_user_id"]
+    ]
 
 
 def test_cancelled_lab_invoice_does_not_lock_order_for_billing(test_engine):

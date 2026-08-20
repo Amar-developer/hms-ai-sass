@@ -37,6 +37,8 @@ class Expense(SQLModel, table=True):
     status: ExpenseStatus = Field(default=ExpenseStatus.PENDING, index=True)
     submitted_by: str = Field(index=True)
     approved_by: str | None = None
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     rejection_reason: str | None = None
     receipt_file_id: str | None = None
     created_at: datetime = Field(default_factory=now_utc)

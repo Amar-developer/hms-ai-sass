@@ -72,6 +72,8 @@ class Patient(SQLModel, table=True):
     monthly_lab_on: date | None = Field(default=None, index=True)
     monthly_lab_test_name: str | None = Field(default=None, max_length=180)
     monthly_lab_notes: str | None = Field(default=None, max_length=1000)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 

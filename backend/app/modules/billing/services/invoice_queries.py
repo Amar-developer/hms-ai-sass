@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
 from app.core.access_control import (
     enforce_entitlement,
     require_user_branch_access,
@@ -77,6 +78,8 @@ def list_billing_invoices(
     payment_state: str | None = None,
     from_date: date | None = None,
     to_date: date | None = None,
+    list_filters: list[ListFilter] | None = None,
+    list_sort: ListSort | None = None,
     limit: int | None = None,
     current_user: User,
     offset: int = 0,
@@ -92,6 +95,8 @@ def list_billing_invoices(
         payment_state=payment_state,
         from_date=from_date,
         to_date=to_date,
+        list_filters=list_filters,
+        list_sort=list_sort,
         offset=offset,
         limit=limit,
     )
@@ -112,6 +117,8 @@ def list_billing_invoice_page(
     payment_state: str | None,
     from_date: date | None,
     to_date: date | None,
+    list_filters: list[ListFilter],
+    list_sort: ListSort | None,
     offset: int,
     limit: int,
     current_user: User,
@@ -126,6 +133,8 @@ def list_billing_invoice_page(
         payment_state=payment_state,
         from_date=from_date,
         to_date=to_date,
+        list_filters=list_filters,
+        list_sort=list_sort,
         offset=offset,
         limit=limit,
         current_user=current_user,
@@ -140,8 +149,26 @@ def list_billing_invoice_page(
         payment_state=payment_state,
         from_date=from_date,
         to_date=to_date,
+        list_filters=list_filters,
     )
     return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+def list_billing_invoice_filter_options(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    patient_id: str | None,
+    current_user: User,
+) -> dict[str, list[ListFilterOption]]:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    scoped_branch = scoped_branch_id(current_user, branch_id)
+    return BillingReadRepository(session).invoice_filter_options(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch,
+        patient_id=patient_id,
+    )
 
 
 def get_billing_invoice_detail(

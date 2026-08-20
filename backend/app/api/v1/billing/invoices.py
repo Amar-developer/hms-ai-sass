@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 from app.core.auth import require_any_permission
 from app.core.access_control import require_user_branch_access
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
 from app.core.pagination import Page
 from app.core.config import get_settings
 from app.core.tenant_context import require_tenant_id
@@ -36,6 +37,7 @@ from app.modules.billing.services.invoice_items import (
 )
 from app.modules.billing.services.invoice_queries import (
     get_billing_invoice_detail,
+    list_billing_invoice_filter_options,
     list_billing_invoices,
     list_billing_invoice_page,
     list_pending_consultation_invoice_page,
@@ -334,6 +336,8 @@ def list_invoice_page(
     ),
     from_date: date | None = None,
     to_date: date | None = None,
+    filters: str | None = Query(default=None, max_length=8000),
+    sort: str | None = Query(default=None, max_length=1000),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=25, ge=1, le=100),
     session: Session = Depends(get_session),
@@ -358,8 +362,39 @@ def list_invoice_page(
         payment_state=payment_state,
         from_date=from_date,
         to_date=to_date,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
         offset=offset,
         limit=limit,
+        current_user=current_user,
+    )
+
+
+@router.get(
+    "/invoices/filter-options",
+    response_model=dict[str, list[ListFilterOption]],
+)
+def list_invoice_filter_options(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    patient_id: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_CREATE,
+        )
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return list_billing_invoice_filter_options(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
         current_user=current_user,
     )
 

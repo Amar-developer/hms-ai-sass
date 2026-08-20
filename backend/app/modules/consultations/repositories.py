@@ -1,8 +1,20 @@
 from typing import Any
 
+from sqlalchemy import func, or_
 from sqlmodel import Session, SQLModel, select
 
 from app.modules.appointments.models import Appointment
+from app.core.list_filters import (
+    ListFilter,
+    ListFilterOption,
+    ListSort,
+    apply_list_filters,
+    apply_list_sort,
+    labeled_filter_options,
+    list_filter_options,
+    tenant_user_filter_options,
+)
+from app.modules.consultations.listing import CONSULTATION_LIST_SPEC
 from app.modules.consultations.models import (
     ClinicalTemplate,
     Consultation,
@@ -11,11 +23,15 @@ from app.modules.consultations.models import (
     ConsultationDiagnosis,
     ConsultationMedicine,
     ConsultationReferral,
+    ConsultationStatus,
     ConsultationVital,
 )
+from app.modules.identity.models import User
 from app.modules.lab.models import LabOrder
 from app.modules.patients.models import Patient
+from app.modules.practitioners.models import Practitioner
 from app.modules.queue.models import QueueEntry
+from app.modules.tenants.models import Branch
 
 
 StructuredConsultationRow = (
@@ -55,8 +71,119 @@ class ConsultationRepository:
         appointment_id: str | None = None,
         branch_id: str | None = None,
         practitioner_id: str | None = None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[Consultation]:
-        statement = select(Consultation).where(Consultation.tenant_id == tenant_id)
+        statement = self._list_statement(
+            tenant_id=tenant_id,
+            patient_id=patient_id,
+            appointment_id=appointment_id,
+            branch_id=branch_id,
+            practitioner_id=practitioner_id,
+            q=q,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            CONSULTATION_LIST_SPEC,
+            list_sort,
+            default_order=[Consultation.created_at.desc()],
+        )
+        if offset:
+            statement = statement.offset(offset)
+        if limit is not None:
+            statement = statement.limit(limit)
+        return list(self.session.exec(statement).all())
+
+    def count_for_tenant(
+        self,
+        *,
+        tenant_id: str,
+        patient_id: str | None = None,
+        appointment_id: str | None = None,
+        branch_id: str | None = None,
+        practitioner_id: str | None = None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._list_statement(
+            tenant_id=tenant_id,
+            patient_id=patient_id,
+            appointment_id=appointment_id,
+            branch_id=branch_id,
+            practitioner_id=practitioner_id,
+            q=q,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def filter_options(self, *, tenant_id: str) -> dict[str, list[ListFilterOption]]:
+        branches = (
+            select(Branch.id, Branch.name)
+            .where(Branch.tenant_id == tenant_id)
+            .order_by(Branch.name)
+        )
+        practitioners = (
+            select(Practitioner.id, Practitioner.full_name)
+            .where(Practitioner.tenant_id == tenant_id)
+            .order_by(Practitioner.full_name)
+        )
+        treatment_types = (
+            select(Consultation.treatment_type)
+            .where(Consultation.tenant_id == tenant_id)
+            .distinct()
+            .order_by(Consultation.treatment_type)
+        )
+        return {
+            "branch_id": labeled_filter_options(
+                list(self.session.exec(branches).all())
+            ),
+            "practitioner_id": labeled_filter_options(
+                list(self.session.exec(practitioners).all())
+            ),
+            "status": list_filter_options(list(ConsultationStatus)),
+            "treatment_type": list_filter_options(
+                list(self.session.exec(treatment_types).all())
+            ),
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "signed_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
+
+    def _list_statement(
+        self,
+        *,
+        tenant_id: str,
+        patient_id: str | None,
+        appointment_id: str | None,
+        branch_id: str | None,
+        practitioner_id: str | None,
+        q: str | None,
+        list_filters: list[ListFilter] | None,
+    ):
+        statement = (
+            select(Consultation)
+            .join(Appointment, Appointment.id == Consultation.appointment_id)
+            .join(Patient, Patient.id == Consultation.patient_id)
+            .join(Branch, Branch.id == Consultation.branch_id)
+            .outerjoin(Practitioner, Practitioner.id == Consultation.practitioner_id)
+            .where(Consultation.tenant_id == tenant_id)
+        )
         if branch_id:
             statement = statement.where(Consultation.branch_id == branch_id)
         if practitioner_id:
@@ -65,9 +192,29 @@ class ConsultationRepository:
             statement = statement.where(Consultation.patient_id == patient_id)
         if appointment_id:
             statement = statement.where(Consultation.appointment_id == appointment_id)
-        return list(
-            self.session.exec(statement.order_by(Consultation.created_at)).all()
-        )
+        if q:
+            pattern = f"%{q.strip().lower()}%"
+            statement = statement.where(
+                or_(
+                    func.lower(Appointment.appointment_number).like(pattern),
+                    func.lower(Patient.patient_number).like(pattern),
+                    func.lower(Patient.full_name).like(pattern),
+                    func.lower(Patient.mobile).like(pattern),
+                    func.lower(Practitioner.full_name).like(pattern),
+                    func.lower(Consultation.chief_complaint).like(pattern),
+                    func.lower(Consultation.diagnosis).like(pattern),
+                    func.lower(Consultation.clinical_notes).like(pattern),
+                    func.lower(Consultation.prescription_text).like(pattern),
+                    func.lower(Consultation.lab_referral_text).like(pattern),
+                )
+            )
+        if list_filters:
+            statement = apply_list_filters(
+                statement,
+                CONSULTATION_LIST_SPEC,
+                list_filters,
+            )
+        return statement
 
 
 class ConsultationReferenceRepository:

@@ -29,7 +29,11 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { getItemsColumns } from "./Column";
 import { getItemsTableSchema, getItemsQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
-import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
+import {
+  applyQueryFilters,
+  type QueryFieldOption,
+  type QueryFilterRow,
+} from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 
 function itemCodePreview(type: string, name: string) {
@@ -69,6 +73,25 @@ function createEmptyForm(type: string) {
   };
 }
 
+function mergeFilterOptions(
+  ...sources: Record<string, QueryFieldOption[]>[]
+): Record<string, QueryFieldOption[]> {
+  const merged: Record<string, QueryFieldOption[]> = {};
+  sources.forEach((source) => {
+    Object.entries(source || {}).forEach(([key, options]) => {
+      const seen = new Set((merged[key] || []).map((option) => option.value));
+      const next = [...(merged[key] || [])];
+      options.forEach((option) => {
+        if (seen.has(option.value)) return;
+        seen.add(option.value);
+        next.push(option);
+      });
+      merged[key] = next;
+    });
+  });
+  return merged;
+}
+
 export function Items({ apiSession, branchId }: any) {
   const {
     register,
@@ -105,6 +128,11 @@ export function Items({ apiSession, branchId }: any) {
     equipment,
     homeCareServices,
     stockSuppliers,
+    medicineFilterOptions,
+    labTestFilterOptions,
+    labPackageFilterOptions,
+    physioEquipmentFilterOptions,
+    homeCareServiceFilterOptions,
     loading,
     loadError,
     load,
@@ -143,9 +171,21 @@ export function Items({ apiSession, branchId }: any) {
         mrp_price: row.mrp_price || 0,
         price: row.default_sale_price,
         purchase_price: row.purchase_price || 0,
+        supplier_id: row.supplier_id || "",
         supplier: supplierName(row.supplier_id),
-        meta: row.generic_name || row.form || "-",
+        branch_id: row.branch_id || "",
+        department: "",
+        sample_type: "",
+        generic_name: row.generic_name || "",
+        form: row.form || "",
+        manufacturer: row.manufacturer || "",
+        modality_type: "",
+        is_portable: "",
+        meta: row.generic_name || row.form || row.manufacturer || "-",
+        created_by_user_id: row.created_by_user_id || "",
+        updated_by_user_id: row.updated_by_user_id || "",
         created_at: row.created_at || row.updated_at || "",
+        updated_at: row.updated_at || row.created_at || "",
         id: row.id,
         raw: row,
       })),
@@ -157,9 +197,18 @@ export function Items({ apiSession, branchId }: any) {
         mrp_price: row.mrp_price || 0,
         price: row.default_price,
         purchase_price: row.purchase_price || 0,
+        supplier_id: row.supplier_id || "",
         supplier: supplierName(row.supplier_id),
+        branch_id: row.branch_id || "",
+        department: row.department || "",
+        sample_type: row.sample_type || "",
+        modality_type: "",
+        is_portable: "",
         meta: row.sample_type || "-",
+        created_by_user_id: row.created_by_user_id || "",
+        updated_by_user_id: row.updated_by_user_id || "",
         created_at: row.created_at || row.updated_at || "",
+        updated_at: row.updated_at || row.created_at || "",
         id: row.id,
         raw: row,
       })),
@@ -171,9 +220,18 @@ export function Items({ apiSession, branchId }: any) {
         mrp_price: row.mrp_price || 0,
         price: row.package_price,
         purchase_price: null,
+        supplier_id: "",
         supplier: "-",
+        branch_id: row.branch_id || "",
+        department: "",
+        sample_type: "",
+        modality_type: "",
+        is_portable: "",
         meta: row.description || `${row.test_ids?.length || 0} tests`,
+        created_by_user_id: row.created_by_user_id || "",
+        updated_by_user_id: row.updated_by_user_id || "",
         created_at: row.created_at || row.updated_at || "",
+        updated_at: row.updated_at || row.created_at || "",
         id: row.id,
         raw: row,
       })),
@@ -185,9 +243,19 @@ export function Items({ apiSession, branchId }: any) {
         mrp_price: row.mrp_price || 0,
         price: null,
         purchase_price: row.purchase_price || 0,
+        supplier_id: row.supplier_id || "",
         supplier: supplierName(row.supplier_id),
+        branch_id: row.branch_id || "",
+        department: "",
+        sample_type: "",
+        modality_type: row.modality_type || "",
+        is_portable: String(Boolean(row.is_portable)),
+        manufacturer: row.manufacturer || "",
         meta: `${row.modality_type} · ${row.is_portable ? "Portable" : "Fixed"}`,
+        created_by_user_id: row.created_by_user_id || "",
+        updated_by_user_id: row.updated_by_user_id || "",
         created_at: row.created_at || row.updated_at || "",
+        updated_at: row.updated_at || row.created_at || "",
         id: row.id,
         raw: row,
       })),
@@ -202,9 +270,18 @@ export function Items({ apiSession, branchId }: any) {
             mrp_price: row.mrp_price || 0,
             price: row.default_price,
             purchase_price: null,
+            supplier_id: "",
             supplier: "-",
+            branch_id: row.branch_id || "",
+            department: "",
+            sample_type: "",
+            modality_type: "",
+            is_portable: "",
             meta: row.description || "Home visit",
+            created_by_user_id: row.created_by_user_id || "",
+            updated_by_user_id: row.updated_by_user_id || "",
             created_at: row.created_at || row.updated_at || "",
+            updated_at: row.updated_at || row.created_at || "",
             id: row.id,
             raw: row,
           };
@@ -233,8 +310,25 @@ export function Items({ apiSession, branchId }: any) {
     [rows, filters, query],
   );
   const itemsQueryFields = useMemo(
-    () => getItemsQueryFields({ rows }),
-    [rows],
+    () =>
+      getItemsQueryFields({
+        rows,
+        filterOptions: mergeFilterOptions(
+          medicineFilterOptions,
+          labTestFilterOptions,
+          labPackageFilterOptions,
+          physioEquipmentFilterOptions,
+          homeCareServiceFilterOptions,
+        ),
+      }),
+    [
+      rows,
+      medicineFilterOptions,
+      labTestFilterOptions,
+      labPackageFilterOptions,
+      physioEquipmentFilterOptions,
+      homeCareServiceFilterOptions,
+    ],
   );
   const sortedRows = useMemo(
     () =>

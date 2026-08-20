@@ -74,7 +74,7 @@ export function mapAppointment(
     queuePosition: Number(q?.queue_position || 0),
     queue_position: Number(q?.queue_position || 0),
     consultationId: c?.id,
-    consultationStatus: c?.status,
+    consultationStatus: c?.status || row.consultation_status,
     consultationSignedAt: c?.signed_at,
     consultationCreatedAt: c?.created_at,
     treatmentType: c?.treatment_type,

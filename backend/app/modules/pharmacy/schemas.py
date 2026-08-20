@@ -75,6 +75,7 @@ class SupplierRead(SupplierCreate):
     tenant_id: str
     supplier_number: str | None = None
     is_active: bool
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -133,6 +134,8 @@ class PurchaseRead(BaseModel):
     gst_amount: int
     total_amount: int
     purchased_by_user_id: str | None
+    created_by_user_id: str | None
+    updated_by_user_id: str | None
     created_at: datetime
     updated_at: datetime
     batches: list[MedicineBatchRead] = []
@@ -220,6 +223,8 @@ class PharmacyIssueRead(BaseModel):
     amount: int
     billing_invoice_id: str | None
     issued_by_user_id: str | None
+    created_by_user_id: str | None
+    updated_by_user_id: str | None
     dispensed_by_user_id: str | None
     dispensed_at: datetime | None
     cancelled_reason: str | None
@@ -281,6 +286,8 @@ class PharmacyReturnRead(BaseModel):
     reason: str
     total_amount: int
     returned_by_user_id: str | None
+    created_by_user_id: str | None
+    updated_by_user_id: str | None
     created_at: datetime
 
 

@@ -1,3 +1,4 @@
+import json
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
@@ -7,6 +8,10 @@ from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionPlan,
 )
+from app.modules.identity.models import User
+from app.modules.patients.models import Patient
+from app.modules.patients.repositories import PatientRepository
+from app.modules.tenants.models import Branch, Tenant
 
 
 def create_tenant(client: TestClient, name: str = "Care Clinic") -> dict:
@@ -325,6 +330,88 @@ def test_patient_page_returns_database_total_and_applies_filters(client: TestCli
     assert inactive_page.json()["items"][0]["full_name"] == "Inactive Female"
 
 
+def test_patient_page_applies_dynamic_filters_before_pagination(client: TestClient):
+    tenant = create_tenant(client)
+    create_patient(
+        client,
+        tenant["id"],
+        full_name="Alpha Match",
+        mobile="9000000011",
+        area="Adyar",
+    )
+    create_patient(
+        client,
+        tenant["id"],
+        full_name="Beta Match",
+        mobile="9000000012",
+        area="Adyar",
+    )
+    create_patient(
+        client,
+        tenant["id"],
+        full_name="Outside Area",
+        mobile="9000000013",
+        area="Velachery",
+    )
+    filters = json.dumps([{"field": "area", "operator": "equals", "value": "Adyar"}])
+
+    response = client.get(
+        "/api/v1/patients/page",
+        params={
+            "active_only": "false",
+            "limit": "1",
+            "offset": "0",
+            "filters": filters,
+        },
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert len(body["items"]) == 1
+    assert body["items"][0]["area"] == "Adyar"
+
+
+def test_patient_page_applies_dynamic_sort_before_pagination(client: TestClient):
+    tenant = create_tenant(client)
+    create_patient(client, tenant["id"], full_name="Charlie", mobile="9000000021")
+    create_patient(client, tenant["id"], full_name="Asha", mobile="9000000022")
+    sort = json.dumps({"key": "full_name", "dir": "asc"})
+
+    response = client.get(
+        "/api/v1/patients/page",
+        params={
+            "active_only": "false",
+            "limit": "1",
+            "offset": "0",
+            "sort": sort,
+        },
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["full_name"] == "Asha"
+
+
+def test_patient_page_rejects_unsupported_dynamic_filter_field(
+    client: TestClient,
+):
+    tenant = create_tenant(client)
+    filters = json.dumps(
+        [{"field": "password_hash", "operator": "like", "value": "secret"}]
+    )
+
+    response = client.get(
+        "/api/v1/patients/page",
+        params={"active_only": "false", "filters": filters},
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unsupported filter field: password_hash"
+
+
 def test_patient_search_includes_subscription_plan_name_and_status(
     client: TestClient,
     test_engine,
@@ -367,6 +454,153 @@ def test_patient_search_includes_subscription_plan_name_and_status(
     row = response.json()[0]
     assert row["subscription_plan_name"] == "Gold Care"
     assert row["subscription_status"] == "active"
+
+
+def test_patient_page_filters_by_subscription_plan_name(
+    client: TestClient,
+    test_engine,
+):
+    tenant = create_tenant(client)
+    branch = client.post(
+        f"/api/v1/tenants/{tenant['id']}/branches",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"name": "Main Branch", "code": "MAIN"},
+    ).json()
+    gold_patient = create_patient(
+        client,
+        tenant["id"],
+        branch_id=branch["id"],
+        full_name="Gold Patient",
+        mobile="9000000031",
+    )
+    create_patient(
+        client,
+        tenant["id"],
+        branch_id=branch["id"],
+        full_name="No Plan Patient",
+        mobile="9000000032",
+    )
+    with Session(test_engine) as session:
+        plan = PatientSubscriptionPlan(
+            tenant_id=tenant["id"],
+            name="Gold Care",
+            price_amount=500,
+            duration_days=30,
+        )
+        session.add(plan)
+        session.commit()
+        session.refresh(plan)
+        session.add(
+            PatientSubscriptionEnrollment(
+                tenant_id=tenant["id"],
+                branch_id=branch["id"],
+                patient_id=gold_patient["id"],
+                plan_id=plan.id,
+                starts_on=date.today(),
+                ends_on=date.today(),
+            )
+        )
+        session.commit()
+    filters = json.dumps(
+        [
+            {
+                "field": "subscription_plan_name",
+                "operator": "equals",
+                "value": "Gold Care",
+            }
+        ]
+    )
+
+    response = client.get(
+        "/api/v1/patients/page",
+        params={"active_only": "false", "filters": filters},
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["full_name"] == "Gold Patient"
+
+
+def test_patient_filter_options_are_data_backed_and_branch_scoped(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Patient Options Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        main_branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        side_branch = Branch(tenant_id=tenant.id, name="Side Branch", code="SIDE")
+        session.add(main_branch)
+        session.add(side_branch)
+        session.commit()
+        session.refresh(main_branch)
+        session.refresh(side_branch)
+        creator = User(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            name="Reception User",
+            email="reception@example.test",
+        )
+        session.add(creator)
+        session.commit()
+        session.refresh(creator)
+        creator_id = creator.id
+        main_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            patient_number="PAT-OPT-1",
+            full_name="Main Patient",
+            mobile="9000000201",
+            gender="female",
+            created_by_user_id=creator_id,
+        )
+        side_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=side_branch.id,
+            patient_number="PAT-OPT-2",
+            full_name="Side Patient",
+            mobile="9000000202",
+            gender="male",
+        )
+        session.add(main_patient)
+        session.add(side_patient)
+        session.commit()
+        session.refresh(main_patient)
+        plan = PatientSubscriptionPlan(
+            tenant_id=tenant.id,
+            name="Gold Care",
+            price_amount=500,
+            duration_days=30,
+        )
+        session.add(plan)
+        session.commit()
+        session.refresh(plan)
+        session.add(
+            PatientSubscriptionEnrollment(
+                tenant_id=tenant.id,
+                branch_id=main_branch.id,
+                patient_id=main_patient.id,
+                plan_id=plan.id,
+                starts_on=date.today(),
+                ends_on=date.today(),
+            )
+        )
+        session.commit()
+
+        options = PatientRepository(session).filter_options(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+        )
+
+    assert [row.model_dump() for row in options["branch_id"]] == [
+        {"value": main_branch.id, "label": "Main Branch"}
+    ]
+    assert [row.value for row in options["gender"]] == ["female"]
+    assert [row.value for row in options["subscription_plan_name"]] == ["Gold Care"]
+    assert [row.model_dump() for row in options["created_by_user_id"]] == [
+        {"value": creator_id, "label": "Reception User"}
+    ]
 
 
 def test_patient_view_blocks_cross_tenant_access(client: TestClient):

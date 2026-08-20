@@ -3,7 +3,9 @@ import json
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
-from app.core.access_control import require_user_branch_access
+from app.core.access_control import require_user_branch_access, scoped_branch_id
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
+from app.core.pagination import Page
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.identity.models import User
 from app.modules.item_catalog_validation import validate_unique_item_name
@@ -13,6 +15,7 @@ from app.modules.lab.schemas import (
     LabResultTemplateCreate,
     LabResultTemplateRead,
     LabTestCatalogCreate,
+    LabTestCatalogRead,
     LabTestCatalogUpdate,
     LabTestPackageCreate,
     LabTestPackageRead,
@@ -24,7 +27,11 @@ from app.modules.tenants.models import now_utc
 
 
 def create_lab_test_record(
-    session: Session, *, tenant_id: str, payload: LabTestCatalogCreate
+    session: Session,
+    *,
+    tenant_id: str,
+    payload: LabTestCatalogCreate,
+    current_user: User | None = None,
 ) -> LabTestCatalog:
     enforce_module_enabled(session, tenant_id, "lab")
     data = payload.model_dump()
@@ -32,7 +39,15 @@ def create_lab_test_record(
     data["name"] = validate_unique_item_name(
         session, tenant_id=tenant_id, name=payload.name
     )
-    test = LabTestCatalog.model_validate(data, update={"tenant_id": tenant_id})
+    actor_user_id = payload.created_by_user_id or getattr(current_user, "id", None)
+    test = LabTestCatalog.model_validate(
+        data,
+        update={
+            "tenant_id": tenant_id,
+            "created_by_user_id": actor_user_id,
+            "updated_by_user_id": actor_user_id,
+        },
+    )
     session.add(test)
     session.commit()
     session.refresh(test)
@@ -40,7 +55,7 @@ def create_lab_test_record(
         session,
         tenant_id=tenant_id,
         branch_id=test.branch_id,
-        actor_user_id=payload.created_by_user_id,
+        actor_user_id=actor_user_id,
         action="lab_test.created",
         resource_type="lab_test_catalog",
         resource_id=test.id,
@@ -82,6 +97,8 @@ def update_lab_test_record(
     for key, value in data.items():
         setattr(test, key, value)
     test.updated_at = now_utc()
+    actor_user_id = payload.updated_by_user_id or current_user.id
+    test.updated_by_user_id = actor_user_id
     session.add(test)
     session.commit()
     session.refresh(test)
@@ -89,7 +106,7 @@ def update_lab_test_record(
         session,
         tenant_id=tenant_id,
         branch_id=test.branch_id,
-        actor_user_id=payload.updated_by_user_id,
+        actor_user_id=actor_user_id,
         action="lab_test.updated",
         resource_type="lab_test_catalog",
         resource_id=test.id,
@@ -97,6 +114,61 @@ def update_lab_test_record(
         changes=diff_changes(before, data),
     )
     return test
+
+
+def list_lab_test_page(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    include_inactive: bool,
+    q: str | None,
+    list_filters: list[ListFilter],
+    list_sort: ListSort | None,
+    limit: int,
+    offset: int,
+    current_user: User,
+) -> Page[LabTestCatalogRead]:
+    enforce_module_enabled(session, tenant_id, "lab")
+    branch_id = scoped_branch_id(current_user, branch_id)
+    repository = LabCatalogRepository(session)
+    rows = repository.list_test_page(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        include_inactive=include_inactive,
+        q=q,
+        list_filters=list_filters,
+        list_sort=list_sort,
+        limit=limit,
+        offset=offset,
+    )
+    total = repository.count_test_page(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        include_inactive=include_inactive,
+        q=q,
+        list_filters=list_filters,
+    )
+    return Page(
+        items=[
+            LabTestCatalogRead.model_validate(row, from_attributes=True) for row in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def list_lab_test_filter_options(
+    session: Session,
+    *,
+    tenant_id: str,
+) -> dict[str, list[ListFilterOption]]:
+    enforce_module_enabled(session, tenant_id, "lab")
+    return LabCatalogRepository(session).catalog_filter_options(
+        tenant_id=tenant_id,
+        catalog="tests",
+    )
 
 
 def delete_lab_test_record(
@@ -132,7 +204,11 @@ def delete_lab_test_record(
 
 
 def create_lab_package_record(
-    session: Session, *, tenant_id: str, payload: LabTestPackageCreate
+    session: Session,
+    *,
+    tenant_id: str,
+    payload: LabTestPackageCreate,
+    current_user: User | None = None,
 ) -> LabTestPackageRead:
     enforce_module_enabled(session, tenant_id, "lab")
     catalog_repo = LabCatalogRepository(session)
@@ -141,7 +217,15 @@ def create_lab_package_record(
     data["name"] = validate_unique_item_name(
         session, tenant_id=tenant_id, name=payload.name
     )
-    package = LabTestPackage.model_validate(data, update={"tenant_id": tenant_id})
+    actor_user_id = payload.created_by_user_id or getattr(current_user, "id", None)
+    package = LabTestPackage.model_validate(
+        data,
+        update={
+            "tenant_id": tenant_id,
+            "created_by_user_id": actor_user_id,
+            "updated_by_user_id": actor_user_id,
+        },
+    )
     session.add(package)
     session.commit()
     session.refresh(package)
@@ -164,7 +248,7 @@ def create_lab_package_record(
         session,
         tenant_id=tenant_id,
         branch_id=package.branch_id,
-        actor_user_id=payload.created_by_user_id,
+        actor_user_id=actor_user_id,
         action="lab_package.created",
         resource_type="lab_test_package",
         resource_id=package.id,
@@ -207,8 +291,8 @@ def update_lab_package_record(
     for key, value in data.items():
         setattr(package, key, value)
     package.updated_at = now_utc()
-    if payload.updated_by_user_id:
-        package.updated_by_user_id = payload.updated_by_user_id
+    actor_user_id = payload.updated_by_user_id or current_user.id
+    package.updated_by_user_id = actor_user_id
     if payload.test_ids is not None:
         valid_test_ids: list[str] = []
         for test_id in payload.test_ids:
@@ -234,7 +318,7 @@ def update_lab_package_record(
         session,
         tenant_id=tenant_id,
         branch_id=package.branch_id,
-        actor_user_id=payload.updated_by_user_id,
+        actor_user_id=actor_user_id,
         action="lab_package.updated",
         resource_type="lab_test_package",
         resource_id=package.id,
@@ -242,6 +326,59 @@ def update_lab_package_record(
         changes=diff_changes(before, data),
     )
     return package_read(session, package)
+
+
+def list_lab_package_page(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    include_inactive: bool,
+    q: str | None,
+    list_filters: list[ListFilter],
+    list_sort: ListSort | None,
+    limit: int,
+    offset: int,
+    current_user: User,
+) -> Page[LabTestPackageRead]:
+    enforce_module_enabled(session, tenant_id, "lab")
+    branch_id = scoped_branch_id(current_user, branch_id)
+    repository = LabCatalogRepository(session)
+    rows = repository.list_package_page(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        include_inactive=include_inactive,
+        q=q,
+        list_filters=list_filters,
+        list_sort=list_sort,
+        limit=limit,
+        offset=offset,
+    )
+    total = repository.count_package_page(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        include_inactive=include_inactive,
+        q=q,
+        list_filters=list_filters,
+    )
+    return Page(
+        items=[package_read(session, row) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def list_lab_package_filter_options(
+    session: Session,
+    *,
+    tenant_id: str,
+) -> dict[str, list[ListFilterOption]]:
+    enforce_module_enabled(session, tenant_id, "lab")
+    return LabCatalogRepository(session).catalog_filter_options(
+        tenant_id=tenant_id,
+        catalog="packages",
+    )
 
 
 def delete_lab_package_record(

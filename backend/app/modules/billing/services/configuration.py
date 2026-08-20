@@ -10,6 +10,8 @@ from app.core.access_control import (
     require_user_branch_access,
     scoped_branch_id,
 )
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
+from app.core.pagination import Page
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.billing.models import (
     DiscountApproval,
@@ -24,9 +26,11 @@ from app.modules.billing.schemas import (
     DiscountApprovalCreate,
     DiscountApprovalDecision,
     DiscountOfferCreate,
+    DiscountOfferRead,
     DiscountOfferUpdate,
     DoctorFeeRuleCreate,
     TaxRuleCreate,
+    TaxRuleRead,
     TaxRuleUpdate,
 )
 from app.modules.identity.models import User
@@ -143,7 +147,14 @@ def create_tax_rule(
     enforce_entitlement(session, tenant_id, "billing_basic")
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(actor, payload.branch_id)
-    rule = TaxRule.model_validate(payload, update={"tenant_id": tenant_id})
+    rule = TaxRule.model_validate(
+        payload,
+        update={
+            "tenant_id": tenant_id,
+            "created_by_user_id": payload.created_by_user_id or actor.id,
+            "updated_by_user_id": payload.created_by_user_id or actor.id,
+        },
+    )
     session.add(rule)
     session.commit()
     session.refresh(rule)
@@ -151,7 +162,7 @@ def create_tax_rule(
         session,
         tenant_id=tenant_id,
         branch_id=rule.branch_id,
-        actor_user_id=payload.created_by_user_id,
+        actor_user_id=rule.created_by_user_id,
         action="tax_rule.created",
         resource_type="tax_rule",
         resource_id=rule.id,
@@ -184,6 +195,58 @@ def list_accessible_tax_rules(
     )
 
 
+def list_accessible_tax_rule_page(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    q: str | None,
+    list_filters: list[ListFilter],
+    list_sort: ListSort | None,
+    limit: int,
+    offset: int,
+    actor: User,
+) -> Page[TaxRuleRead]:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    scoped_branch = scoped_branch_id(actor, branch_id)
+    repository = BillingReferenceRepository(session)
+    rows = repository.list_tax_rule_page(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch,
+        q=q,
+        list_filters=list_filters,
+        list_sort=list_sort,
+        limit=limit,
+        offset=offset,
+    )
+    total = repository.count_tax_rule_page(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch,
+        q=q,
+        list_filters=list_filters,
+    )
+    return Page(
+        items=[TaxRuleRead.model_validate(row, from_attributes=True) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def list_accessible_tax_rule_filter_options(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    actor: User,
+) -> dict[str, list[ListFilterOption]]:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    return BillingReferenceRepository(session).tax_rule_filter_options(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch_id(actor, branch_id),
+    )
+
+
 def update_tax_rule(
     session: Session,
     *,
@@ -205,6 +268,7 @@ def update_tax_rule(
     before = {key: getattr(rule, key) for key in updates}
     for key, value in updates.items():
         setattr(rule, key, value)
+    rule.updated_by_user_id = actor.id
     session.add(rule)
     session.commit()
     session.refresh(rule)
@@ -228,7 +292,14 @@ def create_discount_offer(
     enforce_entitlement(session, tenant_id, "billing_basic")
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(actor, payload.branch_id)
-    offer = DiscountOffer.model_validate(payload, update={"tenant_id": tenant_id})
+    offer = DiscountOffer.model_validate(
+        payload,
+        update={
+            "tenant_id": tenant_id,
+            "created_by_user_id": payload.created_by_user_id or actor.id,
+            "updated_by_user_id": payload.created_by_user_id or actor.id,
+        },
+    )
     session.add(offer)
     session.commit()
     session.refresh(offer)
@@ -236,7 +307,7 @@ def create_discount_offer(
         session,
         tenant_id=tenant_id,
         branch_id=offer.branch_id,
-        actor_user_id=payload.created_by_user_id,
+        actor_user_id=offer.created_by_user_id,
         action="discount_offer.created",
         resource_type="discount_offer",
         resource_id=offer.id,
@@ -250,6 +321,60 @@ def list_accessible_discount_offers(
 ) -> list[DiscountOffer]:
     enforce_entitlement(session, tenant_id, "billing_basic")
     return BillingReferenceRepository(session).list_discount_offers(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch_id(actor, branch_id),
+    )
+
+
+def list_accessible_discount_offer_page(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    q: str | None,
+    list_filters: list[ListFilter],
+    list_sort: ListSort | None,
+    limit: int,
+    offset: int,
+    actor: User,
+) -> Page[DiscountOfferRead]:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    scoped_branch = scoped_branch_id(actor, branch_id)
+    repository = BillingReferenceRepository(session)
+    rows = repository.list_discount_offer_page(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch,
+        q=q,
+        list_filters=list_filters,
+        list_sort=list_sort,
+        limit=limit,
+        offset=offset,
+    )
+    total = repository.count_discount_offer_page(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch,
+        q=q,
+        list_filters=list_filters,
+    )
+    return Page(
+        items=[
+            DiscountOfferRead.model_validate(row, from_attributes=True) for row in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def list_accessible_discount_offer_filter_options(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    actor: User,
+) -> dict[str, list[ListFilterOption]]:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    return BillingReferenceRepository(session).discount_offer_filter_options(
         tenant_id=tenant_id,
         branch_id=scoped_branch_id(actor, branch_id),
     )
@@ -279,6 +404,7 @@ def update_discount_offer(
     before = {key: getattr(offer, key) for key in updates}
     for key, value in updates.items():
         setattr(offer, key, value)
+    offer.updated_by_user_id = actor.id
     session.add(offer)
     session.commit()
     session.refresh(offer)

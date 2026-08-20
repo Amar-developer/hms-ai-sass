@@ -15,11 +15,6 @@ import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
-import {
-  formatInvoiceDate,
-  invoicePatientDueAmount,
-  invoiceSource,
-} from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
 import { money } from "@/utils/helper";
@@ -33,13 +28,12 @@ import {
   useInvoiceDeliveryStatuses,
   usePaymentMethods,
 } from "./api";
-import { fetchInvoicePage } from "./api/billing.api";
+import { fetchInvoiceFilterOptions, fetchInvoicePage } from "./api/billing.api";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getConsultationPendingColumns, getInvoiceColumns } from "./Column";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 import { getBillingTableSchema, getBillingQueryFields } from "./filterSchema";
-import { sortRows } from "@/utils/sortRows";
-import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
+import { type QueryFieldOption, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 import { status_options } from "./contants";
 
@@ -76,6 +70,9 @@ export function Billing({
   });
   const [sort, setSort] = useState<SortState | null>(null);
   const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
+  const [filterOptions, setFilterOptions] = useState<
+    Record<string, QueryFieldOption[]>
+  >({});
   const [page, setPage] = useState(1);
   const [invoiceRows, setInvoiceRows] = useState<any[]>([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
@@ -110,6 +107,8 @@ export function Billing({
   async function loadInvoicePage(
     nextPage = page,
     filterOverrides: Partial<typeof filters> = {},
+    nextQueryFilters = queryFilters,
+    nextSort = sort,
   ) {
     if (!apiSession) return;
     const requestSequence = ++invoiceLoadSequence.current;
@@ -128,6 +127,9 @@ export function Billing({
     if (effectiveFilters.fromDate)
       params.set("from_date", effectiveFilters.fromDate);
     if (effectiveFilters.toDate) params.set("to_date", effectiveFilters.toDate);
+    if (nextQueryFilters.length)
+      params.set("filters", JSON.stringify(nextQueryFilters));
+    if (nextSort) params.set("sort", JSON.stringify(nextSort));
     setInvoiceListLoading(true);
     try {
       const result = await fetchInvoicePage(apiSession, params);
@@ -145,6 +147,7 @@ export function Billing({
 
   async function loadPaidStatusCounts(
     filterOverrides: Partial<typeof filters> = {},
+    nextQueryFilters = queryFilters,
   ) {
     if (!apiSession) return;
     const effectiveFilters = { ...filters, ...filterOverrides };
@@ -162,6 +165,8 @@ export function Billing({
           params.set("from_date", effectiveFilters.fromDate);
         if (effectiveFilters.toDate)
           params.set("to_date", effectiveFilters.toDate);
+        if (nextQueryFilters.length)
+          params.set("filters", JSON.stringify(nextQueryFilters));
         const result = await fetchInvoicePage(apiSession, params).catch(
           () => ({ total: 0 }),
         );
@@ -169,6 +174,16 @@ export function Billing({
       }),
     );
     setPaidStatusCounts(Object.fromEntries(entries));
+  }
+
+  async function loadInvoiceFilterOptions() {
+    if (!apiSession) return;
+    const params = new URLSearchParams();
+    if (branchId) params.set("branch_id", branchId);
+    const result = await fetchInvoiceFilterOptions(apiSession, params).catch(
+      () => ({}),
+    );
+    setFilterOptions(result || {});
   }
 
   const { invoicePaymentOptions, defaultPaymentMethod } =
@@ -229,25 +244,13 @@ export function Billing({
   const invoices = invoiceRows;
   const totalPages = Math.max(1, Math.ceil(invoiceTotal / pageSize));
   const safePage = Math.min(page, totalPages);
-  const billingQueryFields = getBillingQueryFields({ rows: invoices });
-  // Invoices are server-paginated with no backend sort param, so sorting
-  // (and the ad-hoc query builder below) only reorders/filters the current
-  // page — see adaptive-filter checklist Phase 4 / accepted scope limitation.
-  const invoicePageRows = sortRows(
-    applyQueryFilters(invoices, billingQueryFields, queryFilters),
-    sort,
-    (invoice, key) => {
-      if (key === "patient")
-        return (
-          invoice.patient_name ||
-          (patientMap.get(invoice.patient_id) as any)?.name
-        );
-      if (key === "due") return invoicePatientDueAmount(invoice);
-      return invoice[key];
-    },
-  );
+  const billingQueryFields = getBillingQueryFields({
+    rows: invoices,
+    filterOptions,
+  });
+  const invoicePageRows = invoices;
 
-  const billingSchema = getBillingTableSchema();
+  const billingSchema = getBillingTableSchema({ filterOptions });
 
   const payableSettlement = Number(
     settlement?.payable_settlement_amount ??
@@ -273,6 +276,7 @@ export function Billing({
     filters.paidStatus,
     filters.fromDate,
     filters.toDate,
+    queryFilters,
   ]);
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
@@ -282,6 +286,7 @@ export function Billing({
     const timer = window.setTimeout(() => {
       void loadInvoicePage(page);
       void loadPaidStatusCounts();
+      void loadInvoiceFilterOptions();
     }, 250);
     return () => window.clearTimeout(timer);
   }, [
@@ -293,6 +298,8 @@ export function Billing({
     filters.paidStatus,
     filters.fromDate,
     filters.toDate,
+    queryFilters,
+    sort,
   ]);
   useEffect(() => {
     if (!apiSession || typeof window === "undefined") return;
@@ -316,6 +323,21 @@ export function Billing({
       fromDate: "",
       toDate: "",
     });
+    setQueryFilters([]);
+    setSort(null);
+    setPage(1);
+  }
+
+  function handleQueryFiltersChange(nextFilters: QueryFilterRow[]) {
+    setQueryFilters(nextFilters);
+    setPage(1);
+    setMessage("");
+  }
+
+  function handleSortChange(nextSort: SortState | null) {
+    setSort(nextSort);
+    setPage(1);
+    setMessage("");
   }
 
   async function refreshBillingData() {
@@ -622,12 +644,12 @@ export function Billing({
             filterValues={filters}
             onFilterChange={updateFilter}
             sort={sort}
-            onSortChange={setSort}
+            onSortChange={handleSortChange}
             showSort={false}
             onReset={clearFilters}
             queryFields={billingQueryFields}
             queryFilters={queryFilters}
-            onQueryFiltersChange={setQueryFilters}
+            onQueryFiltersChange={handleQueryFiltersChange}
           >
             <FormField label="From">
               <Input
@@ -651,7 +673,7 @@ export function Billing({
           <AdaptiveSortTrigger
             fields={billingSchema.sortFields}
             sort={sort}
-            onSortChange={setSort}
+            onSortChange={handleSortChange}
           />
         </div>
       </BreadcrumbSlot>
@@ -793,7 +815,7 @@ export function Billing({
             }
             onRowClick={openInvoiceDetail}
             sort={sort ?? undefined}
-            onSortChange={setSort}
+            onSortChange={handleSortChange}
           />
         </div>
         <Pagination

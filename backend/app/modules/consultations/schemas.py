@@ -106,6 +106,7 @@ class ConsultationRead(BaseModel):
     follow_up_advice: str | None
     patient_remarks: str | None
     created_by_user_id: str | None
+    updated_by_user_id: str | None
     signed_by_user_id: str | None
     signed_at: datetime | None
     created_at: datetime

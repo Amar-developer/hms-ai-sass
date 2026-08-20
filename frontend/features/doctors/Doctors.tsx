@@ -17,6 +17,8 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import {
   usePractitionersQuery,
+  usePractitionerPageQuery,
+  usePractitionerFilterOptionsQuery,
   useDoctorReferenceData,
   useDoctorActions,
 } from "@/features/doctors/api";
@@ -26,8 +28,7 @@ import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getDoctorColumns } from "./Column";
 import { getDoctorTableSchema, getDoctorQueryFields } from "./filterSchema";
-import { sortRows } from "@/utils/sortRows";
-import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
+import type { QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 
@@ -113,6 +114,25 @@ export function Doctors({
     setMessage,
   });
   const listLoading = practitionersLoading || referenceLoading;
+
+  const pageParams = {
+    q: query,
+    branchId: branchFilter,
+    departmentId: departmentFilter,
+    queryFilters,
+    sort,
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  };
+  const {
+    data: practitionerPage,
+    isLoading: pageLoading,
+    isFetching: pageFetching,
+    error: pageError,
+    refetch: refetchPractitionerPage,
+  } = usePractitionerPageQuery(scopedSession, pageParams);
+  const { data: doctorFilterOptions = {} } =
+    usePractitionerFilterOptionsQuery(scopedSession);
 
   const doctorSchema = getDoctorTableSchema({ branches, departments });
 
@@ -200,9 +220,14 @@ export function Doctors({
   async function refreshList() {
     await Promise.all([
       refetchPractitioners(),
+      refetchPractitionerPage(),
       loadReferenceData(tenantId, true),
     ]);
   }
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, branchFilter, departmentFilter, queryFilters, sort]);
 
   // Bounce back to the list if a direct/bookmarked edit link no longer
   // resolves to a real practitioner, but only once loading has actually
@@ -219,6 +244,12 @@ export function Doctors({
       );
     }
   }, [practitionersError]);
+
+  useEffect(() => {
+    if (pageError) {
+      setMessage((pageError as Error).message || "Could not load doctors.");
+    }
+  }, [pageError]);
 
   useEffect(() => {
     if (listLoading || !rows.length || feeRulesTenantId === tenantId) return;
@@ -270,41 +301,14 @@ export function Doctors({
         back={() => open("list")}
       />
     );
-  const doctorQueryFields = getDoctorQueryFields({ rows });
-  const filtered = sortRows(
-    applyQueryFilters(
-      rows.filter((row: any) => {
-        const text = [
-          row.full_name,
-          row.primary_specialty,
-          row.registration_number,
-          row.mobile,
-          row.email,
-          row.id,
-        ]
-          .join(" ")
-          .toLowerCase();
-        return (
-          (!query || text.includes(query.toLowerCase())) &&
-          (branchFilter === "all" ||
-            (row.branch_ids || []).includes(branchFilter)) &&
-          (departmentFilter === "all" ||
-            (row.department_ids || []).includes(departmentFilter))
-        );
-      }),
-      doctorQueryFields,
-      queryFilters,
-    ),
-    sort,
-    (row, key) =>
-      key === "updated_at" ? row.updated_at || row.created_at : row[key],
-  );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const doctorQueryFields = getDoctorQueryFields({
+    rows,
+    filterOptions: doctorFilterOptions,
+  });
+  const pageRows = practitionerPage?.items || [];
+  const totalRowsCount = Number(practitionerPage?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(totalRowsCount / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
-  );
 
   const doctorColumns = getDoctorColumns({
     canCopyIds,
@@ -327,7 +331,7 @@ export function Doctors({
         <div className="flex items-center gap-2">
           <AdaptiveResultCount
             shown={pageRows.length}
-            total={filtered.length}
+            total={totalRowsCount}
             noun="doctors"
           />
           <RefreshButton
@@ -396,7 +400,7 @@ export function Doctors({
           <DataTable
             columns={doctorColumns}
             data={pageRows}
-            loading={listLoading}
+            loading={listLoading || pageLoading || pageFetching}
             emptyMessage="No doctors match your search."
             onRowClick={(row: any) => open("edit", row.id)}
             sort={sort ?? undefined}
@@ -407,7 +411,7 @@ export function Doctors({
       <Pagination
         page={safePage}
         totalPages={totalPages}
-        total={filtered.length}
+        total={totalRowsCount}
         onPage={setPage}
       />
       {confirm && (

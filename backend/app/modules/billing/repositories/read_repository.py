@@ -4,7 +4,17 @@ from decimal import Decimal
 from sqlalchemy import and_, case, exists, func, or_
 from sqlmodel import Session, select
 
+from app.core.list_filters import (
+    ListFilter,
+    ListFilterOption,
+    ListSort,
+    apply_list_filters,
+    apply_list_sort,
+    list_filter_options,
+    tenant_user_filter_options,
+)
 from app.modules.appointments.models import Appointment
+from app.modules.billing.listing import BILLING_INVOICE_LIST_SPEC, invoice_source
 from app.modules.billing.models import (
     BillingAdjustmentRequest,
     BillingAdjustmentStatus,
@@ -160,6 +170,8 @@ class BillingReadRepository:
         payment_state: str | None = None,
         from_date: date | None = None,
         to_date: date | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
         offset: int = 0,
         limit: int | None = None,
     ) -> list[Invoice]:
@@ -172,6 +184,7 @@ class BillingReadRepository:
             payment_state=payment_state,
             from_date=from_date,
             to_date=to_date,
+            list_filters=list_filters,
         )
         unpaid_rank = case(
             (
@@ -190,7 +203,12 @@ class BillingReadRepository:
             ),
             else_=1,
         )
-        statement = statement.order_by(unpaid_rank, Invoice.created_at.desc())
+        statement = apply_list_sort(
+            statement,
+            BILLING_INVOICE_LIST_SPEC,
+            list_sort,
+            default_order=[unpaid_rank, Invoice.created_at.desc()],
+        )
         statement = statement.offset(offset)
         if limit:
             statement = statement.limit(limit)
@@ -207,6 +225,7 @@ class BillingReadRepository:
         payment_state: str | None = None,
         from_date: date | None = None,
         to_date: date | None = None,
+        list_filters: list[ListFilter] | None = None,
     ) -> int:
         filtered = self._invoice_list_statement(
             tenant_id=tenant_id,
@@ -217,8 +236,54 @@ class BillingReadRepository:
             payment_state=payment_state,
             from_date=from_date,
             to_date=to_date,
+            list_filters=list_filters,
         ).subquery()
         return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def invoice_filter_options(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        patient_id: str | None = None,
+    ) -> dict[str, list[ListFilterOption]]:
+        source_statement = (
+            select(invoice_source)
+            .join(Patient, Patient.id == Invoice.patient_id)
+            .where(Invoice.tenant_id == tenant_id)
+        )
+        status_statement = (
+            select(Invoice.status)
+            .join(Patient, Patient.id == Invoice.patient_id)
+            .where(Invoice.tenant_id == tenant_id)
+        )
+        if branch_id:
+            source_statement = source_statement.where(Invoice.branch_id == branch_id)
+            status_statement = status_statement.where(Invoice.branch_id == branch_id)
+        if patient_id:
+            source_statement = source_statement.where(Invoice.patient_id == patient_id)
+            status_statement = status_statement.where(Invoice.patient_id == patient_id)
+        return {
+            "source": list_filter_options(
+                list(
+                    self.session.exec(
+                        source_statement.distinct().order_by(invoice_source).limit(100)
+                    ).all()
+                )
+            ),
+            "status": list_filter_options(
+                list(
+                    self.session.exec(
+                        status_statement.distinct().order_by(Invoice.status).limit(100)
+                    ).all()
+                )
+            ),
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
 
     def _invoice_list_statement(
         self,
@@ -231,8 +296,13 @@ class BillingReadRepository:
         payment_state: str | None,
         from_date: date | None,
         to_date: date | None,
+        list_filters: list[ListFilter] | None = None,
     ):
-        statement = select(Invoice).where(Invoice.tenant_id == tenant_id)
+        statement = (
+            select(Invoice)
+            .join(Patient, Patient.id == Invoice.patient_id)
+            .where(Invoice.tenant_id == tenant_id)
+        )
         if branch_id:
             statement = statement.where(Invoice.branch_id == branch_id)
         if patient_id:
@@ -240,7 +310,7 @@ class BillingReadRepository:
         if q:
             term = q.strip().lower()
             pattern = f"%{term}%"
-            statement = statement.join(Patient, Patient.id == Invoice.patient_id).where(
+            statement = statement.where(
                 or_(
                     func.lower(Invoice.invoice_number).like(pattern),
                     func.lower(Patient.patient_number).like(pattern),
@@ -343,6 +413,10 @@ class BillingReadRepository:
             statement = statement.where(
                 Invoice.created_at
                 < datetime.combine(to_date + timedelta(days=1), time.min)
+            )
+        if list_filters:
+            statement = apply_list_filters(
+                statement, BILLING_INVOICE_LIST_SPEC, list_filters
             )
         return statement
 

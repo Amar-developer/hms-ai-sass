@@ -11,6 +11,7 @@ from app.core.access_control import (
     require_user_branch_access,
     scoped_branch_id,
 )
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
 from app.core.pagination import Page
 from app.modules.appointments.models import Appointment
 from app.modules.appointments.repositories import (
@@ -75,6 +76,7 @@ def appointment_grid_row(row) -> AppointmentGridRead:
             else consultation_status
         ),
         created_by_user_id=appointment.created_by_user_id,
+        updated_by_user_id=appointment.updated_by_user_id,
         created_at=appointment.created_at,
         updated_at=appointment.updated_at,
     )
@@ -100,6 +102,8 @@ class AppointmentQueryService:
         skip: int,
         limit: int,
         actor: User,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
     ) -> list[AppointmentGridRead]:
         enforce_entitlement(self.session, tenant_id, "appointments")
         branch_id = scoped_branch_id(actor, branch_id)
@@ -120,6 +124,8 @@ class AppointmentQueryService:
             practitioner_id=effective_practitioner_id,
             appointment_date=appointment_date,
             q=q,
+            list_filters=list_filters,
+            list_sort=list_sort,
             skip=skip,
             limit=limit,
         )
@@ -169,6 +175,7 @@ class AppointmentQueryService:
             practitioner_id=practitioner_id,
             appointment_date=kwargs["appointment_date"],
             q=kwargs["q"],
+            list_filters=kwargs.get("list_filters"),
         )
         return Page(
             items=items,
@@ -176,6 +183,12 @@ class AppointmentQueryService:
             limit=kwargs["limit"],
             offset=kwargs["skip"],
         )
+
+    def list_appointment_filter_options(
+        self, *, tenant_id: str
+    ) -> dict[str, list[ListFilterOption]]:
+        enforce_entitlement(self.session, tenant_id, "appointments")
+        return self.grid.filter_options(tenant_id=tenant_id)
 
     def get_appointment(
         self, *, tenant_id: str, appointment_id: str, actor: User

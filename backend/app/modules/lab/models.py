@@ -124,6 +124,8 @@ class LabOrder(SQLModel, table=True):
     external_referrer: str | None = Field(default=None, max_length=220)
     amount: int = Field(default=0, ge=0)
     ordered_by_user_id: str | None = Field(default=None, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     sample_collected_at: datetime | None = Field(default=None, index=True)
     result_ready_at: datetime | None = Field(default=None, index=True)
     cancelled_reason: str | None = Field(default=None, max_length=500)

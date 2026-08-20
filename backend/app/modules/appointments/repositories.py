@@ -3,8 +3,21 @@ from datetime import date, time
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
+from app.core.list_filters import (
+    ListFilter,
+    ListFilterOption,
+    ListSort,
+    apply_list_filters,
+    apply_list_sort,
+    labeled_filter_options,
+    list_filter_options,
+    tenant_user_filter_options,
+)
+from app.modules.appointments.listing import APPOINTMENT_LIST_SPEC
 from app.modules.appointments.models import Appointment, AppointmentIdempotencyKey
-from app.modules.consultations.models import Consultation
+from app.modules.appointments.models import AppointmentStatus, AppointmentType
+from app.modules.consultations.models import Consultation, ConsultationStatus
+from app.modules.identity.models import User
 from app.modules.patients.models import Patient
 from app.modules.practitioners.models import Practitioner
 from app.modules.queue.models import QueueEntry
@@ -189,8 +202,126 @@ class AppointmentGridRepository:
         practitioner_id: str | None = None,
         appointment_date: date | None = None,
         q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
         skip: int = 0,
         limit: int = 100,
+    ):
+        statement = self._filtered_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            department_id=department_id,
+            practitioner_id=practitioner_id,
+            appointment_date=appointment_date,
+            q=q,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            APPOINTMENT_LIST_SPEC,
+            list_sort,
+            default_order=[
+                Appointment.appointment_date.desc(),
+                Appointment.created_at.desc(),
+            ],
+        )
+        return self.session.exec(statement.offset(skip).limit(limit))
+
+    def count_for_tenant(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None = None,
+        department_id: str | None = None,
+        practitioner_id: str | None = None,
+        appointment_date: date | None = None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._filtered_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            department_id=department_id,
+            practitioner_id=practitioner_id,
+            appointment_date=appointment_date,
+            q=q,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def filter_options(self, *, tenant_id: str) -> dict[str, list[ListFilterOption]]:
+        branches = (
+            select(Branch.id, Branch.name)
+            .where(Branch.tenant_id == tenant_id)
+            .order_by(Branch.name)
+        )
+        departments = (
+            select(Department.id, Department.name)
+            .where(Department.tenant_id == tenant_id)
+            .order_by(Department.name)
+        )
+        practitioners = (
+            select(Practitioner.id, Practitioner.full_name)
+            .where(Practitioner.tenant_id == tenant_id)
+            .order_by(Practitioner.full_name)
+        )
+        acquisition_sources = (
+            select(Appointment.acquisition_source)
+            .where(Appointment.tenant_id == tenant_id)
+            .distinct()
+            .order_by(Appointment.acquisition_source)
+        )
+        visit_purposes = (
+            select(Appointment.visit_purpose)
+            .where(Appointment.tenant_id == tenant_id)
+            .distinct()
+            .order_by(Appointment.visit_purpose)
+        )
+        return {
+            "branch_id": labeled_filter_options(
+                list(self.session.exec(branches).all())
+            ),
+            "department_id": labeled_filter_options(
+                list(self.session.exec(departments).all())
+            ),
+            "practitioner_id": labeled_filter_options(
+                list(self.session.exec(practitioners).all())
+            ),
+            "appointment_type": list_filter_options(list(AppointmentType)),
+            "status": list_filter_options(list(AppointmentStatus)),
+            "consultation_status": list_filter_options(list(ConsultationStatus)),
+            "acquisition_source": list_filter_options(
+                list(self.session.exec(acquisition_sources).all())
+            ),
+            "visit_purpose": list_filter_options(
+                list(self.session.exec(visit_purposes).all())
+            ),
+            "is_billable": [
+                ListFilterOption(value="true", label="Billable"),
+                ListFilterOption(value="false", label="Non-billable"),
+            ],
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
+
+    def _filtered_statement(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        department_id: str | None,
+        practitioner_id: str | None,
+        appointment_date: date | None,
+        q: str | None,
+        list_filters: list[ListFilter] | None,
     ):
         statement = self._statement().where(Appointment.tenant_id == tenant_id)
         if branch_id:
@@ -207,60 +338,23 @@ class AppointmentGridRepository:
             pattern = f"%{q.strip().lower()}%"
             statement = statement.where(
                 or_(
+                    func.lower(Appointment.appointment_number).like(pattern),
                     func.lower(Patient.patient_number).like(pattern),
                     func.lower(Patient.full_name).like(pattern),
                     func.lower(Patient.mobile).like(pattern),
                     func.lower(Patient.guardian_mobile).like(pattern),
+                    func.lower(Department.name).like(pattern),
+                    func.lower(Practitioner.full_name).like(pattern),
                     func.lower(QueueEntry.token_number).like(pattern),
+                    func.lower(Appointment.reason).like(pattern),
+                    func.lower(Appointment.visit_purpose).like(pattern),
                 )
             )
-        return self.session.exec(
-            statement.order_by(
-                Appointment.appointment_date.desc(), Appointment.created_at.desc()
+        if list_filters:
+            statement = apply_list_filters(
+                statement, APPOINTMENT_LIST_SPEC, list_filters
             )
-            .offset(skip)
-            .limit(limit)
-        )
-
-    def count_for_tenant(
-        self,
-        *,
-        tenant_id: str,
-        branch_id: str | None = None,
-        department_id: str | None = None,
-        practitioner_id: str | None = None,
-        appointment_date: date | None = None,
-        q: str | None = None,
-    ) -> int:
-        statement = select(func.count(func.distinct(Appointment.id))).where(
-            Appointment.tenant_id == tenant_id
-        )
-        if branch_id:
-            statement = statement.where(Appointment.branch_id == branch_id)
-        if department_id:
-            statement = statement.where(Appointment.department_id == department_id)
-        if practitioner_id:
-            statement = statement.where(Appointment.practitioner_id == practitioner_id)
-        if appointment_date:
-            statement = statement.where(
-                Appointment.appointment_date == appointment_date
-            )
-        if q:
-            pattern = f"%{q.strip().lower()}%"
-            statement = (
-                statement.join(Patient, Patient.id == Appointment.patient_id)
-                .outerjoin(QueueEntry, QueueEntry.appointment_id == Appointment.id)
-                .where(
-                    or_(
-                        func.lower(Patient.patient_number).like(pattern),
-                        func.lower(Patient.full_name).like(pattern),
-                        func.lower(Patient.mobile).like(pattern),
-                        func.lower(Patient.guardian_mobile).like(pattern),
-                        func.lower(QueueEntry.token_number).like(pattern),
-                    )
-                )
-            )
-        return int(self.session.exec(statement).one())
+        return statement
 
     def list_platform(
         self,

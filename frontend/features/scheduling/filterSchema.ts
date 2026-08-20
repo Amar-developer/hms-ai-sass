@@ -1,5 +1,10 @@
 import type { TableSchema } from "@/app/components/common/AdaptiveFilterBar";
-import type { QueryFieldSchema } from "@/utils/queryFilter";
+import {
+  optionMapValues,
+  standardAuditQueryFields,
+  type QueryFieldOption,
+  type QueryFieldSchema,
+} from "@/utils/queryFilter";
 import { weekdays } from "./constants";
 
 export function getScheduleTableSchema(): TableSchema {
@@ -61,38 +66,59 @@ export function getScheduleQueryFields({
   rows,
   branches,
   departments,
+  filterOptions,
 }: {
   rows: any[];
   branches: any[];
   departments: any[];
+  filterOptions?: Record<string, QueryFieldOption[]>;
 }): QueryFieldSchema[] {
   return [
     { key: "practitioner_full_name", label: "Doctor Name", type: "text" },
     {
+      key: "practitioner_id",
+      label: "Doctor",
+      type: "select",
+      options: optionMapValues(filterOptions, "practitioner_id"),
+    },
+    {
       key: "branch_id",
       label: "Branch",
       type: "select",
-      options: branches.map((branch: any) => ({
-        value: branch.id,
-        label: branch.name,
-      })),
+      options: optionMapValues(
+        filterOptions,
+        "branch_id",
+        branches.map((branch: any) => ({
+          value: branch.id,
+          label: branch.name,
+        })),
+      ),
     },
     {
       key: "department_id",
       label: "Department",
       type: "select",
-      options: departments.map((department: any) => ({
-        value: department.id,
-        label: department.name,
-      })),
+      options: optionMapValues(
+        filterOptions,
+        "department_id",
+        departments.map((department: any) => ({
+          value: department.id,
+          label: department.name,
+        })),
+      ),
     },
     {
       key: "mode",
       label: "Schedule Mode",
       type: "select",
-      options: distinctFieldOptions(
-        rows,
+      options: optionMapValues(
+        filterOptions,
         "mode",
+        distinctFieldOptions(
+          rows,
+          "mode",
+          (value) => SCHEDULE_MODE_LABELS[value] || value,
+        ),
         (value) => SCHEDULE_MODE_LABELS[value] || value,
       ),
     },
@@ -103,11 +129,14 @@ export function getScheduleQueryFields({
       key: "is_active",
       label: "Status",
       type: "select",
-      options: distinctFieldOptions(rows, "is_active", (value) =>
-        value === "true" ? "Active" : "Inactive",
+      options: optionMapValues(
+        filterOptions,
+        "is_active",
+        distinctFieldOptions(rows, "is_active", (value) =>
+          value === "true" ? "Active" : "Inactive",
+        ),
       ),
     },
-    { key: "created_at", label: "Created On", type: "date" },
-    { key: "updated_at", label: "Last Updated", type: "date" },
+    ...standardAuditQueryFields({ rows, filterOptions, includeUpdatedBy: true }),
   ];
 }

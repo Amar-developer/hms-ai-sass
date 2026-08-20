@@ -2,6 +2,8 @@ export {
   getTenants,
   getDoctors,
   getSchedules,
+  getScheduleFilterOptions,
+  getSchedulePage,
   createSchedule,
   updateSchedule,
   deleteSchedule,
