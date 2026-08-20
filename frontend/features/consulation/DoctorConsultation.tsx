@@ -5,23 +5,16 @@ import {
   UsersRound,
 } from "lucide-react";
 import {
-  Badge,
   Button,
   Card,
   Input,
   SearchableSelect,
-  Select,
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { calculateConsultationCharge, sortQueue } from "@/lib/hmsLogic";
-import { humanizeOptionLabel } from "@/lib/options";
-import {
-  displayDate,
-  displayDate as formatDisplayDate,
-  today,
-} from "@/utils/helper";
+import { displayDate, today } from "@/utils/helper";
 import { ConsultationWorkspace } from "./components/ConsultationWorkspace";
 import { ScheduleList } from "./components/ScheduleList";
 import {
@@ -29,8 +22,6 @@ import {
   appointmentDateKey,
   isCancelledAppointment,
   isCompletedAppointment,
-  isQueueActionLocked,
-  isWaitingAppointment,
   labTestNames,
   statusKey,
 } from "./helpers";

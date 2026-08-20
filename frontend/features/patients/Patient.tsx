@@ -29,12 +29,6 @@ import { getPatientColumns } from "./Column";
 import { getPatientTableSchema, getPatientQueryFields } from "./filterSchema";
 import { type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
-import {
-  fetchPatientIntelligence,
-  sendPatientEngagementAction,
-  updateManualLabSchedule,
-  updateManualRefillSchedule,
-} from "@/features/patient_intelligence/api/patientIntelligence.api";
 import type { AppNavigationTarget } from "@/lib/navigationTarget";
 
 type PatientProps = {

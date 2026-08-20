@@ -1,17 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
+import { Card, Input, RefreshButton } from "@/app/components/common/ui";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "@/app/components/common/Empty";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { TenantPicker } from "../shared/TenantPicker";
-import { displayDate } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
-import { RowActions } from "@/features/admin/components/RowActions";
 import { FormField } from "@/app/components/FormElements";
 import { DataTable } from "@/app/components/common/DataTable";
-import { Column } from "@/utils/types";
 import { getDepartmentColumns } from "./Column";
 
 export function DepartmentsManagement({

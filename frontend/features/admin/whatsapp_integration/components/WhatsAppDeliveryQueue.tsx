@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 
 import { FormField } from "@/app/components/FormElements";
 import { Badge, Card, Input } from "@/app/components/common/ui";

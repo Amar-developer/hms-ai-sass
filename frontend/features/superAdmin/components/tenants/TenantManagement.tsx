@@ -3,11 +3,7 @@
 import { useEffect, useState } from "react";
 import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import {
-  dateFieldOptions,
-  tenant_status_options,
-  tenantTypes,
-} from "../../constants";
+import { tenant_status_options, tenantTypes } from "../../constants";
 import { addressText } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Pagination } from "@/app/components/common/Pagination";

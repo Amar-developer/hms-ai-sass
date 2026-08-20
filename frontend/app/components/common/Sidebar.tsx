@@ -1,7 +1,6 @@
 import { ChevronDown, Hospital, Settings } from "lucide-react";
 import { BrandBlock } from "./BrandBlock";
 import { useEffect, useRef, useState } from "react";
-import { superAdminSections } from "@/features/superAdmin/constants";
 
 interface SidebarProps {
   visibleNav: any[];

@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { selectedSchedulePayloadsFromRHF } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
-import { pageSize, weekdays } from "./constants";
+import { pageSize } from "./constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { Pagination } from "@/app/components/common/Pagination";

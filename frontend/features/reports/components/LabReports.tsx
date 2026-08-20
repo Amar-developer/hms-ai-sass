@@ -1,4 +1,3 @@
-import React from "react";
 import CollapsibleReportSection from "./CollapsibleReportSection";
 import { LabReportsProps } from "../types";
 import { DataTable } from "@/app/components/common/DataTable";
@@ -38,7 +37,6 @@ const LabReports = ({
       header: "Lab / Package",
       width: "160px",
       render: (row: any) => {
-        console.log(row,'row in lab report')
         return (
           <div className="max-w-[150px]">
             <p className="truncate" title={row.item}>{row.item}</p>

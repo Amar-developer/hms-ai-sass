@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import InvoiceHeader from "./InvoiceHeader";
 import { FieldRow } from "./FieldRow";
 import CustomerDetails from "./CustomerDetails";

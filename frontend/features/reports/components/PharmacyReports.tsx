@@ -1,4 +1,3 @@
-import React from "react";
 import CollapsibleReportSection from "./CollapsibleReportSection";
 import { PharmacyReportsProps } from "../types";
 import { DataTable } from "@/app/components/common/DataTable";

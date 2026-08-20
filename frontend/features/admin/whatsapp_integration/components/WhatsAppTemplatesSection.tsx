@@ -1,7 +1,6 @@
 import { Plus, Trash2 } from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
 import { Input, Select } from "@/app/components/common/ui";
-import { TenantPicker } from "@/features/superAdmin/components/shared/TenantPicker";
 import { WhatsAppSwitch } from "./WhatsAppSwitch";
 import { flowOptions, languageOptions, MAX_TEMPLATE_PARAMETERS } from "../../constants";
 import { WhatsAppCustomTemplate, WhatsAppFlowKey, WhatsAppLanguage, WhatsAppSettingsDraft } from "../../types";

@@ -1,5 +1,4 @@
 import { Column } from "@/utils/types";
-import { pageSize } from "./constants";
 import { capitalizeFirst, displayDate } from "@/utils/helper";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { Badge } from "@/app/components/common/ui";

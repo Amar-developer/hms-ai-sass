@@ -73,7 +73,7 @@ const sectionTabs = [
     id: "consultation",
     label: "Consultation",
     icon: Stethoscope,
-    path: "/opd",
+    path: "/opd/consultation",
     permissions: [
       "consultations.read",
       "consultations.write",
