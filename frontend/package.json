@@ -19,8 +19,11 @@
     "test:e2e:ui": "bash ../scripts/run_frontend_e2e.sh --project=chromium --ui",
     "pretypecheck": "node ../scripts/clean_frontend_build.mjs",
     "typecheck": "tsc --noEmit",
-    "quality": "npm run quality:backend && npm run quality:frontend",
-    "quality:backend": "../backend/.venv/bin/ruff check ../backend/app ../backend/tests ../backend/e2e ../backend/scripts && ../backend/.venv/bin/pytest ../backend/tests -q",
+    "quality": "npm run quality:backend:full && npm run quality:frontend",
+    "quality:fast": "npm run quality:backend:fast && npm run quality:frontend",
+    "quality:backend": "npm run quality:backend:full",
+    "quality:backend:fast": "../backend/.venv/bin/ruff check ../backend/app ../backend/tests ../backend/e2e ../backend/scripts && ../backend/.venv/bin/pytest ../backend/tests -q -m \"unit and not e2e\"",
+    "quality:backend:full": "../backend/.venv/bin/ruff check ../backend/app ../backend/tests ../backend/e2e ../backend/scripts && ../backend/.venv/bin/pytest ../backend/tests -q",
     "quality:frontend": "npm test && npm run typecheck && npm run build",
     "hooks:install": "../backend/.venv/bin/pre-commit install --install-hooks"
   },

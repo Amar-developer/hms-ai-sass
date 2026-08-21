@@ -13,7 +13,7 @@
 #
 # Usage:
 #   bash scripts/verify_all.sh                 # automatic CI gates
-#   bash scripts/verify_all.sh --fast          # skip backend E2E
+#   bash scripts/verify_all.sh --fast          # fast PR-style backend tests, skip backend E2E
 #   bash scripts/verify_all.sh --frontend-e2e  # also run manual Playwright E2E
 
 set -euo pipefail
@@ -71,15 +71,21 @@ step "2/6 Backend lint (ruff)"
 "${ROOT_DIR}/backend/.venv/bin/ruff" check \
   "${ROOT_DIR}/backend/app" "${ROOT_DIR}/backend/tests" "${ROOT_DIR}/backend/e2e"
 
-step "3/6 Backend unit tests (pytest)"
-"${ROOT_DIR}/backend/.venv/bin/pytest" "${ROOT_DIR}/backend/tests" -q
+if [[ "${FAST}" -eq 1 ]]; then
+  step "3/6 Backend fast tests (pytest: unit and not e2e)"
+  "${ROOT_DIR}/backend/.venv/bin/pytest" "${ROOT_DIR}/backend/tests" -q -m "unit and not e2e"
+else
+  step "3/6 Backend full tests (pytest)"
+  "${ROOT_DIR}/backend/.venv/bin/pytest" "${ROOT_DIR}/backend/tests" -q
+fi
 
 step "4/6 Frontend unit tests + typecheck + build"
 (cd "${ROOT_DIR}/frontend" && npm test && npm run typecheck && npm run build)
 
 if [[ "${FAST}" -eq 1 ]]; then
   echo ""
-  echo "--fast: skipped backend E2E. Run without --fast before pushing."
+  echo "--fast: ran PR-style backend tests and skipped backend E2E."
+  echo "Run without --fast before merging to develop/main or before release."
   exit 0
 fi
 
