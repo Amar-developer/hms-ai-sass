@@ -1,22 +1,28 @@
-# MedizinHub HMS Complete v6 - Doctor Revenue & Consultation Billing
+# MedizinHub HMS
 
-Runnable NextJS + Tailwind frontend prototype.
+Multi-tenant healthcare management system with Next.js frontend, FastAPI backend, PostgreSQL, Docker deployment, clinical workflows, billing, files, notifications, and SaaS administration.
 
 ## Product documentation
 
-This project now includes a practical documentation backbone for evolving the prototype into a plug-and-play smart healthcare SaaS platform:
+The canonical project documentation lives in `docs/`:
 
 - [Documentation index](./docs/README.md)
-- [Developer setup guide](./docs/developer-setup.md)
-- [EC2 Docker deployment guide](./docs/ec2-docker-deployment.md)
-- [CI/CD testing strategy](./docs/ci-cd-testing-strategy.md)
-- [Product blueprint](./docs/product-blueprint.md)
-- [Development master prompt](./docs/development-master-prompt.md)
-- [Backend architecture spec](./docs/backend-architecture-spec.md)
-- [Source control and quality guide](./docs/source-control-and-quality-guide.md)
-- [Module catalog](./docs/module-catalog.md)
-- [Data, security, and India compliance](./docs/data-security-compliance.md)
-- [SaaS plans and roadmap](./docs/saas-plans-roadmap.md)
+- [Complete project documentation](./docs/complete-project-documentation.md)
+- [Architecture and data reference](./docs/architecture-and-data.md)
+- [Frontend architecture](./docs/frontend-architecture.md)
+- [Backend architecture](./docs/backend-architecture.md)
+- [API design and request lifecycle](./docs/api-design-and-request-lifecycle.md)
+- [API performance hotspots](./docs/api-performance-hotspots.md)
+- [Database connection and data](./docs/database-connection-and-data.md)
+- [External integrations](./docs/external-integrations.md)
+- [Authentication and authorization](./docs/authentication-and-authorization.md)
+- [Design patterns and SOLID principles](./docs/design-patterns-and-solid.md)
+- [Logging, tracing, and observability](./docs/logging-tracing-observability.md)
+- [Development workflow](./docs/development-workflow.md)
+- [Operations runbook](./docs/operations-runbook.md)
+- [Security and compliance](./docs/security-compliance.md)
+- [Product and roadmap](./docs/product-and-roadmap.md)
+- [API permission matrix](./docs/api-permission-matrix.md)
 
 ## Run
 
@@ -38,15 +44,15 @@ cd frontend
 npm run hooks:install
 ```
 
-The pre-push hook only runs backend lint, backend unit tests, frontend unit
+The pre-push hook only runs backend lint, backend pytest checks, frontend unit
 tests, typecheck, and build. It does **not** run backend E2E or frontend
-Playwright E2E. Frontend Playwright E2E is manual-only; backend E2E still runs
-in CI. To catch the automatic CI gates locally before pushing, run this from
-the repo root:
+Playwright E2E. Frontend Playwright E2E is manual-only; backend E2E runs on
+protected branch pushes. To catch the automatic CI gates locally before pushing,
+run this from the repo root:
 
 ```bash
-bash scripts/verify_all.sh                 # automatic CI gates
-bash scripts/verify_all.sh --fast          # skip backend E2E, for quick iteration
+bash scripts/verify_all.sh --fast          # PR-style gate, for quick iteration
+bash scripts/verify_all.sh                 # full develop/main-style gate
 bash scripts/verify_all.sh --frontend-e2e  # also run manual Playwright E2E
 ```
 
@@ -62,14 +68,15 @@ The frontend E2E runner creates `medizinhub_frontend_e2e` on its first run
 when the local PostgreSQL user has database-creation permission. It refuses
 non-local database hosts and database names that do not end in `_e2e`.
 
-Run the full local quality gate from the frontend package before every push:
+Run the local quality gate from the frontend package:
 
 ```bash
 cd frontend
-npm run quality
+npm run quality:fast  # PR-style fast gate
+npm run quality       # full backend suite + frontend gate
 ```
 
-That command runs:
+The full command runs:
 
 ```bash
 # Backend linting
@@ -88,9 +95,10 @@ npm run typecheck
 npm run build
 ```
 
+`npm run quality:fast` runs backend tests with `-m "unit and not e2e"`.
 `npm run quality` does **not** run E2E — use `bash scripts/verify_all.sh`
-above for the automatic CI gates. The individual E2E commands, if you want to
-run one on its own:
+above for the protected branch gates. The individual E2E commands, if you want
+to run one on its own:
 
 ```bash
 npm run test:e2e               # frontend, chromium only, @critical
@@ -99,10 +107,10 @@ npm run test:e2e:cross-browser # frontend, chromium + firefox + webkit, @critica
 bash ../backend/scripts/run_backend_e2e.sh   # backend, live API suite
 ```
 
-GitHub Actions runs the same main checks on pull requests and pushes to
-`main`, `master`, and `develop`. It also runs the PostgreSQL-backed live
-backend E2E suite. Frontend Playwright E2E is not automatic; run the manual
-`Frontend E2E Cross Browser` workflow when browser coverage is needed.
+GitHub Actions runs a fast backend gate on pull requests and the full backend
+suite plus PostgreSQL-backed backend E2E on pushes to `main` and `develop`.
+Frontend Playwright E2E is not automatic; run the manual `Frontend E2E Cross
+Browser` workflow when browser coverage is needed.
 
 ```bash
 bash backend/scripts/run_backend_e2e.sh
@@ -387,6 +395,8 @@ sudo docker compose exec \
   -e MEDIZINHUB_SUPER_ADMIN_PASSWORD="YOUR_PASSWORD" \
   backend python scripts/reset_super_admin.py
 ```
+
+For production support, also pass `MEDIZINHUB_SUPER_ADMIN_CONFIRM=RESET_SUPER_ADMIN_PRODUCTION`. Do not rely on local fallback credentials outside development.
 
 ---
 

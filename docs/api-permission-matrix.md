@@ -17,6 +17,23 @@ Current enforced guardrails:
 - Core clinical modules are entitlement-checked at API level: patients, appointments, queue, consultations, billing basic, billing advanced, lab, and pharmacy.
 - New custom subscription plans with no explicit module list default to core HMS modules: patients, appointments, queue, consultations, and billing basic.
 
+## How To Update This Matrix
+
+Use this checklist whenever a backend route changes:
+
+1. Add the FastAPI route under `backend/app/api/v1`.
+2. Confirm the permission dependency in code.
+3. Add or update the endpoint row in the correct section below.
+4. If the route is a list helper, include `/page` and `/filter-options` rows too.
+5. Run:
+
+```bash
+cd frontend
+../backend/.venv/bin/pytest ../backend/tests/test_api_docs.py -q
+```
+
+The test compares every live `/api/...` FastAPI route against Markdown endpoint rows in `docs/`.
+
 ## Permission Catalog
 
 | Permission | Purpose |
@@ -80,6 +97,53 @@ Current enforced guardrails:
 | `POST` | `/api/v1/auth/change-password` | Authenticated | Changes current user's password |
 | `POST` | `/api/v1/client-logs` | Authenticated tenant user | Legacy frontend error/warning capture path |
 | `POST` | `/api/v1/error-logs/client` | Authenticated tenant user | Persistent frontend error/warning capture path |
+
+## Live Page and Filter Endpoints
+
+These endpoints back table pagination, adaptive filters, dropdown options, and list-builder screens. They are listed separately so a fresher can quickly understand that most modules expose three list shapes:
+
+- Plain list: `/resource`
+- Paginated list: `/resource/page`
+- Filter metadata: `/resource/filter-options`
+
+When adding a new list route, document all three shapes here or in the owning module section. The backend test `backend/tests/test_api_docs.py` compares live FastAPI routes with this documentation.
+
+| Method | Endpoint | Permission | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/appointments/filter-options` | `appointments.manage` or `appointments.read` | Filter metadata for appointment tables |
+| `GET` | `/api/v1/billing/discount-offers/filter-options` | `billing.manage` or `billing.read` | Discount offer filter metadata |
+| `GET` | `/api/v1/billing/discount-offers/page` | `billing.manage` or `billing.read` | Paginated discount offer list |
+| `GET` | `/api/v1/billing/invoices/filter-options` | `billing.manage`, `invoices.read`, or billing read role | Invoice filter metadata |
+| `GET` | `/api/v1/billing/tax-rules/filter-options` | `billing.manage` or settings/billing read access | Tax rule filter metadata |
+| `GET` | `/api/v1/billing/tax-rules/page` | `billing.manage` or settings/billing read access | Paginated tax rule list |
+| `GET` | `/api/v1/consultations/filter-options` | `consultations.read` | Consultation filter metadata |
+| `GET` | `/api/v1/consultations/page` | `consultations.read` | Paginated consultation list |
+| `GET` | `/api/v1/expenses/filter-options` | `expenses.manage` or `expenses.read` | Expense filter metadata |
+| `GET` | `/api/v1/home-care/services/filter-options` | `home_care.read` or `home_care.manage` | Home-care service filter metadata |
+| `GET` | `/api/v1/home-care/services/page` | `home_care.read` or `home_care.manage` | Paginated home-care service catalog |
+| `GET` | `/api/v1/lab/catalog/packages/filter-options` | `lab.manage` or `lab.read` | Lab package filter metadata |
+| `GET` | `/api/v1/lab/catalog/packages/page` | `lab.manage` or `lab.read` | Paginated lab package catalog |
+| `GET` | `/api/v1/lab/catalog/tests/filter-options` | `lab.manage` or `lab.read` | Lab test filter metadata |
+| `GET` | `/api/v1/lab/catalog/tests/page` | `lab.manage` or `lab.read` | Paginated lab test catalog |
+| `GET` | `/api/v1/lab/orders/filter-options` | `lab.manage` or `lab.read` | Lab order filter metadata |
+| `GET` | `/api/v1/lab/orders/page` | `lab.manage` or `lab.read` | Paginated lab order list |
+| `GET` | `/api/v1/patients/filter-options` | `patients.read` | Patient filter metadata |
+| `GET` | `/api/v1/pharmacy/issues/filter-options` | `pharmacy.manage` or `pharmacy.read` | Pharmacy issue filter metadata |
+| `GET` | `/api/v1/pharmacy/issues/page` | `pharmacy.manage` or `pharmacy.read` | Paginated pharmacy issue list |
+| `GET` | `/api/v1/pharmacy/medicines/filter-options` | `pharmacy.manage` or `pharmacy.read` | Medicine filter metadata |
+| `GET` | `/api/v1/pharmacy/medicines/page` | `pharmacy.manage` or `pharmacy.read` | Paginated medicine catalog |
+| `GET` | `/api/v1/pharmacy/suppliers/filter-options` | Supplier, pharmacy, billing, lab, service item, or settings read access | Supplier filter metadata |
+| `GET` | `/api/v1/pharmacy/suppliers/page` | Supplier, pharmacy, billing, lab, service item, or settings read access | Paginated supplier catalog |
+| `GET` | `/api/v1/physiotherapy/equipment/filter-options` | `physiotherapy.read` | Physiotherapy equipment filter metadata |
+| `GET` | `/api/v1/physiotherapy/equipment/page` | `physiotherapy.read` | Paginated physiotherapy equipment catalog |
+| `GET` | `/api/v1/practitioners/filter-options` | Practitioner or appointment/scheduling read access | Practitioner filter metadata |
+| `GET` | `/api/v1/practitioners/page` | Practitioner or appointment/scheduling read access | Paginated practitioner list |
+| `GET` | `/api/v1/practitioners/schedules/filter-options` | `scheduling.manage` or `scheduling.read` | Schedule filter metadata |
+| `GET` | `/api/v1/practitioners/schedules/page` | `scheduling.manage` or `scheduling.read` | Paginated schedule list |
+| `GET` | `/api/v1/tenants/{tenant_id}/branches/filter-options` | `settings.manage` or tenant admin/super admin access | Branch filter metadata |
+| `GET` | `/api/v1/tenants/{tenant_id}/branches/page` | `settings.manage` or tenant admin/super admin access | Paginated branch list |
+| `GET` | `/api/v1/tenants/{tenant_id}/departments/filter-options` | `settings.manage` or tenant admin/super admin access | Department filter metadata |
+| `GET` | `/api/v1/tenants/{tenant_id}/departments/page` | `settings.manage` or tenant admin/super admin access | Paginated department list |
 
 ## Error Logs
 

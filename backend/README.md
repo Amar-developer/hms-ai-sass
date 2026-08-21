@@ -130,7 +130,7 @@ For a clean local development reset, delete all rows and recreate only the fresh
 MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV python -m scripts.reset_demo_data
 ```
 
-The reset script reads optional `MEDIZINHUB_SUPER_ADMIN_NAME`, `MEDIZINHUB_SUPER_ADMIN_EMAIL`, and `MEDIZINHUB_SUPER_ADMIN_PASSWORD` values. It does not create demo tenants, branches, patients, doctors, appointments, invoices, or staff users.
+The reset script reads optional `MEDIZINHUB_SUPER_ADMIN_NAME` and `MEDIZINHUB_SUPER_ADMIN_EMAIL` values. `MEDIZINHUB_SUPER_ADMIN_PASSWORD` is optional only for local/development resets, where the script falls back to `ChangeMe@123`; production requires both `MEDIZINHUB_SUPER_ADMIN_PASSWORD` and `MEDIZINHUB_SUPER_ADMIN_CONFIRM=RESET_SUPER_ADMIN_PRODUCTION`. It does not create demo tenants, branches, patients, doctors, appointments, invoices, or staff users.
 
 ## Useful API Groups
 

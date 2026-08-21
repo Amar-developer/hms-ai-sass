@@ -37,11 +37,13 @@ jobs:
       CACHE_VERSION: v1
     outputs:
       frontend_key: ${{ steps.keys.outputs.frontend }}
-      backend_key: ${{ steps.keys.outputs.backend }}
+      backend_fast_key: ${{ steps.keys.outputs.backend_fast }}
+      backend_full_key: ${{ steps.keys.outputs.backend_full }}
       backend_e2e_key: ${{ steps.keys.outputs.backend_e2e }}
       docker_key: ${{ steps.keys.outputs.docker }}
       frontend_done: ${{ steps.frontend.outputs.cache-hit }}
-      backend_done: ${{ steps.backend.outputs.cache-hit }}
+      backend_fast_done: ${{ steps.backend_fast.outputs.cache-hit }}
+      backend_full_done: ${{ steps.backend_full.outputs.cache-hit }}
       backend_e2e_done: ${{ steps.backend_e2e.outputs.cache-hit }}
       docker_done: ${{ steps.docker.outputs.cache-hit }}
     steps:
@@ -61,7 +63,8 @@ jobs:
           v="${CACHE_VERSION}"
           {
             echo "frontend=pass-$v-frontend-$ci-$fe"
-            echo "backend=pass-$v-backend-$ci-$be"
+            echo "backend_fast=pass-$v-backend-fast-$ci-$be"
+            echo "backend_full=pass-$v-backend-full-$ci-$be"
             echo "backend_e2e=pass-$v-backend-e2e-$ci-$be"
             echo "docker=pass-$v-docker-$ci-$fe-$be-$img"
           } >> "$GITHUB_OUTPUT"
@@ -74,12 +77,20 @@ jobs:
           key: ${{ steps.keys.outputs.frontend }}
           lookup-only: true
 
-      - name: Backend already green?
-        id: backend
+      - name: Backend fast already green?
+        id: backend_fast
         uses: actions/cache/restore@v4
         with:
           path: .ci-pass
-          key: ${{ steps.keys.outputs.backend }}
+          key: ${{ steps.keys.outputs.backend_fast }}
+          lookup-only: true
+
+      - name: Backend full already green?
+        id: backend_full
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-pass
+          key: ${{ steps.keys.outputs.backend_full }}
           lookup-only: true
 
       - name: Backend E2E already green?
@@ -101,7 +112,8 @@ jobs:
       - name: Summary
         run: |
           echo "frontend      already green: ${{ steps.frontend.outputs.cache-hit == 'true' }}"
-          echo "backend       already green: ${{ steps.backend.outputs.cache-hit == 'true' }}"
+          echo "backend-fast  already green: ${{ steps.backend_fast.outputs.cache-hit == 'true' }}"
+          echo "backend-full  already green: ${{ steps.backend_full.outputs.cache-hit == 'true' }}"
           echo "backend-e2e   already green: ${{ steps.backend_e2e.outputs.cache-hit == 'true' }}"
           echo "docker        already green: ${{ steps.docker.outputs.cache-hit == 'true' }}"
 
@@ -165,10 +177,12 @@ jobs:
           echo "Required frontend checks still run in the Frontend job: npm test, npm run typecheck, and npm run build."
           echo "Run the real Playwright suite manually from Actions → Frontend E2E Cross Browser when browser coverage is needed."
 
-  backend:
-    name: Backend
+  backend-fast:
+    name: Backend Fast
     needs: plan
-    if: needs.plan.outputs.backend_done != 'true'
+    if: >-
+      github.event_name == 'pull_request' &&
+      needs.plan.outputs.backend_fast_done != 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -214,7 +228,72 @@ jobs:
           PYTHONPATH: .
         run: alembic -c alembic/alembic.ini upgrade head
 
-      - name: Test
+      - name: Fast tests
+        run: pytest backend/tests -q -m "unit and not e2e"
+
+      # Only reached when every step above succeeded, so the marker means
+      # "this exact tree passed". A failing run writes nothing and the suite
+      # runs again next push.
+      - name: Mark suite green
+        run: 'mkdir -p .ci-pass && date -u > .ci-pass/passed-at'
+      - uses: actions/cache/save@v4
+        with:
+          path: .ci-pass
+          key: ${{ needs.plan.outputs.backend_fast_key }}
+
+  backend-full:
+    name: Backend Full
+    needs: plan
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main') &&
+      needs.plan.outputs.backend_full_done != 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: medizinhub_hms
+          POSTGRES_USER: medizinhub
+          POSTGRES_PASSWORD: medizinhub_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medizinhub -d medizinhub_hms"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check backend/app backend/tests backend/e2e backend/scripts
+
+      - name: Check Alembic migrations on PostgreSQL
+        working-directory: backend
+        env:
+          MEDIZINHUB_DATABASE_URL: postgresql+psycopg://medizinhub:medizinhub_ci@127.0.0.1:5432/medizinhub_hms
+          # alembic/env.py imports `app.core.database`; unlike pytest (which
+          # auto-adds backend/ to sys.path via tests/conftest.py), the plain
+          # `alembic` console script needs PYTHONPATH set explicitly.
+          PYTHONPATH: .
+        run: alembic -c alembic/alembic.ini upgrade head
+
+      - name: Full tests
         run: pytest backend/tests -q
 
       # Only reached when every step above succeeded, so the marker means
@@ -225,12 +304,15 @@ jobs:
       - uses: actions/cache/save@v4
         with:
           path: .ci-pass
-          key: ${{ needs.plan.outputs.backend_key }}
+          key: ${{ needs.plan.outputs.backend_full_key }}
 
   backend-e2e:
     name: Backend E2E
     needs: plan
-    if: needs.plan.outputs.backend_e2e_done != 'true'
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main') &&
+      needs.plan.outputs.backend_e2e_done != 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -333,7 +415,16 @@ jobs:
   # exact code"; only a real failure or cancellation fails the gate.
   gate:
     name: CI
-    needs: [plan, frontend, frontend-e2e, backend, backend-e2e, docker]
+    needs:
+      [
+        plan,
+        frontend,
+        frontend-e2e,
+        backend-fast,
+        backend-full,
+        backend-e2e,
+        docker,
+      ]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -346,20 +437,22 @@ jobs:
           PLAN: ${{ needs.plan.result }}
           FRONTEND: ${{ needs.frontend.result }}
           FRONTEND_E2E: ${{ needs['frontend-e2e'].result }}
-          BACKEND: ${{ needs.backend.result }}
+          BACKEND_FAST: ${{ needs['backend-fast'].result }}
+          BACKEND_FULL: ${{ needs['backend-full'].result }}
           BACKEND_E2E: ${{ needs['backend-e2e'].result }}
           DOCKER: ${{ needs.docker.result }}
         run: |
           set -euo pipefail
           failed=""
           for entry in "Plan suites|$PLAN" "Frontend|$FRONTEND" \
-                       "Frontend E2E|$FRONTEND_E2E" "Backend|$BACKEND" \
+                       "Frontend E2E|$FRONTEND_E2E" "Backend Fast|$BACKEND_FAST" \
+                       "Backend Full|$BACKEND_FULL" \
                        "Backend E2E|$BACKEND_E2E" "Docker Images|$DOCKER"; do
             name="${entry%%|*}"
             result="${entry##*|}"
             case "$result" in
               success) echo "  PASS     $name" ;;
-              skipped) echo "  SKIPPED  $name (already green for this code)" ;;
+              skipped) echo "  SKIPPED  $name (cached green or not required for this event)" ;;
               *)       echo "  FAILED   $name ($result)"; failed="$failed $name" ;;
             esac
           done
