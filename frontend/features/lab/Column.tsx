@@ -58,12 +58,7 @@ export function getLabColumns({
             allowed={canCopyIds}
             value={o.lab_order_number || publicDisplayValue(o.id, "Lab Order")}
           />
-          <p className="text-xs text-slate-500">
-            {new Date(o.created_at).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </p>
+
         </div>
       ),
     },

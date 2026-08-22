@@ -204,7 +204,7 @@ function pendingPrescriptionCount({
 }
 
 export function OPDWorkspace({
-  section = "consultation",
+  section = "appointments",
   appointmentId = "",
   setActive,
   ...workspace
@@ -372,7 +372,12 @@ export function OPDWorkspace({
     });
   }, [effectiveSection]);
 
-  const openSection = (path: string) => router.push(path);
+  const openSection = (path: string) => {
+    router.push(path);
+    requestAnimationFrame(() =>
+      window.scrollTo({ top: 0, behavior: "smooth" }),
+    );
+  };
   const openAppointment = (id: string) => {
     if (!id) return;
     const appointment = (workspace.appointments || []).find(

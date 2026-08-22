@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { FileText } from "lucide-react";
 import {
   fileCategoryOptions,
   doctypeFetchPaths,
@@ -674,6 +675,9 @@ export function FilesPanel({
             columns={fileColumns}
             data={pagedFiles}
             emptyMessage="No files found."
+            emptyDescription="Files uploaded or synced for this tenant will show up here."
+            emptyIcon={FileText}
+            minBodyHeight="220px"
             paginate={false}
           />
         </div>

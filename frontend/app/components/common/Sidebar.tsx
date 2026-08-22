@@ -23,7 +23,7 @@ interface SidebarProps {
   tenantAdminSection: string;
   setTenantAdminSection: any;
   clinicSection: string;
-  setClinicSection:any;
+  setClinicSection: any;
   superAdminSettingsOpen: boolean;
   setSuperAdminSettingsOpen: any;
 
@@ -110,7 +110,6 @@ export function Sidebar(props: SidebarProps) {
 
     setPopupMenu(menu);
   };
-
 
   return (
     <aside
@@ -413,7 +412,9 @@ export function Sidebar(props: SidebarProps) {
                   <div className="flex items-center gap-3">
                     <Hospital size={22} />
                     {!props.tabletCollapsed && (
-                      <span className="truncate text-xs">{label}</span>
+                      <span className="truncate text-xs font-semibold">
+                        {label}
+                      </span>
                     )}
                   </div>
 
@@ -579,17 +580,19 @@ export function Sidebar(props: SidebarProps) {
   `}
                 >
                   <Icon size={18} />
-                  {!props.tabletCollapsed && (
-                    <span className="min-w-0 flex truncate text-xs">
-                      {label}
-                    </span>
-                  )}
-                  {!props.tabletCollapsed && (
-                    <ChevronDown
-                      size={16}
-                      className={props.reportsOpen ? "rotate-180" : ""}
-                    />
-                  )}
+                  <div className="flex">
+                    {!props.tabletCollapsed && (
+                      <span className="min-w-0 flex truncate text-xs font-semibold">
+                        {label}
+                      </span>
+                    )}
+                    {!props.tabletCollapsed && (
+                      <ChevronDown
+                        size={16}
+                        className={props.reportsOpen ? "rotate-180" : ""}
+                      />
+                    )}
+                  </div>
                 </button>
                 {props.tabletCollapsed && popupMenu === "reports" && (
                   <div
@@ -671,7 +674,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${isActive ? "w-
               <Icon size={22} title={label} />
               {!props.tabletCollapsed && (
                 <span
-                  className={`truncate text-xs ${isActive ? "w-full text-left font-bold text-brand-fg" : ""}`}
+                  className={`truncate text-xs font-semibold ${isActive ? "w-full text-left font-bold text-brand-fg" : ""}`}
                 >
                   {label}
                 </span>

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { FlaskConical, Plus, Trash2 } from "lucide-react";
+import { newSegment } from "@/lib/routeSlugs";
 import {
   ActionButton,
   Button,
@@ -67,7 +69,9 @@ export function Lab({
   numberingRules,
   onConsultationPendingCountChange,
   workspaceMode = "direct",
+  view = "list",
 }: any) {
+  const router = useRouter();
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const {
     orders,
@@ -157,7 +161,10 @@ export function Lab({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [page, setPage] = useState(1);
   const [worklistQuery, setWorklistQuery] = useState("");
-  const [worklistSort, setWorklistSort] = useState<SortState | null>(null);
+  const [worklistSort, setWorklistSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
   const [worklistQueryFilters, setWorklistQueryFilters] = useState<
     QueryFilterRow[]
   >([]);
@@ -523,6 +530,12 @@ export function Lab({
     load,
   });
 
+  async function submitLabOrder(data: any) {
+    const ok = await handleCreateOrder(data);
+    if (ok) router.push("/lab");
+    return ok;
+  }
+
   function addOrderTest() {
     const t = selectedAvailableTest;
     const name = t?.item_name || t?.name || testSearch.trim();
@@ -747,6 +760,69 @@ export function Lab({
     );
   }
 
+  if (view === "create" && canCreateLabOrder) {
+    return (
+      <div className="space-y-4">
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        <button
+          type="button"
+          onClick={() => router.push("/lab")}
+          className="close-button font-bold"
+        >
+          Back to Worklist
+        </button>
+        <Card className="p-0">
+          <h3 className="card-title font-bold">
+            Create Direct Lab &amp; Service Order
+          </h3>
+          <LabOrderForm
+            apiSession={apiSession}
+            patients={patients}
+            busy={busy === "create"}
+            testOptions={testOptions}
+            testSearch={testSearch}
+            selectedAvailableTestId={selectedAvailableTestId}
+            onTestSearchChange={(text: string) => {
+              setTestSearch(text);
+              if (!text) setSelectedAvailableTestId("");
+            }}
+            onTestSelect={(id: string, test: any) => {
+              setSelectedAvailableTestId(id);
+              setTestSearch(test?.item_name || test?.name || "");
+            }}
+            onUseTypedTest={(text: string) => {
+              setSelectedAvailableTestId("");
+              setTestSearch(text);
+            }}
+            getTestSearchText={(test: any) =>
+              [
+                test?.item_name,
+                test?.name,
+                test?.sample_type,
+                test?.category,
+                test?.kind,
+                test?.description,
+                test?.code,
+                test?.slug,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            }
+            testLoading={testLoading}
+            selectedSupplierName={selectedSupplierName}
+            selectedSupplierPrice={formatPrice(selectedSupplierPrice)}
+            selectedTestMrp={formatPrice(selectedTestMrp)}
+            selectedTestSelling={formatPrice(selectedTestSelling)}
+            onAddTest={addOrderTest}
+            orderTests={orderTests}
+            onRemoveTest={removeOrderTest}
+            onSubmit={submitLabOrder}
+          />
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="">
       {selectedOrder && (
@@ -847,59 +923,19 @@ export function Lab({
           />
         </div>
       </BreadcrumbSlot>
-      {canCreateLabOrder && (
-        <Card className="p-0 ">
-          <h3 className="card-title font-bold">
-            Create Direct Lab &amp; Service Order
-          </h3>
-          <LabOrderForm
-            apiSession={apiSession}
-            patients={patients}
-            busy={busy === "create"}
-            testOptions={testOptions}
-            testSearch={testSearch}
-            selectedAvailableTestId={selectedAvailableTestId}
-            onTestSearchChange={(text: string) => {
-              setTestSearch(text);
-              if (!text) setSelectedAvailableTestId("");
-            }}
-            onTestSelect={(id: string, test: any) => {
-              setSelectedAvailableTestId(id);
-              setTestSearch(test?.item_name || test?.name || "");
-            }}
-            onUseTypedTest={(text: string) => {
-              setSelectedAvailableTestId("");
-              setTestSearch(text);
-            }}
-            getTestSearchText={(test: any) =>
-              [
-                test?.item_name,
-                test?.name,
-                test?.sample_type,
-                test?.category,
-                test?.kind,
-                test?.description,
-                test?.code,
-                test?.slug,
-              ]
-                .filter(Boolean)
-                .join(" ")
-            }
-            testLoading={testLoading}
-            selectedSupplierName={selectedSupplierName}
-            selectedSupplierPrice={formatPrice(selectedSupplierPrice)}
-            selectedTestMrp={formatPrice(selectedTestMrp)}
-            selectedTestSelling={formatPrice(selectedTestSelling)}
-            onAddTest={addOrderTest}
-            orderTests={orderTests}
-            onRemoveTest={removeOrderTest}
-            onSubmit={handleCreateOrder}
-          />
-        </Card>
-      )}
       <Card className="mt-5">
         <div className="flex items-center justify-between gap-2">
           <h3 className="card-title font-bold">Lab / Service Worklist</h3>
+          {canCreateLabOrder && (
+            <button
+              type="button"
+              onClick={() => router.push(`/lab/${newSegment("lab-order")}`)}
+              className="primary-action gap-2 px-4 py-3 text-xs"
+            >
+              <Plus size={16} />
+              Create Lab Order
+            </button>
+          )}
         </div>
         <div className="mt-4">
           {!ordersLoaded || labOrderLoading ? (
@@ -911,6 +947,9 @@ export function Lab({
               columns={worklistColumns}
               data={labPageRows}
               emptyMessage="No lab orders match your filters."
+              emptyDescription="Lab and service orders created for patients will show up here."
+              emptyIcon={FlaskConical}
+              minBodyHeight="220px"
               onRowClick={setSelectedOrder}
               sort={worklistSort ?? undefined}
               onSortChange={setWorklistSort}

@@ -1,3 +1,4 @@
+import { HeartPulse } from "lucide-react";
 import CollapsibleReportSection from "./CollapsibleReportSection";
 import { HomeCareReportsProps } from "../types";
 import { DataTable } from "@/app/components/common/DataTable";
@@ -157,6 +158,9 @@ const HomeCareReports = ({
           onRowClick={(row: any) => onOpenInvoices(row.invoiceIds)}
           paginate
           emptyMessage="No paid home care or home visit invoices match this filter."
+          emptyDescription="Home care and home visit invoices will show up here once payments are recorded."
+          emptyIcon={HeartPulse}
+          minBodyHeight="220px"
           className="w-full min-w-[1280px] text-left text-sm"
           loading={loading}
         />

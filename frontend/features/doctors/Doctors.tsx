@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Stethoscope } from "lucide-react";
 import { newSegment, editSegment } from "@/lib/routeSlugs";
 import {
   Card,
@@ -402,6 +402,9 @@ export function Doctors({
             data={pageRows}
             loading={listLoading || pageLoading || pageFetching}
             emptyMessage="No doctors match your search."
+            emptyDescription="Doctors added to this clinic will show up here."
+            emptyIcon={Stethoscope}
+            minBodyHeight="220px"
             onRowClick={(row: any) => open("edit", row.id)}
             sort={sort ?? undefined}
             onSortChange={setSort}

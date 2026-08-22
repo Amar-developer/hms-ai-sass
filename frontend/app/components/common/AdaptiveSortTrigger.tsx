@@ -66,90 +66,95 @@ export function AdaptiveSortTrigger({
 
   return (
     <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-[12px] font-bold transition ${
+      <div
+        className={`inline-flex items-stretch overflow-hidden rounded-md border text-[12px] font-bold transition ${
           sort
             ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            : "border-slate-200 bg-white text-slate-600"
         }`}
       >
-        {sort?.dir === "desc" ? (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="lucide lucide-list-sort-descending-icon lucide-list-sort-descending"
-          >
-            <path d="M15 12H3" />
-            <path d="M3 5h18" />
-            <path d="M9 19H3" />
-          </svg>
-        ) : sort?.dir === "asc" ? (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="lucide lucide-list-sort-ascending-icon lucide-list-sort-ascending"
-          >
-            <path d="M3 19h18" />
-            <path d="M15 12H3" />
-            <path d="M9 5H3" />
-          </svg>
-        ) : (
-          <ArrowUpDown size={13} />
-        )}
-        {activeLabel ?? "Sort"}
-      </button>
+        <button
+          type="button"
+          onClick={toggleDir}
+          disabled={!sort}
+          title={
+            sort?.dir === "desc" ? "Sorted descending" : "Sorted ascending"
+          }
+          className={`flex shrink-0 items-center justify-center px-2.5 py-2 disabled:cursor-not-allowed disabled:opacity-40 ${
+            sort ? "hover:bg-emerald-100" : "hover:bg-slate-50"
+          }`}
+        >
+          {sort?.dir === "desc" ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="lucide lucide-list-sort-descending-icon lucide-list-sort-descending"
+            >
+              <path d="M15 12H3" />
+              <path d="M3 5h18" />
+              <path d="M9 19H3" />
+            </svg>
+          ) : sort?.dir === "asc" ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="lucide lucide-list-sort-ascending-icon lucide-list-sort-ascending"
+            >
+              <path d="M3 19h18" />
+              <path d="M15 12H3" />
+              <path d="M9 5H3" />
+            </svg>
+          ) : (
+            <ArrowUpDown size={13} />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={`flex items-center gap-1.5 border-l px-2.5 py-2 ${
+            sort
+              ? "border-emerald-200 hover:bg-emerald-100"
+              : "border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          {activeLabel ?? "Sort"}
+        </button>
+      </div>
 
       {open && (
         <div className="absolute right-0 z-40 mt-2 w-64 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
-          <div className="flex items-stretch gap-2">
-            <SearchableSelect
-              name="sort-field"
-              value={sort?.key ?? ""}
-              onChange={handleField}
-              options={[
-                { value: "", label: "None" },
-                ...fields.map((field) => ({
-                  value: field.key,
-                  label: field.label,
-                })),
-              ]}
-              searchable={false}
-              placeholder="None"
-              className="w-full"
-              text="text-xs"
-            />
-            <button
-              type="button"
-              onClick={toggleDir}
-              disabled={!sort}
-              title={
-                sort?.dir === "desc" ? "Sorted descending" : "Sorted ascending"
-              }
-              className="flex shrink-0 items-center justify-center rounded-lg border border-slate-200 px-3 text-slate-500 hover:text-slate-900 disabled:opacity-40"
-            >
-              {sort?.dir === "desc" ? (
-                <ArrowDown size={16} />
-              ) : (
-                <ArrowUp size={16} />
-              )}
-            </button>
-          </div>
+          <SearchableSelect
+            name="sort-field"
+            value={sort?.key ?? ""}
+            onChange={handleField}
+            options={[
+              { value: "", label: "None" },
+              ...fields.map((field) => ({
+                value: field.key,
+                label: field.label,
+              })),
+            ]}
+            searchable={false}
+            placeholder="None"
+            className="w-full"
+            text="text-xs"
+            autoOpen
+          />
         </div>
       )}
     </div>

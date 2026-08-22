@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, RefreshCw } from "lucide-react";
+import { ChevronDown, MessageCircle, RefreshCw } from "lucide-react";
 
 import { FormField } from "@/app/components/FormElements";
 import { Badge, Card, Input } from "@/app/components/common/ui";
@@ -409,6 +409,9 @@ export function WhatsAppDeliveryQueue({
               data={data.items}
               loading={busy && data.items.length === 0}
               emptyMessage="No delivery records match these filters."
+              emptyDescription="WhatsApp notifications queued, sent, or failed for this tenant will show up here."
+              emptyIcon={MessageCircle}
+              minBodyHeight="220px"
               className="min-w-[940px] text-xs"
             />
           </div>

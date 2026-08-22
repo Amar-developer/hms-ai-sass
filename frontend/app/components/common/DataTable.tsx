@@ -9,6 +9,9 @@ export function DataTable<T>({
   columns,
   data,
   emptyMessage = "No data found",
+  emptyDescription,
+  emptyIcon: EmptyIcon,
+  minBodyHeight,
   className,
   tableClassName,
   rowClassName,
@@ -44,7 +47,10 @@ export function DataTable<T>({
 
   return (
     <div className={className}>
-      <div className="overflow-auto scrollbar-thin rounded-lg border">
+      <div
+        className="overflow-auto scrollbar-thin rounded-lg border border-slate-300"
+        style={minBodyHeight ? { minHeight: minBodyHeight } : undefined}
+      >
         <table
           className={`w-full min-w-[920px] table-fixed text-left text-sm ${tableClassName ?? ""}`}
         >
@@ -90,11 +96,31 @@ export function DataTable<T>({
 
           {!loading && data.length === 0 && (
             <tr>
-              <td
-                colSpan={columns.length}
-                className="px-4 py-4 text-xs text-slate-500"
-              >
-                {emptyMessage}
+              <td colSpan={columns.length} className="p-0">
+                {EmptyIcon || emptyDescription || minBodyHeight ? (
+                  <div
+                    className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center"
+                    style={
+                      minBodyHeight ? { minHeight: minBodyHeight } : undefined
+                    }
+                  >
+                    {EmptyIcon && (
+                      <EmptyIcon className="h-8 w-8 text-slate-300" />
+                    )}
+                    <p className="text-sm font-bold text-slate-600">
+                      {emptyMessage}
+                    </p>
+                    {emptyDescription && (
+                      <p className="max-w-xs text-xs text-slate-400">
+                        {emptyDescription}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="px-4 py-4 text-xs text-slate-500">
+                    {emptyMessage}
+                  </div>
+                )}
               </td>
             </tr>
           )}

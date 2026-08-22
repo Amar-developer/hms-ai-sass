@@ -61,9 +61,7 @@ export function getBillingTableSchema({
       { key: "total_amount", label: "Total" },
       { key: "paid_amount", label: "Paid" },
       { key: "due", label: "Due" },
-      { key: "created_at", label: "Created On" },
-      { key: "created_by_user_id", label: "Created By" },
-      { key: "updated_at", label: "Last Updated On" },
+      { key: "updated_at", label: "Last Modified" },
     ],
   };
 }

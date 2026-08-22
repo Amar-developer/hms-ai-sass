@@ -26,6 +26,7 @@ import { DataTable } from "@/app/components/common/DataTable";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { getPlanColumns, getSubscriptionColumns } from "./Column";
 import { subscriptin_status_options } from "../../constants";
+import { CreditCard, Receipt } from "lucide-react";
 
 
 
@@ -427,6 +428,9 @@ export function SubscriptionManagement({
                   ? "Loading subscriptions..."
                   : "No subscriptions match your search."
               }
+              emptyDescription="Tenant subscriptions assigned from plans will show up here."
+              emptyIcon={CreditCard}
+              minBodyHeight="220px"
             />
           </div>
           <Pagination
@@ -461,6 +465,9 @@ export function SubscriptionManagement({
                 columns={planColumns}
                 data={catalogPlans}
                 emptyMessage="No subscription plans found."
+                emptyDescription="Subscription plans created for the catalog will show up here."
+                emptyIcon={Receipt}
+                minBodyHeight="220px"
               />
             </div>
           </div>

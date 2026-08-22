@@ -773,8 +773,9 @@ export function SearchableSelect<T = string>({
   error,
   loading = false,
   onSearchChange,
+  autoOpen = false,
 }: SearchableSelectProps<T>) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [query, setQuery] = useState("");
   const [menuPosition, setMenuPosition] = useState({
     left: 0,

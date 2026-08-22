@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Pill, Plus, Stethoscope } from "lucide-react";
+import { newSegment } from "@/lib/routeSlugs";
 import {
   Button,
   Card,
@@ -51,7 +54,9 @@ export function Pharmacy({
   numberingRules,
   onConsultationPendingCountChange,
   workspaceMode = "direct",
+  view = "list",
 }: any) {
+  const router = useRouter();
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [patientId, setPatientId] = useState("");
   const [source, setSource] = useState("op_direct");
@@ -102,7 +107,10 @@ export function Pharmacy({
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [worklistQuery, setWorklistQuery] = useState("");
-  const [worklistSort, setWorklistSort] = useState<SortState | null>(null);
+  const [worklistSort, setWorklistSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
   const [worklistQueryFilters, setWorklistQueryFilters] = useState<
     QueryFilterRow[]
   >([]);
@@ -443,6 +451,7 @@ export function Pharmacy({
       setPage(1);
       void loadPharmacyIssuePage(1);
       void loadPharmacyFilterOptions();
+      router.push("/pharmacy");
     }
   }
 
@@ -573,6 +582,9 @@ export function Pharmacy({
               columns={prescriptionColumns}
               data={visiblePrescriptions}
               emptyMessage="No consultation prescriptions are waiting."
+              emptyDescription="Prescriptions from signed OPD consultations will show up here."
+              emptyIcon={Stethoscope}
+              minBodyHeight="220px"
               rowClassName="hover:bg-emerald-50/30"
               onRowClick={(row: any) => setViewConsult(row)}
             />
@@ -582,97 +594,17 @@ export function Pharmacy({
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {selectedIssue && (
-        <MedicineDetailModal
-          issue={selectedIssue}
-          apiSession={apiSession}
-          patient={
-            selectedIssue.patient_name ||
-            (patientMap.get(selectedIssue.patient_id) as any)?.name ||
-            publicDisplayValue(selectedIssue.patient_id, "Patient")
-          }
-          onClose={() => setSelectedIssue(null)}
-        />
-      )}
-      {viewConsult && (
-        <ConsultPrescriptionModal
-          a={viewConsult}
-          detail={consultDetail}
-          loading={loadingDetail}
-          busy={busy}
-            onClose={() => setViewConsult(null)}
-            onCreate={(a: any, pricePayload?: any) => {
-              setViewConsult(null);
-              createFromConsultation(a, pricePayload);
-            }}
-        />
-      )}
-      <StatusToast message={message} onClose={() => setMessage("")} />
-      <BreadcrumbSlot>
-        <div className="flex items-center gap-2">
-          <AdaptiveResultCount
-            shown={pharmacyPageRows.length}
-            total={issueTotal}
-            noun="issues"
-          />
-          <RefreshButton
-            onRefresh={refreshPharmacyWorkspace}
-            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
-          />
-          <AdaptiveFilterTrigger
-            schema={pharmacySchema}
-            query={worklistQuery}
-            setQuery={setWorklistQuery}
-            filterValues={{}}
-            sort={worklistSort}
-            onSortChange={setWorklistSort}
-            showSort={false}
-            onReset={resetWorklistFilters}
-            queryFields={pharmacyQueryFields}
-            queryFilters={worklistQueryFilters}
-            onQueryFiltersChange={setWorklistQueryFilters}
-          >
-            <FormField label="Price Min">
-              <Input
-                type="number"
-                value={amountMin}
-                onChange={(e: any) => setAmountMin(e.target.value)}
-                placeholder="Min amount"
-              />
-            </FormField>
-            <FormField label="Price Max">
-              <Input
-                type="number"
-                value={amountMax}
-                onChange={(e: any) => setAmountMax(e.target.value)}
-                placeholder="Max amount"
-              />
-            </FormField>
-            <FormField label="From">
-              <Input
-                type="date"
-                value={worklistFromDate}
-                onChange={(e: any) => setWorklistFromDate(e.target.value)}
-              />
-            </FormField>
-            <FormField label="To">
-              <Input
-                type="date"
-                value={worklistToDate}
-                onChange={(e: any) => setWorklistToDate(e.target.value)}
-              />
-            </FormField>
-          </AdaptiveFilterTrigger>
-          <AdaptiveSortTrigger
-            fields={pharmacySchema.sortFields}
-            sort={worklistSort}
-            onSortChange={setWorklistSort}
-          />
-        </div>
-      </BreadcrumbSlot>
-      {canCreatePharmacyIssue && (
+  if (view === "create" && canCreatePharmacyIssue) {
+    return (
+      <div className="space-y-4">
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        <button
+          type="button"
+          onClick={() => router.push("/pharmacy")}
+          className="close-button font-bold"
+        >
+          Back to Worklist
+        </button>
         <Card className="p-0">
           <h3 className="card-title font-bold">
             Create Direct Prescription Order
@@ -770,10 +702,7 @@ export function Pharmacy({
               >
                 Add
               </button>
-              <Button
-                disabled={busy === "create"}
-                className="save-button"
-              >
+              <Button disabled={busy === "create"} className="save-button">
                 {busy === "create" ? "Saving..." : "Create Order"}
               </Button>
             </div>
@@ -794,10 +723,115 @@ export function Pharmacy({
             )}
           </form>
         </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {selectedIssue && (
+        <MedicineDetailModal
+          issue={selectedIssue}
+          apiSession={apiSession}
+          patient={
+            selectedIssue.patient_name ||
+            (patientMap.get(selectedIssue.patient_id) as any)?.name ||
+            publicDisplayValue(selectedIssue.patient_id, "Patient")
+          }
+          onClose={() => setSelectedIssue(null)}
+        />
       )}
+      {viewConsult && (
+        <ConsultPrescriptionModal
+          a={viewConsult}
+          detail={consultDetail}
+          loading={loadingDetail}
+          busy={busy}
+            onClose={() => setViewConsult(null)}
+            onCreate={(a: any, pricePayload?: any) => {
+              setViewConsult(null);
+              createFromConsultation(a, pricePayload);
+            }}
+        />
+      )}
+      <StatusToast message={message} onClose={() => setMessage("")} />
+      <BreadcrumbSlot>
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={pharmacyPageRows.length}
+            total={issueTotal}
+            noun="issues"
+          />
+          <RefreshButton
+            onRefresh={refreshPharmacyWorkspace}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={pharmacySchema}
+            query={worklistQuery}
+            setQuery={setWorklistQuery}
+            filterValues={{}}
+            sort={worklistSort}
+            onSortChange={setWorklistSort}
+            showSort={false}
+            onReset={resetWorklistFilters}
+            queryFields={pharmacyQueryFields}
+            queryFilters={worklistQueryFilters}
+            onQueryFiltersChange={setWorklistQueryFilters}
+          >
+            <FormField label="Price Min">
+              <Input
+                type="number"
+                value={amountMin}
+                onChange={(e: any) => setAmountMin(e.target.value)}
+                placeholder="Min amount"
+              />
+            </FormField>
+            <FormField label="Price Max">
+              <Input
+                type="number"
+                value={amountMax}
+                onChange={(e: any) => setAmountMax(e.target.value)}
+                placeholder="Max amount"
+              />
+            </FormField>
+            <FormField label="From">
+              <Input
+                type="date"
+                value={worklistFromDate}
+                onChange={(e: any) => setWorklistFromDate(e.target.value)}
+              />
+            </FormField>
+            <FormField label="To">
+              <Input
+                type="date"
+                value={worklistToDate}
+                onChange={(e: any) => setWorklistToDate(e.target.value)}
+              />
+            </FormField>
+          </AdaptiveFilterTrigger>
+          <AdaptiveSortTrigger
+            fields={pharmacySchema.sortFields}
+            sort={worklistSort}
+            onSortChange={setWorklistSort}
+          />
+        </div>
+      </BreadcrumbSlot>
       <Card className="p-0 mt-2">
         <div className="flex items-center justify-between gap-2">
           <h3 className="card-title font-bold">Pharmacy Worklist</h3>
+          {canCreatePharmacyIssue && (
+            <button
+              type="button"
+              onClick={() =>
+                router.push(`/pharmacy/${newSegment("pharmacy-order")}`)
+              }
+              className="primary-action gap-2 px-4 py-3 text-xs"
+            >
+              <Plus size={16} />
+              Create Prescription
+            </button>
+          )}
         </div>
         <div className="mt-4">
           {!issuesLoaded || issueLoading ? (
@@ -809,6 +843,9 @@ export function Pharmacy({
               columns={pharmacyColumns}
               data={pharmacyPageRows}
               emptyMessage="No pharmacy issues match your filters."
+              emptyDescription="Pharmacy issues created for patients will show up here."
+              emptyIcon={Pill}
+              minBodyHeight="220px"
               onRowClick={setSelectedIssue}
               sort={worklistSort ?? undefined}
               onSortChange={setWorklistSort}

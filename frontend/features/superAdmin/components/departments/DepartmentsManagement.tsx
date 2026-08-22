@@ -9,6 +9,7 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { FormField } from "@/app/components/FormElements";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getDepartmentColumns } from "./Column";
+import { Layers } from "lucide-react";
 
 export function DepartmentsManagement({
   tenants,
@@ -94,6 +95,9 @@ export function DepartmentsManagement({
                 columns={departmentColumns}
                 data={rows}
                 emptyMessage="No medical departments match your search."
+                emptyDescription="Medical departments created for this tenant will show up here."
+                emptyIcon={Layers}
+                minBodyHeight="220px"
                 onRowClick={(department) => {
                   setSelectedDepartmentId(department.id);
                   setSection("departmentEdit");

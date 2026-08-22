@@ -13,6 +13,7 @@ import {
 import { DataTable } from "@/app/components/common/DataTable";
 import { SortState } from "@/utils/types";
 import { getRoleColumns } from "./Column";
+import { ShieldCheck } from "lucide-react";
 import { status_options } from "../../constants";
 
 const filterConfigs: FilterConfig[] = [
@@ -190,6 +191,9 @@ export function RolesManagement({
               data={rows}
               loading={busy && rows.length === 0}
               emptyMessage="No roles match your search."
+              emptyDescription="Roles created for this tenant will show up here."
+              emptyIcon={ShieldCheck}
+              minBodyHeight="220px"
               onRowClick={(role) => openRole(role)}
               sort={sort}
               onSortChange={setSort}

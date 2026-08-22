@@ -23,7 +23,7 @@ export function getPharmacyTableSchema(): TableSchema {
       { key: "source", label: "Source" },
       { key: "status", label: "Status" },
       { key: "amount", label: "Amount" },
-      { key: "dispensed_at", label: "Dispensed On" },
+      { key: "updated_at", label: "Last Modified" },
     ],
   };
 }

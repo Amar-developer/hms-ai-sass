@@ -65,7 +65,10 @@ export function HomeCare({
     fromDate: "",
     toDate: "",
   });
-  const [sort, setSort] = useState<SortState | null>(null);
+  const [sort, setSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
   const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [page, setPage] = useState(1);
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);

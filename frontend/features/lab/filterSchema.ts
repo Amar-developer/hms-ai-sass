@@ -21,6 +21,7 @@ export function getLabTableSchema(): TableSchema {
       { key: "acquisition_source", label: "Source" },
       { key: "status", label: "Status" },
       { key: "amount", label: "Amount" },
+      { key: "updated_at", label: "Last Modified" },
     ],
   };
 }

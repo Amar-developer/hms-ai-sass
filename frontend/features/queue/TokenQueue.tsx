@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
+  Ticket,
 } from "lucide-react";
 import {
   Badge,
@@ -38,6 +39,7 @@ import { call_language_options, display_mode_options } from "./constants";
 import { DataTable } from "@/app/components/common/DataTable";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 import { RowActions } from "../admin/components/RowActions";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 
 export function TokenQueue({
   apiSession,
@@ -339,17 +341,21 @@ export function TokenQueue({
   ];
 
   return (
-    <Card className="">
+    <>
+      {apiSession && (
+        <BreadcrumbSlot>
+          <RefreshButton
+            onRefresh={() => refetch()}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+        </BreadcrumbSlot>
+      )}
+      <Card className="">
       <div className="flex flex-col justify-between gap-4 border p-2 rounded-lg border-slate-200 pb-4 xl:flex-row xl:items-end">
         <div className="flex items-center gap-2">
           <div className="">
-            <div className="card-title font-bold p-1 flex  justify-between">
-              Patient Queue & Token{" "}
-              <div className="flex justify-center  items-center">
-                {apiSession ? (
-                  <RefreshButton onRefresh={() => refetch()} />
-                ) : null}
-              </div>
+            <div className="card-title font-bold p-1">
+              Patient Queue & Token
             </div>
             <p className="card-desc text-xs text-slate-500">
               {apiSession
@@ -494,6 +500,10 @@ export function TokenQueue({
           data={pagedQueue}
           onRowClick={openConsultation}
           paginate={false}
+          emptyMessage="No tokens in the queue."
+          emptyDescription="Patients checked in for today's appointments will appear here as tokens."
+          emptyIcon={Ticket}
+          minBodyHeight="220px"
         />
       </div>
       <Pagination
@@ -524,6 +534,7 @@ export function TokenQueue({
           }}
         />
       )}
-    </Card>
+      </Card>
+    </>
   );
 }

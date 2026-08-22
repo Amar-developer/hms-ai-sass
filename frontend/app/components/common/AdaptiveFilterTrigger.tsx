@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import {
   AdaptiveFilterBar,
@@ -34,6 +34,14 @@ type AdaptiveFilterTriggerProps = {
 // The breadcrumb row has no room for AdaptiveFilterBar's full grid, so this
 // wraps it behind a "Filters" button — same schema-driven bar, opened as a
 // panel anchored to the trigger instead of rendered inline.
+//
+// The panel itself only ever shows Search + Reset. Schema's fixed dropdown
+// filters (Status, Type, ...) aren't rendered here anymore — they're folded
+// into the "+ Add a Filter" builder's field picker instead, so there's a
+// single place to add any filter. Picking one of those fields with the
+// "Equals" operator still calls onFilterChange (bridged below) so pages that
+// depend on server-side filtering via filterValues keep working; any other
+// operator only applies client-side through onQueryFiltersChange.
 export function AdaptiveFilterTrigger({
   schema,
   query,
@@ -41,9 +49,6 @@ export function AdaptiveFilterTrigger({
   showSearch = true,
   filterValues,
   onFilterChange,
-  sort,
-  onSortChange,
-  showSort = true,
   onReset,
   children,
   queryFields,
@@ -76,6 +81,40 @@ export function AdaptiveFilterTrigger({
     };
   }, [open]);
 
+  const schemaQueryFields: QueryFieldSchema[] = useMemo(
+    () =>
+      schema.filters.map((filter) => ({
+        key: filter.key,
+        label: filter.label,
+        type: "select" as const,
+        options: filter.options,
+      })),
+    [schema.filters],
+  );
+
+  const mergedQueryFields = useMemo(
+    () => [...schemaQueryFields, ...(queryFields ?? [])],
+    [schemaQueryFields, queryFields],
+  );
+
+  const schemaFilterKeys = useMemo(
+    () => new Set(schema.filters.map((f) => f.key)),
+    [schema.filters],
+  );
+
+  // Keeps filterValues (server-side filtering) in sync with any schema-key
+  // row in the ad-hoc builder that uses "Equals" — the same single-value
+  // semantics the old fixed dropdowns had.
+  function handleQueryFiltersApply(rows: QueryFilterRow[]) {
+    schema.filters.forEach((filter) => {
+      const match = rows.find(
+        (row) => row.field === filter.key && row.operator === "equals",
+      );
+      onFilterChange?.(filter.key, match ? match.value : "all");
+    });
+    onQueryFiltersChange?.(rows);
+  }
+
   const activeCount =
     (query ? 1 : 0) +
     schema.filters.filter(
@@ -84,8 +123,8 @@ export function AdaptiveFilterTrigger({
         filterValues[filter.key] !== "all" &&
         filterValues[filter.key] !== "",
     ).length +
-    (showSort && sort ? 1 : 0) +
-    (queryFilters?.length ?? 0);
+    (queryFilters?.filter((row) => !schemaFilterKeys.has(row.field))
+      .length ?? 0);
 
   return (
     <div ref={wrapRef} className="relative">
@@ -110,7 +149,7 @@ export function AdaptiveFilterTrigger({
       {open && (
         <div
           className={`absolute right-0 z-40 mt-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg ${
-            queryFields?.length ? "w-[28rem]" : "w-80"
+            mergedQueryFields.length ? "w-[28rem]" : "w-80"
           }`}
         >
           <AdaptiveFilterBar
@@ -118,29 +157,21 @@ export function AdaptiveFilterTrigger({
             query={query}
             setQuery={setQuery}
             showSearch={showSearch}
-            filterValues={filterValues}
-            onFilterChange={onFilterChange}
-            sort={sort}
-            onSortChange={onSortChange}
-            showSort={showSort}
-            onReset={() => {
-              onQueryFiltersChange?.([]);
-              onReset?.();
-            }}
             className="grid-cols-1"
-            onClose={()=>setOpen(false)}
+            onReset={onReset}
+            onClose={() => setOpen(false)}
           >
             {children}
           </AdaptiveFilterBar>
-          {queryFields && queryFields.length > 0 && (
+          {mergedQueryFields.length > 0 && (
             <div className="my-3 border-t border-slate-100 pt-3">
               <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                Custom filters
+                Filters
               </p>
               <AdaptiveQueryFilterPanel
-                fields={queryFields}
+                fields={mergedQueryFields}
                 appliedFilters={queryFilters ?? []}
-                onApply={(rows) => onQueryFiltersChange?.(rows)}
+                onApply={handleQueryFiltersApply}
               />
             </div>
           )}

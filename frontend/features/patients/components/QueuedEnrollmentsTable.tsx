@@ -1,3 +1,4 @@
+import { Clock } from "lucide-react";
 import { displayDate, money } from "@/utils/helper";
 import { Badge, Card } from "@/app/components/common/ui";
 import { useEffect, useState } from "react";
@@ -93,7 +94,10 @@ export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
           columns={MEMBERSHIP_COLUMNS}
           data={pagedRows}
           paginate={false}
-          emptyMessage="No memberships found"
+          emptyMessage="No queued enrollments."
+          emptyDescription="Plans purchased while another is active will wait here until they activate."
+          emptyIcon={Clock}
+          minBodyHeight="220px"
         />
       </div>
       <Pagination

@@ -7,7 +7,7 @@ import {
   Badge,
 } from "@/app/components/common/ui";
 import { useEffect, useState } from "react";
-import { Camera } from "lucide-react";
+import { Camera, FileSpreadsheet } from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
 import { listValue, settingLabel, settingValueLabel } from "../helpers";
 import { MultiCheckSelect } from "./MultiCheckSelect";
@@ -510,6 +510,9 @@ export function SettingsPanel(props: any) {
             })}
             data={pagedReportJobs}
             emptyMessage="No monthly report jobs yet."
+            emptyDescription="Monthly revenue and settlement reports sent from this tenant will show up here."
+            emptyIcon={FileSpreadsheet}
+            minBodyHeight="220px"
           />
         </div>
         <Pagination

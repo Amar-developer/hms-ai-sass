@@ -1,3 +1,4 @@
+import { ReceiptText } from "lucide-react";
 import { Card, Badge } from "@/app/components/common/ui";
 import {
   approvedDiscountUsage,
@@ -272,6 +273,9 @@ const InvoiceReport = ({
           data={invoicePageRows}
           onRowClick={(row: any) => onOpenInvoices(row.id)}
           emptyMessage="No paid invoices match this filter."
+          emptyDescription="Paid invoices matching the current filters will appear here."
+          emptyIcon={ReceiptText}
+          minBodyHeight="220px"
           loading={loading}
           footer={
             <tr className="font-bold text-slate-900">

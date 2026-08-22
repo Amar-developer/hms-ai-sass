@@ -14,6 +14,7 @@ import {
 import { DataTable } from "@/app/components/common/DataTable";
 import { SortState } from "@/utils/types";
 import { getUserColumns } from "./Column";
+import { Users } from "lucide-react";
 
 const filterConfigs: FilterConfig[] = [
   {
@@ -179,6 +180,9 @@ export function TenantUsers({
               data={rows}
               loading={busy && rows.length === 0}
               emptyMessage="No users match your search."
+              emptyDescription="Users added for this tenant will show up here."
+              emptyIcon={Users}
+              minBodyHeight="220px"
               onRowClick={(user) => {
                 setSelectedUserId(user.id);
                 setSection("userEdit");

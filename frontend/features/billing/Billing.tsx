@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ReceiptText } from "lucide-react";
 import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
@@ -61,7 +62,10 @@ export function Billing({
     fromDate: "",
     toDate: "",
   });
-  const [sort, setSort] = useState<SortState | null>(null);
+  const [sort, setSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
   const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [filterOptions, setFilterOptions] = useState<
     Record<string, QueryFieldOption[]>
@@ -806,6 +810,9 @@ export function Billing({
                   ? "No invoices yet."
                   : "No invoices match the selected filters."
             }
+            emptyDescription="Invoices raised for consultations, lab, pharmacy, and home care will show up here."
+            emptyIcon={ReceiptText}
+            minBodyHeight="220px"
             onRowClick={openInvoiceDetail}
             sort={sort ?? undefined}
             onSortChange={handleSortChange}

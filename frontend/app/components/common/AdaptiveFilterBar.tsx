@@ -1,9 +1,8 @@
 "use client";
 
-import { ArrowDown, ArrowUp, X } from "lucide-react";
-import { Input, SearchableSelect, Button } from "./ui";
+import { X } from "lucide-react";
+import { Input, Button } from "./ui";
 import { FormField } from "../FormElements";
-import type { SortState } from "@/utils/types";
 import React from "react";
 
 export type FilterFieldOption = {
@@ -35,11 +34,6 @@ type AdaptiveFilterBarProps = {
   query?: string;
   setQuery?: (value: string) => void;
   showSearch?: boolean;
-  filterValues: Record<string, string>;
-  onFilterChange?: (key: string, value: string) => void;
-  sort?: SortState | null;
-  onSortChange?: (sort: SortState | null) => void;
-  showSort?: boolean;
   onReset?: () => void;
   onClose?: () => void;
   className?: string;
@@ -51,35 +45,16 @@ export function AdaptiveFilterBar({
   query,
   setQuery,
   showSearch = true,
-  filterValues,
-  onFilterChange,
-  sort,
-  onSortChange,
-  showSort = true,
-  onReset,
   className = "lg:grid-cols-4 xl:grid-cols-5",
   children,
+  onReset,
   onClose,
 }: AdaptiveFilterBarProps) {
   function handleReset() {
+    // Search only — fixed dropdown filters and sort no longer live in this
+    // panel, and ad-hoc query filters have their own dedicated "Clear".
     setQuery?.("");
-    schema.filters.forEach((filter) => onFilterChange?.(filter.key, "all"));
-    onSortChange?.(null);
     onReset?.();
-  }
-
-  function handleSortField(key: string) {
-    if (!onSortChange) return;
-    if (!key) {
-      onSortChange(null);
-      return;
-    }
-    onSortChange({ key, dir: sort?.key === key ? sort.dir : "asc" });
-  }
-
-  function toggleSortDir() {
-    if (!onSortChange || !sort) return;
-    onSortChange({ key: sort.key, dir: sort.dir === "asc" ? "desc" : "asc" });
   }
 
   return (
@@ -103,60 +78,7 @@ export function AdaptiveFilterBar({
           </FormField>
         )}
 
-        {schema.filters.map((filter) => (
-          <FormField key={filter.key} label={filter.label}>
-            <SearchableSelect
-              name={filter.key}
-              value={filterValues[filter.key] ?? "all"}
-              onChange={(value: string) => onFilterChange?.(filter.key, value)}
-              options={filter.options}
-              searchable={false}
-              placeholder={`Select ${filter.label}`}
-              className="w-full"
-            />
-          </FormField>
-        ))}
-
         {children}
-
-        {showSort && schema.sortFields.length > 0 && (
-          <FormField label="Sort by">
-            <div className="flex items-stretch gap-2">
-              <SearchableSelect
-                name="sort-field"
-                value={sort?.key ?? ""}
-                onChange={handleSortField}
-                options={[
-                  { value: "", label: "None" },
-                  ...schema.sortFields.map((field) => ({
-                    value: field.key,
-                    label: field.label,
-                  })),
-                ]}
-                searchable={false}
-                placeholder="None"
-                className="w-full"
-              />
-              <button
-                type="button"
-                onClick={toggleSortDir}
-                disabled={!sort}
-                title={
-                  sort?.dir === "desc"
-                    ? "Sorted descending"
-                    : "Sorted ascending"
-                }
-                className="flex shrink-0 items-center justify-center rounded-lg border border-slate-200 px-3 text-slate-500 hover:text-slate-900 disabled:opacity-40"
-              >
-                {sort?.dir === "desc" ? (
-                  <ArrowDown size={16} />
-                ) : (
-                  <ArrowUp size={16} />
-                )}
-              </button>
-            </div>
-          </FormField>
-        )}
 
         <FormField label="">
           <Button
