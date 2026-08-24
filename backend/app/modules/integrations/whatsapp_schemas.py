@@ -474,6 +474,12 @@ class WhatsAppQueueCounts(BaseModel):
     cancelled: int = 0
 
 
+class WhatsAppQueueTodaySummary(BaseModel):
+    sent: int = 0
+    failed: int = 0
+    patient_recipients: int = 0
+
+
 class WhatsAppQueueItemRead(BaseModel):
     id: str
     flow_key: str
@@ -496,3 +502,4 @@ class WhatsAppQueueListRead(BaseModel):
     limit: int
     offset: int
     counts: WhatsAppQueueCounts
+    today: WhatsAppQueueTodaySummary = Field(default_factory=WhatsAppQueueTodaySummary)

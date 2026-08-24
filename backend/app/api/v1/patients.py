@@ -14,6 +14,7 @@ from app.modules.patients.models import Gender, Patient, PatientAlert, PatientSt
 from app.modules.patients.schemas import (
     PatientAlertCreate,
     PatientAlertRead,
+    PatientCommunicationRead,
     PatientCreate,
     PatientDuplicateCandidate,
     PatientFamilyRelationshipCreate,
@@ -185,6 +186,22 @@ def patient_count(
 
 
 @router.get(
+    "/{patient_id}/communications",
+    response_model=list[PatientCommunicationRead],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
+def patient_communications(
+    patient_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    limit: int = Query(default=50, ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> list[PatientCommunicationRead]:
+    return PatientService(session).patient_communications(
+        tenant_id=tenant_id, patient_id=patient_id, limit=limit
+    )
+
+
+@router.get(
     "/{patient_id}",
     response_model=PatientRead,
 )
@@ -200,7 +217,7 @@ def get_patient(
         )
     ),
     session: Session = Depends(get_session),
-) -> Patient:
+) -> PatientRead:
     return PatientService(session).get_patient(
         tenant_id=tenant_id, patient_id=patient_id, actor=current_user
     )

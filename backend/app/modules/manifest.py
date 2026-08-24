@@ -356,10 +356,10 @@ MODULES = [
         "name": "Expenses",
         "category": "revenue",
         "status": "foundation",
-        "minimum_plan": "starter",
+        "minimum_plan": "growth",
         "entitlement_key": "expense",
-        "default_enabled": True,
-        "is_core": True,
+        "default_enabled": False,
+        "is_core": False,
         "dependencies": ["identity", "audit"],
         "permissions": [
             "expenses.manage",

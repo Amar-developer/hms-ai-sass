@@ -4,6 +4,7 @@ from app.modules.manifest import default_enabled_module_keys
 from app.modules.subscriptions.models import SubscriptionPlan
 from app.modules.subscriptions.services.catalog import (
     DEFAULT_PLANS,
+    EXPENSE_DEFAULT_PLAN_KEYS,
     HOME_CARE_DEFAULT_PLAN_KEYS,
     PATIENT_INTELLIGENCE_DEFAULT_PLAN_KEYS,
 )
@@ -40,6 +41,14 @@ def ensure_default_plans(session: Session) -> None:
             if "patient_intelligence" not in enabled_modules:
                 exists.enabled_modules_json = modules_to_json(
                     [*enabled_modules, "patient_intelligence"]
+                )
+                exists.updated_at = now
+                session.add(exists)
+        if exists and exists.key in EXPENSE_DEFAULT_PLAN_KEYS:
+            enabled_modules = modules_from_json(exists.enabled_modules_json)
+            if "expense" not in enabled_modules:
+                exists.enabled_modules_json = modules_to_json(
+                    [*enabled_modules, "expense"]
                 )
                 exists.updated_at = now
                 session.add(exists)

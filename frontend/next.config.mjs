@@ -6,6 +6,12 @@
 // ".next-build" after clearing it, when the dev server runs under a
 // different user (e.g. a root-owned container) than the build.
 const nextConfig = {
+  // Protect long-lived browser tabs from client/server version skew during a
+  // deployment. Next performs a document navigation when an old client tries
+  // to navigate against a newer build instead of leaving the old route stuck.
+  ...(process.env.MEDIZINHUB_DEPLOYMENT_ID
+    ? { deploymentId: process.env.MEDIZINHUB_DEPLOYMENT_ID }
+    : {}),
   ...(process.env.NODE_ENV === "production"
     ? { distDir: ".next-build" }
     : {}),

@@ -153,7 +153,6 @@ export function AppShell({
   ...props
 }: { children: ReactNode } & Record<string, any>) {
   const {
-    setActive,
     nav,
     enabled,
     clinic,
@@ -200,7 +199,10 @@ export function AppShell({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [pendingPage, setPendingPage] = useState("");
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    page: string;
+    path: string;
+  } | null>(null);
   const [clinicOpen, setClinicOpen] = useState(false);
   // Doctors/Scheduling/Items are full standalone modules with their own
   // routes, now rooted at /clinic/{id} — nested visually under the Clinic
@@ -209,22 +211,6 @@ export function AppShell({
   const clinicModuleIds = ["practitioners", "scheduling", "items"];
   const clinicModulePath = (id: string) => `/clinic/${id}`;
 
-  // Sidebar navigation uses router.push() on click rather than <Link>, so it
-  // gets none of Next.js's automatic hover/viewport prefetching — every
-  // click was a cold fetch, which is why the URL and page appeared to hang
-  // on the old route until the new one finished loading. Warm the cache for
-  // every reachable module route up front so clicks resolve instantly.
-  useEffect(() => {
-    for (const [id] of visibleNav) {
-      router.prefetch(
-        clinicModuleIds.includes(id) ? clinicModulePath(id) : `/${id}`,
-      );
-    }
-    if (canAccessErrorLogs) {
-      router.prefetch("/error_logs");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleNav.map(([id]: any) => id).join(","), canAccessErrorLogs]);
   const routeSegment =
     pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
   const clinicRouteModuleId =
@@ -255,15 +241,18 @@ export function AppShell({
           ? "superadmin"
           : visibleNav[0]?.[0] || "dashboard";
   const activePage =
-    pendingPage || (isKnownRouteSegment ? effectiveRouteSegment : resolvedActivePage);
-  // pendingPage is set the instant a nav click fires and cleared once the
-  // pathname actually lands (see the effect below) — that window is exactly
+    pendingNavigation?.page ||
+    (isKnownRouteSegment ? effectiveRouteSegment : resolvedActivePage);
+  // pendingNavigation is set the instant a nav click fires and cleared once
+  // its exact pathname lands (see the effect below) — that window is exactly
   // "a route change or module switch is in flight", independent of the
   // sidebar, which keeps rendering the live nav state throughout. Next's
   // own loading.tsx Suspense fallback only fires for server data fetches,
   // so client-rendered modules swap with no transition state at all unless
   // we drive the header + content skeletons off this signal ourselves.
-  const showNavigationSkeleton = useNavigationSkeleton(Boolean(pendingPage));
+  const showNavigationSkeleton = useNavigationSkeleton(
+    Boolean(pendingNavigation),
+  );
   const primaryRole = apiSession?.user?.roles?.[0] || role;
   const roleLabel =
     primaryRole
@@ -659,9 +648,13 @@ export function AppShell({
 
     if (id === activePage && pathname === destinationPath) return;
 
-    setPendingPage(id);
-    setActive(id);
+    beginNavigation(id, destinationPath);
     router.push(destinationPath);
+  }
+
+  function beginNavigation(page: string, path: string) {
+    if (pathname === path) return;
+    setPendingNavigation({ page, path });
   }
 
   // Permission/entitlement gating can make the pathname's module unavailable
@@ -700,8 +693,31 @@ export function AppShell({
   ]);
 
   useEffect(() => {
-    setPendingPage("");
-  }, [pathname]);
+    if (!pendingNavigation) return;
+    const normalizePath = (value: string) => value.replace(/\/$/, "") || "/";
+    if (normalizePath(pathname) === normalizePath(pendingNavigation.path)) {
+      setPendingNavigation(null);
+    }
+  }, [pathname, pendingNavigation]);
+
+  // App Router navigation can remain pending when a development RSC bundle or
+  // its cache becomes stale. Never leave the whole workspace behind an
+  // indefinite skeleton: retry as a document navigation after a bounded wait.
+  // This is deliberately a last resort; normal module switches stay client-side.
+  useEffect(() => {
+    if (!pendingNavigation) return;
+    const timer = window.setTimeout(() => {
+      const currentPath = window.location.pathname.replace(/\/$/, "") || "/";
+      const destinationPath =
+        pendingNavigation.path.replace(/\/$/, "") || "/";
+      if (currentPath === destinationPath) {
+        setPendingNavigation(null);
+        return;
+      }
+      window.location.assign(pendingNavigation.path);
+    }, 8_000);
+    return () => window.clearTimeout(timer);
+  }, [pendingNavigation]);
 
   useEffect(() => {
     if (!rememberWorkspacePath || !pathname || pathname === "/login") return;
@@ -754,24 +770,6 @@ export function AppShell({
     };
   }, [profileOpen]);
 
-  useEffect(() => {
-    const highTrafficRoutes = new Set([
-      "dashboard",
-      "appointments",
-      "patients",
-      "practitioners",
-      "queue",
-      "billing",
-    ]);
-    visibleNav.forEach(([id]: any) => {
-      if (highTrafficRoutes.has(id) && id !== activePage) {
-        router.prefetch(
-          clinicModuleIds.includes(id) ? clinicModulePath(id) : `/${id}`,
-        );
-      }
-    });
-  }, [activePage, router, visibleNav.map(([id]: any) => id).join("|")]);
-
   const shellChromeValue: ShellChromeValue = {
     navigatePage,
     activePage,
@@ -813,6 +811,7 @@ export function AppShell({
               visibleNav={sidebarVisibleNav}
               activePage={activePage}
               navigatePage={navigatePage}
+              beginNavigation={beginNavigation}
               isSuperAdmin={isSuperAdmin}
               canAccessPlatformWorkspace={canAccessPlatformWorkspace}
               reportsOpen={reportsOpen}
@@ -862,6 +861,7 @@ export function AppShell({
                 visibleNav={sidebarVisibleNav}
                 activePage={activePage}
                 navigatePage={navigatePage}
+                beginNavigation={beginNavigation}
                 isSuperAdmin={isSuperAdmin}
                 canAccessPlatformWorkspace={canAccessPlatformWorkspace}
                 reportsOpen={reportsOpen}

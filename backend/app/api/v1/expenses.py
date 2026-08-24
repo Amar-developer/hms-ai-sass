@@ -101,7 +101,7 @@ def recent_subcategories_endpoint(
         )
     ),
 ) -> list[str]:
-    return get_recent_subcategories(session, tenant_id=tenant_id)
+    return get_recent_subcategories(session, tenant_id=tenant_id, actor=current_user)
 
 
 @router.get("/{expense_id}", response_model=ExpenseRead)
@@ -113,7 +113,9 @@ def get_expense_endpoint(
         require_any_permission(permissions.EXPENSES_MANAGE, permissions.EXPENSES_READ)
     ),
 ) -> ExpenseRead:
-    return get_expense(session, tenant_id=tenant_id, expense_id=expense_id)
+    return get_expense(
+        session, tenant_id=tenant_id, expense_id=expense_id, actor=current_user
+    )
 
 
 @router.post("", response_model=ExpenseRead, status_code=status.HTTP_201_CREATED)

@@ -39,6 +39,11 @@ type QueueResponse = {
     "queued" | "processing" | "sent" | "failed" | "cancelled",
     number
   >;
+  today: {
+    sent: number;
+    failed: number;
+    patient_recipients: number;
+  };
 };
 
 const emptyQueue: QueueResponse = {
@@ -47,6 +52,7 @@ const emptyQueue: QueueResponse = {
   limit: 20,
   offset: 0,
   counts: { queued: 0, processing: 0, sent: 0, failed: 0, cancelled: 0 },
+  today: { sent: 0, failed: 0, patient_recipients: 0 },
 };
 
 const flowLabels: Record<string, string> = {
@@ -149,6 +155,7 @@ export function WhatsAppDeliveryQueue({
         ...emptyQueue,
         ...response,
         counts: { ...emptyQueue.counts, ...(response?.counts || {}) },
+        today: { ...emptyQueue.today, ...(response?.today || {}) },
       });
     } catch (error: any) {
       onMessage(error.message || "Could not load the delivery queue.");
@@ -344,6 +351,23 @@ export function WhatsAppDeliveryQueue({
             Delivery success rate:{" "}
             <span className="font-bold text-slate-800">{successRate}%</span>
           </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {[
+              ["Messages sent today", data.today.sent],
+              ["Failed today", data.today.failed],
+              ["Patients messaged today", data.today.patient_recipients],
+            ].map(([label, value]) => (
+              <div
+                key={String(label)}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <p className="text-xs text-slate-500">{label}</p>
+                <p className="mt-1 text-xl font-black text-slate-900">
+                  {value}
+                </p>
+              </div>
+            ))}
+          </div>
 
           <div className="flex items-end justify-between gap-3">
             <div className="flex-1">

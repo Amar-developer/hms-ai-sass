@@ -11,6 +11,7 @@ from app.modules.patient_intelligence.service import (
     refresh_patient_intelligence,
 )
 from app.api.v1 import patient_intelligence as patient_intelligence_api
+from app.modules.patient_intelligence.jobs import daily_refresh
 from app.modules.patient_intelligence.models import (
     EngagementActionStatus,
     IntelligenceFlagCategory,
@@ -78,6 +79,34 @@ def test_new_tenant_has_no_implicit_business_rules(test_engine):
     with Session(test_engine) as session:
         tenant, _branch, _patient = _patient_fixture(session)
         assert list_tenant_rules(session, tenant.id) == []
+
+
+def test_daily_refresh_job_batches_and_processes_whatsapp(test_engine, monkeypatch):
+    refresh_counts = iter([2, 0])
+    processed = {}
+
+    def fake_refresh(_session, *, limit):
+        processed.setdefault("limits", []).append(limit)
+        return next(refresh_counts)
+
+    def fake_process(_session):
+        processed["whatsapp"] = True
+        return 1
+
+    monkeypatch.setattr(daily_refresh, "refresh_due_patient_intelligence", fake_refresh)
+    monkeypatch.setattr(
+        daily_refresh, "process_due_whatsapp_notifications", fake_process
+    )
+
+    total = daily_refresh.run_daily_refresh(
+        session_factory=lambda: Session(test_engine),
+        batch_size=2,
+        max_batches=5,
+    )
+
+    assert total == 2
+    assert processed["limits"] == [2, 2]
+    assert processed["whatsapp"] is True
 
 
 def test_between_operator_uses_both_tenant_configured_thresholds(test_engine):
@@ -202,6 +231,98 @@ def test_update_rule_allows_template_edit_with_legacy_duplicate_flag(
         )
 
         assert updated.action_template_key == "clinic_subscription_renewal_reminder"
+
+
+def test_create_rule_allows_multiple_paths_to_same_badge_key(test_engine, monkeypatch):
+    with Session(test_engine) as session:
+        tenant, _branch, _patient = _patient_fixture(session)
+        user = User(
+            name="Tenant Admin",
+            email="tenant.badges@example.test",
+            password_hash="unused",
+            is_super_admin=True,
+        )
+        session.add(user)
+        session.commit()
+        monkeypatch.setattr(patient_intelligence_api, "_entitled", lambda *args: None)
+
+        first = patient_intelligence_api.create_rule(
+            patient_intelligence_api.IntelligenceRuleCreate(
+                rule_key="premium_monthly_member",
+                name="Premium monthly member",
+                category="value",
+                metric_key="net_collected_30d",
+                operator="gte",
+                threshold=Decimal("2500"),
+                threshold_secondary=None,
+                window_days=None,
+                flag_key="PREMIUM_PATIENT",
+                severity="success",
+                badge_label=None,
+                badge_background_color=None,
+                badge_text_color=None,
+                badge_border_color=None,
+                display_as_patient_badge=False,
+                priority=10,
+                exclusive_group="patient_value_tier",
+                score_dimension="value",
+                score_weight=Decimal("100"),
+                required_flag_keys=[],
+                expires_after_days=60,
+                auto_resolve=False,
+                requires_active_membership=True,
+                action_enabled=False,
+                action_key=None,
+                action_channel=None,
+                action_template_key=None,
+                action_requires_approval=False,
+                action_cooldown_days=None,
+                is_enabled=True,
+            ),
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+        second = patient_intelligence_api.create_rule(
+            patient_intelligence_api.IntelligenceRuleCreate(
+                rule_key="premium_monthly_collection",
+                name="Premium monthly collection",
+                category="value",
+                metric_key="net_collected_30d",
+                operator="gte",
+                threshold=Decimal("4000"),
+                threshold_secondary=None,
+                window_days=None,
+                flag_key="PREMIUM_PATIENT",
+                severity="success",
+                badge_label=None,
+                badge_background_color=None,
+                badge_text_color=None,
+                badge_border_color=None,
+                display_as_patient_badge=False,
+                priority=11,
+                exclusive_group="patient_value_tier",
+                score_dimension="value",
+                score_weight=Decimal("100"),
+                required_flag_keys=[],
+                expires_after_days=60,
+                auto_resolve=False,
+                requires_active_membership=False,
+                action_enabled=False,
+                action_key=None,
+                action_channel=None,
+                action_template_key=None,
+                action_requires_approval=False,
+                action_cooldown_days=None,
+                is_enabled=True,
+            ),
+            tenant_id=tenant.id,
+            current_user=user,
+            session=session,
+        )
+
+        assert first.flag_key == second.flag_key == "PREMIUM_PATIENT"
+        assert first.rule_key != second.rule_key
 
 
 def test_content_library_crud_is_tenant_configured(test_engine, monkeypatch):
@@ -569,6 +690,148 @@ def test_active_membership_is_a_configurable_premium_value_condition(test_engine
         assert "Active paid membership" in premium.explanation
 
 
+def test_same_badge_can_have_membership_or_collection_rule_paths(test_engine):
+    with Session(test_engine) as session:
+        tenant, branch, non_member = _patient_fixture(session)
+        member = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-004",
+            full_name="Monthly Member",
+        )
+        high_value_non_member = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-005",
+            full_name="Monthly High Value",
+        )
+        session.add(member)
+        session.add(high_value_non_member)
+        session.flush()
+        _rule(
+            session,
+            tenant.id,
+            rule_key="premium_monthly_member",
+            name="Premium monthly member",
+            flag_key="PREMIUM_PATIENT",
+            category=IntelligenceFlagCategory.VALUE,
+            metric_key="net_collected_30d",
+            operator="gte",
+            threshold=Decimal("2500"),
+            priority=10,
+            exclusive_group="patient_value_tier",
+            requires_active_membership=True,
+        )
+        _rule(
+            session,
+            tenant.id,
+            rule_key="premium_monthly_collection",
+            name="Premium monthly collection",
+            flag_key="PREMIUM_PATIENT",
+            category=IntelligenceFlagCategory.VALUE,
+            metric_key="net_collected_30d",
+            operator="gte",
+            threshold=Decimal("4000"),
+            priority=11,
+            exclusive_group="patient_value_tier",
+        )
+
+        non_member_flags = evaluate_flags(
+            session,
+            tenant_id=tenant.id,
+            patient=non_member,
+            metric_values={
+                "net_collected_30d": Decimal("3000"),
+                "active_membership": Decimal("0"),
+            },
+            now=now_utc(),
+        )
+        member_flags = evaluate_flags(
+            session,
+            tenant_id=tenant.id,
+            patient=member,
+            metric_values={
+                "net_collected_30d": Decimal("3000"),
+                "active_membership": Decimal("1"),
+            },
+            now=now_utc(),
+        )
+        high_value_flags = evaluate_flags(
+            session,
+            tenant_id=tenant.id,
+            patient=high_value_non_member,
+            metric_values={
+                "net_collected_30d": Decimal("4500"),
+                "active_membership": Decimal("0"),
+            },
+            now=now_utc(),
+        )
+
+        assert {flag.flag_key for flag in non_member_flags} == set()
+        assert [flag.flag_key for flag in member_flags] == ["PREMIUM_PATIENT"]
+        assert [flag.flag_key for flag in high_value_flags] == ["PREMIUM_PATIENT"]
+
+
+def test_value_tier_grace_period_prevents_sudden_downgrade(test_engine):
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        earned_at = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        _rule(
+            session,
+            tenant.id,
+            rule_key="premium_monthly_collection",
+            name="Premium",
+            flag_key="PREMIUM_PATIENT",
+            category=IntelligenceFlagCategory.VALUE,
+            metric_key="net_collected_30d",
+            operator="gte",
+            threshold=Decimal("4000"),
+            priority=10,
+            exclusive_group="patient_value_tier",
+            auto_resolve=False,
+            expires_after_days=60,
+        )
+        _rule(
+            session,
+            tenant.id,
+            rule_key="gold_monthly_collection",
+            name="Gold",
+            flag_key="GOLD_PATIENT",
+            category=IntelligenceFlagCategory.VALUE,
+            metric_key="net_collected_30d",
+            operator="gte",
+            threshold=Decimal("1000"),
+            priority=20,
+            exclusive_group="patient_value_tier",
+        )
+
+        initial_flags = evaluate_flags(
+            session,
+            tenant_id=tenant.id,
+            patient=patient,
+            metric_values={"net_collected_30d": Decimal("4500")},
+            now=earned_at,
+        )
+        grace_flags = evaluate_flags(
+            session,
+            tenant_id=tenant.id,
+            patient=patient,
+            metric_values={"net_collected_30d": Decimal("2000")},
+            now=earned_at + timedelta(days=30),
+        )
+        expired_flags = evaluate_flags(
+            session,
+            tenant_id=tenant.id,
+            patient=patient,
+            metric_values={"net_collected_30d": Decimal("2000")},
+            now=earned_at + timedelta(days=61),
+        )
+
+        assert {flag.flag_key for flag in initial_flags} == {"PREMIUM_PATIENT"}
+        assert {flag.flag_key for flag in grace_flags} == {"PREMIUM_PATIENT"}
+        assert {flag.flag_key for flag in expired_flags} == {"GOLD_PATIENT"}
+
+
 def test_intelligence_engagement_requires_explicit_opt_in():
     patient = Patient(
         tenant_id="tenant_1",
@@ -723,6 +986,53 @@ def test_manual_refill_date_drives_configurable_refill_rule(test_engine):
         recurring_evidence = json.loads(snapshot.evidence_json)["recurring_medicine"]
         assert recurring_evidence["manual_schedule"] is True
         assert recurring_evidence["manual_notes"] == "Monthly medicine pickup"
+
+
+def test_monthly_tracking_auto_schedule_uses_next_month_first():
+    assert patient_intelligence_api._first_day_of_next_month(date(2026, 8, 24)) == date(
+        2026, 9, 1
+    )
+    assert patient_intelligence_api._first_day_of_next_month(
+        date(2026, 12, 15)
+    ) == date(2027, 1, 1)
+
+
+def test_due_window_comes_from_enabled_rule_threshold(test_engine):
+    with Session(test_engine) as session:
+        tenant, _branch, _patient = _patient_fixture(session)
+        _rule(
+            session,
+            tenant.id,
+            rule_key="monthly_lab_test_reminder",
+            name="Monthly lab reminder",
+            flag_key="MONTHLY_LAB_TEST_DUE",
+            category=IntelligenceFlagCategory.RECURRING,
+            metric_key="days_until_expected_lab_test",
+            operator="lte",
+            threshold=Decimal("7"),
+        )
+        _rule(
+            session,
+            tenant.id,
+            rule_key="monthly_lab_test_reminder_disabled",
+            name="Disabled lab reminder",
+            flag_key="DISABLED_MONTHLY_LAB_TEST_DUE",
+            category=IntelligenceFlagCategory.RECURRING,
+            metric_key="days_until_expected_lab_test",
+            operator="lte",
+            threshold=Decimal("30"),
+            is_enabled=False,
+        )
+        session.commit()
+
+        rules = list_tenant_rules(session, tenant.id)
+
+        assert (
+            patient_intelligence_api._rule_due_window_days(
+                rules, "days_until_expected_lab_test"
+            )
+            == 7
+        )
 
 
 def test_patient_monthly_tracking_fields_auto_advance_after_crossing(test_engine):

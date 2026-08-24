@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 from typing import Literal
 
@@ -129,6 +131,11 @@ class PatientRead(BaseModel):
     updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
+    subscription_plan_name: str | None = None
+    subscription_status: str | None = None
+    intelligence_flags: list[PatientIntelligenceFlagCompact] = Field(
+        default_factory=list
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -151,6 +158,19 @@ class PatientAlertRead(PatientAlertCreate):
     patient_id: str
     is_active: bool
     created_at: datetime
+
+
+class PatientCommunicationRead(BaseModel):
+    id: str
+    channel: str
+    template_key: str | None
+    status: str
+    recipient_masked: str
+    resource_type: str | None
+    resource_id: str | None
+    created_at: datetime
+    sent_at: datetime | None
+    failure_reason: str | None = None
 
 
 class PatientFamilyRelationshipCreate(BaseModel):

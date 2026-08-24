@@ -65,6 +65,18 @@ export function fetchPatientIpAdmissions(
   );
 }
 
+export function fetchPatientHomeCareBookings(
+  session: ApiSession,
+  patientId: string,
+  options?: any,
+) {
+  return apiFetch(
+    `/home-care/bookings?patient_id=${patientId}`,
+    session,
+    options,
+  );
+}
+
 export function fetchMembershipPlans(session: ApiSession) {
   return apiFetch(
     "/patient-subscriptions/plans?include_inactive=true",
@@ -84,6 +96,13 @@ export function fetchMembershipEnrollments(
 
 export function fetchPatientInvoices(session: ApiSession, patientId: string) {
   return apiFetch(`/billing/invoices?patient_id=${patientId}`, session);
+}
+
+export function fetchPatientCommunications(
+  session: ApiSession,
+  patientId: string,
+) {
+  return apiFetch(`/patients/${patientId}/communications`, session);
 }
 
 export function fetchFamilyRelationships(

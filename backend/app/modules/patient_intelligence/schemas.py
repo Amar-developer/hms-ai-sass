@@ -339,6 +339,7 @@ class PatientIntelligenceRead(BaseModel):
 
 class ManualRefillScheduleUpdate(BaseModel):
     expected_refill_on: date | None = None
+    auto_schedule: bool = False
     notes: str | None = Field(default=None, max_length=1000)
 
 
@@ -351,6 +352,7 @@ class ManualRefillScheduleRead(BaseModel):
 
 class ManualLabScheduleUpdate(BaseModel):
     expected_lab_on: date | None = None
+    auto_schedule: bool = False
     lab_test_name: str | None = Field(default=None, max_length=180)
     notes: str | None = Field(default=None, max_length=1000)
 

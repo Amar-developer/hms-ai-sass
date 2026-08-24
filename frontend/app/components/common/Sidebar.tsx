@@ -1,4 +1,5 @@
 import { ChevronDown, Hospital, Settings } from "lucide-react";
+import Link from "next/link";
 import { BrandBlock } from "./BrandBlock";
 import { useEffect, useRef, useState } from "react";
 
@@ -6,6 +7,7 @@ interface SidebarProps {
   visibleNav: any[];
   activePage: string;
   navigatePage: (page: any) => void;
+  beginNavigation: (page: string, path: string) => void;
 
   isSuperAdmin: boolean;
   canAccessPlatformWorkspace: boolean;
@@ -85,7 +87,7 @@ export function Sidebar(props: SidebarProps) {
 
   const showModuleBadge = (
     label: string,
-    e: React.MouseEvent<HTMLButtonElement>,
+    e: React.MouseEvent<HTMLElement>,
   ) => {
     const rect = e.currentTarget.getBoundingClientRect();
 
@@ -656,12 +658,13 @@ export function Sidebar(props: SidebarProps) {
               </div>
             );
           }
+          const destinationPath = `/${id}`;
           return (
-            <button
+            <Link
               key={id}
-              type="button"
+              href={destinationPath}
               onClick={(e) => {
-                props.navigatePage(id);
+                props.beginNavigation(id, destinationPath);
                 setPopupMenu(null);
                 props.setTenantAdminSettingsOpen(false);
                 if (props.tabletCollapsed) {
@@ -679,7 +682,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${isActive ? "w-
                   {label}
                 </span>
               )}
-            </button>
+            </Link>
           );
         })}
       </nav>

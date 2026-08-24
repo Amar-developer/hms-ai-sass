@@ -8,7 +8,6 @@ import {
   Pill,
   ReceiptText,
   Stethoscope,
-  Users,
   NotepadText,
   Activity
 } from "lucide-react";
@@ -20,6 +19,7 @@ import {
 } from "@/app/components/common/CopyIdButton";
 import { Badge, Button } from "@/app/components/common/ui";
 import { PatientDetail } from "./components/PatientDetail";
+import { PatientFlagBadges } from "./components/PatientFlagBadges";
 
 export type PatientSectionId =
   | "home"
@@ -50,8 +50,7 @@ type SectionTab = {
   icon: ComponentType<{ className?: string }>;
 };
 
-// Order mirrors the product spec: Home -> Membership -> Family ->
-// Consultations -> Labs -> Medicines -> Billing. Each tab renders a slice
+// Each tab renders a slice
 // of PatientDetail's content gated on `activeSection` (see PatientDetail.tsx)
 // rather than a separate component per tab, so every tab shares the same
 // data-fetch/permission logic that already existed on the single-page view.
@@ -61,10 +60,9 @@ export const SECTION_TABS: SectionTab[] = [
   { id: "labs", label: "Lab & Services", icon: FlaskConical },
   { id: "medicines", label: "Medicines", icon: Pill },
   { id: "billing", label: "Billing", icon: ReceiptText },
-  { id: "membership", label: "Membership", icon: CreditCard },
-  { id: "family", label: "Family", icon: Users },
+  { id: "membership", label: "Membership & Family", icon: CreditCard },
   { id: "patient_tracking", label: "Patient Tracking", icon:  NotepadText},
-  { id: "diagonisis", label: "Diagonisis", icon: Activity },
+  { id: "diagonisis", label: "Diagnosis", icon: Activity },
 ];
 
 type PatientFlowProps = {
@@ -84,6 +82,8 @@ export function PatientFlow({
   activeSection,
   onSectionChange,
   patient,
+  membershipEnrollments = [],
+  membershipPlans = [],
   apiSession,
   patientIpAdmissions = [],
   loading,
@@ -102,6 +102,20 @@ export function PatientFlow({
   const isAdmitted = (patientIpAdmissions || []).some(
     (a: any) => a.status === "admitted" || a.status === "active",
   );
+  const activeMembershipPlanName =
+    patient?.subscription_plan_name ||
+    (membershipEnrollments || []).find((row: any) => row.status === "active")?.plan
+      ?.name ||
+    (() => {
+      const activeEnrollment = (membershipEnrollments || []).find(
+        (row: any) => row.status === "active",
+      );
+      return activeEnrollment
+        ? (membershipPlans || []).find(
+            (plan: any) => plan.id === activeEnrollment.plan_id,
+          )?.name
+        : "";
+    })();
 
   return (
     <div className="grid gap-4">
@@ -156,6 +170,12 @@ export function PatientFlow({
                     {isAdmitted ? "Admitted" : "Outpatient"}
                   </Badge>
                 )}
+                {activeMembershipPlanName && (
+                  <Badge tone="purple" className="normal-label max-w-[180px] truncate">
+                    {activeMembershipPlanName}
+                  </Badge>
+                )}
+                <PatientFlagBadges patient={patient} maxVisible={3} />
               </div>
               <p className="mt-1 text-xs font-medium text-slate-500">
                 {patient ? (
@@ -223,6 +243,8 @@ export function PatientFlow({
         <PatientDetail
           {...detailProps}
           patient={patient}
+          membershipEnrollments={membershipEnrollments}
+          membershipPlans={membershipPlans}
           apiSession={apiSession}
           patientIpAdmissions={patientIpAdmissions}
           loading={loading}

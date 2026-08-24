@@ -33,6 +33,7 @@ from app.modules.notifications.models import (
 from app.modules.notifications.services import events
 from app.modules.notifications import whatsapp_processor
 from app.modules.patients.models import Patient, WhatsAppConsentStatus
+from app.modules.patients.services.patient_service import PatientService
 from app.modules.lab.models import LabOrder
 from app.modules.practitioners.models import Practitioner
 from app.modules.queue.models import QueueEntry, QueueEvent
@@ -759,6 +760,10 @@ def test_queue_management_masks_recipient_and_supports_cancel_retry(
         "enforce_module_enabled",
         lambda _session, _tenant, _module: None,
     )
+    monkeypatch.setattr(
+        "app.modules.patients.services.patient_service.enforce_entitlement",
+        lambda _session, _tenant, _module: None,
+    )
     with Session(test_engine) as session:
         tenant, branch, patient, appointment = _configured_tenant(session)
         actor = User(
@@ -809,6 +814,197 @@ def test_queue_management_masks_recipient_and_supports_cancel_retry(
         )
         assert retried.status == "queued"
         assert retried.attempt_count == 0
+
+
+def test_delivery_queue_includes_today_message_summary(test_engine, monkeypatch):
+    monkeypatch.setattr(
+        whatsapp_queue_service,
+        "enforce_module_enabled",
+        lambda _session, _tenant, _module: None,
+    )
+    monkeypatch.setattr(
+        "app.modules.patients.services.patient_service.enforce_entitlement",
+        lambda _session, _tenant, _module: None,
+    )
+    with Session(test_engine) as session:
+        tenant, branch, patient, appointment = _configured_tenant(session)
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+        session.add_all(
+            [
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient=patient.mobile,
+                    message="Sent today",
+                    template_key="appointment_booked_patient",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    sent_at=now,
+                    updated_at=now,
+                ),
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient=patient.mobile,
+                    message="Second sent today",
+                    template_key="invoice_paid_patient",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    sent_at=now,
+                    updated_at=now,
+                ),
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.FAILED,
+                    recipient=patient.mobile,
+                    message="Failed today",
+                    template_key="invoice_paid_patient",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    updated_at=now,
+                ),
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient="919999999999",
+                    message="Sent yesterday",
+                    template_key="invoice_paid_patient",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    sent_at=yesterday,
+                    updated_at=yesterday,
+                ),
+            ]
+        )
+        session.commit()
+
+        listed = whatsapp_queue_service.list_whatsapp_queue(
+            session, tenant_id=tenant.id
+        )
+
+        assert listed.today.sent == 2
+        assert listed.today.failed == 1
+        assert listed.today.patient_recipients == 1
+
+
+def test_patient_communications_include_all_patient_whatsapp_templates(
+    test_engine, monkeypatch
+):
+    monkeypatch.setattr(
+        whatsapp_queue_service,
+        "enforce_module_enabled",
+        lambda _session, _tenant, _module: None,
+    )
+    monkeypatch.setattr(
+        "app.modules.patients.services.patient_service.enforce_entitlement",
+        lambda _session, _tenant, _module: None,
+    )
+    with Session(test_engine) as session:
+        tenant, branch, patient, appointment = _configured_tenant(session)
+        now = datetime.now(timezone.utc)
+        invoice = Invoice(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            invoice_number="MHB-INV-001",
+            total_amount=500,
+            payable_amount=500,
+            balance_amount=0,
+            status=InvoiceStatus.PAID,
+        )
+        session.add(invoice)
+        other_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-OTHER",
+            full_name="Other Patient",
+            mobile="919999993456",
+        )
+        session.add(other_patient)
+        session.flush()
+        other_invoice = Invoice(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=other_patient.id,
+            invoice_number="MHB-INV-OTHER",
+            total_amount=700,
+            payable_amount=700,
+            balance_amount=0,
+            status=InvoiceStatus.PAID,
+        )
+        session.add(other_invoice)
+        session.flush()
+        session.add_all(
+            [
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient=patient.mobile,
+                    message="Invoice sent",
+                    template_key="invoice_paid_patient",
+                    resource_type="invoice",
+                    resource_id=invoice.id,
+                    sent_at=now,
+                    updated_at=now,
+                ),
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient=patient.mobile,
+                    message="Appointment sent",
+                    template_key="appointment_booked_patient",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    sent_at=now,
+                    updated_at=now,
+                ),
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient=other_patient.mobile,
+                    message="Other invoice sent",
+                    template_key="invoice_paid_patient",
+                    resource_type="invoice",
+                    resource_id=other_invoice.id,
+                    sent_at=now,
+                    updated_at=now,
+                ),
+            ]
+        )
+        session.commit()
+
+        rows = PatientService(session).patient_communications(
+            tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        assert {row.template_key for row in rows} >= {
+            "invoice_paid_patient",
+            "appointment_booked_patient",
+        }
+        assert all(row.recipient_masked == "••••3210" for row in rows)
+        assert all(row.resource_id != other_invoice.id for row in rows)
 
 
 def test_phase_seven_flows_resolve_authoritative_template_values(
