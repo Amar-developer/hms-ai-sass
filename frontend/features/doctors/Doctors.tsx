@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Stethoscope } from "lucide-react";
+import { Plus, PlusCircle, Stethoscope } from "lucide-react";
 import { newSegment, editSegment } from "@/lib/routeSlugs";
 import {
   Card,
@@ -388,7 +388,7 @@ export function Doctors({
               onClick={() => open("create")}
               className="primary-action gap-2 px-4 py-3 text-xs lg:w-full"
             >
-              <Plus size={16} />
+               <PlusCircle size={16} />
               Create Doctor
             </button>
           )}

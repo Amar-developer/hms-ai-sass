@@ -34,6 +34,7 @@ export function getExpenseTableSchema(view: "months" | "expenses"): TableSchema 
             { key: "category", label: "Category" },
             { key: "amount", label: "Amount" },
             { key: "status", label: "Status" },
+            { key: "updatedAt", label: "Last Modified" },
           ],
   };
 }

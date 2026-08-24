@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ApiSession } from "@/lib/api";
+import type { RecentSubcategory } from "../types";
 import { fetchRecentSubcategories } from "./expenses.api";
 
 export function useRecentSubcategories(apiSession: ApiSession | null | undefined) {
-  const [subcategories, setSubcategories] = useState<string[]>([]);
+  const [recentSubcategories, setRecentSubcategories] = useState<
+    RecentSubcategory[]
+  >([]);
 
   const reload = useCallback(async () => {
     if (!apiSession) return;
     try {
       const result = await fetchRecentSubcategories(apiSession);
-      setSubcategories(Array.isArray(result) ? result : []);
+      setRecentSubcategories(Array.isArray(result) ? result : []);
     } catch {
       // Suggestions are a convenience, not critical — fail silently.
     }
@@ -19,5 +22,5 @@ export function useRecentSubcategories(apiSession: ApiSession | null | undefined
     void reload();
   }, [reload]);
 
-  return { subcategories, reload };
+  return { recentSubcategories, reload };
 }

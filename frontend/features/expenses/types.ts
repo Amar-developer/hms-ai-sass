@@ -21,6 +21,7 @@ export type Expense = {
   status: ExpenseStatus;
   submittedBy: string;
   approvedBy?: string;
+  quantity?: number | null;
   rejectionReason?: string;
   receiptName?: string;
   createdByUserId?: string | null;
@@ -36,4 +37,19 @@ export type ExpenseFormValues = {
   incurredOn: string;
   branchId: string;
   description: string;
+  quantity?: string;
+};
+
+export type ExpenseSubcategoryConfig = {
+  id: string;
+  category: ExpenseCategory;
+  name: string;
+  defaultAmount: number | null;
+  requiresQuantity: boolean;
+  isActive: boolean;
+};
+
+export type RecentSubcategory = {
+  category: ExpenseCategory;
+  name: string;
 };

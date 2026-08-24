@@ -12,6 +12,7 @@ from app.modules.expenses.schemas import (
     ExpenseUpdate,
     ExpenseRead,
     ExpenseRejectRequest,
+    RecentSubcategory,
 )
 from app.modules.identity.models import User
 from app.modules.subscriptions.service import enforce_module_enabled
@@ -96,11 +97,11 @@ def get_expense(session: Session, *, tenant_id: str, expense_id: str, actor: Use
 
 
 def get_recent_subcategories(
-    session: Session, *, tenant_id: str, actor: User, limit: int = 5
-) -> list[str]:
-    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
+    session: Session, *, tenant_id: str, limit: int = 50
+) -> list[RecentSubcategory]:
     repo = ExpenseRepository(session=session)
-    return repo.recent_subcategories(tenant_id=tenant_id, limit=limit)
+    rows = repo.recent_subcategories(tenant_id=tenant_id, limit=limit)
+    return [RecentSubcategory(category=category, name=name) for category, name in rows]
 
 
 def create_expense(
@@ -118,6 +119,7 @@ def create_expense(
         currency=payload.currency,
         incurred_on=payload.incurred_on,
         description=payload.description,
+        quantity=payload.quantity,
         submitted_by=actor.id,
         created_by_user_id=actor.id,
         updated_by_user_id=actor.id,

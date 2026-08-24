@@ -37,6 +37,7 @@ class Expense(SQLModel, table=True):
     status: ExpenseStatus = Field(default=ExpenseStatus.PENDING, index=True)
     submitted_by: str = Field(index=True)
     approved_by: str | None = None
+    quantity: Decimal | None = Field(default=None, sa_column=Column(Numeric(12, 2)))
     created_by_user_id: str | None = Field(default=None, index=True)
     updated_by_user_id: str | None = Field(default=None, index=True)
     rejection_reason: str | None = None
@@ -48,3 +49,21 @@ class Expense(SQLModel, table=True):
         Index("ix_expense_tenant_status", "tenant_id", "status"),
         Index("ix_expense_tenant_incurred_on", "tenant_id", "incurred_on"),
     )
+
+
+class ExpenseSubcategory(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("expsubcat"), primary_key=True)
+    tenant_id: str = Field(index=True)
+    category: ExpenseCategory = Field(index=True)
+    name: str = Field(min_length=1, max_length=100, index=True)
+    default_amount: Decimal | None = Field(
+        default=None, sa_column=Column(Numeric(12, 2))
+    )
+    requires_quantity: bool = Field(default=False)
+    is_active: bool = Field(default=True, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc)
+    updated_at: datetime = Field(default_factory=now_utc)
+
+    __table_args__ = (Index("ix_expsubcat_tenant_category", "tenant_id", "category"),)

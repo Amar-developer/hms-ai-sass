@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pill, Plus, Stethoscope } from "lucide-react";
+import { Pill, Plus, PlusCircle, Stethoscope } from "lucide-react";
 import { newSegment } from "@/lib/routeSlugs";
 import {
   Button,
@@ -779,7 +779,7 @@ export function Pharmacy({
             queryFilters={worklistQueryFilters}
             onQueryFiltersChange={setWorklistQueryFilters}
           >
-            <FormField label="Price Min">
+            {/* <FormField label="Price Min">
               <Input
                 type="number"
                 value={amountMin}
@@ -808,7 +808,7 @@ export function Pharmacy({
                 value={worklistToDate}
                 onChange={(e: any) => setWorklistToDate(e.target.value)}
               />
-            </FormField>
+            </FormField> */}
           </AdaptiveFilterTrigger>
           <AdaptiveSortTrigger
             fields={pharmacySchema.sortFields}
@@ -828,7 +828,7 @@ export function Pharmacy({
               }
               className="primary-action gap-2 px-4 py-3 text-xs"
             >
-              <Plus size={16} />
+              <PlusCircle size={16} />
               Create Prescription
             </button>
           )}

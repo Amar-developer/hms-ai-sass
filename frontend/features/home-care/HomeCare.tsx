@@ -430,7 +430,7 @@ export function HomeCare({
               queryFilters={queryFilters}
               onQueryFiltersChange={setQueryFilters}
             >
-              <FormField label="From">
+              {/* <FormField label="From">
                 <Input
                   type="date"
                   value={filters.fromDate}
@@ -447,7 +447,7 @@ export function HomeCare({
                     setFilters({ ...filters, toDate: event.target.value })
                   }
                 />
-              </FormField>
+              </FormField> */}
             </AdaptiveFilterTrigger>
             <AdaptiveSortTrigger
               fields={homeCareSchema.sortFields}

@@ -592,6 +592,10 @@ All endpoints enforce the separate `patient_intelligence` plan entitlement. Exis
 | `POST` | `/api/v1/expenses/{expense_id}/approve` | `expenses.approve` |
 | `POST` | `/api/v1/expenses/{expense_id}/reject` | `expenses.approve` |
 | `POST` | `/api/v1/expenses/{expense_id}/reimburse` | `expenses.manage` |
+| `POST` | `/api/v1/expenses/subcategory-configs` | `expense_subcategories.manage` or `expense_subcategories.create` |
+| `GET` | `/api/v1/expenses/subcategory-configs` | `expense_subcategories.manage`, `expense_subcategories.read`, `expenses.manage`, or `expenses.create` |
+| `PATCH` | `/api/v1/expenses/subcategory-configs/{subcategory_id}` | `expense_subcategories.manage` or `expense_subcategories.edit` |
+| `DELETE` | `/api/v1/expenses/subcategory-configs/{subcategory_id}` | `expense_subcategories.manage` or `expense_subcategories.delete` |
 | `POST` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications/in-app` | Authenticated tenant user; current user's inbox only |

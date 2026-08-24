@@ -13,6 +13,7 @@ import {
   Plus,
   Stethoscope,
   CreditCard,
+  PlusCircle,
 } from "lucide-react";
 
 import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
@@ -440,7 +441,7 @@ export function OPDWorkspace({
                 onClick={() => openSection("/opd/new")}
                 className="primary-action h-9 gap-2 whitespace-nowrap px-4 text-xs"
               >
-                <Plus className="h-4 w-4" />
+                <PlusCircle size={16} />
                 New Appointment
               </button>
             )}

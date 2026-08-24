@@ -881,7 +881,7 @@ export function AppointmentCalendarBooking(props: Props) {
                 />
               </FormField>
             )}
-            <FormField label="Select Date">
+            {/* <FormField label="Select Date">
               <Input
                 type="date"
                 value={filterDate}
@@ -890,7 +890,7 @@ export function AppointmentCalendarBooking(props: Props) {
                   setFilterDate(event.target.value);
                 }}
               />
-            </FormField>
+            </FormField> */}
           </AdaptiveFilterTrigger>
           {!isSuperAdmin && (
             <AdaptiveSortTrigger

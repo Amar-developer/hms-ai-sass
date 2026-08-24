@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Users } from "lucide-react";
+import { Plus, PlusCircle, Users } from "lucide-react";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { Pagination } from "@/app/components/common/Pagination";
 import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
@@ -589,7 +589,7 @@ export function Patient({
               onClick={() => open("create")}
               className="primary-action shrink-0 gap-2 px-5 py-3 text-xs shadow-sm"
             >
-              <Plus size={16} />
+             <PlusCircle size={16} />
               Create Patient
             </button>
           )}

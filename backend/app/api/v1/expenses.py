@@ -12,7 +12,11 @@ from app.modules.expenses.schemas import (
     ExpenseCreate,
     ExpenseRead,
     ExpenseRejectRequest,
+    ExpenseSubcategoryCreate,
+    ExpenseSubcategoryRead,
+    ExpenseSubcategoryUpdate,
     ExpenseUpdate,
+    RecentSubcategory,
 )
 from app.modules.expenses.services.expense import (
     create_expense,
@@ -25,6 +29,12 @@ from app.modules.expenses.services.expense import (
     reimburse_expense,
     get_expense,
     get_recent_subcategories,
+)
+from app.modules.expenses.services.expense_subcategory import (
+    create_expense_subcategory,
+    delete_expense_subcategory,
+    list_expense_subcategories,
+    update_expense_subcategory,
 )
 
 from app.modules.identity import permissions
@@ -89,7 +99,7 @@ def list_expense_filter_options_endpoint(
     )
 
 
-@router.get("/subcategories/recent", response_model=list[str])
+@router.get("/subcategories/recent", response_model=list[RecentSubcategory])
 def recent_subcategories_endpoint(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
@@ -100,8 +110,97 @@ def recent_subcategories_endpoint(
             permissions.EXPENSES_READ,
         )
     ),
-) -> list[str]:
-    return get_recent_subcategories(session, tenant_id=tenant_id, actor=current_user)
+) -> list[RecentSubcategory]:
+    return get_recent_subcategories(session, tenant_id=tenant_id)
+
+
+@router.post(
+    "/subcategory-configs",
+    response_model=ExpenseSubcategoryRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_expense_subcategory_config_endpoint(
+    payload: ExpenseSubcategoryCreate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.EXPENSE_SUBCATEGORIES_MANAGE,
+            permissions.EXPENSE_SUBCATEGORIES_CREATE,
+        )
+    ),
+) -> ExpenseSubcategoryRead:
+    return create_expense_subcategory(
+        session, tenant_id=tenant_id, payload=payload, actor=current_user
+    )
+
+
+@router.get(
+    "/subcategory-configs",
+    response_model=list[ExpenseSubcategoryRead],
+)
+def list_expense_subcategory_configs_endpoint(
+    category: ExpenseCategory | None = Query(default=None),
+    active_only: bool = Query(default=False),
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.EXPENSE_SUBCATEGORIES_MANAGE,
+            permissions.EXPENSE_SUBCATEGORIES_READ,
+            permissions.EXPENSES_MANAGE,
+            permissions.EXPENSES_CREATE,
+        )
+    ),
+) -> list[ExpenseSubcategoryRead]:
+    return list_expense_subcategories(
+        session, tenant_id=tenant_id, category=category, active_only=active_only
+    )
+
+
+@router.patch(
+    "/subcategory-configs/{subcategory_id}",
+    response_model=ExpenseSubcategoryRead,
+)
+def update_expense_subcategory_config_endpoint(
+    subcategory_id: str,
+    payload: ExpenseSubcategoryUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.EXPENSE_SUBCATEGORIES_MANAGE,
+            permissions.EXPENSE_SUBCATEGORIES_EDIT,
+        )
+    ),
+) -> ExpenseSubcategoryRead:
+    return update_expense_subcategory(
+        session,
+        tenant_id=tenant_id,
+        subcategory_id=subcategory_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.delete(
+    "/subcategory-configs/{subcategory_id}",
+    response_model=ExpenseSubcategoryRead,
+)
+def delete_expense_subcategory_config_endpoint(
+    subcategory_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.EXPENSE_SUBCATEGORIES_MANAGE,
+            permissions.EXPENSE_SUBCATEGORIES_DELETE,
+        )
+    ),
+) -> ExpenseSubcategoryRead:
+    return delete_expense_subcategory(
+        session, tenant_id=tenant_id, subcategory_id=subcategory_id, actor=current_user
+    )
 
 
 @router.get("/{expense_id}", response_model=ExpenseRead)

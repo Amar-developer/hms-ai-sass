@@ -19,7 +19,6 @@ type ExpenseDetailProps = {
   onClose: () => void;
   onApprove: (id: string) => void;
   onReject: (id: string, reason: string) => void;
-  onReimburse: (id: string) => void;
   onAttachReceipt?: (id: string, receiptFileId: string) => void;
 };
 
@@ -37,7 +36,6 @@ export function ExpenseDetail({
   onClose,
   onApprove,
   onReject,
-  onReimburse,
   onAttachReceipt,
 }: ExpenseDetailProps) {
   const [rejectionReason, setRejectionReason] = useState("");
@@ -151,7 +149,7 @@ export function ExpenseDetail({
                 <Button
                   type="button"
                   onClick={() => setShowRejectField(true)}
-                  className="bg-slate-100 text-slate-700 rounded-lg px-4 py-2.5 lg:px-4 lg:py-2.5 md:text-base lg:text-xs border font-bold"
+                  className="close-button bg-slate-200 text-slate-900 hover:bg-slate-300 font-bold"
                 >
                   Reject
                 </Button>
@@ -160,7 +158,7 @@ export function ExpenseDetail({
                   type="button"
                   disabled={!rejectionReason.trim() || busy}
                   onClick={() => onReject(expense.id, rejectionReason.trim())}
-                  className="close-button bg-slate-100"
+                  className="close-button bg-slate-200 text-slate-900 hover:bg-slate-300 font-bold"
                 >
                   Confirm Reject
                 </Button>
@@ -174,18 +172,6 @@ export function ExpenseDetail({
                 Approve
               </Button>
             </div>
-          </div>
-        )}
-
-        {canApprove && expense.status === "approved" && (
-          <div className="mt-5 flex justify-end">
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => onReimburse(expense.id)}
-            >
-              Mark Reimbursed
-            </Button>
           </div>
         )}
       </div>

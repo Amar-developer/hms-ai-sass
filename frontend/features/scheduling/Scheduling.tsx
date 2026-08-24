@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, CalendarClock } from "lucide-react";
+import { Plus, CalendarClock, PlusCircle } from "lucide-react";
 import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { selectedSchedulePayloadsFromRHF } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
@@ -415,7 +415,7 @@ export function Scheduling({
             onClick={() => open("create")}
             className="primary-action gap-2 px-4 py-3 text-xs"
           >
-            <Plus size={16} />
+           <PlusCircle size={16} />
             Create Schedule
           </button>
         </div>

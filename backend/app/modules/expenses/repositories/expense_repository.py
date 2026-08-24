@@ -160,16 +160,18 @@ class ExpenseRepository:
             ),
         }
 
-    def recent_subcategories(self, *, tenant_id: str, limit: int = 5) -> list[str]:
+    def recent_subcategories(
+        self, *, tenant_id: str, limit: int = 50
+    ) -> list[tuple[ExpenseCategory, str]]:
         stmt = (
-            select(Expense.subcategory, func.max(Expense.created_at))
+            select(Expense.category, Expense.subcategory, func.max(Expense.created_at))
             .where(
                 Expense.tenant_id == tenant_id,
                 Expense.subcategory.is_not(None),
             )
-            .group_by(Expense.subcategory)
+            .group_by(Expense.category, Expense.subcategory)
             .order_by(func.max(Expense.created_at).desc())
             .limit(limit)
         )
         rows = self.session.exec(stmt).all()
-        return [row[0] for row in rows]
+        return [(row[0], row[1]) for row in rows]

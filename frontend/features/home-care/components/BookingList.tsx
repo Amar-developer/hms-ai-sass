@@ -2,7 +2,7 @@ import { Card, Button } from "@/app/components/common/ui";
 import { Pagination } from "@/app/components/common/Pagination";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getBookingListColumn } from "../Column";
-import { Plus, HeartPulse } from "lucide-react";
+import { Plus, HeartPulse, PlusCircle } from "lucide-react";
 
 export function BookingsList({
   bookings,
@@ -46,7 +46,7 @@ export function BookingsList({
           <div className="mt-2 flex items-center gap-2">
             {canCreate && (
               <Button type="button" onClick={onCreate} className="save-button  primary-action shrink-0 gap-2 px-5 py-3 text-xs shadow-sm">
-                <Plus size={16} /> New Booking
+                <PlusCircle size={16} /> New Booking
               </Button>
             )}
           </div>

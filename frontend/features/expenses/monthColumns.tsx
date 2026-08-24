@@ -8,7 +8,9 @@ export function getMonthColumns() {
       key: "label",
       header: "Month",
       sortable: true,
-      render: (row: MonthGroup) => <span className="text-sm font-bold">{row.label}</span>,
+      render: (row: MonthGroup) => (
+        <span className="text-sm font-bold">{row.label}</span>
+      ),
     },
     {
       key: "count",

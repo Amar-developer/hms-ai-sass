@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, PlusCircle, Wallet, CalendarRange } from "lucide-react";
+import { ArrowLeft, PlusCircle, Wallet, CalendarRange, X } from "lucide-react";
 import {
   Button,
   Card,
@@ -23,11 +23,18 @@ import type { SortState } from "@/utils/types";
 import { ExpenseSummaryTiles } from "./components/ExpenseSummaryTiles";
 import { ExpenseDetail } from "./components/ExpenseDetail";
 import { ExpenseForm } from "./forms/ExpenseForm";
+import { ExpenseSubcategoriesAdmin } from "./subcategories/ExpenseSubcategoriesAdmin";
 import { getExpenseColumns } from "./columns";
 import { getMonthColumns } from "./monthColumns";
 import { groupExpensesByMonth, mapExpense, monthLabel } from "./helpers";
-import { useExpenseActions, useExpensesData, useRecentSubcategories } from "./api";
+import {
+  useExpenseActions,
+  useExpensesData,
+  useExpenseSubcategoryConfigs,
+  useRecentSubcategories,
+} from "./api";
 import { fetchExpenseFilterOptions } from "./api/expenses.api";
+import { canManageExpenseSubcategories } from "./permissions";
 import type { Expense } from "./types";
 import type { ExpenseFormSchemaValues } from "./expenses.schema";
 
@@ -40,14 +47,17 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [sort, setSort] = useState<SortState | null>(null);
+  const DEFAULT_SORT: SortState = { key: "updatedAt", dir: "desc" };
+  const [sort, setSort] = useState<SortState | null>(DEFAULT_SORT);
   const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [receiptTargetExpense, setReceiptTargetExpense] = useState<Expense | null>(null);
+  const [receiptTargetExpense, setReceiptTargetExpense] =
+    useState<Expense | null>(null);
   const [receiptFileId, setReceiptFileId] = useState("");
+  const [showSubcategoryAdmin, setShowSubcategoryAdmin] = useState(false);
   const [filterOptions, setFilterOptions] = useState<
     Record<string, QueryFieldOption[]>
   >({});
@@ -73,13 +83,18 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
     attachReceipt,
     approveExpense,
     rejectExpense,
-    reimburseExpense,
   } = useExpenseActions(apiSession, reload);
-  const { subcategories: recentSubcategories, reload: reloadSubcategories } =
+  const { subcategoryConfigs, reload: reloadSubcategoryConfigs } =
+    useExpenseSubcategoryConfigs(apiSession, { activeOnly: true });
+  const { recentSubcategories, reload: reloadRecentSubcategories } =
     useRecentSubcategories(apiSession);
+  const canManageSubcategories = canManageExpenseSubcategories(apiSession?.user);
 
   const branchNameById = useMemo(() => {
-    const entries = (clinic?.branches || []).map((branch: any) => [branch.id, branch.name]);
+    const entries = (clinic?.branches || []).map((branch: any) => [
+      branch.id,
+      branch.name,
+    ]);
     return Object.fromEntries(entries) as Record<string, string>;
   }, [clinic]);
 
@@ -93,15 +108,26 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
   );
 
   const rows = useMemo(
-    () => rawExpenses.map((raw) => mapExpense(raw, branchNameById, apiSession?.user?.id)),
+    () =>
+      rawExpenses.map((raw) =>
+        mapExpense(raw, branchNameById, apiSession?.user?.id),
+      ),
     [rawExpenses, branchNameById, apiSession?.user?.id],
   );
+
+  const [selectedMonthNum, selectedYearNum] = useMemo(() => {
+    if (!selectedMonth) return [undefined, undefined];
+    const [year, month] = selectedMonth.split("-").map(Number);
+    return [month, year];
+  }, [selectedMonth]);
 
   const rawMonthGroups = useMemo(() => groupExpensesByMonth(rows), [rows]);
   const rawMonthRows = useMemo(
     () =>
       selectedMonth
-        ? rows.filter((expense) => expense.incurredOn.slice(0, 7) === selectedMonth)
+        ? rows.filter(
+            (expense) => expense.incurredOn.slice(0, 7) === selectedMonth,
+          )
         : [],
     [rows, selectedMonth],
   );
@@ -133,14 +159,13 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
   );
   const monthRows = useMemo(
     () =>
-      sortRows(
-        selectedMonth ? rawMonthRows : [],
-        selectedMonth ? sort : null,
-      ),
+      sortRows(selectedMonth ? rawMonthRows : [], selectedMonth ? sort : null),
     [rawMonthRows, selectedMonth, sort],
   );
 
-  const expenseSchema = getExpenseTableSchema(selectedMonth ? "expenses" : "months");
+  const expenseSchema = getExpenseTableSchema(
+    selectedMonth ? "expenses" : "months",
+  );
 
   const handleFilterChange = (key: string, value: string) => {
     if (key === "status") setFilterStatus(value);
@@ -151,7 +176,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
     setQuery("");
     setFilterStatus("all");
     setFilterCategory("all");
-    setSort(null);
+    setSort(DEFAULT_SORT);
     setQueryFilters([]);
   };
 
@@ -172,10 +197,11 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
       currency: "INR",
       incurred_on: values.incurredOn,
       description: values.description,
+      quantity: values.quantity ? Number(values.quantity) : null,
     });
     if (ok) {
       setShowForm(false);
-      void reloadSubcategories();
+      void reloadRecentSubcategories();
     }
   }
 
@@ -188,10 +214,11 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
       currency: "INR",
       incurred_on: values.incurredOn,
       description: values.description,
+      quantity: values.quantity ? Number(values.quantity) : null,
     });
     if (ok) {
       setEditingExpense(null);
-      void reloadSubcategories();
+      void reloadRecentSubcategories();
     }
   }
 
@@ -205,18 +232,16 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
     if (ok) setSelectedExpense(null);
   }
 
-  async function handleReimburse(id: string) {
-    const ok = await reimburseExpense(id);
-    if (ok) setSelectedExpense(null);
-  }
-
   async function handleAttachReceipt(id: string, fileId: string) {
     await attachReceipt(id, fileId);
   }
 
   async function handleQuickAttachReceipt() {
     if (!receiptTargetExpense || !receiptFileId.trim()) return;
-    const ok = await attachReceipt(receiptTargetExpense.id, receiptFileId.trim());
+    const ok = await attachReceipt(
+      receiptTargetExpense.id,
+      receiptFileId.trim(),
+    );
     if (ok) {
       setReceiptTargetExpense(null);
       setReceiptFileId("");
@@ -263,7 +288,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
 
       <ExpenseSummaryTiles expenses={rows} />
 
-      <Card>
+      <Card className="p-0">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
             {selectedMonth && (
@@ -285,18 +310,29 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
                 : "Track, approve, and reimburse staff expense claims across branches."}
             </p>
           </div>
-          <Button
-            onClick={() => setShowForm(true)}
-            className="flex items-center justify-between rounded-lg gap-2 w-44 text-xs px-3 py-2 lg:px-4 lg:py-3"
-          >
-            <div className="flex items-center">
-              <PlusCircle size={16} />
-              <p className="pl-2">Add New</p>
-            </div>
-          </Button>
+          <div className="flex items-center gap-2">
+            {canManageSubcategories && (
+              <button
+                type="button"
+                onClick={() => setShowSubcategoryAdmin(true)}
+                className="border rounded-lg px-3 py-2 text-xs font-bold hover:bg-slate-100"
+              >
+                Manage Subcategories
+              </button>
+            )}
+            <Button
+              onClick={() => setShowForm(true)}
+              className="flex items-center justify-between rounded-lg gap-2 w-28 text-xs px-3 py-2 lg:px-4 lg:py-3"
+            >
+              <div className="flex items-center">
+                <PlusCircle size={16} />
+                <p className="pl-2">Add New</p>
+              </div>
+            </Button>
+          </div>
         </div>
 
-        <div className="mt-4 overflow-auto max-w-[1000px]">
+        <div className="mt-4 overflow-auto max-w-[975px]">
           {selectedMonth ? (
             <DataTable
               columns={getExpenseColumns(
@@ -304,12 +340,16 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
                 (row) => setReceiptTargetExpense(row),
               )}
               data={monthRows}
-              emptyMessage={loading ? "Loading expenses..." : "No expenses found for this month."}
+              emptyMessage={
+                loading
+                  ? "Loading expenses..."
+                  : "No expenses found for this month."
+              }
               emptyDescription="Staff expense claims submitted for this month will show up here."
               emptyIcon={Wallet}
               minBodyHeight="220px"
               onRowClick={(row: Expense) => setSelectedExpense(row)}
-              className="max-w-[1000px] overflow-auto"
+              className="max-w-[975px] overflow-auto"
               sort={sort ?? undefined}
               onSortChange={setSort}
             />
@@ -317,11 +357,15 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
             <DataTable
               columns={getMonthColumns()}
               data={monthGroups}
-              emptyMessage={loading ? "Loading expenses..." : "No expenses found."}
+              emptyMessage={
+                loading ? "Loading expenses..." : "No expenses found."
+              }
               emptyDescription="Monthly expense claim summaries across branches will show up here."
               emptyIcon={CalendarRange}
               minBodyHeight="220px"
-              onRowClick={(row: { monthKey: string }) => setSelectedMonth(row.monthKey)}
+              onRowClick={(row: { monthKey: string }) => {
+                setSelectedMonth(row.monthKey);
+              }}
               sort={sort ?? undefined}
               onSortChange={setSort}
             />
@@ -337,14 +381,15 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="close-button font-bold"
+                className="border p-2 rounded-md hover:bg-slate-200 font-bold"
               >
-                Close
+                <X size={16}/>
               </button>
             </div>
             <div className="mt-4">
               <ExpenseForm
                 branchOptions={branchOptions}
+                subcategoryConfigs={subcategoryConfigs}
                 recentSubcategories={recentSubcategories}
                 busy={isBusy}
                 initialValues={
@@ -361,6 +406,8 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
                 }
                 onCancel={() => setShowForm(false)}
                 onSubmit={handleCreate}
+                selectedMonth={selectedMonthNum}
+                selectedYear={selectedYearNum}
               />
             </div>
           </div>
@@ -383,6 +430,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
             <div className="mt-4">
               <ExpenseForm
                 branchOptions={branchOptions}
+                subcategoryConfigs={subcategoryConfigs}
                 recentSubcategories={recentSubcategories}
                 busy={isBusy}
                 submitLabel="Save Changes"
@@ -393,9 +441,15 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
                   incurredOn: editingExpense.incurredOn,
                   branchId: editingExpense.branchId ?? "",
                   description: editingExpense.description,
+                  quantity:
+                    editingExpense.quantity != null
+                      ? String(editingExpense.quantity)
+                      : "",
                 }}
                 onCancel={() => setEditingExpense(null)}
                 onSubmit={(values) => handleUpdate(editingExpense.id, values)}
+                selectedMonth={selectedMonthNum}
+                selectedYear={selectedYearNum}
               />
             </div>
           </div>
@@ -461,8 +515,17 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
           onClose={() => setSelectedExpense(null)}
           onApprove={handleApprove}
           onReject={handleReject}
-          onReimburse={handleReimburse}
           onAttachReceipt={handleAttachReceipt}
+        />
+      )}
+
+      {showSubcategoryAdmin && (
+        <ExpenseSubcategoriesAdmin
+          apiSession={apiSession}
+          onClose={() => {
+            setShowSubcategoryAdmin(false);
+            void reloadSubcategoryConfigs();
+          }}
         />
       )}
     </div>
