@@ -72,7 +72,7 @@ const AppHeader = ({
 
   return (
     <header className="sticky top-0 z-20 shadow-sm  bg-white/95 px-4 py-2 backdrop-blur lg:px-5">
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:grid-cols-[minmax(250px,1fr)_minmax(260px,420px)_minmax(140px,210px)_auto]">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:grid-cols-[minmax(260px,1fr)_minmax(260px,420px)_minmax(140px,210px)_auto]">
         <div className="min-w-0 self-center">
           {isSuperAdmin && apiSession ? (
             <SearchableSelect
@@ -82,7 +82,7 @@ const AppHeader = ({
               options={tenantOptions}
             />
           ) : (
-            <h2 className="whitespace-nowrap text-sm font-black leading-tight text-slate-950 lg:text-base">
+            <h2 className="whitespace-nowrap text-[13px] font-black leading-tight text-slate-950 lg:text-base">
               {displayClinicName}
             </h2>
           )}

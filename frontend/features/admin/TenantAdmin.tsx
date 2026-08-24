@@ -30,14 +30,14 @@ import type { SortState } from "@/utils/types";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
 import { groupDepartmentsByName } from "./helpers";
 import {
-  UserRow,
-  RoleRow,
-  DepartmentRow,
-  BranchRow,
-  SupplierRow,
-  TaxRuleRow,
-  DiscountOfferRow,
-} from "./components/Rows";
+  getUserColumns,
+  getRoleColumns,
+  getDepartmentColumns,
+  getBranchColumns,
+  getSupplierColumns,
+  getTaxRuleColumns,
+  getDiscountOfferColumns,
+} from "./column";
 import { ListCard } from "./components/ListCard";
 import { PasswordResetModal } from "./components/PasswordResetModal";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
@@ -52,15 +52,6 @@ import { FilesPanel } from "./components/FilesPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { WhatsAppIntegrationSettings } from "./whatsapp_integration/WhatsAppIntegrationSettings";
 import { PatientIntelligenceSettings } from "./components/PatientIntelligenceSettings";
-import {
-  BRANCH_COLUMNS,
-  DEPARTMENT_COLUMNS,
-  DISCOUNT_OFFER_COLUMNS,
-  ROLE_COLUMNS,
-  SUPPLIER_COLUMNS,
-  TAX_RULE_COLUMNS,
-  USER_COLUMNS,
-} from "@/utils/constants";
 import { useAdminData } from "./AdminDataContext";
 import { useTenantAdminActions } from "./api/useTenantAdminActions";
 import { Role } from "./types";
@@ -86,13 +77,16 @@ export function TenantAdmin({
   // one of them is ever visible at a time — reset whenever the section
   // changes so a filter from one entity doesn't silently no-op in another.
   const [listQuery, setListQuery] = useState("");
-  const [listSort, setListSort] = useState<SortState | null>(null);
+  const [listSort, setListSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
   const [listQueryFilters, setListQueryFilters] = useState<QueryFilterRow[]>(
     [],
   );
   useEffect(() => {
     setListQuery("");
-    setListSort(null);
+    setListSort({ key: "updated_at", dir: "desc" });
     setListQueryFilters([]);
   }, [section]);
 
@@ -623,27 +617,23 @@ export function TenantAdmin({
           canCreate={hasAdminAction("identity.users", "create")}
           onCreate={openCreate}
           loading={data.busy}
-          columns={USER_COLUMNS}
-          render={(user: any, index: number) => (
-            <UserRow
-              key={user.id}
-              index={index}
-              user={user}
-              roles={data.roles}
-              branches={data.branches}
-              canCopyIds={canCopyIds}
-              canEdit={hasAdminAction("identity.users", "edit")}
-              canDelete={hasAdminAction("identity.users", "delete")}
-              onEdit={() => openEdit(user.id)}
-              onRowClick={() => openDetail(user.id)}
-              onStatus={() =>
-                setConfirm({ entity: "users", kind: "status", row: user })
-              }
-              onDelete={() =>
-                setConfirm({ entity: "users", kind: "delete", row: user })
-              }
-            />
-          )}
+          columns={getUserColumns({
+            roles: data.roles,
+            branches: data.branches,
+            canCopyIds,
+            canEdit: hasAdminAction("identity.users", "edit"),
+            canDelete: hasAdminAction("identity.users", "delete"),
+            onEdit: (user: any) => openEdit(user.id),
+            onStatus: (user: any) =>
+              setConfirm({ entity: "users", kind: "status", row: user }),
+            onDelete: (user: any) =>
+              setConfirm({ entity: "users", kind: "delete", row: user }),
+          })}
+          onRowClick={
+            hasAdminAction("identity.users", "edit")
+              ? (user: any) => openDetail(user.id)
+              : undefined
+          }
         />
       )}
       {section === "users" && view === "create" && (
@@ -686,25 +676,21 @@ export function TenantAdmin({
           canCreate={hasAdminAction("identity.roles", "create")}
           onCreate={openCreate}
           loading={data.busy}
-          columns={ROLE_COLUMNS}
-          render={(role: Role, index: number) => (
-            <RoleRow
-              key={role.id}
-              index={index}
-              role={role}
-              canCopyIds={canCopyIds}
-              canEdit={hasAdminAction("identity.roles", "edit")}
-              canDelete={hasAdminAction("identity.roles", "delete")}
-              onEdit={() => openEdit(role.id)}
-              onRowClick={() => openDetail(role.id)}
-              onStatus={() =>
-                setConfirm({ entity: "roles", kind: "status", row: role })
-              }
-              onDelete={() =>
-                setConfirm({ entity: "roles", kind: "delete", row: role })
-              }
-            />
-          )}
+          columns={getRoleColumns({
+            canCopyIds,
+            canEdit: hasAdminAction("identity.roles", "edit"),
+            canDelete: hasAdminAction("identity.roles", "delete"),
+            onEdit: (role: Role) => openEdit(role.id),
+            onStatus: (role: Role) =>
+              setConfirm({ entity: "roles", kind: "status", row: role }),
+            onDelete: (role: Role) =>
+              setConfirm({ entity: "roles", kind: "delete", row: role }),
+          })}
+          onRowClick={
+            hasAdminAction("identity.roles", "edit")
+              ? (role: Role) => openDetail(role.id)
+              : undefined
+          }
         />
       )}
       {section === "roles" && view === "create" && (
@@ -742,33 +728,28 @@ export function TenantAdmin({
           canCreate={hasAdminAction("departments", "create")}
           onCreate={openCreate}
           loading={data.busy}
-          columns={DEPARTMENT_COLUMNS}
-          render={(department: any, index: number) => (
-            <DepartmentRow
-              key={department.id}
-              index={index}
-              department={department}
-              canEdit={hasAdminAction("departments", "edit")}
-              canDelete={hasAdminAction("departments", "delete")}
-              branches={data.branches}
-              onEdit={() => openEdit(department.id)}
-              onRowClick={() => openDetail(department.id)}
-              onStatus={() =>
-                setConfirm({
-                  entity: "departments",
-                  kind: "status",
-                  row: department.primary,
-                })
-              }
-              onDelete={() =>
-                setConfirm({
-                  entity: "departments",
-                  kind: "delete",
-                  row: department.primary,
-                })
-              }
-            />
-          )}
+          columns={getDepartmentColumns({
+            canEdit: hasAdminAction("departments", "edit"),
+            canDelete: hasAdminAction("departments", "delete"),
+            onEdit: (department: any) => openEdit(department.id),
+            onStatus: (department: any) =>
+              setConfirm({
+                entity: "departments",
+                kind: "status",
+                row: department.primary,
+              }),
+            onDelete: (department: any) =>
+              setConfirm({
+                entity: "departments",
+                kind: "delete",
+                row: department.primary,
+              }),
+          })}
+          onRowClick={
+            hasAdminAction("departments", "edit")
+              ? (department: any) => openDetail(department.id)
+              : undefined
+          }
         />
       )}
       {section === "departments" && view === "create" && (
@@ -807,25 +788,21 @@ export function TenantAdmin({
           canCreate={hasAdminAction("branches", "create")}
           onCreate={openCreate}
           loading={data.busy}
-          columns={BRANCH_COLUMNS}
-          render={(branch: any, index: number) => (
-            <BranchRow
-              key={branch.id}
-              index={index}
-              branch={branch}
-              canCopyIds={canCopyIds}
-              canEdit={hasAdminAction("branches", "edit")}
-              canDelete={hasAdminAction("branches", "delete")}
-              onEdit={() => openEdit(branch.id)}
-              onRowClick={() => openDetail(branch.id)}
-              onStatus={() =>
-                setConfirm({ entity: "branches", kind: "status", row: branch })
-              }
-              onDelete={() =>
-                setConfirm({ entity: "branches", kind: "delete", row: branch })
-              }
-            />
-          )}
+          columns={getBranchColumns({
+            canCopyIds,
+            canEdit: hasAdminAction("branches", "edit"),
+            canDelete: hasAdminAction("branches", "delete"),
+            onEdit: (branch: any) => openEdit(branch.id),
+            onStatus: (branch: any) =>
+              setConfirm({ entity: "branches", kind: "status", row: branch }),
+            onDelete: (branch: any) =>
+              setConfirm({ entity: "branches", kind: "delete", row: branch }),
+          })}
+          onRowClick={
+            hasAdminAction("branches", "edit")
+              ? (branch: any) => openDetail(branch.id)
+              : undefined
+          }
         />
       )}
       {section === "branches" && view === "create" && (
@@ -841,6 +818,7 @@ export function TenantAdmin({
           back={() => open("branches")}
         />
       )}
+
       {section === "branches" &&
         (view === "edit" || view === "view") &&
         selectedBranch && (
@@ -865,32 +843,20 @@ export function TenantAdmin({
           canCreate={hasAdminAction("suppliers", "create")}
           onCreate={openCreate}
           loading={data.busy}
-          columns={SUPPLIER_COLUMNS}
-          render={(supplier: any, index: number) => (
-            <SupplierRow
-              key={supplier.id}
-              index={index}
-              supplier={supplier}
-              canEdit={hasAdminAction("suppliers", "edit")}
-              canDelete={hasAdminAction("suppliers", "delete")}
-              onEdit={() => openEdit(supplier.id)}
-              onRowClick={() => openDetail(supplier.id)}
-              onStatus={() =>
-                setConfirm({
-                  entity: "suppliers",
-                  kind: "status",
-                  row: supplier,
-                })
-              }
-              onDelete={() =>
-                setConfirm({
-                  entity: "suppliers",
-                  kind: "delete",
-                  row: supplier,
-                })
-              }
-            />
-          )}
+          columns={getSupplierColumns({
+            canEdit: hasAdminAction("suppliers", "edit"),
+            canDelete: hasAdminAction("suppliers", "delete"),
+            onEdit: (supplier: any) => openEdit(supplier.id),
+            onStatus: (supplier: any) =>
+              setConfirm({ entity: "suppliers", kind: "status", row: supplier }),
+            onDelete: (supplier: any) =>
+              setConfirm({ entity: "suppliers", kind: "delete", row: supplier }),
+          })}
+          onRowClick={
+            hasAdminAction("suppliers", "edit")
+              ? (supplier: any) => openDetail(supplier.id)
+              : undefined
+          }
         />
       )}
       {section === "suppliers" && view === "create" && (
@@ -925,25 +891,21 @@ export function TenantAdmin({
           canCreate={hasAdminAction("tax", "create")}
           onCreate={openCreate}
           loading={data.busy}
-          columns={TAX_RULE_COLUMNS}
-          render={(rule: any, index: number) => (
-            <TaxRuleRow
-              key={rule.id}
-              index={index}
-              rule={rule}
-              canEdit={hasAdminAction("tax", "edit")}
-              canDelete={hasAdminAction("tax", "delete")}
-              branches={data.branches}
-              onEdit={() => openEdit(rule.id)}
-              onRowClick={() => openDetail(rule.id)}
-              onStatus={() =>
-                setConfirm({ entity: "tax", kind: "status", row: rule })
-              }
-              onDelete={() =>
-                setConfirm({ entity: "tax", kind: "status", row: rule })
-              }
-            />
-          )}
+          columns={getTaxRuleColumns({
+            branches: data.branches,
+            canEdit: hasAdminAction("tax", "edit"),
+            canDelete: hasAdminAction("tax", "delete"),
+            onEdit: (rule: any) => openEdit(rule.id),
+            onStatus: (rule: any) =>
+              setConfirm({ entity: "tax", kind: "status", row: rule }),
+            onDelete: (rule: any) =>
+              setConfirm({ entity: "tax", kind: "status", row: rule }),
+          })}
+          onRowClick={
+            hasAdminAction("tax", "edit")
+              ? (rule: any) => openDetail(rule.id)
+              : undefined
+          }
         />
       )}
       {section === "tax" && view === "create" && (
@@ -980,25 +942,21 @@ export function TenantAdmin({
           canCreate={hasAdminAction("discounts", "create")}
           onCreate={openCreate}
           loading={data.busy}
-          columns={DISCOUNT_OFFER_COLUMNS}
-          render={(offer: any, index: number) => (
-            <DiscountOfferRow
-              key={offer.id}
-              index={index}
-              offer={offer}
-              canEdit={hasAdminAction("discounts", "edit")}
-              canDelete={hasAdminAction("discounts", "delete")}
-              branches={data.branches}
-              onEdit={() => openEdit(offer.id)}
-              onRowClick={() => openDetail(offer.id)}
-              onStatus={() =>
-                setConfirm({ entity: "offers", kind: "status", row: offer })
-              }
-              onDelete={() =>
-                setConfirm({ entity: "offers", kind: "status", row: offer })
-              }
-            />
-          )}
+          columns={getDiscountOfferColumns({
+            branches: data.branches,
+            canEdit: hasAdminAction("discounts", "edit"),
+            canDelete: hasAdminAction("discounts", "delete"),
+            onEdit: (offer: any) => openEdit(offer.id),
+            onStatus: (offer: any) =>
+              setConfirm({ entity: "offers", kind: "status", row: offer }),
+            onDelete: (offer: any) =>
+              setConfirm({ entity: "offers", kind: "status", row: offer }),
+          })}
+          onRowClick={
+            hasAdminAction("discounts", "edit")
+              ? (offer: any) => openDetail(offer.id)
+              : undefined
+          }
         />
       )}
       {section === "offers" && view === "create" && (

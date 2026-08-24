@@ -16,6 +16,7 @@ export function getHomeCareTableSchema(): TableSchema {
       { key: "date_range", label: "Start date" },
       { key: "status", label: "Status" },
       { key: "total", label: "Total" },
+      { key: "updated_at", label: "Last Modified" },
     ],
   };
 }

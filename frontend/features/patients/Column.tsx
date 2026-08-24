@@ -1,10 +1,15 @@
-import { capitalizeFirst } from "@/utils/helper";
+import { capitalizeFirst, money } from "@/utils/helper";
 import { Badge } from "@/app/components/common/ui";
 import { RecordIdCell } from "@/app/components/common/RecordIdCell";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { Column } from "@/utils/types";
-import { displayPatientGender, patientDisplayMobile } from "./helpers";
+import { displayPatientGender, patientDisplayMobile, fmtDate } from "./helpers";
 import { PatientFlagBadges } from "./components/PatientFlagBadges";
+import { StatusBadge } from "./components/StatusBadge";
+import {
+  invoicePatientDueAmount,
+  invoiceSource,
+} from "@/features/billing/helpers";
 
 type PatientColumnsParams = {
   branches: any[];
@@ -164,6 +169,218 @@ export function getPatientColumns({
             className="right-7 -bottom-5"
           />
         </div>
+      ),
+    },
+  ];
+}
+
+export function getConsultationColumns({
+  onOpen,
+}: {
+  onOpen: (row: any) => void;
+}): Column<any>[] {
+  return [
+    {
+      key: "created_at",
+      header: "Date",
+      render: (row: any) => (
+        <span className="font-black text-slate-950">
+          {fmtDate(row.created_at)}
+        </span>
+      ),
+    },
+    {
+      key: "treatment_type",
+      header: "Type",
+      render: (row: any) => (
+        <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold capitalize text-slate-700">
+          {String(row.treatment_type || "consultation").replaceAll("_", " ")}
+        </span>
+      ),
+    },
+    {
+      key: "summary",
+      header: "Summary",
+      render: (row: any) => (
+        <span className="line-clamp-1">
+          {row.chief_complaint ||
+            row.diagnosis ||
+            row.patient_remarks ||
+            row.clinical_notes ||
+            "Consultation record"}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      className: "text-center",
+      width: "150px",
+      render: (row: any) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "action",
+      header: "Action",
+      cellClassName: "text-left",
+      disableRowClick: true,
+      render: (row: any) => (
+        <button
+          type="button"
+          onClick={() => onOpen(row)}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
+        >
+          Open
+        </button>
+      ),
+    },
+  ];
+}
+
+export function getInvoiceColumns({
+  onOpen,
+}: {
+  onOpen: (row: any) => void;
+}): Column<any>[] {
+  return [
+    {
+      key: "invoice_number",
+      header: "Invoice",
+      render: (row: any) => (
+        <span className="font-black">{row.invoice_number}</span>
+      ),
+    },
+    {
+      key: "source",
+      header: "Source",
+      render: (row: any) => (
+        <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase">
+          {invoiceSource(row).label}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row: any) => String(row.status || "").replaceAll("_", " "),
+    },
+    {
+      key: "total_amount",
+      header: "Total",
+      cellClassName: "text-left",
+      render: (row: any) => money(row.total_amount),
+    },
+    {
+      key: "paid_amount",
+      header: "Paid",
+      cellClassName: "text-left",
+      render: (row: any) => money(row.paid_amount),
+    },
+    {
+      key: "balance_amount",
+      header: "Due",
+      cellClassName: "text-left",
+      render: (row: any) => money(invoicePatientDueAmount(row)),
+    },
+  ];
+}
+
+// Labs and medicines both come in as `{ row, items }` bundles — one order/
+// issue per row, with its own line items grouped underneath.
+export function getLabOrderColumns({
+  onOpen,
+}: {
+  onOpen: (row: any) => void;
+}): Column<any>[] {
+  return [
+    {
+      key: "date",
+      header: "Date",
+      render: ({ row: order }: any) => (
+        <span className="font-black text-slate-950">
+          {fmtDate(order.created_at)}
+        </span>
+      ),
+    },
+    {
+      key: "tests",
+      header: "Tests",
+      className: "text-right",
+      cellClassName: "text-right",
+      render: ({ items }: any) => (
+        <span className="text-xs font-semibold text-slate-500">
+          {items.length} test(s)
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: ({ row: order }: any) => <StatusBadge status={order.status} />,
+    },
+    {
+      key: "action",
+      header: "Action",
+      className: "text-right",
+      cellClassName: "text-right",
+      disableRowClick: true,
+      render: ({ row: order }: any) => (
+        <button
+          type="button"
+          onClick={() => onOpen(order)}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
+        >
+          Open
+        </button>
+      ),
+    },
+  ];
+}
+
+export function getMedicineColumns({
+  onOpen,
+}: {
+  onOpen: (row: any) => void;
+}): Column<any>[] {
+  return [
+    {
+      key: "date",
+      header: "Date",
+      render: ({ row: issue }: any) => (
+        <span className="font-black text-slate-950">
+          {fmtDate(issue.created_at)}
+        </span>
+      ),
+    },
+    {
+      key: "items",
+      header: "Items",
+      className: "text-right",
+      cellClassName: "text-right",
+      render: ({ items }: any) => (
+        <span className="text-xs font-semibold text-slate-500">
+          {items.length} item(s)
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: ({ row: issue }: any) => <StatusBadge status={issue.status} />,
+    },
+    {
+      key: "action",
+      header: "Action",
+      className: "text-right",
+      cellClassName: "text-right",
+      disableRowClick: true,
+      render: ({ row: issue }: any) => (
+        <button
+          type="button"
+          onClick={() => onOpen(issue)}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
+        >
+          Open
+        </button>
       ),
     },
   ];

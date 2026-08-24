@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, CalendarClock } from "lucide-react";
 import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { selectedSchedulePayloadsFromRHF } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
@@ -428,6 +428,9 @@ export function Scheduling({
           data={pageRows}
           loading={loading || schedulePageLoading}
           emptyMessage="No schedules available"
+          emptyDescription="Doctor weekly consultation timings created for branches and departments will show up here."
+          emptyIcon={CalendarClock}
+          minBodyHeight="220px"
           className=" rounded-lg border border-slate-200 overflow-auto"
           onRowClick={(row) => open("edit", row.id)}
           sort={sort ?? undefined}

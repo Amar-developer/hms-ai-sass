@@ -1,3 +1,4 @@
+import { FlaskConical } from "lucide-react";
 import CollapsibleReportSection from "./CollapsibleReportSection";
 import { LabReportsProps } from "../types";
 import { DataTable } from "@/app/components/common/DataTable";
@@ -154,6 +155,9 @@ const LabReports = ({
             onRowClick={(row: any) => onOpenInvoices(row.invoices)}
             paginate
             emptyMessage="No paid lab invoices match this filter"
+            emptyDescription="Lab settlement and profitability figures will appear here once invoices are paid."
+            emptyIcon={FlaskConical}
+            minBodyHeight="220px"
             className="w-full min-w-[920px] text-left text-sm"
             loading={loading}
           />

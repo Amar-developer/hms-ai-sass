@@ -119,7 +119,7 @@ function BreadcrumbCrumb({
       type="button"
       onClick={onClick}
       disabled={current}
-      className={`truncate rounded-md px-1.5 py-1 text-[11px] font-bold text-brand hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent ${className}`}
+      className={`truncate rounded-md py-2 text-[11px] font-bold text-brand hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent ${className}`}
     >
       {label}
     </button>
@@ -963,7 +963,7 @@ export function AppShell({
           {showNavigationSkeleton ? (
             <BreadcrumbBarSkeleton />
           ) : (
-            <div className=" border-slate-100 bg-white px-4 py-3 lg:px-5 ">
+            <div className=" border-slate-100 bg-white px-4 py-2 lg:px-5 ">
               <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-2">
                   {/* Back / Forward group */}

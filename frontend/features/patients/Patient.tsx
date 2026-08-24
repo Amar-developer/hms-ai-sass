@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { Pagination } from "@/app/components/common/Pagination";
 import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
@@ -11,6 +11,7 @@ import { readNotificationTarget } from "@/lib/notificationTarget";
 import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
 import { PatientFlow, type PatientSectionId } from "./PatientFlow";
+import { PatientDetailSkeleton } from "./components/PatientDetailSkeleton";
 import { mapPatient } from "@/lib/liveData";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
@@ -137,6 +138,7 @@ export function Patient({
     canReadIntelligence,
     setBusy,
     setMessage,
+    initialId: selectedId,
   });
 
   const selected = selectedDetail || rows.find((row: any) => row.id === selectedId);
@@ -330,15 +332,22 @@ export function Patient({
 
 
   const detailFetchInFlightRef = useRef(false);
+  // Mount-scoped, not selectedDetail-scoped: selectedDetail can already be
+  // populated on mount (usePatientDetailData seeds the header from its
+  // cross-remount cache), but the rest of the bundle — consultations, labs,
+  // invoices, etc. — still needs a fresh fetch every time this component
+  // mounts, which the App Router does on every tab switch.
+  const fetchedForRef = useRef<string | null>(null);
   useEffect(() => {
     if (isInitialLoading) return;
     if ((view !== "detail" && view !== "edit") || !selectedId) return;
-    if (selectedDetail?.id === selectedId) return;
+    if (fetchedForRef.current === selectedId) return;
+    fetchedForRef.current = selectedId;
     detailFetchInFlightRef.current = true;
     loadPatientDetail(scopedSession, selectedId).finally(() => {
       detailFetchInFlightRef.current = false;
     });
-  }, [view, selectedId, selectedDetail?.id, isInitialLoading]);
+  }, [view, selectedId, isInitialLoading]);
 
   useEffect(() => {
     if (
@@ -494,6 +503,14 @@ export function Patient({
         setActive={setActive}
       />
     );
+  // Route-driven tabs remount this page on every switch, so `selected`
+  // (selectedDetail || rows.find(...)) is briefly empty while the fresh
+  // fetch runs — without this branch that fell through to the patient LIST
+  // view below, flashing its generic table skeleton over the detail page.
+  if (view === "detail" && !selected)
+    return (
+      <PatientDetailSkeleton section={section} onBack={() => open("list")} />
+    );
 
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -569,13 +586,16 @@ export function Patient({
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-3 overflow-x-auto  rounded-lg border border-slate-200 bg-white z-0 scrollbar-hidden">
+      <div className="mt-3 overflow-x-auto  rounded-lg  bg-white z-0 scrollbar-hidden">
         <div className="min-w-[1120px] ">
           <DataTable
             columns={patientColumns}
             data={pageRows}
             loading={busy}
             emptyMessage="No patients match your search."
+            emptyDescription="Patients registered here will show up in this list once added."
+            emptyIcon={Users}
+            minBodyHeight="220px"
             onRowClick={(row: any) => open("detail", row.id)}
             sort={sort ?? undefined}
             onSortChange={handleSortChange}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, PlusCircle } from "lucide-react";
+import { ArrowLeft, PlusCircle, Wallet, CalendarRange } from "lucide-react";
 import {
   Button,
   Card,
@@ -305,6 +305,9 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
               )}
               data={monthRows}
               emptyMessage={loading ? "Loading expenses..." : "No expenses found for this month."}
+              emptyDescription="Staff expense claims submitted for this month will show up here."
+              emptyIcon={Wallet}
+              minBodyHeight="220px"
               onRowClick={(row: Expense) => setSelectedExpense(row)}
               className="max-w-[1000px] overflow-auto"
               sort={sort ?? undefined}
@@ -315,6 +318,9 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
               columns={getMonthColumns()}
               data={monthGroups}
               emptyMessage={loading ? "Loading expenses..." : "No expenses found."}
+              emptyDescription="Monthly expense claim summaries across branches will show up here."
+              emptyIcon={CalendarRange}
+              minBodyHeight="220px"
               onRowClick={(row: { monthKey: string }) => setSelectedMonth(row.monthKey)}
               sort={sort ?? undefined}
               onSortChange={setSort}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CheckCircle2 } from "lucide-react";
 import { Card, Badge } from "@/app/components/common/ui";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { displayDate, money } from "@/utils/helper";
@@ -311,6 +312,9 @@ export function ActiveEnrollmentsTable({
           columns={columns}
           data={filteredRows}
           emptyMessage="No active enrollments yet."
+          emptyDescription="Patients with an active membership plan will appear here."
+          emptyIcon={CheckCircle2}
+          minBodyHeight="220px"
           paginate
           pageSize={enrollmentPageSize}
         />

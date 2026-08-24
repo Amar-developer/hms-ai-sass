@@ -1,3 +1,4 @@
+import { Stethoscope } from "lucide-react";
 import { DataTable } from "@/app/components/common/DataTable";
 import { AppointmentReportsProps } from "../types";
 import CollapsibleReportSection from "./CollapsibleReportSection";
@@ -152,6 +153,9 @@ const AppointmentReports = ({
             paginate
             className="w-full min-w-[1280px] text-left text-sm"
             emptyMessage="No healthcare invoices match this filter."
+            emptyDescription="Doctor fee and profitability details will appear here once consultations are settled."
+            emptyIcon={Stethoscope}
+            minBodyHeight="220px"
           />
         </div>
       </CollapsibleReportSection>

@@ -2,7 +2,7 @@ import { Card, Button } from "@/app/components/common/ui";
 import { Pagination } from "@/app/components/common/Pagination";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getBookingListColumn } from "../Column";
-import { Plus } from "lucide-react";
+import { Plus, HeartPulse } from "lucide-react";
 
 export function BookingsList({
   bookings,
@@ -60,6 +60,9 @@ export function BookingsList({
             data={bookings}
             loading={loading}
             emptyMessage="No home care / visit bookings match your filter."
+            emptyDescription="Home care and visit bookings created for patients will show up here."
+            emptyIcon={HeartPulse}
+            minBodyHeight="220px"
             onRowClick={(booking: any) => onView(booking)}
             sort={sort ?? undefined}
             onSortChange={onSortChange}

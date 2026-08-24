@@ -1,3 +1,4 @@
+import { Pill } from "lucide-react";
 import CollapsibleReportSection from "./CollapsibleReportSection";
 import { PharmacyReportsProps } from "../types";
 import { DataTable } from "@/app/components/common/DataTable";
@@ -144,6 +145,9 @@ const PharmacyReports = ({
             onRowClick={(row: any) => onOpenInvoices(row.invoices)}
             paginate
             emptyMessage="No paid pharmacy invoices match this filter."
+            emptyDescription="Pharmacy settlement and profitability figures will appear here once invoices are paid."
+            emptyIcon={Pill}
+            minBodyHeight="220px"
             className="w-full min-w-[1220px] text-left text-sm"
             loading={loading}
           />

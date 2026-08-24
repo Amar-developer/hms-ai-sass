@@ -36,6 +36,7 @@ export type SearchableSelectProps<T = string> = {
   error?: string;
   loading?: boolean;
   onSearchChange?: (query: string) => void;
+  autoOpen?: boolean;
 };
 
 

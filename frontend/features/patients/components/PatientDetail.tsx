@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
+import { FlaskConical, Pill, ReceiptText, Stethoscope } from "lucide-react";
 
-import { ApiSession, apiFetch, uploadAssetUrl } from "@/lib/api";
+import { ApiSession, apiFetch } from "@/lib/api";
 import {
   clinicalRecordsWithUniqueItems,
   displayPatientGender,
   fmtDate,
-  patientDisplayMobile,
   uniqueClinicalRecords,
 } from "../helpers";
 import { MembershipEnrollForm } from "../forms/PatientForms";
@@ -33,14 +33,15 @@ import { DetailSection } from "./DetailSection";
 import { AlertCard } from "./AlertCard";
 import { familyRelationshipOptions, hiddenScrollbar } from "../constants";
 import { money } from "@/utils/helper";
-import {
-  canCopyDatabaseIds,
-  CopyIdButton,
-} from "@/app/components/common/CopyIdButton";
 import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
 import { DataTable } from "@/app/components/common/DataTable";
-import { Column } from "@/utils/types";
 import { PatientFlagBadges, patientValueTierFlags } from "./PatientFlagBadges";
+import {
+  getConsultationColumns,
+  getInvoiceColumns,
+  getLabOrderColumns,
+  getMedicineColumns,
+} from "../Column";
 import { BmiTrendChart, type VitalReading } from "./workspace/BmiTrendChart";
 
 // Placeholder vitals — the patient schema has no height/weight/vitals model
@@ -86,7 +87,6 @@ export function PatientDetail({
   activeSection = "home",
 }: any & { apiSession?: ApiSession | null }) {
   const permissionKeys = apiSession?.user?.permissions || [];
-  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const hasAnyPermission = (keys: string[]) =>
     Boolean(
       apiSession?.user?.is_super_admin ||
@@ -183,9 +183,6 @@ export function PatientDetail({
     ...(summary?.allergies || []),
   ];
   const risks = [...(summary?.risk_alerts || []), ...(summary?.notes || [])];
-  const isAdmitted = patientIpAdmissions.some(
-    (a: any) => a.status === "admitted" || a.status === "active",
-  );
   const uniqueLabOrders = uniqueClinicalRecords(
     labOrders,
     (order: any) =>
@@ -317,173 +314,21 @@ export function PatientDetail({
     return { source, kind, saved };
   }
 
-  const consultationColumns: Column<any>[] = [
-    {
-      key: "created_at",
-      header: "Date",
-      render: (row) => (
-        <span className="font-black text-slate-950">
-          {fmtDate(row.created_at)}
-        </span>
-      ),
-    },
-    {
-      key: "treatment_type",
-      header: "Type",
-      render: (row) => (
-        <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold capitalize text-slate-700">
-          {String(row.treatment_type || "consultation").replaceAll("_", " ")}
-        </span>
-      ),
-    },
-    {
-      key: "summary",
-      header: "Summary",
-      render: (row) => (
-        <span className="line-clamp-1">
-          {row.chief_complaint ||
-            row.diagnosis ||
-            row.patient_remarks ||
-            row.clinical_notes ||
-            "Consultation record"}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      className:'text-center',
-      width:'150px',
-      render: (row) => <StatusBadge status={row.status} />,
-    },
-    {
-      key: "action",
-      header: "Action",
-      cellClassName: "text-left",
-      disableRowClick: true,
-      render: (row) => (
-        <button
-          type="button"
-          onClick={() => openConsultation(row)}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
-        >
-          Open
-        </button>
-      ),
-    },
-  ];
-
-  const invoiceColumns: Column<any>[] = [
-    {
-      key: "invoice_number",
-      header: "Invoice",
-      render: (row) => <span className="font-black">{row.invoice_number}</span>,
-    },
-    {
-      key: "source",
-      header: "Source",
-      render: (row) => (
-        <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase">
-          {invoiceSource(row).label}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => String(row.status || "").replaceAll("_", " "),
-    },
-    {
-      key: "total_amount",
-      header: "Total",
-      cellClassName: "text-left",
-      render: (row) => money(row.total_amount),
-    },
-    {
-      key: "paid_amount",
-      header: "Paid",
-      cellClassName: "text-left",
-      render: (row) => money(row.paid_amount),
-    },
-    {
-      key: "balance_amount",
-      header: "Due",
-      cellClassName: "text-left",
-      render: (row) => money(invoicePatientDueAmount(row)),
-    },
-  ];
+  const consultationColumns = getConsultationColumns({
+    onOpen: openConsultation,
+  });
+  const invoiceColumns = getInvoiceColumns({ onOpen: openInvoice });
+  const labOrderColumns = getLabOrderColumns({
+    onOpen: () => goToModule("lab"),
+  });
+  const medicineColumns = getMedicineColumns({
+    onOpen: () => goToModule("pharmacy"),
+  });
 
   return (
     <div className="relative space-y-5">
       {loading && <OverlayLoader />}
       <Card>
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-          <div className="flex items-start gap-4">
-            <label className="group relative block h-16 w-16 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-              {patient.photo_url ? (
-                <img
-                  src={uploadAssetUrl(patient.photo_url)}
-                  alt="Patient"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center text-2xl font-bold text-slate-400">
-                  {patient.full_name?.[0]?.toUpperCase() || "P"}
-                </span>
-              )}
-              <span className="absolute inset-x-0 bottom-0 bg-slate-900/75 px-1 py-1 text-center text-[9px] font-bold text-white opacity-0 transition group-hover:opacity-100">
-                {patient.photo_url ? "Change" : "Upload"}
-              </span>
-              {canEditPatient && (
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={(e: any) => {
-                    const f = e.target.files?.[0];
-                    if (f) onUploadPhoto(f);
-                    e.currentTarget.value = "";
-                  }}
-                />
-              )}
-            </label>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="card-title font-bold">{patient.full_name}</h3>
-                <CopyIdButton
-                  value={patient.id}
-                  label="Patient ID"
-                  allowed={canCopyIds}
-                />
-                <Badge
-                  tone={isAdmitted ? "amber" : "green"}
-                  className="normal-label"
-                >
-                  {isAdmitted ? "Admitted" : "Outpatient"}
-                </Badge>
-              </div>
-              <p className="table-data mt-1 text-slate-500">
-                {patient.patient_number} ·{" "}
-                {patientDisplayMobile(patient) || "No mobile"}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {loading && <Badge tone="amber">Loading...</Badge>}
-            <button
-              type="button"
-              onClick={onBack}
-              className="close-button font-bold"
-            >
-              Back to Patients
-            </button>
-            {canEditPatient && (
-              <Button onClick={onEdit} className="close-button">
-                Edit Patient
-              </Button>
-            )}
-          </div>
-        </div>
         <StatusToast message={message} onClose={onMessageClose} />
         {activeSection === "home" && (
           <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -1007,7 +852,7 @@ export function PatientDetail({
         </div>
       )}
 
-      {activeSection === "consultations" && consultations.length > 0 && (
+      {activeSection === "consultations" && (
         <DetailSection
           title="Consultations"
           description="Click a consultation to open the consultation workspace."
@@ -1017,6 +862,9 @@ export function PatientDetail({
             columns={consultationColumns}
             data={consultations}
             emptyMessage="No consultation records found."
+            emptyDescription="Consultations recorded for this patient will show up here."
+            emptyIcon={Stethoscope}
+            minBodyHeight="220px"
             onRowClick={openConsultation}
           />
         </DetailSection>
@@ -1024,103 +872,39 @@ export function PatientDetail({
 
       {activeSection === "labs" && (
         <div className="grid gap-5">
-          {labRows.length > 0 && (
-            <DetailSection
-              title="Lab & Service"
-              description="Ordered diagnostic tests and services."
-              count={labRows.length}
-            >
-              <div
-                className={`max-h-[300px] overflow-y-auto rounded-lg border border-slate-200 ${hiddenScrollbar}`}
-              >
-                <table className="w-full min-w-[520px] text-left text-sm">
-                  <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2.5">Date</th>
-                      <th className="px-3 py-2.5 text-right">Tests</th>
-                      <th className="px-3 py-2.5">Status</th>
-                      <th className="px-3 py-2.5 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {labRows.map(({ row: order, items }: any) => (
-                      <tr key={order.id} className="hover:bg-slate-50">
-                        <td className="px-3 py-3 font-black text-slate-950">
-                          {fmtDate(order.created_at)}
-                        </td>
-                        <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
-                          {items.length} test(s)
-                        </td>
-                        <td className="px-3 py-3">
-                          <StatusBadge status={order.status} />
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => goToModule("lab")}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
-                          >
-                            Open
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </DetailSection>
-          )}
+          <DetailSection
+            title="Lab & Service"
+            description="Ordered diagnostic tests and services."
+            count={labRows.length}
+          >
+            <DataTable
+              columns={labOrderColumns}
+              data={labRows}
+              emptyMessage="No lab or service orders found."
+              emptyDescription="Diagnostic tests and services ordered for this patient will show up here."
+              emptyIcon={FlaskConical}
+              minBodyHeight="220px"
+            />
+          </DetailSection>
         </div>
       )}
 
       {activeSection === "medicines" && (
         <div className="grid gap-5">
-          {medicineRows.length > 0 && (
-            <DetailSection
-              title="Medicines"
-              description="Pharmacy issues and dispensed medicines."
-              count={medicineRows.length}
-            >
-              <div
-                className={`max-h-[300px] overflow-y-auto rounded-lg border border-slate-200 ${hiddenScrollbar}`}
-              >
-                <table className="w-full min-w-[520px] text-left text-sm">
-                  <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2.5">Date</th>
-                      <th className="px-3 py-2.5 text-right">Items</th>
-                      <th className="px-3 py-2.5">Status</th>
-                      <th className="px-3 py-2.5 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {medicineRows.map(({ row: issue, items }: any) => (
-                      <tr key={issue.id} className="hover:bg-slate-50">
-                        <td className="px-3 py-3 font-black text-slate-950">
-                          {fmtDate(issue.created_at)}
-                        </td>
-                        <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
-                          {items.length} item(s)
-                        </td>
-                        <td className="px-3 py-3">
-                          <StatusBadge status={issue.status} />
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => goToModule("pharmacy")}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
-                          >
-                            Open
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </DetailSection>
-          )}
+          <DetailSection
+            title="Medicines"
+            description="Pharmacy issues and dispensed medicines."
+            count={medicineRows.length}
+          >
+            <DataTable
+              columns={medicineColumns}
+              data={medicineRows}
+              emptyMessage="No pharmacy issues found."
+              emptyDescription="Medicines dispensed to this patient will show up here."
+              emptyIcon={Pill}
+              minBodyHeight="220px"
+            />
+          </DetailSection>
         </div>
       )}
 
@@ -1315,31 +1099,29 @@ export function PatientDetail({
           </DetailSection>
         )}
 
-      {activeSection === "billing" &&
-        canReadBilling &&
-        patientInvoices.length > 0 && (
-          <DetailSection
-            title="Billing Invoices"
-            description="Patient invoices, paid amount, and due amount."
-            count={patientInvoices.length}
-            defaultOpen={false}
-          >
-            <div className="mb-3 grid gap-3 md:grid-cols-3">
-              <CompactMetric
-                label="Overall Billed"
-                value={money(totalBilled)}
-              />
-              <CompactMetric label="Overall Paid" value={money(totalPaid)} />
-              <CompactMetric label="Overall Due" value={money(totalDue)} />
-            </div>
-            <DataTable
-              columns={invoiceColumns}
-              data={patientInvoices}
-              emptyMessage="No billing invoices found."
-              onRowClick={openInvoice}
-            />
-          </DetailSection>
-        )}
+      {activeSection === "billing"  && (
+        <DetailSection
+          title="Billing Invoices"
+          description="Patient invoices, paid amount, and due amount."
+          count={patientInvoices.length}
+          defaultOpen={false}
+        >
+          <div className="mb-3 grid gap-3 md:grid-cols-3">
+            <CompactMetric label="Overall Billed" value={money(totalBilled)} />
+            <CompactMetric label="Overall Paid" value={money(totalPaid)} />
+            <CompactMetric label="Overall Due" value={money(totalDue)} />
+          </div>
+          <DataTable
+            columns={invoiceColumns}
+            data={patientInvoices}
+            emptyMessage="No billing invoices found."
+            emptyDescription="Invoices generated for this patient will show up here."
+            emptyIcon={ReceiptText}
+            minBodyHeight="220px"
+            onRowClick={openInvoice}
+          />
+        </DetailSection>
+      )}
 
       <ActivityLog
         resourceType="patient"

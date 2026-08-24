@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CreditCard } from "lucide-react";
 import {
   Button,
   Card,
@@ -498,6 +499,9 @@ export function PatientSubscriptions({
                 data={pagedPlans}
                 loading={loading}
                 emptyMessage="No patient plans yet."
+                emptyDescription="Membership plans created for patients will show up here."
+                emptyIcon={CreditCard}
+                minBodyHeight="220px"
               />
             </div>
             <Pagination

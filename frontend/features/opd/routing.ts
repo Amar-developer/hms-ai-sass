@@ -28,6 +28,6 @@ export function opdSectionFromSegment(segment: unknown): OPDSection {
     case "templates":
       return "templates";
     default:
-      return "consultation";
+      return "appointments";
   }
 }

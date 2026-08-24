@@ -26,8 +26,7 @@ export function getItemsTableSchema(): TableSchema {
       { key: "modality_type", label: "Modality" },
       { key: "mrp_price", label: "MRP" },
       { key: "price", label: "Sale price" },
-      { key: "created_by_user_id", label: "Created By" },
-      { key: "updated_by_user_id", label: "Updated By" },
+      { key: "updated_at", label: "Last Modified" },
     ],
   };
 }

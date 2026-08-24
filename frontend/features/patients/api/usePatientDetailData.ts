@@ -10,7 +10,17 @@ type UsePatientDetailDataParams = {
   canReadIntelligence: boolean;
   setBusy: (busy: boolean) => void;
   setMessage: (message: string) => void;
+  // Seeds the patient/IP-admissions state synchronously from the last
+  // successful load for this id — see headerCache below.
+  initialId?: string;
 };
+
+// Module-scope, keyed by patient id: survives the full component remount
+// the App Router does on every route change (PatientFlow's tabs are real
+// routes), so switching tabs on an already-visited patient can seed the
+// header (photo/name/admitted badge) instantly instead of it reverting to
+// the "not loaded yet" placeholder for the ~1s the refetch takes.
+const headerCache = new Map<string, { patient: any; ipAdmissions: any[] }>();
 
 /**
  * Owns the full patient detail bundle shown on the detail/edit pages:
@@ -23,14 +33,20 @@ export function usePatientDetailData({
   canReadIntelligence,
   setBusy,
   setMessage,
+  initialId,
 }: UsePatientDetailDataParams) {
-  const [selectedDetail, setSelectedDetail] = useState<any>(null);
+  const cachedHeader = initialId ? headerCache.get(initialId) : undefined;
+  const [selectedDetail, setSelectedDetail] = useState<any>(
+    cachedHeader?.patient ?? null,
+  );
   const [summary, setSummary] = useState<any>(null);
   const [consultations, setConsultations] = useState<any[]>([]);
   const [labOrders, setLabOrders] = useState<any[]>([]);
   const [pharmacyIssues, setPharmacyIssues] = useState<any[]>([]);
   const [physioCases, setPhysioCases] = useState<any[]>([]);
-  const [patientIpAdmissions, setPatientIpAdmissions] = useState<any[]>([]);
+  const [patientIpAdmissions, setPatientIpAdmissions] = useState<any[]>(
+    cachedHeader?.ipAdmissions ?? [],
+  );
   const [membershipPlans, setMembershipPlans] = useState<any[]>([]);
   const [membershipEnrollments, setMembershipEnrollments] = useState<any[]>(
     [],
@@ -114,13 +130,17 @@ export function usePatientDetailData({
             )
           : Promise.resolve(null),
       ]);
+      const ipAdmissions = Array.isArray(ipRows) ? ipRows : [];
       setSelectedDetail(detail);
       setSummary(summaryData);
       setConsultations(Array.isArray(consultationRows) ? consultationRows : []);
       setLabOrders(Array.isArray(labRows) ? labRows : []);
       setPharmacyIssues(Array.isArray(pharmacyRows) ? pharmacyRows : []);
       setPhysioCases(Array.isArray(physioRows) ? physioRows : []);
-      setPatientIpAdmissions(Array.isArray(ipRows) ? ipRows : []);
+      setPatientIpAdmissions(ipAdmissions);
+      if (detail?.id) {
+        headerCache.set(detail.id, { patient: detail, ipAdmissions });
+      }
       setMembershipPlans(Array.isArray(planRows) ? planRows : []);
       setMembershipEnrollments(
         Array.isArray(enrollmentRows) ? enrollmentRows : [],

@@ -3,19 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, FileText, ReceiptText } from "lucide-react";
 
-import {
-  Button,
-  Card,
-  StatusToast,
-} from "@/app/components/common/ui";
+import { Button, Card, StatusToast } from "@/app/components/common/ui";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
-import {
-  createInvoiceFromConsultation,
-} from "@/features/billing/api/billing.api";
+import { createInvoiceFromConsultation } from "@/features/billing/api/billing.api";
 import { createInvoiceFromLabOrder } from "@/features/lab/api/lab.api";
-import {
-  createInvoiceFromPharmacyIssue,
-} from "@/features/pharmacy/api/pharmacy.api";
+import { createInvoiceFromPharmacyIssue } from "@/features/pharmacy/api/pharmacy.api";
 import { displayDateTime } from "@/utils/helper";
 import {
   fetchOPDBillingQueueRows,
@@ -29,14 +21,12 @@ function doctorFromConsultation(
   if (!consultationId) return "";
   const row = appointments.find(
     (appointment: any) =>
-      String(appointment.consultationId || appointment.consultation_id || "") ===
-      String(consultationId),
+      String(
+        appointment.consultationId || appointment.consultation_id || "",
+      ) === String(consultationId),
   );
   return String(
-    row?.doctor ||
-      row?.practitioner_name ||
-      row?.practitionerName ||
-      "",
+    row?.doctor || row?.practitioner_name || row?.practitionerName || "",
   ).trim();
 }
 
@@ -55,7 +45,10 @@ export function OPDInvoiceQueue({
     if (!apiSession) return;
     setLoading(true);
     try {
-      const queueRows = await fetchOPDBillingQueueRows({ apiSession, branchId });
+      const queueRows = await fetchOPDBillingQueueRows({
+        apiSession,
+        branchId,
+      });
       setRows(
         queueRows.map((row: any) =>
           row.queueType === "consultation"
@@ -129,7 +122,8 @@ export function OPDInvoiceQueue({
         <div className="min-w-0">
           <h3 className="card-title font-bold">OPD Billing Queue</h3>
           <p className="card-desc text-slate-500">
-            Completed consultations, lab orders and prescription issues ready for invoice.
+            Completed consultations, lab orders and prescription issues ready
+            for invoice.
           </p>
         </div>
         <Button
@@ -158,14 +152,16 @@ export function OPDInvoiceQueue({
               No invoices waiting
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Completed consultations, lab orders and prescription issues will appear here until their invoice is generated.
+              Completed consultations, lab orders and prescription issues will
+              appear here until their invoice is generated.
             </p>
           </div>
         </div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-          <div className="hidden grid-cols-[minmax(0,1.2fr)_130px_minmax(0,1fr)_180px_180px] gap-4 bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 md:grid">
+          <div className="hidden grid-cols-[minmax(0,1.2fr)_180px_130px_minmax(0,1fr)_130px_180px] gap-4 bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 md:grid">
             <span>Patient</span>
+            <span>Token</span>
             <span>Type</span>
             <span>Doctor</span>
             <span>Date</span>
@@ -180,12 +176,14 @@ export function OPDInvoiceQueue({
               return (
                 <div
                   key={rowKey}
-                  className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,1.2fr)_130px_minmax(0,1fr)_180px_180px] md:items-center"
+                  className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,1.2fr)_130px_130px_minmax(0,1fr)_180px_180px] md:items-center"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-black text-slate-950">
                       {row.patient_name || "Patient"}
                     </p>
+                  </div>
+                  <div className="">
                     <p className="mt-0.5 text-[11px] font-medium text-slate-500">
                       {row.queueType === "lab"
                         ? row.lab_order_number || "Lab order"

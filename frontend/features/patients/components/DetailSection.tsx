@@ -25,7 +25,7 @@ export function DetailSection({
               {count}
             </span>
           )}
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-slate-500 ring-1 ring-slate-200 transition group-open:rotate-180">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-slate-500 ring-1 ring   -slate-200 transition group-open:rotate-180">
             <ChevronDown className="h-4 w-4" strokeWidth={2.5} />
           </span>
         </div>

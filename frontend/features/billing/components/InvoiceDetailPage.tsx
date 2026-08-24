@@ -13,6 +13,7 @@ import {
   numberValue,
 } from "../helpers";
 import { useEffect, useState } from "react";
+import { Package, Landmark, ClipboardList, BookOpen } from "lucide-react";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Input, SearchableSelect } from "@/app/components/common/ui";
 import { BillLine } from "./BillLine";
@@ -646,6 +647,9 @@ export function InvoiceDetailPage({
                   })}
                   data={items}
                   emptyMessage="No bill items found."
+                  emptyDescription="Line items billed for this invoice will show up here."
+                  emptyIcon={Package}
+                  minBodyHeight="220px"
                 />
               </div>
               {canRequestDiscountBase ? (
@@ -1148,6 +1152,9 @@ export function InvoiceDetailPage({
                 columns={getSettlementHistoryColumns()}
                 data={settlementRows}
                 emptyMessage="No payments or credit notes recorded yet."
+                emptyDescription="Payments collected and credit notes issued against this invoice will show up here."
+                emptyIcon={Landmark}
+                minBodyHeight="220px"
               />
             </div>
           </div>
@@ -1203,6 +1210,9 @@ export function InvoiceDetailPage({
                 data={adjustmentRequests}
                 className="rounded-none"
                 emptyMessage="No refund or cancellation requests yet."
+                emptyDescription="Discount, refund, and cancellation requests raised on this invoice will show up here."
+                emptyIcon={ClipboardList}
+                minBodyHeight="220px"
               />
             </div>
           </div>
@@ -1226,6 +1236,9 @@ export function InvoiceDetailPage({
                   })}
                   data={financialLedgerEntries}
                   emptyMessage="No financial ledger entries recorded yet."
+                  emptyDescription="Debit and credit journal entries generated for this invoice will show up here."
+                  emptyIcon={BookOpen}
+                  minBodyHeight="220px"
                   className="rounded-none"
                   tableClassName="min-w-[1480px]"
                   rowClassName="odd:bg-white even:bg-slate-50/40 hover:bg-emerald-50/30"

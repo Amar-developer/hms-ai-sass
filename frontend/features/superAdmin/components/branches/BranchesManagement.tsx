@@ -9,6 +9,7 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { FormField } from "@/app/components/FormElements";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getBranchColumns } from "./Column";
+import { Building2 } from "lucide-react";
 
 export function BranchesManagement({
   tenants,
@@ -97,6 +98,9 @@ export function BranchesManagement({
               columns={branchColumns}
               data={rows}
               emptyMessage="No branches match your search."
+              emptyDescription="Branches added for this tenant will show up here."
+              emptyIcon={Building2}
+              minBodyHeight="220px"
               onRowClick={(branch) => {
                 setSelectedBranchId(branch.id);
                 setSection("branchEdit");

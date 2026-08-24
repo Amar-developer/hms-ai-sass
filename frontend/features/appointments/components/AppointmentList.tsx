@@ -1,4 +1,4 @@
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, CalendarClock } from "lucide-react";
 import {
   Button,
   Card,
@@ -120,6 +120,9 @@ export function AppointmentList(props: any) {
           data={rows}
           loading={rowsLoading}
           emptyMessage="No appointments found."
+          emptyDescription="Booked OP appointments with patient, doctor, and consultation status will show up here."
+          emptyIcon={CalendarClock}
+          minBodyHeight="220px"
           onRowClick={onRowClick}
         />
       </div>
