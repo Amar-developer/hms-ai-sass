@@ -11,11 +11,11 @@ CORE_HMS_MODULES = [
     "queue",
     "consultations",
     "billing_basic",
-    "expense",
 ]
 
 FULL_HMS_MODULES = [
     *CORE_HMS_MODULES,
+    "expense",
     "billing_advanced",
     "patient_subscriptions",
     "home_care",
@@ -39,6 +39,7 @@ STARTER_HMS_MODULES = [
 
 GROWTH_HMS_MODULES = [
     *STARTER_HMS_MODULES,
+    "expense",
     "home_care",
     "lab",
     "pharmacy",
@@ -152,6 +153,15 @@ HOME_CARE_DEFAULT_PLAN_KEYS = {
 }
 
 PATIENT_INTELLIGENCE_DEFAULT_PLAN_KEYS = {
+    "growth",
+    "pro",
+    "hospital",
+    "monthly_clinic",
+    "half_yearly_clinic",
+    "yearly_clinic",
+}
+
+EXPENSE_DEFAULT_PLAN_KEYS = {
     "growth",
     "pro",
     "hospital",

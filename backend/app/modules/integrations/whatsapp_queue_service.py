@@ -16,6 +16,7 @@ from app.modules.integrations.whatsapp_schemas import (
     WhatsAppQueueCounts,
     WhatsAppQueueItemRead,
     WhatsAppQueueListRead,
+    WhatsAppQueueTodaySummary,
 )
 from app.modules.integrations.whatsapp_usage import enforce_whatsapp_monthly_limit
 from app.modules.notifications.models import (
@@ -213,6 +214,75 @@ def _read_item(session: Session, event: NotificationEvent) -> WhatsAppQueueItemR
     )
 
 
+def _today_summary(
+    session: Session,
+    *,
+    tenant_id: str,
+    flow_key: str | None,
+    q: str | None,
+) -> WhatsAppQueueTodaySummary:
+    today = date.today()
+    start, end = _date_bounds(today, today)
+    filters = _base_filters(
+        tenant_id=tenant_id,
+        flow_key=flow_key,
+        q=q,
+        from_date=None,
+        to_date=None,
+    )
+    sent = int(
+        session.exec(
+            select(func.count())
+            .select_from(NotificationEvent)
+            .where(
+                *filters,
+                NotificationEvent.status == NotificationStatus.SENT,
+                NotificationEvent.sent_at >= start,
+                NotificationEvent.sent_at < end,
+            )
+        ).one()
+    )
+    failed = int(
+        session.exec(
+            select(func.count())
+            .select_from(NotificationEvent)
+            .where(
+                *filters,
+                NotificationEvent.status == NotificationStatus.FAILED,
+                NotificationEvent.updated_at >= start,
+                NotificationEvent.updated_at < end,
+            )
+        ).one()
+    )
+    patient_recipients = int(
+        session.exec(
+            select(func.count(func.distinct(NotificationEvent.recipient)))
+            .select_from(NotificationEvent)
+            .where(
+                *filters,
+                NotificationEvent.status == NotificationStatus.SENT,
+                NotificationEvent.sent_at >= start,
+                NotificationEvent.sent_at < end,
+                NotificationEvent.resource_type.in_(
+                    [
+                        "appointment",
+                        "invoice",
+                        "credit_note",
+                        "lab_order",
+                        "consultation",
+                        "patient_engagement_action",
+                    ]
+                ),
+            )
+        ).one()
+    )
+    return WhatsAppQueueTodaySummary(
+        sent=sent,
+        failed=failed,
+        patient_recipients=patient_recipients,
+    )
+
+
 def list_whatsapp_queue(
     session: Session,
     *,
@@ -306,6 +376,12 @@ def list_whatsapp_queue(
             sent=counts.get("sent", 0),
             failed=counts.get("failed", 0),
             cancelled=counts.get("cancelled", 0),
+        ),
+        today=_today_summary(
+            session,
+            tenant_id=tenant_id,
+            flow_key=flow_key,
+            q=q,
         ),
     )
 

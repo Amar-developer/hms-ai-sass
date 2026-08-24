@@ -222,8 +222,9 @@ export function usePatientActions({
   }
 
   async function saveManualPrescriptionDate(
-    expectedRefillOn: string,
+    expectedRefillOn: string | null,
     notes: string,
+    autoSchedule = false,
   ) {
     if (!scopedSession || !selectedId) return;
     setBusy(true);
@@ -231,6 +232,7 @@ export function usePatientActions({
     try {
       await patientsApi.saveManualRefill(scopedSession, selectedId, {
         expected_refill_on: expectedRefillOn || null,
+        auto_schedule: autoSchedule,
         notes: notes || null,
       });
       const intelligenceData = await patientsApi.fetchPatientIntelligence(
@@ -238,9 +240,23 @@ export function usePatientActions({
         selectedId,
       );
       setPatientIntelligence(() => intelligenceData);
+      setSelectedDetail((current: any) =>
+        current
+          ? {
+              ...current,
+              monthly_tracking_enabled: Boolean(
+                expectedRefillOn || current.monthly_lab_on,
+              ),
+              monthly_refill_on: expectedRefillOn || null,
+              monthly_refill_notes: notes || null,
+            }
+          : current,
+      );
       setMessage(
         expectedRefillOn
           ? "Monthly prescription date saved and intelligence rules recalculated."
+          : autoSchedule
+            ? "Monthly prescription tracking enabled and next date set automatically."
           : "Manual monthly prescription date cleared.",
       );
     } catch (err: any) {
@@ -253,9 +269,10 @@ export function usePatientActions({
   }
 
   async function saveManualLabDate(
-    expectedLabOn: string,
+    expectedLabOn: string | null,
     labTestName: string,
     notes: string,
+    autoSchedule = false,
   ) {
     if (!scopedSession || !selectedId) return;
     setBusy(true);
@@ -263,6 +280,7 @@ export function usePatientActions({
     try {
       await patientsApi.saveManualLab(scopedSession, selectedId, {
         expected_lab_on: expectedLabOn || null,
+        auto_schedule: autoSchedule,
         lab_test_name: labTestName || null,
         notes: notes || null,
       });
@@ -271,9 +289,24 @@ export function usePatientActions({
         selectedId,
       );
       setPatientIntelligence(() => intelligenceData);
+      setSelectedDetail((current: any) =>
+        current
+          ? {
+              ...current,
+              monthly_tracking_enabled: Boolean(
+                expectedLabOn || current.monthly_refill_on,
+              ),
+              monthly_lab_on: expectedLabOn || null,
+              monthly_lab_test_name: labTestName || null,
+              monthly_lab_notes: notes || null,
+            }
+          : current,
+      );
       setMessage(
         expectedLabOn
           ? "Monthly lab test date saved and tracking rules recalculated."
+          : autoSchedule
+            ? "Monthly lab tracking enabled and next date set automatically."
           : "Manual monthly lab test date cleared.",
       );
     } catch (err: any) {

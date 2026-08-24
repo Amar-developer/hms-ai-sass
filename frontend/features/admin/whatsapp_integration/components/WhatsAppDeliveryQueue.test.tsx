@@ -32,6 +32,7 @@ const queueResponse = {
   limit: 20,
   offset: 0,
   counts: { queued: 0, processing: 0, sent: 0, failed: 1, cancelled: 0 },
+  today: { sent: 3, failed: 1, patient_recipients: 2 },
 };
 
 describe("WhatsApp delivery queue", () => {
@@ -53,6 +54,8 @@ describe("WhatsApp delivery queue", () => {
 
     expect(await screen.findByText("Test Patient")).toBeTruthy();
     expect(screen.getByText("••••3210")).toBeTruthy();
+    expect(screen.getByText("Messages sent today")).toBeTruthy();
+    expect(screen.getByText("Patients messaged today")).toBeTruthy();
     expect(screen.queryByText("9876543210")).toBeNull();
     expect(apiFetchMock.mock.calls[0][0]).toContain("/communications/whatsapp/queue?");
   });

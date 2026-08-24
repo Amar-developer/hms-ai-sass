@@ -7,6 +7,7 @@ import * as patientsApi from "./patients.api";
 type UsePatientDetailDataParams = {
   canReadPhysiotherapy: boolean;
   canReadIp: boolean;
+  canReadHomeCare: boolean;
   canReadIntelligence: boolean;
   setBusy: (busy: boolean) => void;
   setMessage: (message: string) => void;
@@ -30,6 +31,7 @@ const headerCache = new Map<string, { patient: any; ipAdmissions: any[] }>();
 export function usePatientDetailData({
   canReadPhysiotherapy,
   canReadIp,
+  canReadHomeCare,
   canReadIntelligence,
   setBusy,
   setMessage,
@@ -42,6 +44,7 @@ export function usePatientDetailData({
   const [summary, setSummary] = useState<any>(null);
   const [consultations, setConsultations] = useState<any[]>([]);
   const [labOrders, setLabOrders] = useState<any[]>([]);
+  const [homeCareBookings, setHomeCareBookings] = useState<any[]>([]);
   const [pharmacyIssues, setPharmacyIssues] = useState<any[]>([]);
   const [physioCases, setPhysioCases] = useState<any[]>([]);
   const [patientIpAdmissions, setPatientIpAdmissions] = useState<any[]>(
@@ -52,6 +55,7 @@ export function usePatientDetailData({
     [],
   );
   const [patientInvoices, setPatientInvoices] = useState<any[]>([]);
+  const [patientCommunications, setPatientCommunications] = useState<any[]>([]);
   const [familyRelationships, setFamilyRelationships] = useState<any[]>([]);
   const [patientIntelligence, setPatientIntelligence] = useState<any>(null);
   const [patientIntelligenceError, setPatientIntelligenceError] =
@@ -65,11 +69,13 @@ export function usePatientDetailData({
     setBusy(true);
     setConsultations([]);
     setLabOrders([]);
+    setHomeCareBookings([]);
     setPharmacyIssues([]);
     setPhysioCases([]);
     setPatientIpAdmissions([]);
     setMembershipEnrollments([]);
     setPatientInvoices([]);
+    setPatientCommunications([]);
     setFamilyRelationships([]);
     setPatientIntelligence(null);
     setPatientIntelligenceError("");
@@ -79,12 +85,14 @@ export function usePatientDetailData({
         summaryData,
         consultationRows,
         labRows,
+        homeCareRows,
         pharmacyRows,
         physioRows,
         ipRows,
         planRows,
         enrollmentRows,
         invoiceRows,
+        communicationRows,
         familyRows,
         intelligenceData,
       ] = await Promise.all([
@@ -94,6 +102,13 @@ export function usePatientDetailData({
           .fetchPatientConsultations(scopedSession, id)
           .catch(() => []),
         patientsApi.fetchPatientLabOrders(scopedSession, id).catch(() => []),
+        canReadHomeCare
+          ? patientsApi
+              .fetchPatientHomeCareBookings(scopedSession, id, {
+                suppressErrorReportStatuses: [402, 403, 404],
+              })
+              .catch(() => [])
+          : Promise.resolve([]),
         patientsApi
           .fetchPatientPharmacyIssues(scopedSession, id)
           .catch(() => []),
@@ -116,6 +131,7 @@ export function usePatientDetailData({
           .fetchMembershipEnrollments(scopedSession, id)
           .catch(() => []),
         patientsApi.fetchPatientInvoices(scopedSession, id).catch(() => []),
+        patientsApi.fetchPatientCommunications(scopedSession, id).catch(() => []),
         patientsApi
           .fetchFamilyRelationships(scopedSession, id)
           .catch(() => []),
@@ -135,6 +151,7 @@ export function usePatientDetailData({
       setSummary(summaryData);
       setConsultations(Array.isArray(consultationRows) ? consultationRows : []);
       setLabOrders(Array.isArray(labRows) ? labRows : []);
+      setHomeCareBookings(Array.isArray(homeCareRows) ? homeCareRows : []);
       setPharmacyIssues(Array.isArray(pharmacyRows) ? pharmacyRows : []);
       setPhysioCases(Array.isArray(physioRows) ? physioRows : []);
       setPatientIpAdmissions(ipAdmissions);
@@ -146,6 +163,9 @@ export function usePatientDetailData({
         Array.isArray(enrollmentRows) ? enrollmentRows : [],
       );
       setPatientInvoices(Array.isArray(invoiceRows) ? invoiceRows : []);
+      setPatientCommunications(
+        Array.isArray(communicationRows) ? communicationRows : [],
+      );
       setFamilyRelationships(Array.isArray(familyRows) ? familyRows : []);
       setPatientIntelligence(intelligenceData);
     } catch (err: any) {
@@ -161,12 +181,14 @@ export function usePatientDetailData({
     summary,
     consultations,
     labOrders,
+    homeCareBookings,
     pharmacyIssues,
     physioCases,
     patientIpAdmissions,
     membershipPlans,
     membershipEnrollments,
     patientInvoices,
+    patientCommunications,
     familyRelationships,
     setFamilyRelationships,
     patientIntelligence,

@@ -923,6 +923,9 @@ export function useAppController() {
       try {
         tenantsRes = await fetchWithTimeout(`${API_BASE}/tenants`, {
           credentials: "include",
+          headers: body.access_token
+            ? { Authorization: `Bearer ${body.access_token}` }
+            : undefined,
         });
       } catch (error) {
         if (error instanceof RequestTimeoutError) {

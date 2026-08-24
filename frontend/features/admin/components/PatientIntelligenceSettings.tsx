@@ -351,9 +351,8 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
           <div>
             <h3 className="card-title font-bold">Patient Intelligence</h3>
             <p className="card-desc text-slate-500">
-              Tenant-owned tracking, badge, and WhatsApp engagement rules. Create
-              every rule manually; no starter thresholds or patient categories are
-              installed automatically.
+              Tenant-owned tracking, badge, and WhatsApp engagement rules. All
+              rule definitions come from the database and can be changed here.
             </p>
           </div>
           <ActionButton onClick={adaptExistingData} disabled={busy}>
@@ -545,13 +544,19 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
 
       {showAdvancedRules && <Card>
         <h4 className="font-bold">{editingId ? "Edit Rule" : "Create Rule"}</h4>
+        <p className="mt-1 text-sm text-slate-500">
+          To combine rules into one badge, reuse the same Generated Flag. To
+          show only one tier such as Silver, Gold, or Premium, give those rules
+          the same Exclusive Group. Turn off auto-resolve and set Expires After
+          Days when a badge should stay for a grace period.
+        </p>
         <form onSubmit={save} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <FormField label="Rule Key" required>
             <Input value={editing.rule_key} disabled={Boolean(editingId)} onChange={(e: any) => update("rule_key", e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"))} />
           </FormField>
           <FormField label="Rule Name" required><Input value={editing.name} onChange={(e: any) => update("name", e.target.value)} /></FormField>
           <FormField label="Category" required><Select required value={editing.category} onChange={(e: any) => update("category", e.target.value)}><option value="">Select category</option>{options.categories.map((value: string) => <option key={value} value={value}>{humanizeKey(value)}</option>)}</Select></FormField>
-          <FormField label="Generated Flag" required><Input value={editing.flag_key} onChange={(e: any) => update("flag_key", e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, "_"))} /></FormField>
+          <FormField label="Generated Flag" required><Input value={editing.flag_key} onChange={(e: any) => update("flag_key", e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, "_"))} placeholder="PREMIUM_PATIENT" /></FormField>
 
           <FormField label="Metric" required><Select required value={editing.metric_key} onChange={(e: any) => update("metric_key", e.target.value)}><option value="">Select metric</option>{options.metrics.map((metric: any) => <option key={metric.key} value={metric.key}>{metric.label}</option>)}</Select></FormField>
           <FormField label="Operator" required><Select required value={editing.operator} onChange={(e: any) => update("operator", e.target.value)}><option value="">Select operator</option>{options.operators.map((value: string) => <option key={value} value={value}>{operatorLabel(value)}</option>)}</Select></FormField>
@@ -560,7 +565,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
           <FormField label="Window Days"><Input type="number" min="1" value={editing.window_days} onChange={(e: any) => update("window_days", e.target.value)} /></FormField>
           <FormField label="Severity" required><Input required value={editing.severity} onChange={(e: any) => update("severity", e.target.value)} /></FormField>
           <FormField label="Priority" required><Input required type="number" min="0" value={editing.priority} onChange={(e: any) => update("priority", e.target.value)} /></FormField>
-          <FormField label="Exclusive Group"><Input value={editing.exclusive_group} onChange={(e: any) => update("exclusive_group", e.target.value)} placeholder="e.g. patient_value_tier" /></FormField>
+          <FormField label="Exclusive Group"><Input value={editing.exclusive_group} onChange={(e: any) => update("exclusive_group", e.target.value)} placeholder="patient_value_tier" /></FormField>
           <FormField label="Score Dimension"><Select value={editing.score_dimension} onChange={(e: any) => update("score_dimension", e.target.value)}><option value="">No score</option>{(options.score_dimensions || []).map((item: any) => <option key={item.key} value={item.key}>{item.label}</option>)}</Select></FormField>
           <FormField label="Score Weight"><Input type="number" min="0" step="0.01" value={editing.score_weight} onChange={(e: any) => update("score_weight", e.target.value)} placeholder="e.g. 10" /></FormField>
           <FormField label="Required Flags"><Input value={editing.required_flag_keys} onChange={(e: any) => update("required_flag_keys", e.target.value)} placeholder="FLAG_ONE, FLAG_TWO" /></FormField>
@@ -597,14 +602,22 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h4 className="font-bold">Configured Rules</h4>
-          <ActionButton
-            onClick={() => setShowAdvancedRules((value) => !value)}
-          >
-            {showAdvancedRules ? "Hide Advanced Rule Editor" : "Advanced Rule Editor"}
-          </ActionButton>
+          <div className="flex flex-wrap gap-2">
+            <ActionButton
+              onClick={() => setShowAdvancedRules((value) => !value)}
+            >
+              {showAdvancedRules ? "Hide Advanced Rule Editor" : "Advanced Rule Editor"}
+            </ActionButton>
+          </div>
         </div>
         <div className="mt-3 space-y-2">
-          {!busy && rules.length === 0 && <p className="text-sm text-slate-500">No rules configured. Patient flags remain empty until the tenant creates a rule.</p>}
+          {!busy && rules.length === 0 && (
+            <p className="text-sm text-slate-500">
+              No rules configured. Use the advanced editor to create database
+              rules for Silver, Gold, Premium, membership, or any tenant-specific
+              patient flag.
+            </p>
+          )}
           {rules.map((rule: any) => (
             <div key={rule.id} className="flex flex-col justify-between gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center">
               <div>

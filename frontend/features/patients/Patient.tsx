@@ -75,6 +75,11 @@ export function Patient({
     enabledModules,
     "physiotherapy",
   );
+  const canReadHomeCare = canReadPatientLinkedModule(
+    apiSession,
+    enabledModules,
+    "home_care",
+  );
   const canCreatePatient = hasPermission("patients.write", "patients.create");
   const canEditPatient = hasPermission("patients.edit");
   const canDeletePatient = hasPermission("patients.delete");
@@ -121,12 +126,14 @@ export function Patient({
     summary,
     consultations,
     labOrders,
+    homeCareBookings,
     pharmacyIssues,
     physioCases,
     patientIpAdmissions,
     membershipPlans,
     membershipEnrollments,
     patientInvoices,
+    patientCommunications,
     familyRelationships,
     patientIntelligence,
     setPatientIntelligence,
@@ -135,6 +142,7 @@ export function Patient({
   } = usePatientDetailData({
     canReadPhysiotherapy,
     canReadIp,
+    canReadHomeCare,
     canReadIntelligence,
     setBusy,
     setMessage,
@@ -479,11 +487,13 @@ export function Patient({
         patientIpAdmissions={patientIpAdmissions}
         consultations={consultations}
         labOrders={labOrders}
+        homeCareBookings={homeCareBookings}
         pharmacyIssues={pharmacyIssues}
         physioCases={physioCases}
         membershipPlans={membershipPlans}
         membershipEnrollments={membershipEnrollments}
         patientInvoices={patientInvoices}
+        patientCommunications={patientCommunications}
         familyRelationships={familyRelationships}
         patientIntelligence={patientIntelligence}
         patientIntelligenceError={patientIntelligenceError}

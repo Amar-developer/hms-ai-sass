@@ -56,8 +56,6 @@ export function getPatientColumns({
             value={capitalizeFirst(row.full_name)}
             valueClassName="text-sm text-slate-950"
           />
-
-          <PatientFlagBadges patient={row} className="mt-1.5" maxVisible={3} />
         </div>
       ),
     },
@@ -104,17 +102,17 @@ export function getPatientColumns({
       ),
     },
     {
-      key: "subscription_plan_name",
-      header: "Plan",
+      key: "intelligence_flags",
+      header: "Badges",
       width: "160px",
-      render: (row: any) =>
-        row.subscription_plan_name ? (
-          <span className="block truncate text-sm text-slate-700">
-            {row.subscription_plan_name}
-          </span>
+      render: (row: any) => {
+        const hasFlags = (row.intelligence_flags || []).length > 0;
+        return hasFlags ? (
+          <PatientFlagBadges patient={row} maxVisible={3} />
         ) : (
           <span className="text-sm text-slate-400">-</span>
-        ),
+        );
+      },
     },
     {
       key: "status",
@@ -297,18 +295,30 @@ export function getLabOrderColumns({
       header: "Date",
       render: ({ row: order }: any) => (
         <span className="font-black text-slate-950">
-          {fmtDate(order.created_at)}
+          {fmtDate(order.created_at || order.start_date)}
         </span>
       ),
     },
     {
-      key: "tests",
-      header: "Tests",
+      key: "type",
+      header: "Type",
+      width: "150px",
+      render: ({ row, source }: any) => (
+        <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold capitalize text-slate-700">
+          {source === "home_care"
+            ? String(row.booking_type || "home_care").replaceAll("_", " ")
+            : "Lab Order"}
+        </span>
+      ),
+    },
+    {
+      key: "services",
+      header: "Services",
       className: "text-right",
       cellClassName: "text-right",
-      render: ({ items }: any) => (
+      render: ({ items, source }: any) => (
         <span className="text-xs font-semibold text-slate-500">
-          {items.length} test(s)
+          {items.length} {source === "home_care" ? "service(s)" : "test(s)"}
         </span>
       ),
     },
@@ -323,10 +333,10 @@ export function getLabOrderColumns({
       className: "text-right",
       cellClassName: "text-right",
       disableRowClick: true,
-      render: ({ row: order }: any) => (
+      render: (bundle: any) => (
         <button
           type="button"
-          onClick={() => onOpen(order)}
+          onClick={() => onOpen(bundle)}
           className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
         >
           Open

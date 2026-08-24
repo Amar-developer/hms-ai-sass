@@ -49,6 +49,10 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      # Keep Next's persistent Turbopack cache out of the host bind mount.
+      # A cache written by the container user can otherwise become stale or
+      # unreadable to a host-run dev server and produce stuck/stale routes.
+      - /app/.next
     # The anonymous node_modules volume above can go stale after a rebuild
     # (Compose reuses the old volume's contents instead of the freshly built
     # image's node_modules). Installing here reconciles node_modules against

@@ -1,8 +1,14 @@
 from datetime import date, timedelta
 
+import pytest
+from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.core.database import get_session
+from app.modules.expenses.models import ExpenseCategory
+from app.modules.expenses.schemas import ExpenseCreate
+from app.modules.expenses.services.expense import create_expense
+from app.modules.identity.models import User
 from app.modules.subscriptions.models import SubscriptionPlan, TenantSubscription
 from app.modules.subscriptions.service import (
     ensure_default_plans,
@@ -50,6 +56,71 @@ def test_existing_yearly_plan_recovers_home_care_entitlement(test_engine):
         session.refresh(yearly)
 
         assert "home_care" in modules_from_json(yearly.enabled_modules_json)
+        assert "expense" in modules_from_json(yearly.enabled_modules_json)
+
+
+def test_default_plan_expense_entitlements_are_plan_controlled(test_engine):
+    with Session(test_engine) as session:
+        plans = {
+            plan.key: modules_from_json(plan.enabled_modules_json)
+            for plan in session.exec(select(SubscriptionPlan)).all()
+        }
+
+    assert "expense" not in plans["free_trial"]
+    assert "expense" not in plans["starter"]
+    assert "expense" in plans["growth"]
+    assert "expense" in plans["hospital"]
+
+
+def test_expense_module_requires_plan_entitlement_for_staff(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="No Expense Clinic")
+        session.add(tenant)
+        session.flush()
+        plan = SubscriptionPlan(
+            key="no_expense",
+            name="No Expense",
+            monthly_patient_limit=50,
+            included_branches=1,
+            included_doctors=1,
+            price_inr_monthly=100,
+            enabled_modules_json='["patients", "billing_basic"]',
+        )
+        session.add(plan)
+        session.flush()
+        session.add(
+            TenantSubscription(
+                tenant_id=tenant.id,
+                plan_id=plan.id,
+                starts_on=date.today(),
+                is_trial=False,
+            )
+        )
+        staff = User(
+            tenant_id=tenant.id,
+            user_type="staff",
+            name="Expense Staff",
+            email="expense.staff@example.test",
+        )
+        session.add(staff)
+        session.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            create_expense(
+                session,
+                tenant_id=tenant.id,
+                actor=staff,
+                payload=ExpenseCreate(
+                    category=ExpenseCategory.OTHER,
+                    subcategory="Tea",
+                    amount=100,
+                    incurred_on=date.today(),
+                    description="Pantry tea",
+                ),
+            )
+
+        assert exc.value.status_code == 403
+        assert exc.value.detail == "Module expense is not enabled for plan No Expense"
 
 
 def test_subscription_plan_read_tolerates_legacy_null_updated_at():

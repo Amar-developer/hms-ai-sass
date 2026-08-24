@@ -156,7 +156,13 @@ def run_once() -> None:
             queue_due_whatsapp_appointment_reminders(session)
             # Progressively adapt existing HMS records and refresh stale
             # Patient 360 projections without a separate scheduler service.
-            refresh_due_patient_intelligence(session, limit=100)
+            refreshed = refresh_due_patient_intelligence(session, limit=500)
+            if refreshed:
+                logger.info(
+                    "report_worker.patient_intelligence_refreshed",
+                    extra={"patient_count": refreshed},
+                )
+            session.commit()
     with Session(engine) as session:
         recovered = recover_stale_report_jobs(session)
         if recovered:

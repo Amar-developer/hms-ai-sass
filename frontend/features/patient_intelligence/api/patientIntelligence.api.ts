@@ -148,7 +148,11 @@ export function sendPatientEngagementAction(
 export function updateManualRefillSchedule(
   session: ApiSession,
   patientId: string,
-  payload: { expected_refill_on: string | null; notes: string | null },
+  payload: {
+    expected_refill_on: string | null;
+    auto_schedule?: boolean;
+    notes: string | null;
+  },
 ) {
   return apiFetch(
     `/patient-intelligence/patients/${encodeURIComponent(patientId)}/manual-refill`,
@@ -162,6 +166,7 @@ export function updateManualLabSchedule(
   patientId: string,
   payload: {
     expected_lab_on: string | null;
+    auto_schedule?: boolean;
     lab_test_name: string | null;
     notes: string | null;
   },

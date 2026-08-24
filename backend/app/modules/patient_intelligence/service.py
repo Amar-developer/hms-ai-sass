@@ -642,11 +642,18 @@ def calculate_metrics(
         window = rule.window_days
         metric = rule.metric_key
         if metric in {"net_collected", "net_collected_30d", "net_collected_365d"}:
+            collection_window = (
+                30
+                if metric == "net_collected_30d" and window is None
+                else 365
+                if metric == "net_collected_365d" and window is None
+                else window
+            )
             value = sum(
                 (
                     net_payment(payment)
                     for payment in payments
-                    if within_window(payment.collected_at, window)
+                    if within_window(payment.collected_at, collection_window)
                 ),
                 Decimal("0"),
             )
@@ -827,8 +834,43 @@ def evaluate_flags(
             )
         ).all()
     }
+
+    def flag_rule(flag: PatientIntelligenceFlag) -> PatientIntelligenceRule | None:
+        return next((item for item in rules if item.id == flag.rule_id), None)
+
+    def flag_expired(
+        flag: PatientIntelligenceFlag,
+        rule: PatientIntelligenceRule | None,
+    ) -> bool:
+        return bool(
+            rule
+            and rule.expires_after_days
+            and _aware(flag.last_detected_at)
+            and now
+            > _aware(flag.last_detected_at) + timedelta(days=rule.expires_after_days)
+        )
+
+    retained_group_owner: dict[str, str] = {}
+    for flag in sorted(
+        existing.values(),
+        key=lambda item: (
+            flag_rule(item).priority if flag_rule(item) else 10000,
+            item.flag_key,
+        ),
+    ):
+        rule = flag_rule(flag)
+        if (
+            rule
+            and rule.exclusive_group
+            and not rule.auto_resolve
+            and not flag_expired(flag, rule)
+            and flag.status
+            not in {IntelligenceFlagStatus.RESOLVED, IntelligenceFlagStatus.CLOSED}
+        ):
+            retained_group_owner.setdefault(rule.exclusive_group, flag.flag_key)
+
     matched: set[str] = set()
-    matched_exclusive_groups: set[str] = set()
+    matched_exclusive_groups: dict[str, str] = {}
     for rule in rules:
         # Tenant configuration may contain legacy rules that share a flag key.
         # The first matching rule by priority owns that patient flag.
@@ -846,15 +888,17 @@ def evaluate_flags(
             )
             and required_flags.issubset(matched)
         )
-        if rule.exclusive_group:
-            rule_matches = (
-                rule_matches and rule.exclusive_group not in matched_exclusive_groups
+        if rule.exclusive_group and rule_matches:
+            retained_owner = retained_group_owner.get(rule.exclusive_group)
+            matched_owner = matched_exclusive_groups.get(rule.exclusive_group)
+            rule_matches = matched_owner is None and (
+                retained_owner is None or retained_owner == rule.flag_key
             )
         if not rule_matches:
             continue
         matched.add(rule.flag_key)
         if rule.exclusive_group:
-            matched_exclusive_groups.add(rule.exclusive_group)
+            matched_exclusive_groups[rule.exclusive_group] = rule.flag_key
         explanation = _explanation(rule, value)
         evidence = _json(
             {
@@ -930,15 +974,24 @@ def evaluate_flags(
             IntelligenceFlagStatus.CLOSED,
         }:
             continue
-        rule = next((item for item in rules if item.flag_key == key), None)
-        expired = bool(
-            rule
-            and rule.expires_after_days
-            and _aware(flag.last_detected_at)
-            and now
-            > _aware(flag.last_detected_at) + timedelta(days=rule.expires_after_days)
+        rule = flag_rule(flag) or next(
+            (item for item in rules if item.flag_key == key),
+            None,
         )
-        if rule and not rule.auto_resolve and not expired:
+        expired = flag_expired(flag, rule)
+        exclusive_owner = (
+            matched_exclusive_groups.get(rule.exclusive_group)
+            or retained_group_owner.get(rule.exclusive_group)
+            if rule and rule.exclusive_group
+            else None
+        )
+        blocked_by_higher_tier = bool(exclusive_owner and exclusive_owner != key)
+        if (
+            rule
+            and not rule.auto_resolve
+            and not expired
+            and not blocked_by_higher_tier
+        ):
             continue
         previous = flag.status.value
         flag.status = IntelligenceFlagStatus.RESOLVED

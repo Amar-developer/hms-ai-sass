@@ -14,6 +14,10 @@ from app.modules.expenses.schemas import (
     ExpenseRejectRequest,
 )
 from app.modules.identity.models import User
+from app.modules.subscriptions.service import enforce_module_enabled
+
+
+EXPENSE_MODULE_KEY = "expense"
 
 
 def _read(expense: Expense) -> ExpenseRead:
@@ -50,6 +54,7 @@ def list_expenses(
     list_filters: list[ListFilter] | None = None,
     list_sort: ListSort | None = None,
 ) -> tuple[list[ExpenseRead], int]:
+    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     repo = ExpenseRepository(session=session)
     rows, total = repo.list_for_tenant(
         tenant_id=tenant_id,
@@ -76,6 +81,7 @@ def list_expense_filter_options(
     tenant_id: str,
     branch_id: str | None,
 ) -> dict[str, list[ListFilterOption]]:
+    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     repo = ExpenseRepository(session=session)
     return repo.filter_options(
         tenant_id=tenant_id,
@@ -83,14 +89,16 @@ def list_expense_filter_options(
     )
 
 
-def get_expense(session: Session, *, tenant_id: str, expense_id: str):
+def get_expense(session: Session, *, tenant_id: str, expense_id: str, actor: User):
+    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     repo = ExpenseRepository(session=session)
     return _read(_get_or_404(repo=repo, tenant_id=tenant_id, expense_id=expense_id))
 
 
 def get_recent_subcategories(
-    session: Session, *, tenant_id: str, limit: int = 5
+    session: Session, *, tenant_id: str, actor: User, limit: int = 5
 ) -> list[str]:
+    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     repo = ExpenseRepository(session=session)
     return repo.recent_subcategories(tenant_id=tenant_id, limit=limit)
 
@@ -98,6 +106,7 @@ def get_recent_subcategories(
 def create_expense(
     session: Session, *, tenant_id: str, payload: ExpenseCreate, actor: User
 ) -> ExpenseRead:
+    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     require_user_branch_access(actor, payload.branch_id)
     repo = ExpenseRepository(session=session)
     expense = Expense(
@@ -142,6 +151,7 @@ def update_expense(
     payload: ExpenseUpdate,
     actor: User,
 ) -> ExpenseRead:
+    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     repo = ExpenseRepository(session)
     expense = _get_or_404(repo, tenant_id=tenant_id, expense_id=expense_id)
     require_user_branch_access(actor, expense.branch_id)
@@ -172,6 +182,7 @@ def attach_receipt(
     payload: ExpenseAttachReceiptRequest,
     actor: User,
 ) -> ExpenseRead:
+    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     repo = ExpenseRepository(session=session)
     expense = _get_or_404(repo=repo, tenant_id=tenant_id, expense_id=expense_id)
     require_user_branch_access(actor, expense.branch_id)
@@ -193,6 +204,7 @@ def attach_receipt(
 def approve_expense(
     session: Session, *, tenant_id: str, expense_id: str, actor: User
 ) -> ExpenseRead:
+    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     repo = ExpenseRepository(session)
     expense = _get_or_404(repo, tenant_id=tenant_id, expense_id=expense_id)
     require_user_branch_access(actor, expense.branch_id)
@@ -228,6 +240,7 @@ def reject_expense(
     payload: ExpenseRejectRequest,
     actor: User,
 ) -> ExpenseRead:
+    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     repo = ExpenseRepository(session)
     expense = _get_or_404(repo, tenant_id=tenant_id, expense_id=expense_id)
     require_user_branch_access(actor, expense.branch_id)
@@ -259,6 +272,7 @@ def reject_expense(
 def reimburse_expense(
     session: Session, *, tenant_id: str, expense_id: str, actor: User
 ) -> ExpenseRead:
+    enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     repo = ExpenseRepository(session)
     expense = _get_or_404(repo, tenant_id=tenant_id, expense_id=expense_id)
     require_user_branch_access(actor, expense.branch_id)

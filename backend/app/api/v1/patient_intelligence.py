@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import ValidationError
 from sqlmodel import Session, select
 
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
@@ -124,6 +124,31 @@ def _monthly_action_summary(
         key: (action.status.value, _action_month_timestamp(action))
         for key, action in summary.items()
     }
+
+
+def _first_day_of_next_month(value: date | None = None) -> date:
+    current = value or date.today()
+    if current.month == 12:
+        return date(current.year + 1, 1, 1)
+    return date(current.year, current.month + 1, 1)
+
+
+def _rule_due_window_days(rules: list[PatientIntelligenceRule], metric_key: str) -> int:
+    windows: list[int] = []
+    for rule in rules:
+        if not rule.is_enabled or rule.metric_key != metric_key:
+            continue
+        if rule.operator in {"lte", "lt", "eq"}:
+            threshold = rule.threshold
+        elif rule.operator == "between" and rule.threshold_secondary is not None:
+            threshold = rule.threshold_secondary
+        else:
+            continue
+        try:
+            windows.append(max(int(threshold), 0))
+        except (TypeError, ValueError):
+            continue
+    return max(windows, default=2)
 
 
 METRIC_CATALOG = (
@@ -412,13 +437,20 @@ def intelligence_dashboard(
     total = len(dashboard_rows)
     page_rows = dashboard_rows[offset : offset + limit]
     today = date.today()
+    refill_window_days = _rule_due_window_days(
+        rules.values(), "days_until_expected_refill"
+    )
+    lab_window_days = _rule_due_window_days(
+        rules.values(), "days_until_expected_lab_test"
+    )
     upcoming_refill_patient_ids = {
         patient.id
         for patient, snapshot in filtered
         if snapshot
         and snapshot.expected_refill_at
         and snapshot.expected_refill_at.date() > today
-        and snapshot.expected_refill_at.date() <= today + timedelta(days=2)
+        and snapshot.expected_refill_at.date()
+        <= today + timedelta(days=refill_window_days)
     }
     today_medicine_patient_ids = {
         patient.id
@@ -432,7 +464,7 @@ def intelligence_dashboard(
         for row in dashboard_rows
         if row.manual_expected_lab_at
         and row.manual_expected_lab_at.date() > today
-        and row.manual_expected_lab_at.date() <= today + timedelta(days=2)
+        and row.manual_expected_lab_at.date() <= today + timedelta(days=lab_window_days)
     }
     today_lab_patient_ids = {
         row.patient_id
@@ -507,14 +539,24 @@ def intelligence_dashboard(
 @router.patch(
     "/patients/{patient_id}/manual-refill",
     response_model=ManualRefillScheduleRead,
-    dependencies=[Depends(require_permission(permissions.PATIENT_INTELLIGENCE_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.PATIENT_INTELLIGENCE_MANAGE,
+                permissions.PATIENTS_EDIT,
+            )
+        )
+    ],
 )
 def update_manual_refill_schedule(
     patient_id: str,
     payload: ManualRefillScheduleUpdate,
     tenant_id: str = Depends(require_tenant_id),
     current_user: User = Depends(
-        require_permission(permissions.PATIENT_INTELLIGENCE_MANAGE)
+        require_any_permission(
+            permissions.PATIENT_INTELLIGENCE_MANAGE,
+            permissions.PATIENTS_EDIT,
+        )
     ),
     session: Session = Depends(get_session),
 ) -> ManualRefillScheduleRead:
@@ -534,16 +576,19 @@ def update_manual_refill_schedule(
         setting = PatientIntelligencePatientSetting(
             tenant_id=tenant_id, patient_id=patient_id
         )
-    if payload.expected_refill_on:
+    expected_refill_on = payload.expected_refill_on or (
+        _first_day_of_next_month() if payload.auto_schedule else None
+    )
+    if expected_refill_on:
         patient.monthly_tracking_enabled = True
     elif not patient.monthly_lab_on:
         patient.monthly_tracking_enabled = False
-    patient.monthly_refill_on = payload.expected_refill_on
+    patient.monthly_refill_on = expected_refill_on
     patient.monthly_refill_notes = payload.notes
     patient.updated_at = now_utc()
     setting.manual_expected_refill_at = (
-        datetime.combine(payload.expected_refill_on, time.min, tzinfo=timezone.utc)
-        if payload.expected_refill_on
+        datetime.combine(expected_refill_on, time.min, tzinfo=timezone.utc)
+        if expected_refill_on
         else None
     )
     setting.notes = payload.notes
@@ -564,7 +609,7 @@ def update_manual_refill_schedule(
         resource_id=patient_id,
         purpose="patient_engagement_configuration",
         metadata_json=json.dumps(
-            {"expected_refill_on": payload.expected_refill_on, "notes": payload.notes},
+            {"expected_refill_on": expected_refill_on, "notes": payload.notes},
             default=str,
         ),
     )
@@ -583,14 +628,24 @@ def update_manual_refill_schedule(
 @router.patch(
     "/patients/{patient_id}/manual-lab",
     response_model=ManualLabScheduleRead,
-    dependencies=[Depends(require_permission(permissions.PATIENT_INTELLIGENCE_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.PATIENT_INTELLIGENCE_MANAGE,
+                permissions.PATIENTS_EDIT,
+            )
+        )
+    ],
 )
 def update_manual_lab_schedule(
     patient_id: str,
     payload: ManualLabScheduleUpdate,
     tenant_id: str = Depends(require_tenant_id),
     current_user: User = Depends(
-        require_permission(permissions.PATIENT_INTELLIGENCE_MANAGE)
+        require_any_permission(
+            permissions.PATIENT_INTELLIGENCE_MANAGE,
+            permissions.PATIENTS_EDIT,
+        )
     ),
     session: Session = Depends(get_session),
 ) -> ManualLabScheduleRead:
@@ -610,17 +665,20 @@ def update_manual_lab_schedule(
         setting = PatientIntelligencePatientSetting(
             tenant_id=tenant_id, patient_id=patient_id
         )
-    if payload.expected_lab_on:
+    expected_lab_on = payload.expected_lab_on or (
+        _first_day_of_next_month() if payload.auto_schedule else None
+    )
+    if expected_lab_on:
         patient.monthly_tracking_enabled = True
     elif not patient.monthly_refill_on:
         patient.monthly_tracking_enabled = False
-    patient.monthly_lab_on = payload.expected_lab_on
+    patient.monthly_lab_on = expected_lab_on
     patient.monthly_lab_test_name = payload.lab_test_name or None
     patient.monthly_lab_notes = payload.notes or None
     patient.updated_at = now_utc()
     setting.manual_expected_lab_at = (
-        datetime.combine(payload.expected_lab_on, time.min, tzinfo=timezone.utc)
-        if payload.expected_lab_on
+        datetime.combine(expected_lab_on, time.min, tzinfo=timezone.utc)
+        if expected_lab_on
         else None
     )
     setting.manual_lab_test_name = payload.lab_test_name or None
@@ -643,7 +701,7 @@ def update_manual_lab_schedule(
         purpose="patient_engagement_configuration",
         metadata_json=json.dumps(
             {
-                "expected_lab_on": payload.expected_lab_on,
+                "expected_lab_on": expected_lab_on,
                 "lab_test_name": payload.lab_test_name,
                 "notes": payload.notes,
             },
@@ -768,19 +826,6 @@ def create_rule(
             status_code=status.HTTP_409_CONFLICT,
             detail="A rule with this key already exists",
         )
-    if payload.is_enabled:
-        duplicate_flag = session.exec(
-            select(PatientIntelligenceRule).where(
-                PatientIntelligenceRule.tenant_id == tenant_id,
-                PatientIntelligenceRule.flag_key == payload.flag_key,
-                PatientIntelligenceRule.is_enabled.is_(True),
-            )
-        ).first()
-        if duplicate_flag:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="An enabled rule with this flag key already exists",
-            )
     values = payload.model_dump(exclude={"category", "required_flag_keys"})
     row = PatientIntelligenceRule(
         tenant_id=tenant_id,
@@ -841,23 +886,6 @@ def update_rule(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_safe_validation_errors(exc),
         ) from exc
-    claims_new_enabled_flag_key = bool(candidate["is_enabled"]) and (
-        not row.is_enabled or candidate["flag_key"] != row.flag_key
-    )
-    if claims_new_enabled_flag_key:
-        duplicate_flag = session.exec(
-            select(PatientIntelligenceRule).where(
-                PatientIntelligenceRule.tenant_id == tenant_id,
-                PatientIntelligenceRule.flag_key == candidate["flag_key"],
-                PatientIntelligenceRule.is_enabled.is_(True),
-                PatientIntelligenceRule.id != row.id,
-            )
-        ).first()
-        if duplicate_flag:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="An enabled rule with this flag key already exists",
-            )
     for key, value in changes.items():
         if key == "required_flag_keys":
             row.required_flag_keys_json = json.dumps(value)

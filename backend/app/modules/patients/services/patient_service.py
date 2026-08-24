@@ -1,7 +1,9 @@
 from datetime import date
+import re
 
 from fastapi import HTTPException, UploadFile, status
-from sqlmodel import Session
+from sqlalchemy import and_, or_
+from sqlmodel import Session, select
 
 from app.core.list_filters import ListFilter, ListFilterOption, ListSort
 from app.core.access_control import (
@@ -16,6 +18,15 @@ from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.files.service import record_file_document
 from app.modules.identity import permissions
 from app.modules.identity.models import User
+from app.modules.appointments.models import Appointment
+from app.modules.billing.models import CreditNote, Invoice
+from app.modules.consultations.models import Consultation
+from app.modules.lab.models import LabOrder
+from app.modules.notifications.models import (
+    NotificationEvent,
+    NotificationProvider,
+)
+from app.modules.patient_intelligence.models import PatientEngagementAction
 from app.modules.patients.models import (
     AlertSeverity,
     AlertType,
@@ -32,6 +43,7 @@ from app.modules.patients.repositories import (
 from app.modules.patients.schemas import (
     PatientAlertCreate,
     PatientAlertRead,
+    PatientCommunicationRead,
     PatientCreate,
     PatientDuplicateCandidate,
     PatientFamilyRelationshipCreate,
@@ -117,6 +129,11 @@ class PatientService:
             values["monthly_lab_test_name"] = None
             values["monthly_lab_notes"] = None
         return values
+
+    @staticmethod
+    def _masked_recipient(value: str | None) -> str:
+        digits = re.sub(r"\D", "", value or "")
+        return f"••••{digits[-4:]}" if digits else "Unavailable"
 
     def register_patient(
         self, *, tenant_id: str, payload: PatientCreate, actor: User
@@ -312,7 +329,95 @@ class PatientService:
             to_date=to_date,
         )
 
-    def get_patient(self, *, tenant_id: str, patient_id: str, actor: User) -> Patient:
+    def patient_communications(
+        self, *, tenant_id: str, patient_id: str, limit: int = 50
+    ) -> list[PatientCommunicationRead]:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        patient = self._get_or_404(tenant_id, patient_id)
+        appointment_ids = select(Appointment.id).where(
+            Appointment.tenant_id == tenant_id,
+            Appointment.patient_id == patient.id,
+        )
+        invoice_ids = select(Invoice.id).where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.patient_id == patient.id,
+        )
+        credit_note_ids = select(CreditNote.id).where(
+            CreditNote.tenant_id == tenant_id,
+            CreditNote.invoice_id.in_(invoice_ids),
+        )
+        lab_order_ids = select(LabOrder.id).where(
+            LabOrder.tenant_id == tenant_id,
+            LabOrder.patient_id == patient.id,
+        )
+        consultation_ids = select(Consultation.id).where(
+            Consultation.tenant_id == tenant_id,
+            Consultation.patient_id == patient.id,
+        )
+        engagement_action_ids = select(PatientEngagementAction.id).where(
+            PatientEngagementAction.tenant_id == tenant_id,
+            PatientEngagementAction.patient_id == patient.id,
+        )
+        matches = [
+            and_(
+                NotificationEvent.resource_type == "appointment",
+                NotificationEvent.resource_id.in_(appointment_ids),
+            ),
+            and_(
+                NotificationEvent.resource_type == "invoice",
+                NotificationEvent.resource_id.in_(invoice_ids),
+            ),
+            and_(
+                NotificationEvent.resource_type == "credit_note",
+                NotificationEvent.resource_id.in_(credit_note_ids),
+            ),
+            and_(
+                NotificationEvent.resource_type == "lab_order",
+                NotificationEvent.resource_id.in_(lab_order_ids),
+            ),
+            and_(
+                NotificationEvent.resource_type == "consultation",
+                NotificationEvent.resource_id.in_(consultation_ids),
+            ),
+            and_(
+                NotificationEvent.resource_type == "patient_engagement_action",
+                NotificationEvent.resource_id.in_(engagement_action_ids),
+            ),
+            and_(
+                NotificationEvent.resource_type == "patient",
+                NotificationEvent.resource_id == patient.id,
+            ),
+        ]
+        rows = self.session.exec(
+            select(NotificationEvent)
+            .where(
+                NotificationEvent.tenant_id == tenant_id,
+                NotificationEvent.provider == NotificationProvider.WHATSAPP,
+                NotificationEvent.template_key.is_not(None),
+                or_(*matches),
+            )
+            .order_by(NotificationEvent.created_at.desc())
+            .limit(limit)
+        ).all()
+        return [
+            PatientCommunicationRead(
+                id=row.id,
+                channel=row.provider.value,
+                template_key=row.template_key,
+                status=row.status.value,
+                recipient_masked=self._masked_recipient(row.recipient),
+                resource_type=row.resource_type,
+                resource_id=row.resource_id,
+                created_at=row.created_at,
+                sent_at=row.sent_at,
+                failure_reason=row.failure_reason,
+            )
+            for row in rows
+        ]
+
+    def get_patient(
+        self, *, tenant_id: str, patient_id: str, actor: User
+    ) -> PatientRead:
         enforce_entitlement(self.session, tenant_id, "patients")
         patient = self._get_or_404(tenant_id, patient_id)
         # Patients are tenant-global for read (see search_patients): a branch user
@@ -349,7 +454,24 @@ class PatientService:
             resource_id=patient.id,
             purpose="treatment",
         )
-        return patient
+        reference = PatientSearchService(self.session).references(
+            tenant_id=tenant_id,
+            patient_ids=[patient.id],
+        )
+        enriched = reference[0] if reference else None
+        data = PatientRead.model_validate(patient, from_attributes=True).model_dump()
+        data.update(
+            {
+                "subscription_plan_name": enriched.subscription_plan_name
+                if enriched
+                else None,
+                "subscription_status": enriched.subscription_status
+                if enriched
+                else None,
+                "intelligence_flags": enriched.intelligence_flags if enriched else [],
+            }
+        )
+        return PatientRead(**data)
 
     def update_patient(
         self, *, tenant_id: str, patient_id: str, payload: PatientUpdate, actor: User
