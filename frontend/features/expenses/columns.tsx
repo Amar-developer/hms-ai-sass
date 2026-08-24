@@ -124,11 +124,6 @@ export function getExpenseColumns(
             //   disabled: row.status !== "pending",
             // },
             // {
-            //   label: "Reimburse",
-            //   onClick: () => {},
-            //   disabled: row.status !== "approved",
-            // },
-            // {
             //   label: "Add Receipt",
             //   onClick: () => onAddReceipt?.(row),
             // },

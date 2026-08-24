@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Package, Plus } from "lucide-react";
+import { Package, Plus, PlusCircle } from "lucide-react";
 import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { homeServiceTypes, serviceItemTypes } from "@/features/items/constants";
 import { ItemForm } from "@/features/items/forms/ItemForms";
@@ -543,7 +543,7 @@ export function Items({
             onClick={() => open("create", "", "medicine")}
             className="primary-action gap-2 px-4 py-3 text-xs"
           >
-            <Plus size={16} />
+            <PlusCircle size={16} />
             Create Item
           </button>
         </div>

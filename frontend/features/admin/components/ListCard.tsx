@@ -1,5 +1,5 @@
 import { Card } from "@/app/components/common/ui";
-import { Inbox, Plus } from "lucide-react";
+import { Inbox, Plus, PlusCircle } from "lucide-react";
 import { DataTable } from "@/app/components/common/DataTable";
 
 // Search, sort, reset, and the "+ Add a Filter" custom builder now live in
@@ -35,7 +35,7 @@ export function ListCard({
             onClick={onCreate}
             className="primary-action gap-2 px-4 py-3 text-xs"
           >
-            <Plus size={16} />
+             <PlusCircle size={16} />
             {createLabel}
           </button>
         )}

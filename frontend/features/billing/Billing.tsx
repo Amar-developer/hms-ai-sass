@@ -31,6 +31,17 @@ import { type QueryFieldOption, type QueryFilterRow } from "@/utils/queryFilter"
 import type { SortState } from "@/utils/types";
 import { status_options } from "./contants";
 
+// "Paid Status" filters on computed due/paid/partially_paid/unpaid logic
+// (status combined with balance/paid amounts) that the backend's generic
+// list-filter mechanism can't express — so it's carried as the dedicated
+// `payment_state` query param instead of the generic `filters` JSON blob,
+// and must be pulled out of the Add Filter rows before those are sent.
+function splitPaidStatusFilter(queryFilters: QueryFilterRow[]) {
+  const paidStatusRow = queryFilters.find((row) => row.field === "paidStatus");
+  const restFilters = queryFilters.filter((row) => row.field !== "paidStatus");
+  return { paidStatus: paidStatusRow?.value, restFilters };
+}
+
 export function Billing({
   apiSession,
   loadLiveData,
@@ -57,8 +68,6 @@ export function Billing({
   } | null>(null);
   const [filters, setFilters] = useState({
     query: "",
-    source: "all",
-    paidStatus: "all",
     fromDate: "",
     toDate: "",
   });
@@ -117,15 +126,12 @@ export function Billing({
     if (branchId) params.set("branch_id", branchId);
     if (effectiveFilters.query.trim())
       params.set("q", effectiveFilters.query.trim());
-    if (effectiveFilters.source !== "all")
-      params.set("source", effectiveFilters.source);
-    if (effectiveFilters.paidStatus !== "all")
-      params.set("payment_state", effectiveFilters.paidStatus);
+    const { paidStatus, restFilters } = splitPaidStatusFilter(nextQueryFilters);
+    if (paidStatus) params.set("payment_state", paidStatus);
     if (effectiveFilters.fromDate)
       params.set("from_date", effectiveFilters.fromDate);
     if (effectiveFilters.toDate) params.set("to_date", effectiveFilters.toDate);
-    if (nextQueryFilters.length)
-      params.set("filters", JSON.stringify(nextQueryFilters));
+    if (restFilters.length) params.set("filters", JSON.stringify(restFilters));
     if (nextSort) params.set("sort", JSON.stringify(nextSort));
     setInvoiceListLoading(true);
     try {
@@ -149,21 +155,19 @@ export function Billing({
     if (!apiSession) return;
     const effectiveFilters = { ...filters, ...filterOverrides };
     const countStatuses = status_options.map((option) => option.value);
+    const { restFilters } = splitPaidStatusFilter(nextQueryFilters);
     const entries = await Promise.all(
       countStatuses.map(async (status) => {
         const params = new URLSearchParams({ limit: "1", offset: "0" });
         if (branchId) params.set("branch_id", branchId);
         if (effectiveFilters.query.trim())
           params.set("q", effectiveFilters.query.trim());
-        if (effectiveFilters.source !== "all")
-          params.set("source", effectiveFilters.source);
         if (status !== "all") params.set("payment_state", status);
         if (effectiveFilters.fromDate)
           params.set("from_date", effectiveFilters.fromDate);
         if (effectiveFilters.toDate)
           params.set("to_date", effectiveFilters.toDate);
-        if (nextQueryFilters.length)
-          params.set("filters", JSON.stringify(nextQueryFilters));
+        if (restFilters.length) params.set("filters", JSON.stringify(restFilters));
         const result = await fetchInvoicePage(apiSession, params).catch(
           () => ({ total: 0 }),
         );
@@ -267,14 +271,7 @@ export function Billing({
 
   useEffect(() => {
     setPage(1);
-  }, [
-    filters.query,
-    filters.source,
-    filters.paidStatus,
-    filters.fromDate,
-    filters.toDate,
-    queryFilters,
-  ]);
+  }, [filters.query, filters.fromDate, filters.toDate, queryFilters]);
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
@@ -291,8 +288,6 @@ export function Billing({
     branchId,
     page,
     filters.query,
-    filters.source,
-    filters.paidStatus,
     filters.fromDate,
     filters.toDate,
     queryFilters,
@@ -315,8 +310,6 @@ export function Billing({
   function clearFilters() {
     setFilters({
       query: "",
-      source: "all",
-      paidStatus: "all",
       fromDate: "",
       toDate: "",
     });
@@ -648,7 +641,7 @@ export function Billing({
             queryFilters={queryFilters}
             onQueryFiltersChange={handleQueryFiltersChange}
           >
-            <FormField label="From">
+            {/* <FormField label="From">
               <Input
                 type="date"
                 value={filters.fromDate}
@@ -665,7 +658,7 @@ export function Billing({
                   updateFilter("toDate", event.target.value)
                 }
               />
-            </FormField>
+            </FormField> */}
           </AdaptiveFilterTrigger>
           <AdaptiveSortTrigger
             fields={billingSchema.sortFields}

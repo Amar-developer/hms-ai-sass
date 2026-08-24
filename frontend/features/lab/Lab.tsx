@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FlaskConical, Plus, Trash2 } from "lucide-react";
+import { FlaskConical, Plus, PlusCircle, Trash2 } from "lucide-react";
 import { newSegment } from "@/lib/routeSlugs";
 import {
   ActionButton,
@@ -885,7 +885,7 @@ export function Lab({
             queryFilters={worklistQueryFilters}
             onQueryFiltersChange={setWorklistQueryFilters}
           >
-            <FormField label="Price Min">
+            {/* <FormField label="Price Min">
               <Input
                 type="number"
                 value={amountMin}
@@ -914,7 +914,7 @@ export function Lab({
                 value={worklistToDate}
                 onChange={(e: any) => setWorklistToDate(e.target.value)}
               />
-            </FormField>
+            </FormField> */}
           </AdaptiveFilterTrigger>
           <AdaptiveSortTrigger
             fields={labSchema.sortFields}
@@ -932,7 +932,7 @@ export function Lab({
               onClick={() => router.push(`/lab/${newSegment("lab-order")}`)}
               className="primary-action gap-2 px-4 py-3 text-xs"
             >
-              <Plus size={16} />
+             <PlusCircle size={16} />
               Create Lab Order
             </button>
           )}

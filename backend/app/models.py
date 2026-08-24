@@ -23,6 +23,7 @@ from app.modules.consultations.models import (
 )
 from app.modules.consultations.models import ConsultationReferral, ConsultationVital
 from app.modules.error_logs.models import ErrorLog
+from app.modules.expenses.models import Expense, ExpenseSubcategory
 from app.modules.files.models import FileDocument
 from app.modules.home_care.models import (
     HomeCareBooking,
@@ -149,6 +150,8 @@ __all__ = [
     "HomeCareVisitLog",
     "DoctorSettlement",
     "ErrorLog",
+    "Expense",
+    "ExpenseSubcategory",
     "FileDocument",
     "DiscountApproval",
     "DiscountOffer",

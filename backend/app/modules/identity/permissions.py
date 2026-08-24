@@ -168,6 +168,11 @@ EXPENSES_CREATE = "expenses.create"
 EXPENSES_READ = "expenses.read"
 EXPENSES_APPROVE = "expenses.approve"
 EXPENSES_DELETE = "expenses.delete"
+EXPENSE_SUBCATEGORIES_MANAGE = "expense_subcategories.manage"
+EXPENSE_SUBCATEGORIES_CREATE = "expense_subcategories.create"
+EXPENSE_SUBCATEGORIES_READ = "expense_subcategories.read"
+EXPENSE_SUBCATEGORIES_EDIT = "expense_subcategories.edit"
+EXPENSE_SUBCATEGORIES_DELETE = "expense_subcategories.delete"
 
 PERMISSION_CATALOG = [
     PLATFORM_TENANTS_MANAGE,
@@ -340,6 +345,11 @@ PERMISSION_CATALOG = [
     EXPENSES_READ,
     EXPENSES_APPROVE,
     EXPENSES_DELETE,
+    EXPENSE_SUBCATEGORIES_MANAGE,
+    EXPENSE_SUBCATEGORIES_CREATE,
+    EXPENSE_SUBCATEGORIES_READ,
+    EXPENSE_SUBCATEGORIES_EDIT,
+    EXPENSE_SUBCATEGORIES_DELETE,
 ]
 
 
@@ -396,4 +406,5 @@ PERMISSION_MODULE_LABELS = {
     "tax": "Tax",
     "discounts": "Discounts & Offers",
     "expenses": "Expenses",
+    "expense_subcategories": "Expense Subcategories",
 }

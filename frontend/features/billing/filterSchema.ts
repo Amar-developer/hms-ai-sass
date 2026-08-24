@@ -8,16 +8,6 @@ import {
 import { invoiceSourceOptions } from "./helpers";
 import { status_options } from "./contants";
 
-function labelOptions(
-  options: QueryFieldOption[],
-  labelFor: (value: string) => string,
-) {
-  return options.map((option) => ({
-    ...option,
-    label: labelFor(option.value),
-  }));
-}
-
 function invoiceSourceLabel(value: string) {
   return invoiceSourceOptions.find((source) => source.key === value)?.label || value;
 }
@@ -31,28 +21,11 @@ export function getBillingTableSchema({
 }: {
   filterOptions?: Record<string, QueryFieldOption[]>;
 } = {}): TableSchema {
-  const sourceOptions = filterOptions?.source?.length
-    ? labelOptions(filterOptions.source, invoiceSourceLabel)
-    : invoiceSourceOptions.map((source) => ({
-        value: source.key,
-        label: source.label,
-      }));
   return {
     id: "billing",
     searchLabel: "Invoices",
     searchPlaceholder: "Invoice, patient, source",
-    filters: [
-      {
-        key: "source",
-        label: "Source",
-        options: [{ value: "all", label: "All sources" }, ...sourceOptions],
-      },
-      {
-        key: "paidStatus",
-        label: "Paid Status",
-        options: status_options,
-      },
-    ],
+    filters: [],
     sortFields: [
       { key: "invoice_date", label: "Date" },
       { key: "source", label: "Source" },
@@ -113,6 +86,12 @@ export function getBillingQueryFields({
         distinctFieldOptions(rows, "status"),
         invoiceStatusLabel,
       ),
+    },
+    {
+      key: "paidStatus",
+      label: "Paid Status",
+      type: "select",
+      options: status_options,
     },
     { key: "total_amount", label: "Total Amount", type: "number" },
     { key: "paid_amount", label: "Paid Amount", type: "number" },

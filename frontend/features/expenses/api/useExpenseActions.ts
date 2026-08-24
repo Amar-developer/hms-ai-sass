@@ -10,6 +10,7 @@ export type ExpenseCreatePayload = {
   currency: string;
   incurred_on: string;
   description: string;
+  quantity?: number | null;
 };
 
 export function useExpenseActions(
@@ -104,23 +105,6 @@ export function useExpenseActions(
     }
   }
 
-  async function reimburseExpense(expenseId: string) {
-    if (!apiSession) return false;
-    setBusy(`reimburse-${expenseId}`);
-    setMessage("");
-    try {
-      await expensesApi.reimburseExpense(apiSession, expenseId);
-      await reload();
-      setMessage("Expense marked as reimbursed.");
-      return true;
-    } catch (err: any) {
-      setMessage(err.message || "Could not reimburse expense.");
-      return false;
-    } finally {
-      setBusy("");
-    }
-  }
-
   return {
     busy,
     message,
@@ -130,6 +114,5 @@ export function useExpenseActions(
     attachReceipt,
     approveExpense,
     rejectExpense,
-    reimburseExpense,
   };
 }
