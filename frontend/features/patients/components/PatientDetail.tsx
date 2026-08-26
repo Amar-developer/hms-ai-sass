@@ -42,6 +42,7 @@ import { money } from "@/utils/helper";
 import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
 import { DataTable } from "@/app/components/common/DataTable";
 import { PatientFlagBadges, patientValueTierFlags } from "./PatientFlagBadges";
+import { MembershipBenefitUsageModal } from "./MembershipBenefitUsageModal";
 import {
   getConsultationColumns,
   getInvoiceColumns,
@@ -84,6 +85,7 @@ export function PatientDetail({
   message,
   onMessageClose,
   onEnrollMembership,
+  onUpdateMembershipBenefitUsage,
   onCreateFamilyRelationship,
   onDeleteFamilyRelationship,
   onBack,
@@ -111,6 +113,10 @@ export function PatientDetail({
     "patient_subscriptions.manage",
     "patient_subscriptions.create",
   ]);
+  const canAdjustMembershipUsage = Boolean(
+    apiSession?.user?.user_type === "tenant_admin" ||
+      apiSession?.user?.roles?.includes("tenant_admin"),
+  );
   const canReadBilling = hasAnyPermission([
     "billing.manage",
     "billing.read",
@@ -133,6 +139,9 @@ export function PatientDetail({
   const [familyPatientOptions, setFamilyPatientOptions] = useState<any[]>([]);
   const [familyPatientSearchLoading, setFamilyPatientSearchLoading] =
     useState(false);
+  const [editingBenefitUsage, setEditingBenefitUsage] = useState<any | null>(
+    null,
+  );
 
   async function searchFamilyPatients(query = "") {
     if (!apiSession) return;
@@ -641,14 +650,29 @@ export function PatientDetail({
                 activates automatically when the current plan ends.
               </p>
             )}
-            {canCreateMembership && (
+            {canCreateMembership && !queuedMembership && (
               <MembershipEnrollForm
                 membershipPlans={membershipPlans}
                 patient={patient}
                 branches={branches}
                 loading={loading}
                 onSubmit={onEnrollMembership}
+                excludedPlanIds={[
+                  visibleMembership?.plan_id,
+                  queuedMembership?.plan_id,
+                ].filter(Boolean)}
               />
+            )}
+            {canAdjustMembershipUsage && visibleMembership && (
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  onClick={() => setEditingBenefitUsage(visibleMembership)}
+                  className="rounded-lg px-3 py-2 text-xs"
+                >
+                  Update benefit usage
+                </Button>
+              </div>
             )}
             <div className="mt-3 grid gap-3 md:grid-cols-4">
               <CompactMetric
@@ -678,6 +702,12 @@ export function PatientDetail({
                 }
               />
             </div>
+            <MembershipBenefitUsageModal
+              enrollment={editingBenefitUsage}
+              onClose={() => setEditingBenefitUsage(null)}
+              onSave={onUpdateMembershipBenefitUsage}
+              saving={loading}
+            />
           </div>
         )}
         {(activeSection === "membership" || activeSection === "family") && (

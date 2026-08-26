@@ -109,6 +109,42 @@ def test_daily_refresh_job_batches_and_processes_whatsapp(test_engine, monkeypat
     assert processed["whatsapp"] is True
 
 
+def test_daily_refresh_job_queues_admin_report_before_sending(test_engine, monkeypatch):
+    """The cron entry point must enqueue the end-of-day admin report and then
+    deliver it in the same run, so an external scheduler needs one invocation."""
+    order = []
+
+    monkeypatch.setattr(
+        daily_refresh, "refresh_due_patient_intelligence", lambda _session, *, limit: 0
+    )
+
+    def fake_queue(_session):
+        order.append("queue")
+        return 3
+
+    def fake_process(_session):
+        order.append("send")
+        return 3
+
+    monkeypatch.setattr(
+        daily_refresh, "queue_due_whatsapp_admin_daily_reports", fake_queue
+    )
+    monkeypatch.setattr(
+        daily_refresh, "process_due_whatsapp_notifications", fake_process
+    )
+
+    daily_refresh.run_daily_refresh(session_factory=lambda: Session(test_engine))
+
+    assert order == ["queue", "send"]
+
+    order.clear()
+    daily_refresh.run_daily_refresh(
+        session_factory=lambda: Session(test_engine),
+        queue_admin_daily_report=False,
+    )
+    assert order == ["send"]
+
+
 def test_between_operator_uses_both_tenant_configured_thresholds(test_engine):
     with Session(test_engine) as session:
         tenant, _branch, patient = _patient_fixture(session)

@@ -8,6 +8,9 @@ from sqlmodel import Session
 
 from app.core.database import engine
 from app.core.logging import configure_logging
+from app.modules.integrations.whatsapp_daily_report import (
+    queue_due_whatsapp_admin_daily_reports,
+)
 from app.modules.notifications.whatsapp_processor import (
     process_due_whatsapp_notifications,
 )
@@ -23,6 +26,7 @@ def run_daily_refresh(
     batch_size: int = 500,
     max_batches: int = 20,
     send_whatsapp: bool = True,
+    queue_admin_daily_report: bool = True,
 ) -> int:
     """Refresh stale patient intelligence and process newly due WhatsApp reminders.
 
@@ -40,6 +44,17 @@ def run_daily_refresh(
         total += refreshed
         if refreshed < batch_size:
             break
+    # Queued before the send pass below so a cron run scheduled after the
+    # tenant's 22:00 cutoff both enqueues and delivers the report in one
+    # shot. Deduped per tenant and local report date, so extra runs are no-ops.
+    if queue_admin_daily_report:
+        with make_session() as session:
+            queued = queue_due_whatsapp_admin_daily_reports(session)
+            session.commit()
+        logger.info(
+            "patient_intelligence.daily_refresh_admin_reports_queued",
+            extra={"report_count": queued},
+        )
     if send_whatsapp:
         with make_session() as session:
             sent = process_due_whatsapp_notifications(session)
@@ -66,12 +81,18 @@ def main() -> None:
         action="store_true",
         help="Only create/update engagement actions; do not process WhatsApp sends.",
     )
+    parser.add_argument(
+        "--no-admin-daily-report",
+        action="store_true",
+        help="Skip queueing the tenant admin end-of-day clinic report.",
+    )
     args = parser.parse_args()
     configure_logging()
     run_daily_refresh(
         batch_size=max(args.batch_size, 1),
         max_batches=max(args.max_batches, 1),
         send_whatsapp=not args.no_send_whatsapp,
+        queue_admin_daily_report=not args.no_admin_daily_report,
     )
 
 

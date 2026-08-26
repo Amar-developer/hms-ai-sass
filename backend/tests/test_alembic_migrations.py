@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -51,3 +54,20 @@ def test_alembic_revision_chain_is_complete_and_linear():
         current = scripts.get_revision(down_revision) if down_revision else None
 
     assert visited.issubset(revision_ids)
+
+
+def test_documented_alembic_cli_can_discover_revisions_without_pythonpath():
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    completed = subprocess.run(
+        [sys.executable, "-m", "alembic", "-c", "alembic/alembic.ini", "heads"],
+        cwd=BACKEND_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "(head)" in completed.stdout

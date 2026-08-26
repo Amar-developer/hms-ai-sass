@@ -4,7 +4,7 @@ import { Badge } from "@/app/components/common/ui";
 export function WhatsAppReadinessPanel({ readiness }: { readiness: any }) {
   if (!readiness) return null;
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h4 className="text-sm font-bold text-slate-800">
@@ -75,7 +75,7 @@ export function WhatsAppReadinessPanel({ readiness }: { readiness: any }) {
 export function WhatsAppUsagePanel({ usage }: { usage: any }) {
   if (!usage) return null;
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h4 className="card-title font-bold text-slate-800">
@@ -112,7 +112,7 @@ export function WhatsAppUsagePanel({ usage }: { usage: any }) {
 export function WhatsAppHealthPanel({ health }: { health: any }) {
   if (!health) return null;
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 className="card-title font-bold text-slate-800">

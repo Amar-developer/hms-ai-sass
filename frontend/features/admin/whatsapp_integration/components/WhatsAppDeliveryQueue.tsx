@@ -56,6 +56,7 @@ const emptyQueue: QueueResponse = {
 };
 
 const flowLabels: Record<string, string> = {
+  admin_daily_report: "Admin daily clinic report",
   appointment_booked_patient: "Patient appointment",
   appointment_booked_doctor: "Doctor appointment",
   invoice_paid_patient: "Paid invoice",
@@ -119,12 +120,14 @@ export function WhatsAppDeliveryQueue({
   apiSession,
   tenantId,
   onMessage,
+  workspaceMode = false,
 }: {
   apiSession?: any;
   tenantId: string;
   onMessage: (message: string) => void;
+  workspaceMode?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(workspaceMode);
   const [data, setData] = useState<QueueResponse>(emptyQueue);
   const [busy, setBusy] = useState(false);
   const [actionId, setActionId] = useState("");
@@ -303,13 +306,8 @@ export function WhatsAppDeliveryQueue({
   ];
 
   return (
-    <Card className="mt-4 px-4 py-4 text-xs lg:text-sm">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-3 text-left"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
-      >
+    <Card className="border border-slate-200 px-4 py-4 text-xs shadow-sm lg:text-sm">
+      <div className="flex w-full items-center justify-between gap-3 text-left">
         <div>
           <h3 className="card-title font-bold text-slate-900">
             Delivery queue
@@ -318,12 +316,18 @@ export function WhatsAppDeliveryQueue({
             Monitor queued, sent, failed and cancelled template notifications.
           </p>
         </div>
-        <span
-          className={`hover:scale-105 hover:font-bold ${expanded ? "rotate-180" : ""}`}
-        >
-          <ChevronDown size={18} />
-        </span>
-      </button>
+        {!workspaceMode && (
+          <button
+            type="button"
+            aria-label={expanded ? "Collapse delivery queue" : "Expand delivery queue"}
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+            className={`rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 ${expanded ? "rotate-180" : ""}`}
+          >
+            <ChevronDown size={18} />
+          </button>
+        )}
+      </div>
 
       {expanded && (
         <div className="mt-4 border-t border-slate-200 pt-4">

@@ -34,6 +34,7 @@ WhatsAppFlowKey = Literal[
     "pharmacy_dispense_patient",
     "service_invoice_patient",
     "service_follow_up_patient",
+    "admin_daily_report",
 ]
 
 WhatsAppLanguage = Literal[
@@ -80,6 +81,7 @@ class WhatsAppTemplateSettings(BaseModel):
     pharmacy_dispense_patient: str = Field(default="", max_length=160)
     service_invoice_patient: str = Field(default="", max_length=160)
     service_follow_up_patient: str = Field(default="", max_length=160)
+    admin_daily_report: str = Field(default="hms_admin_daily_report", max_length=160)
 
     @field_validator("*", mode="before")
     @classmethod
@@ -116,6 +118,7 @@ class WhatsAppFlowSettings(BaseModel):
     pharmacy_dispense_patient: bool = False
     service_invoice_patient: bool = False
     service_follow_up_patient: bool = False
+    admin_daily_report: bool = False
 
 
 class WhatsAppCustomTemplateSettings(BaseModel):
@@ -189,6 +192,7 @@ class WhatsAppIntegrationUpdate(BaseModel):
     max_attempts: int = Field(default=5, ge=1, le=10)
     patient_notifications_enabled: bool = True
     doctor_notifications_enabled: bool = True
+    admin_recipient_user_ids: list[str] = Field(default_factory=list, max_length=100)
     appointment_reminder_24h_enabled: bool = False
     appointment_reminder_2h_enabled: bool = False
     default_language: WhatsAppLanguage = "en"
@@ -213,6 +217,17 @@ class WhatsAppIntegrationUpdate(BaseModel):
     template_field_mappings: dict[WhatsAppFlowKey, list[str]] = Field(
         default_factory=dict
     )
+
+    @field_validator("admin_recipient_user_ids", mode="before")
+    @classmethod
+    def normalize_admin_recipient_user_ids(cls, value):
+        return list(
+            dict.fromkeys(
+                str(user_id or "").strip()
+                for user_id in (value or [])
+                if str(user_id or "").strip()
+            )
+        )
 
     @field_validator("template_field_mappings", mode="before")
     @classmethod
@@ -285,6 +300,10 @@ class WhatsAppIntegrationUpdate(BaseModel):
             raise ValueError(
                 "Enable the patient appointment reminder flow before its schedule"
             )
+        if self.flows.admin_daily_report and not self.admin_recipient_user_ids:
+            raise ValueError(
+                "Select at least one user for the tenant admin daily report"
+            )
         enabled_templates = {}
         for key, enabled in self.flows.model_dump().items():
             if not enabled:
@@ -294,7 +313,9 @@ class WhatsAppIntegrationUpdate(BaseModel):
                 "appointment_cancelled_doctor",
             }
             audience_enabled = (
-                self.doctor_notifications_enabled
+                True
+                if key == "admin_daily_report"
+                else self.doctor_notifications_enabled
                 if is_doctor_flow
                 else self.patient_notifications_enabled
             )
@@ -369,6 +390,13 @@ class WhatsAppFieldCatalogRead(BaseModel):
     fields: list[WhatsAppFieldOption]
 
 
+class WhatsAppAdminRecipientOption(BaseModel):
+    user_id: str
+    name: str
+    mobile: str
+    user_type: str
+
+
 class WhatsAppIntegrationRead(BaseModel):
     enabled: bool
     api_url: str
@@ -381,6 +409,10 @@ class WhatsAppIntegrationRead(BaseModel):
     max_attempts: int
     patient_notifications_enabled: bool
     doctor_notifications_enabled: bool
+    admin_recipient_user_ids: list[str] = Field(default_factory=list)
+    admin_recipient_options: list[WhatsAppAdminRecipientOption] = Field(
+        default_factory=list
+    )
     appointment_reminder_24h_enabled: bool
     appointment_reminder_2h_enabled: bool
     default_language: WhatsAppLanguage

@@ -329,6 +329,17 @@ export function readDraft(value: any): WhatsAppSettingsDraft {
     doctorNotificationsEnabled: Boolean(
       value?.doctor_notifications_enabled ?? true,
     ),
+    adminRecipientUserIds: Array.isArray(value?.admin_recipient_user_ids)
+      ? value.admin_recipient_user_ids.map(String)
+      : [],
+    adminRecipientOptions: Array.isArray(value?.admin_recipient_options)
+      ? value.admin_recipient_options.map((option: any) => ({
+          userId: String(option.user_id || ""),
+          name: String(option.name || ""),
+          mobile: String(option.mobile || ""),
+          userType: String(option.user_type || "staff"),
+        }))
+      : [],
     appointmentReminder24hEnabled: Boolean(
       value?.appointment_reminder_24h_enabled ?? false,
     ),
@@ -597,7 +608,10 @@ export function addNotificationTemplateToDraft(
     englishIdentifier: string;
     tamilIdentifier: string;
   },
-  flowOptions: Array<{ key: WhatsAppFlowKey; audience: "patient" | "doctor" }>,
+  flowOptions: Array<{
+    key: WhatsAppFlowKey;
+    audience: "patient" | "doctor" | "user";
+  }>,
 ): WhatsAppSettingsDraft {
   const name = newTemplate.name.trim();
   const englishIdentifier = newTemplate.englishIdentifier.trim();
@@ -647,13 +661,18 @@ export function isDeletedBuiltInTemplate(
 }
 
 export function getEligibleTestFlows<
-  T extends { key: WhatsAppFlowKey; audience: "patient" | "doctor" },
+  T extends {
+    key: WhatsAppFlowKey;
+    audience: "patient" | "doctor" | "user";
+  },
 >(draft: WhatsAppSettingsDraft, flowOptions: T[]) {
   return flowOptions.filter((flow) => {
     const audienceEnabled =
       flow.audience === "doctor"
         ? draft.doctorNotificationsEnabled
-        : draft.patientNotificationsEnabled;
+        : flow.audience === "patient"
+          ? draft.patientNotificationsEnabled
+          : true;
     return (
       audienceEnabled &&
       draft.flows[flow.key] &&
@@ -697,14 +716,19 @@ export function getMissingLocalizedCount(
   draft: WhatsAppSettingsDraft,
   activeTemplateLanguage: WhatsAppLanguage,
   activeTemplates: Record<WhatsAppFlowKey, string>,
-  flowOptions: Array<{ key: WhatsAppFlowKey; audience: "patient" | "doctor" }>,
+  flowOptions: Array<{
+    key: WhatsAppFlowKey;
+    audience: "patient" | "doctor" | "user";
+  }>,
 ) {
   if (activeTemplateLanguage === draft.defaultLanguage) return 0;
   return flowOptions.filter((flow) => {
     const audienceEnabled =
       flow.audience === "doctor"
         ? draft.doctorNotificationsEnabled
-        : draft.patientNotificationsEnabled;
+        : flow.audience === "patient"
+          ? draft.patientNotificationsEnabled
+          : true;
     return (
       audienceEnabled && draft.flows[flow.key] && !activeTemplates[flow.key].trim()
     );
@@ -764,6 +788,7 @@ export function buildWhatsAppSettingsPayload(draft: WhatsAppSettingsDraft) {
     max_attempts: draft.maxAttempts,
     patient_notifications_enabled: draft.patientNotificationsEnabled,
     doctor_notifications_enabled: draft.doctorNotificationsEnabled,
+    admin_recipient_user_ids: draft.adminRecipientUserIds,
     appointment_reminder_24h_enabled: draft.appointmentReminder24hEnabled,
     appointment_reminder_2h_enabled: draft.appointmentReminder2hEnabled,
     default_language: draft.defaultLanguage,

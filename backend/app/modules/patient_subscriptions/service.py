@@ -19,6 +19,7 @@ from app.modules.patient_subscriptions.services.enrollment_service import (
     enroll_patient,  # noqa: F401
     list_enrollments,  # noqa: F401
     update_enrollment,  # noqa: F401
+    update_benefit_usage,  # noqa: F401
 )
 from app.modules.patient_subscriptions.services.enrollment_reads import (
     read_enrollment,  # noqa: F401
@@ -50,5 +51,6 @@ from app.modules.patient_subscriptions.services.validation import (
     _get_enrollment,  # noqa: F401
     _get_plan,  # noqa: F401
     _resolve_enrollment_branch,  # noqa: F401
+    require_tenant_admin,  # noqa: F401
     require_tenant_admin_or_super_admin,  # noqa: F401
 )

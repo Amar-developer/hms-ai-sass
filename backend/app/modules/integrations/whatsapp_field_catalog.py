@@ -23,6 +23,16 @@ of birth to a template is a settings change, not a code change.
 from app.modules.integrations.whatsapp_entity_fields import entity_catalog
 
 FLOW_FIELD_CATALOG: dict[str, list[tuple[str, str]]] = {
+    "admin_daily_report": [
+        ("report_date", "Report date"),
+        ("appointments_completed", "Appointments completed"),
+        ("appointments_not_completed", "Appointments not completed"),
+        ("lab_bookings_completed", "Lab bookings completed"),
+        ("lab_bookings_not_completed", "Lab bookings not completed"),
+        ("homecare_completed", "Homecare visits completed"),
+        ("homecare_not_completed", "Homecare visits not completed"),
+        ("pending_invoices", "Pending invoices"),
+    ],
     "appointment_booked_patient": [
         ("recipient_name", "Recipient name"),
         ("doctor_name", "Doctor name"),

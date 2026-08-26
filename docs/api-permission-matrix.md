@@ -250,6 +250,7 @@ Secondary tenant admins keep the existing tenant-scoped screens and APIs. They c
 | `GET` | `/api/v1/patients/references` | `patients.read` | Resolves only patient IDs referenced by the current page |
 | `GET` | `/api/v1/patients/count` | `patients.read` | Tenant patient count for dashboard summaries |
 | `GET` | `/api/v1/patients/{patient_id}` | `patients.read` | Patient detail |
+| `GET` | `/api/v1/patients/{patient_id}/communications` | `patients.read` | Tenant-scoped patient communication history |
 | `PATCH` | `/api/v1/patients/{patient_id}` | `patients.edit` | Updates patient demographics/status audit |
 | `DELETE` | `/api/v1/patients/{patient_id}` | `patients.delete` | Soft delete by deactivating patient audit |
 | `POST` | `/api/v1/patients/{patient_id}/alerts` | `patients.write` | Creates alert audit |

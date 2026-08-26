@@ -6,6 +6,9 @@ from urllib.request import Request, urlopen
 from fastapi import HTTPException, status
 
 
+MAX_GRAPHQL_RESPONSE_BYTES = 1_048_576
+
+
 def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
@@ -76,17 +79,27 @@ class GraphQLCatalogClient:
         )
         try:
             with urlopen(request, timeout=self.timeout_seconds) as response:
-                raw = response.read().decode("utf-8")
+                raw_bytes = response.read(MAX_GRAPHQL_RESPONSE_BYTES + 1)
+                if len(raw_bytes) > MAX_GRAPHQL_RESPONSE_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Medicine GraphQL API returned an oversized response",
+                    )
+                raw = raw_bytes.decode("utf-8")
         except HTTPError as err:
-            detail = err.read().decode("utf-8") or f"{err.code} {err.reason}"
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Medicine GraphQL request failed: {detail}",
+                detail="Medicine GraphQL request failed",
             ) from err
         except URLError as err:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Medicine GraphQL API is unreachable: {err.reason}",
+                detail="Medicine GraphQL API is unreachable",
+            ) from err
+        except UnicodeDecodeError as err:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Medicine GraphQL API returned invalid text",
             ) from err
 
         try:
@@ -99,6 +112,6 @@ class GraphQLCatalogClient:
         if data.get("errors"):
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Medicine GraphQL API failed: {json.dumps(data['errors'])}",
+                detail="Medicine GraphQL API returned an error",
             )
         return data

@@ -57,6 +57,18 @@ def require_tenant_admin_or_super_admin(
     )
 
 
+def require_tenant_admin(session: Session, tenant_id: str, user: User) -> None:
+    """Require an administrator belonging to the selected tenant."""
+    roles = user_role_keys(session, user)
+    if user.tenant_id == tenant_id and (
+        user.user_type == "tenant_admin" or "tenant_admin" in roles
+    ):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, detail="Tenant admin access required"
+    )
+
+
 def _resolve_enrollment_branch(
     session: Session,
     *,

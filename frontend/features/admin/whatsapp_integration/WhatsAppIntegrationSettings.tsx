@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
-import { MessageCircleMore } from "lucide-react";
+import {
+  Activity,
+  KeyRound,
+  ListChecks,
+  MessageCircleMore,
+  MessagesSquare,
+  Send,
+  UsersRound,
+} from "lucide-react";
 
-import { Badge, Button, Card, StatusToast } from "@/app/components/common/ui";
+import { Badge, Button, StatusToast } from "@/app/components/common/ui";
 import {
   fetchWhatsAppSettings,
   sendWhatsAppTest,
@@ -66,6 +74,9 @@ export function WhatsAppIntegrationSettings({
   tenantId?: string;
 } = {}) {
   const [draft, setDraft] = useState<WhatsAppSettingsDraft>(initialDraft);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<
+    "overview" | "connection" | "recipients" | "templates" | "delivery"
+  >("overview");
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAllTemplates, setShowAllTemplates] = useState(false);
   const [addTemplateOpen, setAddTemplateOpen] = useState(false);
@@ -441,25 +452,55 @@ export function WhatsAppIntegrationSettings({
     }
   }
 
+  const enabledTemplateCount = Object.values(draft.flows).filter(Boolean).length;
+  const workspaceTabs = [
+    {
+      id: "overview" as const,
+      label: "Overview",
+      icon: Activity,
+      count: Number(readiness?.blockers || readiness?.warnings || 0),
+    },
+    { id: "connection" as const, label: "API Connection", icon: KeyRound },
+    {
+      id: "recipients" as const,
+      label: "Recipients",
+      icon: UsersRound,
+      count: draft.adminRecipientUserIds.length,
+    },
+    {
+      id: "templates" as const,
+      label: "Templates",
+      icon: MessagesSquare,
+      count: enabledTemplateCount,
+    },
+    {
+      id: "delivery" as const,
+      label: "Delivery Queue",
+      icon: ListChecks,
+      count: Number(health?.queued || 0),
+    },
+  ];
+
   return (
-    <>
-      <Card className="relative px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
+    <div className="space-y-3">
+      <section className="relative overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         {initialLoading && <OverlayLoader />}
         <StatusToast message={message} onClose={() => setMessage("")} />
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
-          <div className="flex gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
-              <MessageCircleMore className="h-5 w-5" />
+        <div className="flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
+              <MessageCircleMore className="h-4 w-4" />
             </span>
             <div>
-              <h3 className="card-title font-bold">WhatsApp Integration</h3>
-              <p className="card-desc max-w-3xl text-slate-500">
-                Configure the external API connection, approved template
-                identifiers, and the notifications each tenant wants to use.
+              <h2 className="text-base font-black tracking-tight text-slate-950">
+                WhatsApp Workspace
+              </h2>
+              <p className="text-xs font-medium text-slate-500">
+                Connection, recipients, templates and delivery operations in one workspace
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge
               tone={draft.enabled ? "green" : "slate"}
               className="normal-badge"
@@ -471,13 +512,92 @@ export function WhatsAppIntegrationSettings({
               checked={draft.enabled}
               onChange={(checked) => update("enabled", checked)}
             />
+            <span className="hidden h-6 w-px bg-slate-200 sm:block" />
+            <button
+              type="button"
+              onClick={openTestMessage}
+              disabled={
+                busy ||
+                testBusy ||
+                !apiSession ||
+                !effectiveTenantId ||
+                !draft.enabled ||
+                !hasApiKey
+              }
+              title={
+                !draft.enabled || !hasApiKey
+                  ? "Enable and save the connection first"
+                  : undefined
+              }
+              className="close-button inline-flex h-9 items-center gap-2 px-3 text-xs font-bold disabled:cursor-not-allowed disabled:text-slate-400"
+            >
+              <Send className="h-4 w-4" />
+              Send Test Message
+            </button>
+            <Button
+              type="button"
+              onClick={saveSettings}
+              disabled={busy || !apiSession || !effectiveTenantId}
+              className="save-button h-9 px-4 text-xs"
+            >
+              <ButtonLoader loading={busy}>
+                {busy ? "Saving..." : "Save WhatsApp Settings"}
+              </ButtonLoader>
+            </Button>
           </div>
         </div>
 
-        <WhatsAppReadinessPanel readiness={readiness} />
-        <WhatsAppUsagePanel usage={usage} />
-        <WhatsAppHealthPanel health={health} />
+        <nav
+          className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+          aria-label="WhatsApp workspace sections"
+          role="tablist"
+        >
+          {workspaceTabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeWorkspaceTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setActiveWorkspaceTab(tab.id)}
+                className={`inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-xs font-bold transition-colors ${
+                  active
+                    ? "bg-brand text-brand-fg"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{tab.label}</span>
+                {Boolean(tab.count) && (
+                  <span
+                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                      active
+                        ? "bg-white/20 text-brand-fg"
+                        : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </section>
 
+      <section
+        className={activeWorkspaceTab === "overview" ? "space-y-3" : "hidden"}
+      >
+        <WhatsAppReadinessPanel readiness={readiness} />
+        <div className="grid gap-3 xl:grid-cols-[minmax(280px,0.7fr)_minmax(0,1.3fr)]">
+          <WhatsAppUsagePanel usage={usage} />
+          <WhatsAppHealthPanel health={health} />
+        </div>
+      </section>
+
+      <section className={activeWorkspaceTab === "connection" ? "block" : "hidden"}>
         <WhatsAppApiConnectionSection
           draft={draft}
           update={update}
@@ -486,9 +606,13 @@ export function WhatsAppIntegrationSettings({
           hasApiKey={hasApiKey}
           maskedApiKey={maskedApiKey}
         />
+      </section>
 
+      <section className={activeWorkspaceTab === "recipients" ? "block" : "hidden"}>
         <WhatsAppRecipientControls draft={draft} update={update} />
+      </section>
 
+      <section className={activeWorkspaceTab === "templates" ? "block" : "hidden"}>
         <WhatsAppTemplatesSection
           draft={draft}
           activeTemplateLanguage={activeTemplateLanguage}
@@ -515,51 +639,14 @@ export function WhatsAppIntegrationSettings({
           visibleFlowOptionsByStatus={visibleFlowOptionsByStatus}
           visibleCustomTemplatesByStatus={visibleCustomTemplatesByStatus}
         />
+      </section>
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">
-            Test messages use the last saved tenant configuration and are sent
-            to the number entered in the test window.
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={openTestMessage}
-              disabled={
-                busy ||
-                testBusy ||
-                !apiSession ||
-                !effectiveTenantId ||
-                !draft.enabled ||
-                !hasApiKey
-              }
-              title={
-                !draft.enabled || !hasApiKey
-                  ? "Enable and save the connection first"
-                  : undefined
-              }
-              className="close-button font-bold disabled:cursor-not-allowed disabled:text-slate-400"
-            >
-              Send Test Message
-            </button>
-            <Button
-              type="button"
-              onClick={saveSettings}
-              disabled={busy || !apiSession || !effectiveTenantId}
-              className="save-button"
-            >
-              <ButtonLoader loading={busy}>
-                {busy ? "Saving..." : "Save WhatsApp Settings"}
-              </ButtonLoader>
-            </Button>
-          </div>
-        </div>
-      </Card>
-      {apiSession && effectiveTenantId && (
+      {activeWorkspaceTab === "delivery" && apiSession && effectiveTenantId && (
         <WhatsAppDeliveryQueue
           apiSession={apiSession}
           tenantId={effectiveTenantId}
           onMessage={setMessage}
+          workspaceMode
         />
       )}
       <WhatsAppAddTemplateModal
@@ -589,6 +676,6 @@ export function WhatsAppIntegrationSettings({
         onSelectOption={selectTestOption}
         onSubmit={sendTestMessage}
       />
-    </>
+    </div>
   );
 }

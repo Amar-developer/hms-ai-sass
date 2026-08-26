@@ -712,8 +712,12 @@ export function MembershipEnrollForm({
   branches = [],
   loading,
   onSubmit,
+  excludedPlanIds = [],
 }: any) {
-  const activePlans = membershipPlans.filter((plan: any) => plan.is_active);
+  const excludedPlans = new Set(excludedPlanIds);
+  const activePlans = membershipPlans.filter(
+    (plan: any) => plan.is_active && !excludedPlans.has(plan.id),
+  );
   const [planId, setPlanId] = useState("");
   const [branchId, setBranchId] = useState(patient?.branch_id || "");
   const [startsOn, setStartsOn] = useState(todayInputValue());
@@ -807,6 +811,11 @@ export function MembershipEnrollForm({
         <Button disabled={loading || !selectedPlan} className='save-button'>
           {loading ? "Saving..." : "Enroll & Create Invoice"}
         </Button>
+        {activePlans.length === 0 && (
+          <p className="mt-2 text-xs font-semibold text-amber-700">
+            The current or queued membership plan cannot be enrolled again.
+          </p>
+        )}
       </div>
     </form>
   );

@@ -131,6 +131,15 @@ def _base_filters(
 def _display_context(
     session: Session, event: NotificationEvent
 ) -> tuple[str, str | None]:
+    if event.template_key == "admin_daily_report":
+        try:
+            snapshot = json.loads(event.message or "{}")
+        except (TypeError, ValueError):
+            snapshot = {}
+        return (
+            str(snapshot.get("recipient_name") or "Tenant Admin"),
+            str(snapshot.get("report_date") or event.resource_id or ""),
+        )
     if event.resource_type == "appointment":
         appointment = session.get(Appointment, event.resource_id or "")
         if appointment and appointment.tenant_id == event.tenant_id:

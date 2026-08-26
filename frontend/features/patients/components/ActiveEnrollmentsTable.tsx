@@ -7,14 +7,19 @@ import { enrollmentPageSize } from "../constants";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { DataTable } from "@/app/components/common/DataTable";
 import { PatientFlagBadges } from "./PatientFlagBadges";
+import { MembershipBenefitUsageModal } from "./MembershipBenefitUsageModal";
 
 export function ActiveEnrollmentsTable({
   rows,
   patientMap,
   canManage,
+  canAdjustBenefits,
   busy,
   onUpdate,
+  onUpdateBenefits,
   onCancel,
+  labTests = [],
+  medicines = [],
 }: any) {
   const [query, setQuery] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({
@@ -22,6 +27,7 @@ export function ActiveEnrollmentsTable({
     status: "all",
   });
   const [editing, setEditing] = useState<any | null>(null);
+  const [usageEditing, setUsageEditing] = useState<any | null>(null);
 
   // Derive unique plan & status options from data
   const planOptions = useMemo(() => {
@@ -101,7 +107,6 @@ export function ActiveEnrollmentsTable({
       starts_on: String(row.starts_on || "").slice(0, 10),
       ends_on: String(row.ends_on || "").slice(0, 10),
       paid_amount: String(row.paid_amount ?? 0),
-      used_consultations: String(row.used_consultations ?? 0),
     });
   }
 
@@ -115,9 +120,12 @@ export function ActiveEnrollmentsTable({
       starts_on: editing.starts_on,
       ends_on: editing.ends_on,
       paid_amount: Number(editing.paid_amount || 0),
-      used_consultations: Number(editing.used_consultations || 0),
     });
     setEditing(null);
+  }
+
+  function startUsageEdit(row: any) {
+    setUsageEditing(row);
   }
 
   const columns = [
@@ -263,6 +271,14 @@ export function ActiveEnrollmentsTable({
                         label: "Edit",
                         onClick: () => startEdit(row),
                       },
+                      ...(canAdjustBenefits
+                        ? [
+                            {
+                              label: "Update benefit usage",
+                              onClick: () => startUsageEdit(row),
+                            },
+                          ]
+                        : []),
                       {
                         label: "Cancel",
                         onClick: () => onCancel(row),
@@ -319,6 +335,16 @@ export function ActiveEnrollmentsTable({
           pageSize={enrollmentPageSize}
         />
       </div>
+      <MembershipBenefitUsageModal
+        enrollment={usageEditing}
+        onClose={() => setUsageEditing(null)}
+        onSave={onUpdateBenefits}
+        saving={Boolean(
+          usageEditing && busy === `benefit-usage-${usageEditing.id}`,
+        )}
+        labTests={labTests}
+        medicines={medicines}
+      />
     </Card>
   );
 }

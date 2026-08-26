@@ -94,6 +94,21 @@ export function fetchMembershipEnrollments(
   );
 }
 
+export function updateMembershipBenefitUsage(
+  session: ApiSession,
+  enrollmentId: string,
+  payload: any,
+) {
+  return apiFetch(
+    `/patient-subscriptions/enrollments/${enrollmentId}/benefit-usage`,
+    session,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export function fetchPatientInvoices(session: ApiSession, patientId: string) {
   return apiFetch(`/billing/invoices?patient_id=${patientId}`, session);
 }

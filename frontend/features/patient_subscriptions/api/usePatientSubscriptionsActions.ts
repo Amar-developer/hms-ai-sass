@@ -19,6 +19,7 @@ type UsePatientSubscriptionsActionsParams = {
   medicines: any[];
   patientMap: Map<string, any>;
   canDeletePlans: boolean;
+  canAdjustBenefitUsage: boolean;
   busy: string;
   selectedPatient: string;
   selectedPlan: string;
@@ -65,6 +66,7 @@ export function usePatientSubscriptionsActions({
   medicines,
   patientMap,
   canDeletePlans,
+  canAdjustBenefitUsage,
   busy,
   selectedPatient,
   selectedPlan,
@@ -415,6 +417,33 @@ export function usePatientSubscriptionsActions({
     }
   }
 
+  async function updateBenefitUsage(row: any, usage: any) {
+    if (!canAdjustBenefitUsage) {
+      setToast({ kind: "warn", text: "Tenant admin access required." });
+      return false;
+    }
+    setBusy(`benefit-usage-${row.id}`);
+    setToast(null);
+    try {
+      await patientSubscriptionsApi.updateBenefitUsage(
+        apiSession as ApiSession,
+        row.id,
+        usage,
+      );
+      await load();
+      setToast({ kind: "success", text: "Patient benefit usage updated." });
+      return true;
+    } catch (err: any) {
+      setToast({
+        kind: "error",
+        text: err.message || "Could not update patient benefit usage.",
+      });
+      return false;
+    } finally {
+      setBusy("");
+    }
+  }
+
   function cancelEnrollment(row: any) {
     const patientName =
       row.patient_name ||
@@ -435,6 +464,7 @@ export function usePatientSubscriptionsActions({
     togglePlanActive,
     deletePlan,
     updateEnrollment,
+    updateBenefitUsage,
     cancelEnrollment,
   };
 }

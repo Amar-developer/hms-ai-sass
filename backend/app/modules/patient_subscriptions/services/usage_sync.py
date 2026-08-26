@@ -11,22 +11,21 @@ from app.modules.patient_subscriptions.repositories import (
 )
 from app.modules.patient_subscriptions.services.serialization import (
     free_items_from_json,
+    usage_from_json,
     usage_to_json,
 )
 from app.modules.pharmacy.repositories import PharmacyIssueRepository
 
 
-def sync_free_item_usage_from_invoices(
+def invoice_benefit_usage(
     session: Session,
     enrollment: PatientSubscriptionEnrollment,
     plan: PatientSubscriptionPlan,
-) -> None:
-    """Rebuild membership usage from non-cancelled benefit invoices.
+) -> tuple[int, dict[str, int], dict[str, int], bool]:
+    """Return usage backed by non-cancelled benefit invoices.
 
     Consultation usage is counted by distinct clinical visit so duplicate
-    invoices cannot consume a second benefit. If legacy usage has no linked
-    invoices, preserve its counter; once invoice history exists it becomes the
-    source of truth, including restoring benefits after cancellation/refund.
+    invoices cannot consume a second benefit.
     """
     free_lab = free_items_from_json(plan.free_lab_test_ids_json)
     free_medicine = free_items_from_json(plan.free_medicine_ids_json)
@@ -57,8 +56,9 @@ def sync_free_item_usage_from_invoices(
         for invoice in invoices
         if is_consultation_invoice(invoice)
     }
-    if any(is_consultation_invoice(invoice) for invoice in all_benefit_invoices):
-        enrollment.used_consultations = len(consultation_visits)
+    has_consultation_history = any(
+        is_consultation_invoice(invoice) for invoice in all_benefit_invoices
+    )
     for invoice in invoices:
         remaining_discount = int(invoice.membership_discount_amount or 0)
         if remaining_discount <= 0:
@@ -96,5 +96,45 @@ def sync_free_item_usage_from_invoices(
                 ) + max(int(item.quantity or 1), 1)
                 remaining_discount -= amount
 
-    enrollment.used_free_lab_json = usage_to_json(lab_usage)
-    enrollment.used_free_medicine_json = usage_to_json(medicine_usage)
+    return (
+        len(consultation_visits),
+        lab_usage,
+        medicine_usage,
+        has_consultation_history,
+    )
+
+
+def sync_free_item_usage_from_invoices(
+    session: Session,
+    enrollment: PatientSubscriptionEnrollment,
+    plan: PatientSubscriptionPlan,
+) -> None:
+    """Combine invoice usage with the tenant-admin handover baseline."""
+    invoice_consultations, invoice_lab, invoice_medicine, has_consultation_history = (
+        invoice_benefit_usage(session, enrollment, plan)
+    )
+    manual_consultations = enrollment.manual_used_consultations
+    if manual_consultations is not None:
+        enrollment.used_consultations = (
+            int(manual_consultations) + invoice_consultations
+        )
+    elif has_consultation_history:
+        # Preserve the legacy behavior for enrollments that have never received
+        # an explicit handover correction.
+        enrollment.used_consultations = invoice_consultations
+
+    manual_lab = usage_from_json(enrollment.manual_used_free_lab_json)
+    manual_medicine = usage_from_json(enrollment.manual_used_free_medicine_json)
+    enrollment.used_free_lab_json = usage_to_json(
+        {
+            item_id: int(invoice_lab.get(item_id, 0)) + int(manual_lab.get(item_id, 0))
+            for item_id in set(invoice_lab) | set(manual_lab)
+        }
+    )
+    enrollment.used_free_medicine_json = usage_to_json(
+        {
+            item_id: int(invoice_medicine.get(item_id, 0))
+            + int(manual_medicine.get(item_id, 0))
+            for item_id in set(invoice_medicine) | set(manual_medicine)
+        }
+    )

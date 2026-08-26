@@ -17,10 +17,18 @@ from app.modules.patients.models import Patient
 def test_invoice_list_batches_related_data_queries(test_engine):
     with Session(test_engine) as session:
         for index in range(25):
+            patient = Patient(
+                id=f"patient-{index}",
+                tenant_id="tenant_invoice_batch",
+                patient_number=f"PAT-BATCH-{index:03d}",
+                full_name=f"Billing Patient {index}",
+                mobile=f"900000{index:04d}",
+            )
+            session.add(patient)
             invoice = Invoice(
                 tenant_id="tenant_invoice_batch",
                 branch_id="branch_invoice_batch",
-                patient_id=f"patient-{index}",
+                patient_id=patient.id,
                 invoice_number=f"BATCH-INV-{index:03d}",
                 status=InvoiceStatus.PAID,
                 subtotal_amount=100,

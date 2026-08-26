@@ -76,7 +76,6 @@ class PatientSubscriptionEnrollmentUpdate(BaseModel):
     starts_on: date | None = None
     ends_on: date | None = None
     status: PatientSubscriptionEnrollmentStatus | None = None
-    used_consultations: int | None = Field(default=None, ge=0)
     paid_amount: int | None = Field(default=None, ge=0)
     updated_by_user_id: UserId | None = None
 
@@ -97,8 +96,10 @@ class PatientSubscriptionEnrollmentRead(BaseModel):
     allocated_free_consultations: int = 0
     remaining_free_consultations: int = 0
     used_free_lab_count: int = 0
+    used_free_lab_quantities: dict[str, int] = Field(default_factory=dict)
     remaining_free_lab_count: int = 0
     used_free_medicine_count: int = 0
+    used_free_medicine_quantities: dict[str, int] = Field(default_factory=dict)
     remaining_free_medicine_count: int = 0
     paid_amount: int
     purchase_invoice_id: str | None = None
@@ -107,6 +108,13 @@ class PatientSubscriptionEnrollmentRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     plan: PatientSubscriptionPlanRead | None = None
+
+
+class PatientSubscriptionBenefitUsageUpdate(BaseModel):
+    used_consultations: int = Field(ge=0)
+    used_free_lab_quantities: dict[str, int] = Field(default_factory=dict)
+    used_free_medicine_quantities: dict[str, int] = Field(default_factory=dict)
+    reason: str = Field(min_length=2, max_length=500)
 
 
 class PatientBenefitPreviewRequest(BaseModel):

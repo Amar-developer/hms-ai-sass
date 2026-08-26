@@ -189,6 +189,10 @@ export function PatientSubscriptions({
       "patient_subscriptions.delete",
       "settings.manage",
     );
+  const canAdjustBenefitUsage = Boolean(
+    apiSession?.user?.user_type === "tenant_admin" ||
+      apiSession?.user?.roles?.includes("tenant_admin"),
+  );
 
   const {
     createPlan,
@@ -197,6 +201,7 @@ export function PatientSubscriptions({
     togglePlanActive,
     deletePlan,
     updateEnrollment,
+    updateBenefitUsage,
     cancelEnrollment,
   } = usePatientSubscriptionsActions({
     apiSession,
@@ -205,6 +210,7 @@ export function PatientSubscriptions({
     medicines,
     patientMap,
     canDeletePlans,
+    canAdjustBenefitUsage,
     busy,
     selectedPatient,
     selectedPlan,
@@ -517,9 +523,13 @@ export function PatientSubscriptions({
               rows={activeEnrollments}
               patientMap={patientMap}
               canManage={canDeletePlans}
+              canAdjustBenefits={canAdjustBenefitUsage}
               busy={busy}
               onUpdate={updateEnrollment}
+              onUpdateBenefits={updateBenefitUsage}
               onCancel={requestCancelEnrollment}
+              labTests={labTests}
+              medicines={medicines}
             />
           </div>
           <QueuedEnrollmentsTable

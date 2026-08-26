@@ -58,11 +58,13 @@ def read_enrollment(
             free_consultations - int(enrollment.used_consultations or 0), 0
         ),
         used_free_lab_count=sum(used_lab.values()),
+        used_free_lab_quantities=used_lab,
         remaining_free_lab_count=sum(
             max(int(limit or 0) - int(used_lab.get(item_id, 0) or 0), 0)
             for item_id, limit in free_lab.items()
         ),
         used_free_medicine_count=sum(used_medicine.values()),
+        used_free_medicine_quantities=used_medicine,
         remaining_free_medicine_count=sum(
             max(int(limit or 0) - int(used_medicine.get(item_id, 0) or 0), 0)
             for item_id, limit in free_medicine.items()
