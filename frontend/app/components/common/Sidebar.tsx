@@ -85,10 +85,7 @@ export function Sidebar(props: SidebarProps) {
     };
   }, [props.tabletCollapsed]);
 
-  const showModuleBadge = (
-    label: string,
-    e: React.MouseEvent<HTMLElement>,
-  ) => {
+  const showModuleBadge = (label: string, e: React.MouseEvent<HTMLElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
 
     setBadge({
@@ -161,22 +158,24 @@ export function Sidebar(props: SidebarProps) {
                       !props.superAdminSettingsOpen,
                     );
                   }}
-                  className={`relative flex w-full items-center rounded-xl py-3 transition
-                    ${isActive ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-3 text-slate-900 hover:bg-slate-50"}
+                  className={`relative flex w-full items-center rounded-xl py-2 transition
+                    ${isActive ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-2 text-slate-900 hover:bg-slate-50"}
                   ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 >
-                  <Icon size={18} />
-                  {!props.tabletCollapsed && (
-                    <span className="truncate text-xs">{label}</span>
-                  )}
-                  {!props.tabletCollapsed && (
-                    <ChevronDown
-                      size={16}
-                      className={
-                        props.superAdminSettingsOpen ? "rotate-180" : ""
-                      }
-                    />
-                  )}
+                    <Icon size={22} />
+                  <div className="flex justify-between w-full">
+                    {!props.tabletCollapsed && (
+                      <span className="truncate text-xs font-semibold">{label}</span>
+                    )}
+                    {!props.tabletCollapsed && (
+                      <ChevronDown
+                        size={16}
+                        className={
+                          props.superAdminSettingsOpen ? "rotate-180" : ""
+                        }
+                      />
+                    )}
+                  </div>
                 </button>
                 {props.tabletCollapsed && popupMenu === "superadmin" && (
                   <div
@@ -212,10 +211,7 @@ export function Sidebar(props: SidebarProps) {
                   isActive &&
                   props.superAdminSettingsOpen && (
                     <div className="mt-2 grid gap-1 pl-5">
-                      <div className="mb-1 flex items-center gap-2 px-3 text-xs font-bold uppercase text-slate-400">
-                        <Settings size={13} />
-                        Settings
-                      </div>
+
                       {props.superAdminSections.map(
                         ([sectionId, sectionLabel, SectionIcon]: any) => (
                           <button
@@ -227,7 +223,11 @@ export function Sidebar(props: SidebarProps) {
                                 section: sectionId,
                               });
                             }}
-                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs ${props.superAdminSection == sectionId ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-3 text-slate-500 hover:bg-slate-50"}`}
+                       className={`flex w-full items-start justify-start gap-3 px-2 py-2 text-xs ${
+                            props.superAdminSection == sectionId
+                              ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"
+                              : "py-2"
+                          }`}
                           >
                             <SectionIcon size={15} />
                             {!props.tabletCollapsed && (
@@ -275,7 +275,9 @@ export function Sidebar(props: SidebarProps) {
                   <div className="flex justify-center items-center gap-3">
                     <Settings size={22} />
                     {!props.tabletCollapsed && (
-                      <span className="truncate text-xs font-semibold">{label}</span>
+                      <span className="truncate text-xs font-semibold">
+                        {label}
+                      </span>
                     )}
                   </div>
                   {!props.tabletCollapsed && (
@@ -408,7 +410,7 @@ export function Sidebar(props: SidebarProps) {
                   className={`relative flex w-full items-center justify-between rounded-xl transition ${
                     clinicRowActive
                       ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"
-                      : "py-3 text-slate-900 hover:bg-slate-50"
+                      : "py-2 text-slate-900 hover:bg-slate-50"
                   } ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 >
                   <div className="flex items-center gap-3">
@@ -572,16 +574,16 @@ export function Sidebar(props: SidebarProps) {
                       props.setReportsSection("metrix");
                     }
                   }}
-                  className={`flex w-full items-center jutify-between rounded-xl py-3 transition
+                  className={`flex w-full items-center jutify-between rounded-xl py-2 transition
     ${
       isActive
-        ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg"
+        ? "w-full rounded-full bg-brand px-3 py-2 text-left font-bold text-brand-fg"
         : "py-3 text-slate-900 hover:bg-slate-50"
     }
     ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}
   `}
                 >
-                  <Icon size={18} />
+                  <Icon size={22} />
                   <div className="flex justify-between w-full">
                     {!props.tabletCollapsed && (
                       <span className="min-w-0 flex truncate text-xs font-semibold">
@@ -671,8 +673,8 @@ export function Sidebar(props: SidebarProps) {
                   showModuleBadge(label, e);
                 }
               }}
-              className={`flex w-full items-center rounded-xl transition md:py-3 lg:py-2
-${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${isActive ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "text-slate-900 hover:bg-slate-50"}`}
+              className={`flex w-full items-center rounded-xl transition md:py-2 lg:py-2
+${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${isActive ? "w-full rounded-full bg-brand px-2 py-2 text-left font-bold text-brand-fg" : "text-slate-900 hover:bg-slate-50"}`}
             >
               <Icon size={22} title={label} />
               {!props.tabletCollapsed && (

@@ -189,6 +189,14 @@ export function AppShell({
     apiSession?.user?.permissions?.includes("platform.tenants.manage"),
   );
   const visiblePlatformSections = platformSectionsForUser(apiSession?.user);
+  // The Sidebar's "Settings" dropdown (superadmin) must not repeat the
+  // users/branches/departments sections Clinic Setup already shows — those
+  // ids are the CLINIC_SECTION_IDS excluded here (see superAdminClinicSections
+  // above, which is the flip side of this same filter).
+  const visiblePlatformSettingsSections = visiblePlatformSections.filter(
+    ([id]: any) =>
+      !superAdminClinicSections.some(([clinicId]: any) => clinicId === id),
+  );
   const passwordChangeRequired = Boolean(
     apiSession?.user?.must_change_password,
   );
@@ -837,7 +845,7 @@ export function AppShell({
               sideBarOpen={sideBarOpen}
               reportSections={reportSections}
               reportSection={reportsSection}
-              superAdminSections={visiblePlatformSections}
+              superAdminSections={visiblePlatformSettingsSections}
               tabletCollapsed={tabletCollapsed}
               setTabletCollapsed={setTabletCollapsed}
               clinicOpen={clinicOpen}
@@ -887,7 +895,7 @@ export function AppShell({
                 sideBarOpen={sideBarOpen}
                 reportSections={reportSections}
                 reportSection={reportsSection}
-                superAdminSections={visiblePlatformSections}
+                superAdminSections={visiblePlatformSettingsSections}
                 tabletCollapsed={tabletCollapsed}
                 setTabletCollapsed={setTabletCollapsed}
                 clinicOpen={clinicOpen}

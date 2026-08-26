@@ -66,7 +66,7 @@ export function getRoleColumns({
       className: "text-center",
       sortable: true,
       render: (role: any) => (
-        <Badge tone={role.is_active ? "green" : "red"} className="normal-badge">
+        <Badge tone={role.is_active ? "green" : "red"} className="normal-label">
           {role.is_active ? "Active" : "Inactive"}
         </Badge>
       ),

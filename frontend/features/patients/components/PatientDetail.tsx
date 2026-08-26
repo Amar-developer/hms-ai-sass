@@ -188,11 +188,15 @@ export function PatientDetail({
       ).slice(0, 10),
     );
     setManualPrescriptionNotes(
-      patientIntelligence?.manual_refill_notes || patient?.monthly_refill_notes || "",
+      patientIntelligence?.manual_refill_notes ||
+        patient?.monthly_refill_notes ||
+        "",
     );
     setManualLabDate(
       String(
-        patientIntelligence?.manual_expected_lab_at || patient?.monthly_lab_on || "",
+        patientIntelligence?.manual_expected_lab_at ||
+          patient?.monthly_lab_on ||
+          "",
       ).slice(0, 10),
     );
     setManualLabTestName(
@@ -447,118 +451,117 @@ export function PatientDetail({
     },
   ];
   const monthlyTrackingCards = (
-    <div className="grid gap-3 xl:grid-cols-2">
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <h5 className="text-sm font-black text-slate-950">
-          Monthly Medicine Tracking
-        </h5>
-        <p className="mt-1 text-xs font-semibold text-slate-500">
-          Set the first refill date. Future monthly dates update automatically.
-        </p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <FormField label="First / Next Refill Date">
-            <Input
-              type="date"
-              value={manualPrescriptionDate}
-              onChange={(event: any) =>
-                setManualPrescriptionDate(event.target.value)
-              }
-            />
-          </FormField>
-          <FormField label="Notes">
-            <Input
-              value={manualPrescriptionNotes}
-              onChange={(event: any) =>
-                setManualPrescriptionNotes(event.target.value)
-              }
-              placeholder="Optional medicine note"
-            />
-          </FormField>
-        </div>
-        <div className="mt-3 flex gap-2">
-          <Button
-            onClick={() =>
-              onSaveManualPrescriptionDate?.(
-                manualPrescriptionDate,
-                manualPrescriptionNotes,
-              )
-            }
-            disabled={loading || !manualPrescriptionDate}
-          >
-            Save Refill
-          </Button>
-          {(patientIntelligence?.manual_expected_refill_at ||
-            patient?.monthly_refill_on) && (
-            <ActionButton
-              tone="danger"
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <h5 className="text-sm font-black text-slate-950">
+        Monthly Lab & Medicine Tracking
+      </h5>
+      <p className="mt-1 text-xs font-semibold text-slate-500">
+        Set the first refill and lab dates. Future monthly dates update
+        automatically.
+      </p>
+      <div className="mt-3 grid gap-4 xl:grid-cols-2">
+        <div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="First / Next Refill Date">
+              <Input
+                type="date"
+                value={manualPrescriptionDate}
+                onChange={(event: any) =>
+                  setManualPrescriptionDate(event.target.value)
+                }
+              />
+            </FormField>
+            <FormField label="Notes">
+              <Input
+                value={manualPrescriptionNotes}
+                onChange={(event: any) =>
+                  setManualPrescriptionNotes(event.target.value)
+                }
+                placeholder="Optional medicine note"
+              />
+            </FormField>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <Button
               onClick={() =>
-                onSaveManualPrescriptionDate?.("", manualPrescriptionNotes)
+                onSaveManualPrescriptionDate?.(
+                  manualPrescriptionDate,
+                  manualPrescriptionNotes,
+                )
               }
-              disabled={loading}
+              disabled={loading || !manualPrescriptionDate}
+              className="save-button"
             >
-              Clear
-            </ActionButton>
-          )}
+              Save Refill
+            </Button>
+            {(patientIntelligence?.manual_expected_refill_at ||
+              patient?.monthly_refill_on) && (
+              <ActionButton
+                tone="danger"
+                onClick={() =>
+                  onSaveManualPrescriptionDate?.("", manualPrescriptionNotes)
+                }
+                disabled={loading}
+              >
+                Clear
+              </ActionButton>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <h5 className="text-sm font-black text-slate-950">
-          Monthly Lab Tracking
-        </h5>
-        <p className="mt-1 text-xs font-semibold text-slate-500">
-          Set the first lab date and test. Future monthly dates update automatically.
-        </p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <FormField label="First / Next Lab Date">
-            <Input
-              type="date"
-              value={manualLabDate}
-              onChange={(event: any) => setManualLabDate(event.target.value)}
-            />
-          </FormField>
-          <FormField label="Lab Test">
-            <Input
-              value={manualLabTestName}
-              onChange={(event: any) =>
-                setManualLabTestName(event.target.value)
-              }
-              placeholder="For example, HbA1c"
-            />
-          </FormField>
-          <FormField label="Notes" className="md:col-span-2">
-            <Input
-              value={manualLabNotes}
-              onChange={(event: any) => setManualLabNotes(event.target.value)}
-              placeholder="Optional lab note"
-            />
-          </FormField>
-        </div>
-        <div className="mt-3 flex gap-2">
-          <Button
-            onClick={() =>
-              onSaveManualLabDate?.(
-                manualLabDate,
-                manualLabTestName,
-                manualLabNotes,
-              )
-            }
-            disabled={loading || !manualLabDate}
-          >
-            Save Lab Date
-          </Button>
-          {(patientIntelligence?.manual_expected_lab_at ||
-            patient?.monthly_lab_on) && (
-            <ActionButton
-              tone="danger"
+        <div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="First / Next Lab Date">
+              <Input
+                type="date"
+                value={manualLabDate}
+                onChange={(event: any) => setManualLabDate(event.target.value)}
+              />
+            </FormField>
+            <FormField label="Lab Test">
+              <Input
+                value={manualLabTestName}
+                onChange={(event: any) =>
+                  setManualLabTestName(event.target.value)
+                }
+                placeholder="For example, HbA1c"
+              />
+            </FormField>
+            <FormField label="Notes" className="md:col-span-2">
+              <Input
+                value={manualLabNotes}
+                onChange={(event: any) => setManualLabNotes(event.target.value)}
+                placeholder="Optional lab note"
+              />
+            </FormField>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <Button
               onClick={() =>
-                onSaveManualLabDate?.("", manualLabTestName, manualLabNotes)
+                onSaveManualLabDate?.(
+                  manualLabDate,
+                  manualLabTestName,
+                  manualLabNotes,
+                )
               }
-              disabled={loading}
+              disabled={loading || !manualLabDate}
+              className="save-button"
             >
-              Clear
-            </ActionButton>
-          )}
+              Save Lab Date
+            </Button>
+            {(patientIntelligence?.manual_expected_lab_at ||
+              patient?.monthly_lab_on) && (
+              <ActionButton
+                tone="danger"
+                onClick={() =>
+                  onSaveManualLabDate?.("", manualLabTestName, manualLabNotes)
+                }
+                disabled={loading}
+              >
+                Clear
+              </ActionButton>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -567,7 +570,7 @@ export function PatientDetail({
   return (
     <div className="relative space-y-5">
       {loading && <OverlayLoader />}
-      <Card>
+      <Card className="">
         <StatusToast message={message} onClose={onMessageClose} />
         {activeSection === "home" && (
           <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -761,6 +764,7 @@ export function PatientDetail({
                 </FormField>
                 <Button
                   disabled={loading || !familyPatientId.trim()}
+                  className="save-button"
                   onClick={async () => {
                     const ok = await onCreateFamilyRelationship?.({
                       relatedPatientId: familyPatientId.trim(),
@@ -954,38 +958,38 @@ export function PatientDetail({
         )}
 
       {activeSection === "patient_tracking" && (
-        <DetailSection
-          title="Patient Tracking"
-          description="Monthly medicine refill and lab test follow-up dates."
-          count={canUpdatePatientTracking ? 3 : patientCommunications.length}
-        >
-          <div className="grid gap-3">
-            {canUpdatePatientTracking ? (
-              monthlyTrackingCards
-            ) : (
-              <Empty text="You do not have permission to update patient tracking." />
-            )}
-            <div className="rounded-lg border border-slate-200 bg-white p-3">
-              <h5 className="text-sm font-black text-slate-950">
-                WhatsApp Message History
-              </h5>
-              <p className="mt-1 text-xs font-semibold text-slate-500">
-                All WhatsApp templates sent or queued for this patient.
-              </p>
-              <div className="mt-3">
-                <DataTable
-                  columns={communicationColumns}
-                  data={patientCommunications}
-                  emptyMessage="No WhatsApp messages found."
-                  emptyDescription="Invoice, membership, reminder and care messages for this patient will show here."
-                  emptyIcon={MessageCircle}
-                  minBodyHeight={`${patientCommunications.length > 0 ?'':'220px'}`}
-                  className="text-xs"
-                />
-              </div>
+        // <DetailSection
+        //   title="Patient Tracking"
+        //   description="Monthly medicine refill and lab test follow-up dates."
+        //   count={canUpdatePatientTracking ? 3 : patientCommunications.length}
+        // >
+        <div className="grid gap-3">
+          {canUpdatePatientTracking ? (
+            monthlyTrackingCards
+          ) : (
+            <Empty text="You do not have permission to update patient tracking." />
+          )}
+          <div className="rounded-lg pt-2 bg-white ">
+            <h5 className="text-sm font-black text-slate-950">
+              WhatsApp Message History
+            </h5>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              All WhatsApp templates sent or queued for this patient.
+            </p>
+            <div className="mt-3">
+              <DataTable
+                columns={communicationColumns}
+                data={patientCommunications}
+                emptyMessage="No WhatsApp messages found."
+                emptyDescription="Invoice, membership, reminder and care messages for this patient will show here."
+                emptyIcon={MessageCircle}
+                minBodyHeight={`${patientCommunications.length > 0 ? "" : "220px"}`}
+                className="text-xs"
+              />
             </div>
           </div>
-        </DetailSection>
+        </div>
+        // </DetailSection>
       )}
 
       {activeSection === "home" && (alerts.length > 0 || risks.length > 0) && (
@@ -1020,58 +1024,58 @@ export function PatientDetail({
       )}
 
       {activeSection === "consultations" && (
-        <DetailSection
-          title="Consultations"
-          description="Click a consultation to open the consultation workspace."
-          count={consultations.length}
-        >
-          <DataTable
-            columns={consultationColumns}
-            data={consultations}
-            emptyMessage="No consultation records found."
-            emptyDescription="Consultations recorded for this patient will show up here."
-            emptyIcon={Stethoscope}
-            minBodyHeight={`${consultations.length > 0 ?'':'220px'}`}
-            onRowClick={openConsultation}
-          />
-        </DetailSection>
+        // <DetailSection
+        //   title="Consultations"
+        //   description="Click a consultation to open the consultation workspace."
+        //   count={consultations.length}
+        // >
+        <DataTable
+          columns={consultationColumns}
+          data={consultations}
+          emptyMessage="No consultation records found."
+          emptyDescription="Consultations recorded for this patient will show up here."
+          emptyIcon={Stethoscope}
+          minBodyHeight={`${consultations.length > 0 ? "" : "220px"}`}
+          onRowClick={openConsultation}
+        />
+        // </DetailSection>
       )}
 
       {activeSection === "labs" && (
         <div className="grid gap-5">
-          <DetailSection
+          {/* <DetailSection
             title="Lab & Service"
             description="Ordered diagnostic tests, services, home care, and home visit bookings."
             count={labServiceRows.length}
-          >
-            <DataTable
-              columns={labOrderColumns}
-              data={labServiceRows}
-              emptyMessage="No lab or service orders found."
-              emptyDescription="Diagnostic tests, services, home care, and home visit bookings for this patient will show up here."
-              emptyIcon={FlaskConical}
-              minBodyHeight={`${labServiceRows.length > 0 ?'':'220px'}`}
-            />
-          </DetailSection>
+          > */}
+          <DataTable
+            columns={labOrderColumns}
+            data={labServiceRows}
+            emptyMessage="No lab or service orders found."
+            emptyDescription="Diagnostic tests, services, home care, and home visit bookings for this patient will show up here."
+            emptyIcon={FlaskConical}
+            minBodyHeight={`${labServiceRows.length > 0 ? "" : "220px"}`}
+          />
+          {/* </DetailSection> */}
         </div>
       )}
 
       {activeSection === "medicines" && (
         <div className="grid gap-5">
-          <DetailSection
+          {/* <DetailSection
             title="Medicines"
             description="Pharmacy issues and dispensed medicines."
             count={medicineRows.length}
-          >
-            <DataTable
-              columns={medicineColumns}
-              data={medicineRows}
-              emptyMessage="No pharmacy issues found."
-              emptyDescription="Medicines dispensed to this patient will show up here."
-              emptyIcon={Pill}
-              minBodyHeight={`${medicineRows.length > 0 ?'':'220px'}`}
-            />
-          </DetailSection>
+          > */}
+          <DataTable
+            columns={medicineColumns}
+            data={medicineRows}
+            emptyMessage="No pharmacy issues found."
+            emptyDescription="Medicines dispensed to this patient will show up here."
+            emptyIcon={Pill}
+            minBodyHeight={`${medicineRows.length > 0 ? "" : "220px"}`}
+          />
+          {/* </DetailSection> */}
         </div>
       )}
 
@@ -1266,13 +1270,14 @@ export function PatientDetail({
           </DetailSection>
         )}
 
-      {activeSection === "billing"  && (
-        <DetailSection
-          title="Billing Invoices"
-          description="Patient invoices, paid amount, and due amount."
-          count={patientInvoices.length}
-          defaultOpen={false}
-        >
+      {activeSection === "billing" && (
+        // <DetailSection
+        //   title="Billing Invoices"
+        //   description="Patient invoices, paid amount, and due amount."
+        //   count={patientInvoices.length}
+        //   defaultOpen={false}
+        // >
+        <div>
           <div className="mb-3 grid gap-3 md:grid-cols-3">
             <CompactMetric label="Overall Billed" value={money(totalBilled)} />
             <CompactMetric label="Overall Paid" value={money(totalPaid)} />
@@ -1284,10 +1289,11 @@ export function PatientDetail({
             emptyMessage="No billing invoices found."
             emptyDescription="Invoices generated for this patient will show up here."
             emptyIcon={ReceiptText}
-            minBodyHeight={`${patientInvoices.length > 0 ?'':'220px'}`}
+            minBodyHeight={`${patientInvoices.length > 0 ? "" : "220px"}`}
             onRowClick={openInvoice}
           />
-        </DetailSection>
+        </div>
+        // </DetailSection>
       )}
 
       <ActivityLog

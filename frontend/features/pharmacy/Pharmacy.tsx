@@ -570,14 +570,8 @@ export function Pharmacy({
           />
         )}
         <StatusToast message={message} onClose={() => setMessage("")} />
-        <Card>
-          <div className="border-b border-slate-200 pb-3">
-            <h3 className="card-title font-bold">Consultation Prescriptions</h3>
-            <p className="card-desc text-slate-500">
-              Doctor prescriptions created from signed OPD consultations.
-            </p>
-          </div>
-          <div className="mt-4">
+        <Card className="pt-2">
+          <div className="mt-2">
             <DataTable
               columns={prescriptionColumns}
               data={visiblePrescriptions}

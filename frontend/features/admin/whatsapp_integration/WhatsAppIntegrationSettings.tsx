@@ -116,7 +116,11 @@ export function WhatsAppIntegrationSettings({
       };
     }
     const scopedSession = { ...apiSession, tenantId: effectiveTenantId };
-    setBusy(true);
+    // Not setBusy(true) here: `busy` also drives the Save Settings button's
+    // loading state, and this effect re-runs on every visit to the page —
+    // sharing the flag made Save show its "Saving..." spinner on load even
+    // though nothing was being saved. initialLoading (the overlay) already
+    // covers this fetch.
     setMessage("");
     void fetchWhatsAppSettings(scopedSession)
       .then((value) => {
@@ -136,7 +140,6 @@ export function WhatsAppIntegrationSettings({
       })
       .finally(() => {
         if (active) {
-          setBusy(false);
           setInitialLoading(false);
         }
       });
@@ -487,7 +490,7 @@ export function WhatsAppIntegrationSettings({
         {initialLoading && <OverlayLoader />}
         <StatusToast message={message} onClose={() => setMessage("")} />
         <div className="flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-1/2">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
               <MessageCircleMore className="h-4 w-4" />
             </span>
@@ -500,10 +503,10 @@ export function WhatsAppIntegrationSettings({
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-2 items-center w-1/2">
             <Badge
               tone={draft.enabled ? "green" : "slate"}
-              className="normal-badge"
+              className="normal-label"
             >
               {draft.enabled ? "Enabled" : "Disabled"}
             </Badge>
@@ -519,6 +522,7 @@ export function WhatsAppIntegrationSettings({
               disabled={
                 busy ||
                 testBusy ||
+                initialLoading ||
                 !apiSession ||
                 !effectiveTenantId ||
                 !draft.enabled ||
@@ -529,7 +533,7 @@ export function WhatsAppIntegrationSettings({
                   ? "Enable and save the connection first"
                   : undefined
               }
-              className="close-button inline-flex h-9 items-center gap-2 px-3 text-xs font-bold disabled:cursor-not-allowed disabled:text-slate-400"
+              className="close-button inline-flex h-9 items-center gap-2 px-2 text-xs font-bold disabled:cursor-not-allowed disabled:text-slate-400"
             >
               <Send className="h-4 w-4" />
               Send Test Message
@@ -537,11 +541,11 @@ export function WhatsAppIntegrationSettings({
             <Button
               type="button"
               onClick={saveSettings}
-              disabled={busy || !apiSession || !effectiveTenantId}
+              disabled={busy || initialLoading || !apiSession || !effectiveTenantId}
               className="save-button h-9 px-4 text-xs"
             >
               <ButtonLoader loading={busy}>
-                {busy ? "Saving..." : "Save WhatsApp Settings"}
+                {busy ? "Saving WhatsApp Settings..." : "Save WhatsApp Settings"}
               </ButtonLoader>
             </Button>
           </div>

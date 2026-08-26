@@ -230,7 +230,7 @@ export function WhatsAppTestMessageModal({
           >
             Cancel
           </button>
-          <Button type="submit" disabled={testBusy}>
+          <Button type="submit" className='save-button' disabled={testBusy}>
             <ButtonLoader loading={testBusy}>
               {testBusy ? "Sending..." : "Send Test Message"}
             </ButtonLoader>

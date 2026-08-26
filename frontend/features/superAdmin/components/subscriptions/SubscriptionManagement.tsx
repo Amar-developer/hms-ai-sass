@@ -320,7 +320,7 @@ export function SubscriptionManagement({
 
   return (
     <div className="mt-3">
-      <Card>
+      <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
             <p className="card-title font-bold">Subscription Management</p>
@@ -380,16 +380,16 @@ export function SubscriptionManagement({
         />
       </div>
       <div className="mt-3">
-        <Card>
+        <Card className="pt-2">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
             <div>
               <h4 className="card-title font-bold">Subscriptions</h4>
-              <p className=" card-desc text-slate-500">
+              <p className="card-desc text-slate-500">
                 Compact tenant subscription list. Open details for IDs, notes,
                 and module information.
               </p>
             </div>
-            <Badge tone="blue" className="normal-badge">
+            <Badge tone="blue" className="normal-label">
               {filtered.length} records
             </Badge>
           </div>
@@ -419,7 +419,7 @@ export function SubscriptionManagement({
               />
             </FormField>
           </FilterSection>
-          <div className="mt-4 rounded-2xl border border-slate-200">
+          <div className="mt-4 rounded-lg border border-slate-200">
             <DataTable
               columns={subscriptionColumns}
               data={rows}
@@ -443,7 +443,7 @@ export function SubscriptionManagement({
         </Card>
       </div>
       <div className="mt-3">
-        <Card>
+        <Card className="pt-2">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
             <div>
               <h4 className="card-title font-bold">Plan Catalog</h4>
@@ -454,12 +454,12 @@ export function SubscriptionManagement({
             </div>
             <Badge
               tone="blue"
-              className="px-2 py-2 rounded-lg md:w-[15%] lg:w-[10%] text-center"
+              className="normal-label"
             >
               {catalogPlans.length} plans
             </Badge>
           </div>
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
             <div className="min-w-[900px]">
               <DataTable
                 columns={planColumns}

@@ -82,7 +82,7 @@ export function getTenantColumns({
                 ? "amber"
                 : "red"
           }
-          className="normal-badge"
+          className="normal-label"
         >
           {tenant.status}
         </Badge>

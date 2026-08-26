@@ -13,11 +13,7 @@ function invoiceType(invoice: any) {
   return "Consultation";
 }
 
-export function OPDPaymentQueue({
-  apiSession,
-  branchId,
-  onOpenInvoice,
-}: any) {
+export function OPDPaymentQueue({ apiSession, branchId, onOpenInvoice }: any) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -39,8 +35,8 @@ export function OPDPaymentQueue({
   }, [loadRows]);
 
   return (
-    <Card>
-      <div className="flex flex-col gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="pt-2">
+      <div className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h3 className="card-title font-bold">OPD Payment Queue</h3>
           <p className="card-desc text-slate-500">
@@ -71,8 +67,9 @@ export function OPDPaymentQueue({
         </div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-          <div className="hidden grid-cols-[180px_130px_140px_120px_180px] gap-4 bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 md:grid">
+          <div className="hidden grid-cols-[180px_120px_130px_100px_150px_180px] gap-4 bg-slate-50 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
             <span>Patient</span>
+            <span>Invoice No</span>
             <span>Type</span>
             <span>Due</span>
             <span>Date</span>
@@ -82,16 +79,16 @@ export function OPDPaymentQueue({
             {rows.map((invoice) => (
               <div
                 key={invoice.id}
-                className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,1.2fr)_130px_140px_120px_180px] md:items-center"
+                className="grid gap-4 px-4 py-2 md:grid-cols-[180px_120px_130px_100px_150px_180px] md:items-center"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-black text-slate-950">
                     {invoice.patient_name || "Patient"}
                   </p>
-                  <p className="mt-0.5 text-[11px] font-medium text-slate-500">
-                    {invoice.invoice_number}
-                  </p>
                 </div>
+                <p className="mt-0.5 text-xs font-medium text-slate-500">
+                  {invoice.invoice_number}
+                </p>
                 <span className="w-fit rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
                   {invoiceType(invoice)}
                 </span>
@@ -101,14 +98,16 @@ export function OPDPaymentQueue({
                 <p className="text-xs text-slate-600">
                   {displayDateTime(invoice.created_at)}
                 </p>
-                <Button
-                  type="button"
-                  onClick={() => onOpenInvoice?.(invoice)}
-                  className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap bg-brand px-3 py-0 text-xs hover:bg-brand-hover"
-                >
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Collect Payment
-                </Button>
+                <div className="flex justify-center border w-full">
+                  <Button
+                    type="button"
+                    onClick={() => onOpenInvoice?.(invoice)}
+                    className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap bg-brand px-3 py-0 text-xs hover:bg-brand-hover"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Collect Payment
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

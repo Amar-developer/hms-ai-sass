@@ -117,24 +117,8 @@ export function OPDInvoiceQueue({
   }
 
   return (
-    <Card>
-      <div className="flex flex-col gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="card-title font-bold">OPD Billing Queue</h3>
-          <p className="card-desc text-slate-500">
-            Completed consultations, lab orders and prescription issues ready
-            for invoice.
-          </p>
-        </div>
-        <Button
-          type="button"
-          className="inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap bg-brand px-4 py-0 text-xs hover:bg-brand-hover"
-          onClick={onOpenInvoices}
-        >
-          <ReceiptText className="mr-2 h-4 w-4" />
-          View All Invoices
-        </Button>
-      </div>
+    <Card className="pt-2">
+
 
       <StatusToast message={message} onClose={() => setMessage("")} />
 
@@ -159,7 +143,7 @@ export function OPDInvoiceQueue({
         </div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-          <div className="hidden grid-cols-[minmax(0,1.2fr)_180px_130px_minmax(0,1fr)_130px_180px] gap-4 bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 md:grid">
+          <div className="hidden grid-cols-[180px_100px_130px_130px_160px_180px] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
             <span>Patient</span>
             <span>Token</span>
             <span>Type</span>
@@ -176,7 +160,7 @@ export function OPDInvoiceQueue({
               return (
                 <div
                   key={rowKey}
-                  className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,1.2fr)_130px_130px_minmax(0,1fr)_180px_180px] md:items-center"
+                  className="grid gap-3 px-4 py-2 md:grid-cols-[180px_100px_130px_130px_160px_180px] md:items-center"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-black text-slate-950">
@@ -184,7 +168,7 @@ export function OPDInvoiceQueue({
                     </p>
                   </div>
                   <div className="">
-                    <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                    <p className="mt-0.5 text-xs font-medium text-slate-500">
                       {row.queueType === "lab"
                         ? row.lab_order_number || "Lab order"
                         : row.queueType === "pharmacy"

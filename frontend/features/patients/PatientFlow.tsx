@@ -118,10 +118,10 @@ export function PatientFlow({
     })();
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-4 ">
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col justify-between gap-3 px-4 py-3 md:flex-row md:items-start">
-          <div className="flex items-start gap-4">
+        <div className="flex flex-col justify-between gap-3 px-4 py-3 md:flex-row md:items-start ">
+          <div className="flex items-start gap-4 ">
             <label className="group relative block h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
               {patient?.photo_url ? (
                 <img
@@ -150,7 +150,7 @@ export function PatientFlow({
                 />
               )}
             </label>
-            <div className="min-w-0">
+            <div className="min-w-0 ">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base font-black tracking-tight text-slate-950">
                   {patient?.full_name || "Patient Workspace"}

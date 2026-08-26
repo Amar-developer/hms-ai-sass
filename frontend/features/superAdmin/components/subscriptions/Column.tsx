@@ -232,7 +232,7 @@ export function getPlanColumns({
       render: (plan: any) => (
         <Badge
           tone="slate"
-          className="rounded-full px-1 py-1 text-xs lg:text-sm"
+          className="normal-badge"
         >
           {(plan.enabled_modules || []).length}
         </Badge>
@@ -246,7 +246,7 @@ export function getPlanColumns({
       render: (plan: any) => (
         <Badge
           tone={plan.is_active ? "green" : "slate"}
-          className="rounded-full px-1 py-1 text-xs lg:text-sm"
+          className="normal-badge"
         >
           {plan.is_active ? "Active" : "Inactive"}
         </Badge>

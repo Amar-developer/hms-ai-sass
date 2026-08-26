@@ -257,8 +257,8 @@ export function ClinicalTemplateManager({
   }
 
   return (
-    <Card className="p-4">
-      <div className="flex flex-col gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="pt-2">
+      <div className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="card-title font-bold">Consultation Templates</h3>
           <p className="card-desc text-slate-500">
