@@ -545,7 +545,7 @@ export function WhatsAppIntegrationSettings({
               className="save-button h-9 px-4 text-xs"
             >
               <ButtonLoader loading={busy}>
-                {busy ? "Saving WhatsApp Settings..." : "Save    Settings"}
+                {busy ? "Saving WhatsApp Settings..." : "Save WhatsApp Settings"}
               </ButtonLoader>
             </Button>
           </div>
