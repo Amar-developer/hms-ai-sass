@@ -92,9 +92,17 @@ export function AdaptiveFilterTrigger({
     [schema.filters],
   );
 
+  const queryFieldKeys = useMemo(
+    () => new Set((queryFields ?? []).map((field) => field.key)),
+    [queryFields],
+  );
+
   const mergedQueryFields = useMemo(
-    () => [...schemaQueryFields, ...(queryFields ?? [])],
-    [schemaQueryFields, queryFields],
+    () => [
+      ...schemaQueryFields.filter((field) => !queryFieldKeys.has(field.key)),
+      ...(queryFields ?? []),
+    ],
+    [schemaQueryFields, queryFields, queryFieldKeys],
   );
 
   const schemaFilterKeys = useMemo(

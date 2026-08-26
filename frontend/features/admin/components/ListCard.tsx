@@ -52,7 +52,7 @@ export function ListCard({
         emptyMessage="No records match your search."
         emptyDescription="Items will show up here once added."
         emptyIcon={Inbox}
-        minBodyHeight="220px"
+        minBodyHeight={`${rows.length >0 ? '':'220px'}`}
       />
     </Card>
   );

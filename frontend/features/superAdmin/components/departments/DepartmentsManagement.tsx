@@ -97,7 +97,7 @@ export function DepartmentsManagement({
                 emptyMessage="No medical departments match your search."
                 emptyDescription="Medical departments created for this tenant will show up here."
                 emptyIcon={Layers}
-                minBodyHeight="220px"
+                minBodyHeight={`${rows.length > 0 ?'':'220px'}`}
                 onRowClick={(department) => {
                   setSelectedDepartmentId(department.id);
                   setSection("departmentEdit");

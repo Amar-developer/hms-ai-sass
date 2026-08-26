@@ -435,7 +435,7 @@ export function WhatsAppDeliveryQueue({
               emptyMessage="No delivery records match these filters."
               emptyDescription="WhatsApp notifications queued, sent, or failed for this tenant will show up here."
               emptyIcon={MessageCircle}
-              minBodyHeight="220px"
+              minBodyHeight={`${data.items.length >0 ?'':'220px'}`}
               className="min-w-[940px] text-xs"
             />
           </div>

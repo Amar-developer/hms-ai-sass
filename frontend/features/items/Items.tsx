@@ -18,7 +18,8 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { getItemsColumns } from "./Column";
 import { getItemsTableSchema, getItemsQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
-import { newSegment, editSegment } from "@/lib/routeSlugs";
+import { newSegment, editSegment, viewSegment } from "@/lib/routeSlugs";
+import { ItemDetail } from "@/features/items/components/ItemDetail";
 import {
   applyQueryFilters,
   type QueryFieldOption,
@@ -110,7 +111,6 @@ export function Items({
     load,
   } = useItemsData({ apiSession, branchId });
   const [packageTestIds, setPackageTestIds] = useState<string[]>([]);
-  const [editing, setEditing] = useState<any>(null);
   const [confirmAction, setConfirmAction] = useState<any>(null);
   const [filters, setFilters] = useState({
     labOnly: "all",
@@ -125,11 +125,6 @@ export function Items({
   const containerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 10;
   const [form, setForm] = useState<any>(() => createEmptyForm(itemType));
-  const autoCode = editing
-    ? type === "physio_equipment"
-      ? form.serial_number || form.code || ""
-      : form.code || ""
-    : itemCodePreview(type, form.name);
 
   const supplierName = (id: string | null | undefined) =>
     stockSuppliers.find((supplier: any) => supplier.id === id)?.name || "-";
@@ -261,6 +256,14 @@ export function Items({
     ],
     [medicines, tests, packages, equipment, homeCareServices, stockSuppliers],
   );
+  // The route (not stray component state) is the source of truth for which
+  // record is being edited — this is what `type`/`editing` used to track
+  // locally before edit became route-driven, which left them permanently
+  // uninitialized and caused edits to be submitted as the wrong item type.
+  const editingRow = useMemo(
+    () => (view === "edit" ? rows.find((row: any) => row.id === selectedId) : null),
+    [view, selectedId, rows],
+  );
   const filteredRows = useMemo(
     () =>
       rows.filter((row: any) => {
@@ -321,6 +324,16 @@ export function Items({
     if (loadError) setMessage(loadError);
   }, [loadError]);
 
+  // Bounce back to the list if a direct/bookmarked edit or view link no
+  // longer resolves to a real item, but only once loading has finished.
+  // Navigating during render (rather than here) updates the router while
+  // Items is still rendering, which React flags as an invalid setState.
+  useEffect(() => {
+    if ((view !== "edit" && view !== "view") || loading) return;
+    if (!rows.some((row: any) => row.id === selectedId)) open("list");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedId, loading, rows]);
+
   // The route is the source of truth for which type is being created — this
   // component instance isn't remounted on navigation (same [[...segments]]
   // page), so `type`/`form` local state needs to be re-seeded whenever the
@@ -333,6 +346,15 @@ export function Items({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, itemType]);
 
+  // Same idea for edit: `type` drives which fields useItemsActions builds
+  // into the save payload, so it has to match the record actually being
+  // edited, not whatever type was last selected elsewhere in the module.
+  useEffect(() => {
+    if (view !== "edit" || !editingRow) return;
+    setType(editingRow.type);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, editingRow?.id]);
+
   function setField(key: string, value: any) {
     setForm((prev: any) => ({ ...prev, [key]: value }));
   }
@@ -343,7 +365,9 @@ export function Items({
         ? `/clinic/items/${nextType}/${newSegment("item")}`
         : nextView === "edit" && id
           ? `/clinic/items/${id}/${editSegment("item")}`
-          : "/clinic/items";
+          : nextView === "view" && id
+            ? `/clinic/items/${id}/${viewSegment("item")}`
+            : "/clinic/items";
     router.push(path);
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
@@ -352,7 +376,7 @@ export function Items({
 
   function changeItemType(nextType: string) {
     if (
-      editing &&
+      editingRow &&
       homeServiceTypes.includes(type) &&
       homeServiceTypes.includes(nextType)
     ) {
@@ -377,10 +401,10 @@ export function Items({
   const { handleItemSubmit, confirmDelete } = useItemsActions({
     apiSession,
     type,
-    editing,
+    editing: editingRow,
     rows,
     packageTestIds,
-    setEditing,
+    setEditing: () => {},
     setBusy,
     setMessage,
     setConfirmAction,
@@ -397,6 +421,10 @@ export function Items({
 
   function startEdit(row: any) {
     open("edit", row.id);
+  }
+
+  function openView(row: any) {
+    open("view", row.id);
   }
 
   function cancelEdit() {
@@ -436,15 +464,35 @@ export function Items({
     busy,
   });
 
+  if (view === "view") {
+    const viewedRow = rows.find((row: any) => row.id === selectedId);
+
+    if (!viewedRow) return null;
+
+    return (
+      <div className="space-y-4">
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        <button
+          type="button"
+          onClick={() => open("list")}
+          className="close-button font-bold"
+        >
+          Back to Items
+        </button>
+        <ItemDetail
+          item={viewedRow}
+          canEdit
+          onEdit={() => startEdit(viewedRow)}
+          back={() => open("list")}
+        />
+      </div>
+    );
+  }
+
   // Route-driven create/edit, mirroring Doctors.tsx: these two views render
   // only the form, no breadcrumb/filter bar/table alongside it.
   if (view === "create" || view === "edit") {
-    const editingRow =
-      view === "edit" ? rows.find((row: any) => row.id === selectedId) : null;
-
-    if (view === "edit" && !loading && !editingRow) {
-      // Bookmarked/direct edit link no longer resolves to a real item.
-      if (typeof window !== "undefined") open("list");
+    if (view === "edit" && !editingRow) {
       return null;
     }
 
@@ -556,9 +604,10 @@ export function Items({
             emptyMessage="No items match your filter."
             emptyDescription="Medicines, tests, services, and equipment added here will show up in this list."
             emptyIcon={Package}
-            minBodyHeight="220px"
+            minBodyHeight={`${pagedRows.length > 0 ?'':'220px'}`}
             sort={sort ?? undefined}
             onSortChange={setSort}
+            onRowClick={openView}
           />
           {confirmAction && (
             <ConfirmModal

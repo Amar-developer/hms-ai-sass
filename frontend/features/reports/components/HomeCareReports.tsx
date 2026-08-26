@@ -151,7 +151,7 @@ const HomeCareReports = ({
         }))
       }
     >
-      <div className="mt-4 overflow-auto scrollbar-hidden rounded-2xl border">
+      <div className="mt-4 overflow-auto scrollbar-hidden rounded-lg border">
         <DataTable
           columns={columns}
           data={homeCareReportRows}
@@ -160,7 +160,7 @@ const HomeCareReports = ({
           emptyMessage="No paid home care or home visit invoices match this filter."
           emptyDescription="Home care and home visit invoices will show up here once payments are recorded."
           emptyIcon={HeartPulse}
-          minBodyHeight="220px"
+          minBodyHeight={`${homeCareReportRows.length > 0 ?'':'220px'}`}
           className="w-full min-w-[1280px] text-left text-sm"
           loading={loading}
         />

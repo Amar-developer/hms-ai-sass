@@ -53,7 +53,7 @@ export function BookingsList({
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-2xl border border-slate-200">
+      <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-lg border border-slate-200">
         <div className="min-w-[980px] ">
           <DataTable
             columns={bookingColumns}
@@ -62,7 +62,7 @@ export function BookingsList({
             emptyMessage="No home care / visit bookings match your filter."
             emptyDescription="Home care and visit bookings created for patients will show up here."
             emptyIcon={HeartPulse}
-            minBodyHeight="220px"
+            minBodyHeight={`${bookings.length > 0 ?'':'220px'}`}
             onRowClick={(booking: any) => onView(booking)}
             sort={sort ?? undefined}
             onSortChange={onSortChange}

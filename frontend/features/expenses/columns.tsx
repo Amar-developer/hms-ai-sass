@@ -56,29 +56,18 @@ export function getExpenseColumns(
         <span className="text-sm">{row.subcategory || "—"}</span>
       ),
     },
-    {
-      key: "description",
-      header: "Description",
-      width: "180px",
-      render: (row: Expense) => (
-        <span className="text-sm">{row.description}</span>
-      ),
-    },
-    {
-      key: "branchName",
-      header: "Branch",
-      width: "200px",
-      render: (row: Expense) => (
-        <span className="text-sm">{row.branchName}</span>
-      ),
-    },
+
     {
       key: "submittedBy",
       header: "Submitted By",
       width: "140px",
-      render: (row: Expense) => (
-        <span className="text-sm">{row.submittedBy}</span>
-      ),
+      // render: (row: Expense) => (
+      //   <span className="text-sm">{row.submittedBy}</span>
+      // ),
+      render: (row: Expense) => {
+        console.log(row,'row')
+        return <span className="text-sm">{row.submittedBy}</span>
+      },
     },
     {
       key: "amount",
@@ -90,14 +79,14 @@ export function getExpenseColumns(
     {
       key: "status",
       header: "Status",
-      width: "150px",
+      width: "100px",
       className: "text-center",
       cellClassName: "text-center",
       sortable: true,
       render: (row: Expense) => (
         <Badge
           tone={EXPENSE_STATUS_TONE[row.status]}
-          className="normal-badge text-sm"
+          className="normal-label"
         >
           {EXPENSE_STATUS_LABEL[row.status]}
         </Badge>
@@ -106,7 +95,7 @@ export function getExpenseColumns(
     {
       key: "actions",
       header: "Actions",
-      width: "100px",
+      width: "80px",
       className: "text-center",
       cellClassName: "text-center",
       render: (row: Expense) => (

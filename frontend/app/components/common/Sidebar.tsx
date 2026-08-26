@@ -275,7 +275,7 @@ export function Sidebar(props: SidebarProps) {
                   <div className="flex justify-center items-center gap-3">
                     <Settings size={22} />
                     {!props.tabletCollapsed && (
-                      <span className="truncate text-xs">{label}</span>
+                      <span className="truncate text-xs font-semibold">{label}</span>
                     )}
                   </div>
                   {!props.tabletCollapsed && (
@@ -582,7 +582,7 @@ export function Sidebar(props: SidebarProps) {
   `}
                 >
                   <Icon size={18} />
-                  <div className="flex">
+                  <div className="flex justify-between w-full">
                     {!props.tabletCollapsed && (
                       <span className="min-w-0 flex truncate text-xs font-semibold">
                         {label}

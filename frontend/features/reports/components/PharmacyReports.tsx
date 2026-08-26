@@ -138,7 +138,7 @@ const PharmacyReports = ({
           }))
         }
       >
-        <div className="mt-4 overflow-auto scrollbar-hidden rounded-2xl border">
+        <div className="mt-4 overflow-auto scrollbar-hidden rounded-lg border">
           <DataTable
             columns={columns}
             data={pharmacySettlementRows}
@@ -147,7 +147,7 @@ const PharmacyReports = ({
             emptyMessage="No paid pharmacy invoices match this filter."
             emptyDescription="Pharmacy settlement and profitability figures will appear here once invoices are paid."
             emptyIcon={Pill}
-            minBodyHeight="220px"
+            minBodyHeight={`${pharmacySettlementRows.length > 0 ?'':'220px'}`}
             className="w-full min-w-[1220px] text-left text-sm"
             loading={loading}
           />

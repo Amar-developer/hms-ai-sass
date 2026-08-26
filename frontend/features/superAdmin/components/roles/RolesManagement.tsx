@@ -193,7 +193,7 @@ export function RolesManagement({
               emptyMessage="No roles match your search."
               emptyDescription="Roles created for this tenant will show up here."
               emptyIcon={ShieldCheck}
-              minBodyHeight="220px"
+              minBodyHeight={`${rows.length > 0 ?'':'220px'}`}
               onRowClick={(role) => openRole(role)}
               sort={sort}
               onSortChange={setSort}

@@ -100,7 +100,7 @@ export function BranchesManagement({
               emptyMessage="No branches match your search."
               emptyDescription="Branches added for this tenant will show up here."
               emptyIcon={Building2}
-              minBodyHeight="220px"
+              minBodyHeight={`${rows.length > 0 ?'':'220px'}`}
               onRowClick={(branch) => {
                 setSelectedBranchId(branch.id);
                 setSection("branchEdit");

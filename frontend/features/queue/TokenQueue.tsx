@@ -503,7 +503,7 @@ export function TokenQueue({
           emptyMessage="No tokens in the queue."
           emptyDescription="Patients checked in for today's appointments will appear here as tokens."
           emptyIcon={Ticket}
-          minBodyHeight="220px"
+          minBodyHeight={`${pagedQueue.length > 0 ?'':'220px'}`}
         />
       </div>
       <Pagination

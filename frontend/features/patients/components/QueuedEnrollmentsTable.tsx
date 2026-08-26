@@ -97,7 +97,7 @@ export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
           emptyMessage="No queued enrollments."
           emptyDescription="Plans purchased while another is active will wait here until they activate."
           emptyIcon={Clock}
-          minBodyHeight="220px"
+          minBodyHeight={`${pagedRows.length > 0 ?'':'220px'}`}
         />
       </div>
       <Pagination

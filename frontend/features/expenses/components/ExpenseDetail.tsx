@@ -163,7 +163,8 @@ export function ExpenseDetail({
                   Confirm Reject
                 </Button>
               )}
-              <Button
+             {!showRejectField ? (
+               <Button
                 type="button"
                 className="close-button"
                 disabled={busy}
@@ -171,6 +172,21 @@ export function ExpenseDetail({
               >
                 Approve
               </Button>
+             ):(
+               <Button
+                type="button"
+                className="close-button"
+                disabled={busy}
+                onClick={() => {
+                  setShowRejectField(false);
+                  setRejectionReason("");
+                }}
+              >
+                Back
+              </Button>
+             )
+
+             }
             </div>
           </div>
         )}

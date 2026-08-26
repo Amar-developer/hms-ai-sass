@@ -677,7 +677,7 @@ export function FilesPanel({
             emptyMessage="No files found."
             emptyDescription="Files uploaded or synced for this tenant will show up here."
             emptyIcon={FileText}
-            minBodyHeight="220px"
+            minBodyHeight={`${pagedFiles.length > 0 ?'':'220px'}`}
             paginate={false}
           />
         </div>

@@ -512,7 +512,7 @@ export function SettingsPanel(props: any) {
             emptyMessage="No monthly report jobs yet."
             emptyDescription="Monthly revenue and settlement reports sent from this tenant will show up here."
             emptyIcon={FileSpreadsheet}
-            minBodyHeight="220px"
+            minBodyHeight={`${pagedReportJobs.length > 0 ?'':'220px'}`}
           />
         </div>
         <Pagination

@@ -605,7 +605,7 @@ export function Patient({
             emptyMessage="No patients match your search."
             emptyDescription="Patients registered here will show up in this list once added."
             emptyIcon={Users}
-            minBodyHeight="220px"
+            minBodyHeight={`${pageRows.length > 0 ?'':'220px'}`}
             onRowClick={(row: any) => open("detail", row.id)}
             sort={sort ?? undefined}
             onSortChange={handleSortChange}

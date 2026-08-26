@@ -761,7 +761,7 @@ export function AppointmentBookingFlow(props: any) {
             >
               Print Token
             </button>
-            <Button onClick={closeBooking}>Close</Button>
+            <Button onClick={closeBooking} className='close-button'>Close</Button>
             <Button onClick={openBookedAppointment} className="save-button">
               Continue to Consultation
             </Button>

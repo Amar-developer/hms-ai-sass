@@ -165,8 +165,8 @@ def record_invoice_payment(
         branch_id=invoice.branch_id,
         actor_user_id=payload.collected_by_user_id,
         action="payment.recorded",
-        resource_type="payment",
-        resource_id=payment.id,
+        resource_type="invoice",
+        resource_id=invoice.id,
         purpose="payment_collection",
         changes=diff_changes(
             before, {key: getattr(invoice, key) for key in INVOICE_PAYMENT_FIELDS}

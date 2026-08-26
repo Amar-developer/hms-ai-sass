@@ -145,7 +145,7 @@ const AppointmentReports = ({
           setOpenSections((state: any) => ({ ...state, doctor: !state.doctor }))
         }
       >
-        <div className="mt-4 overflow-auto scrollbar-hidden rounded-2xl border">
+        <div className="mt-4 overflow-auto scrollbar-hidden rounded-lg border">
           <DataTable
             columns={columns}
             data={doctorRows}
@@ -155,7 +155,7 @@ const AppointmentReports = ({
             emptyMessage="No healthcare invoices match this filter."
             emptyDescription="Doctor fee and profitability details will appear here once consultations are settled."
             emptyIcon={Stethoscope}
-            minBodyHeight="220px"
+            minBodyHeight={`${doctorRows.length > 0 ?'':'220px'}`}
           />
         </div>
       </CollapsibleReportSection>

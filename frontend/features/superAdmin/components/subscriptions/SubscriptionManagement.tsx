@@ -430,7 +430,7 @@ export function SubscriptionManagement({
               }
               emptyDescription="Tenant subscriptions assigned from plans will show up here."
               emptyIcon={CreditCard}
-              minBodyHeight="220px"
+              minBodyHeight={`${rows.length > 0 ?'':'220px'}`}
             />
           </div>
           <Pagination
@@ -467,7 +467,7 @@ export function SubscriptionManagement({
                 emptyMessage="No subscription plans found."
                 emptyDescription="Subscription plans created for the catalog will show up here."
                 emptyIcon={Receipt}
-                minBodyHeight="220px"
+                minBodyHeight={`${catalogPlans.length > 0 ?'':'220px'}`}
               />
             </div>
           </div>

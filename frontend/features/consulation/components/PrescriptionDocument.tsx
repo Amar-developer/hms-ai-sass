@@ -219,6 +219,12 @@ function PrescriptionPage({
                   className="block w-[98px] h-[98px] shrink-0"
                   src={uploadAssetUrl(clinic.logo_url) || "/clinic_logo.png"}
                   alt=""
+                  onError={(event) => {
+                    const img = event.currentTarget;
+                    if (img.src.endsWith("/clinic_logo.png")) return;
+                    img.onerror = null;
+                    img.src = "/clinic_logo.png";
+                  }}
                 />
                 <div className="flex-1 min-w-0 pt-[5px] items-center justify-center">
                   <h1 className="m-0 leading-none whitespace-nowrap ">
