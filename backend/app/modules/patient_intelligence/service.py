@@ -39,7 +39,11 @@ from app.modules.patient_subscriptions.models import (
 )
 from app.modules.patient_subscriptions.services.serialization import (
     free_items_from_json,
+    slabs_from_json,
     usage_from_json,
+)
+from app.modules.patient_subscriptions.services.reminder_summary import (
+    available_membership_benefits_summary,
 )
 from app.modules.patients.models import Patient
 from app.modules.pharmacy.models import (
@@ -92,6 +96,14 @@ def _add_one_month(value: date) -> date:
     return date(year, month, day)
 
 
+def _add_months_from_anchor(value: date, months: int) -> date:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
 def _advance_monthly_date(value: date | None, today: date) -> date | None:
     if not value:
         return None
@@ -103,6 +115,22 @@ def _advance_monthly_date(value: date | None, today: date) -> date | None:
 
 def _date_as_utc_start(value: date | None) -> datetime | None:
     return datetime.combine(value, time.min, tzinfo=timezone.utc) if value else None
+
+
+def _membership_month_period(
+    enrollment: PatientSubscriptionEnrollment, on_date: date
+) -> str | None:
+    """Return the due membership-month key, or None outside its validity."""
+    if on_date < enrollment.starts_on or on_date > enrollment.ends_on:
+        return None
+    period_start = enrollment.starts_on
+    month_number = 1
+    next_start = _add_months_from_anchor(enrollment.starts_on, month_number)
+    while next_start <= on_date and next_start <= enrollment.ends_on:
+        period_start = next_start
+        month_number += 1
+        next_start = _add_months_from_anchor(enrollment.starts_on, month_number)
+    return f"{enrollment.id}:{period_start.isoformat()}"
 
 
 def _humanize_key(value: str | None) -> str:
@@ -498,7 +526,7 @@ def calculate_metrics(
             "manual_expected_refill_at": expected_refill.isoformat(),
             "manual_schedule": True,
             "manual_notes": patient.monthly_refill_notes,
-            "days_until_expected": (expected_refill - current).days,
+            "days_until_expected": (expected_refill.date() - current.date()).days,
         }
     expected_lab_at = _date_as_utc_start(lab_on)
 
@@ -599,11 +627,27 @@ def calculate_metrics(
     recurrence_deviation = Decimal(recurrence_evidence.get("max_deviation_days", 0))
     days_until_refill = Decimal(recurrence_evidence.get("days_until_expected", 9999))
     days_until_lab = (
-        Decimal((expected_lab_at - current).days)
+        Decimal((expected_lab_at.date() - current.date()).days)
         if expected_lab_at
         else Decimal("9999")
     )
-    unused_benefits = Decimal(unused_consultations + unused_lab + unused_medicine)
+    unlimited_discount_benefits = int(
+        bool(active_plan and active_plan.lab_discount_percentage)
+    ) + int(
+        bool(
+            active_plan
+            and (
+                active_plan.pharmacy_discount_percentage
+                or slabs_from_json(active_plan.pharmacy_discount_slabs_json)
+            )
+        )
+    )
+    unused_benefits = Decimal(
+        unused_consultations
+        + unused_lab
+        + unused_medicine
+        + unlimited_discount_benefits
+    )
     values = {
         "net_collected_30d": net_30,
         "net_collected_365d": net_365,
@@ -1121,8 +1165,13 @@ def recommend_actions(
     unused_lab_tests = int(membership_evidence.get("unused_lab_tests") or 0)
     unused_medicines = int(membership_evidence.get("unused_medicines") or 0)
     unused_benefits_summary = (
-        f"Consultations: {unused_consultations}, "
-        f"Lab tests: {unused_lab_tests}, Medicines: {unused_medicines}"
+        available_membership_benefits_summary(
+            session,
+            enrollment=active_membership,
+            plan=membership_plan,
+        )
+        if active_membership and membership_plan
+        else "No membership benefits currently available"
     )
     days_since_activity = (
         max((now - _aware(snapshot.last_activity_at)).days, 0)
@@ -1205,7 +1254,29 @@ def recommend_actions(
             values["days_remaining"] = str(
                 max((snapshot.membership_ends_on.date() - now.date()).days, 0)
             )
-        if rule.action_cooldown_days:
+        scheduled_occurrence = None
+        if (
+            rule.action_template_key == "medicine_refill_patient"
+            and snapshot.expected_refill_at
+        ):
+            scheduled_occurrence = snapshot.expected_refill_at.date().isoformat()
+        elif rule.action_template_key == "lab_test_reminder_patient" and manual_lab.get(
+            "expected_lab_at"
+        ):
+            scheduled_occurrence = (
+                datetime.fromisoformat(manual_lab["expected_lab_at"]).date().isoformat()
+            )
+        membership_period = (
+            _membership_month_period(active_membership, now.date())
+            if rule.action_template_key == "unused_benefit_patient"
+            and active_membership
+            else None
+        )
+        if scheduled_occurrence:
+            period = f"scheduled-occurrence:{scheduled_occurrence}"
+        elif membership_period:
+            period = f"membership-month:{membership_period}"
+        elif rule.action_cooldown_days:
             period = str(now.date().toordinal() // rule.action_cooldown_days)
         else:
             period = flag.first_detected_at.date().isoformat()

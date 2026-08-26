@@ -160,6 +160,13 @@ describe("WhatsApp integration settings design", () => {
     fireEvent.click(templatesTab);
     expect(templatesTab.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("Notification templates")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show \d+ more automatic templates/ }),
+    );
+    expect(screen.queryByText("IP admission confirmation")).toBeNull();
+    expect(screen.queryByText("IP discharge summary")).toBeNull();
+    expect(screen.queryByText("Physiotherapy case created")).toBeNull();
+    expect(screen.queryByText("Physiotherapy session update")).toBeNull();
     expect(screen.getByRole("button", { name: "Send Test Message" })).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Save WhatsApp Settings" }),

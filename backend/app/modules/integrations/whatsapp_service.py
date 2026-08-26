@@ -14,6 +14,7 @@ from app.modules.integrations.whatsapp_field_catalog import (
     FLOW_FIELD_CATALOG,
     default_field_order,
     flow_fields,
+    normalize_saved_field_order,
 )
 from app.modules.integrations.whatsapp_schemas import (
     WhatsAppAdminRecipientOption,
@@ -135,9 +136,13 @@ def _read(
         flows=WhatsAppFlowSettings.model_validate(config.get("flows") or {}),
         custom_templates=config.get("custom_templates") or [],
         template_field_mappings={
-            flow_key: saved_field_mappings[flow_key]
-            if flow_key in saved_field_mappings
-            else default_field_order(flow_key)
+            flow_key: (
+                normalize_saved_field_order(
+                    flow_key, saved_field_mappings.get(flow_key)
+                )
+                if flow_key in saved_field_mappings
+                else default_field_order(flow_key)
+            )
             for flow_key in FLOW_FIELD_CATALOG
         },
         # Serialize the *merged* catalog (curated fields first, then every
@@ -326,8 +331,9 @@ def _resolve_test_campaign_name(config: dict, payload: WhatsAppTestRequest) -> s
             status_code=status.HTTP_409_CONFLICT,
             detail="The selected notification flow is disabled.",
         )
-    configured_fields = (config.get("template_field_mappings") or {}).get(
-        flow_key
+    configured_fields = normalize_saved_field_order(
+        flow_key,
+        (config.get("template_field_mappings") or {}).get(flow_key),
     ) or default_field_order(flow_key)
     if len(payload.template_parameters) != len(configured_fields):
         raise HTTPException(

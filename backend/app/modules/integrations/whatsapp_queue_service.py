@@ -10,6 +10,7 @@ from app.modules.appointments.models import Appointment
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import CreditNote, Invoice
 from app.modules.consultations.models import Consultation
+from app.modules.home_care.models import HomeCareBooking
 from app.modules.identity.models import User
 from app.modules.integrations.service import decode_config, get_tenant_plugin
 from app.modules.integrations.whatsapp_schemas import (
@@ -114,6 +115,13 @@ def _base_filters(
             Consultation.tenant_id == tenant_id,
             Consultation.patient_id.in_(matching_patients),
         )
+        matching_home_care_bookings = select(HomeCareBooking.id).where(
+            HomeCareBooking.tenant_id == tenant_id,
+            or_(
+                HomeCareBooking.patient_id.in_(matching_patients),
+                func.lower(HomeCareBooking.booking_number).like(pattern),
+            ),
+        )
         filters.append(
             or_(
                 func.lower(NotificationEvent.recipient).like(pattern),
@@ -123,6 +131,7 @@ def _base_filters(
                 NotificationEvent.resource_id.in_(matching_credit_notes),
                 NotificationEvent.resource_id.in_(matching_lab_orders),
                 NotificationEvent.resource_id.in_(matching_consultations),
+                NotificationEvent.resource_id.in_(matching_home_care_bookings),
             )
         )
     return filters
@@ -185,6 +194,14 @@ def _display_context(
             return (
                 patient.full_name if patient else "Unknown patient",
                 consultation.created_at.strftime("%d %b %Y"),
+            )
+    if event.resource_type == "home_care_booking":
+        booking = session.get(HomeCareBooking, event.resource_id or "")
+        if booking and booking.tenant_id == event.tenant_id:
+            patient = session.get(Patient, booking.patient_id)
+            return (
+                patient.full_name if patient else "Unknown patient",
+                booking.booking_number or booking.id,
             )
     if event.resource_type == "patient_engagement_action":
         action = session.get(PatientEngagementAction, event.resource_id or "")

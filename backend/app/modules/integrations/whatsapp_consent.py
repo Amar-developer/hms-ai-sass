@@ -3,6 +3,7 @@ from sqlmodel import Session
 from app.modules.appointments.models import Appointment
 from app.modules.billing.models import CreditNote, Invoice
 from app.modules.consultations.models import Consultation
+from app.modules.home_care.models import HomeCareBooking
 from app.modules.lab.models import LabOrder
 from app.modules.patients.contact import patient_whatsapp_numbers
 from app.modules.patients.models import Patient, WhatsAppConsentStatus
@@ -42,6 +43,9 @@ def patient_for_notification_resource(
         patient_id = row.patient_id if row and row.tenant_id == tenant_id else None
     elif resource_type == "consultation":
         row = session.get(Consultation, resource_id)
+        patient_id = row.patient_id if row and row.tenant_id == tenant_id else None
+    elif resource_type == "home_care_booking":
+        row = session.get(HomeCareBooking, resource_id)
         patient_id = row.patient_id if row and row.tenant_id == tenant_id else None
     elif resource_type == "patient_engagement_action":
         # Local import avoids making the general integration policy module own
