@@ -555,18 +555,21 @@ export function getAdjustmentRequestColumns({
     {
       key: "created_at",
       header: "Requested",
+      width:"160px",
       cellClassName: "whitespace-nowrap font-semibold text-slate-700",
       render: (row: any) => displayDateTime(row.created_at),
     },
     {
       key: "request_type",
       header: "Type",
+      width:"120px",
       cellClassName: "whitespace-nowrap font-bold capitalize",
       render: (row: any) => humanizeOptionLabel(row.request_type),
     },
     {
       key: "amount",
       header: "Amount",
+      width:"100px",
       className: "text-right",
       cellClassName: "whitespace-nowrap text-right font-black tabular-nums",
       render: (row: any) => money(row.amount),
@@ -574,18 +577,21 @@ export function getAdjustmentRequestColumns({
     {
       key: "reason",
       header: "Reason",
+      width:"140px",
       cellClassName: "max-w-[260px] truncate font-semibold text-slate-600",
       render: (row: any) => <span title={row.reason}>{row.reason}</span>,
     },
     {
       key: "requested_by",
       header: "Requested By",
+      width:"160px",
       cellClassName: "whitespace-nowrap font-semibold text-slate-700",
       render: (row: any) => row.requested_by_user_name || "Unknown user",
     },
     {
       key: "status",
       header: "Status",
+      width:"100px",
       render: (row: any) => (
         <Badge
           tone={
@@ -597,7 +603,7 @@ export function getAdjustmentRequestColumns({
                   ? "blue"
                   : "amber"
           }
-          className="normal-badge"
+          className="normal-label"
         >
           {humanizeOptionLabel(row.status)}
         </Badge>

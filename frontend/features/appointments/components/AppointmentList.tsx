@@ -122,7 +122,7 @@ export function AppointmentList(props: any) {
           emptyMessage="No appointments found."
           emptyDescription="Booked OP appointments with patient, doctor, and consultation status will show up here."
           emptyIcon={CalendarClock}
-          minBodyHeight="220px"
+          minBodyHeight={`${rows.length > 0 ?'':'220px'}`}
           onRowClick={onRowClick}
         />
       </div>

@@ -649,7 +649,7 @@ export function InvoiceDetailPage({
                   emptyMessage="No bill items found."
                   emptyDescription="Line items billed for this invoice will show up here."
                   emptyIcon={Package}
-                  minBodyHeight="220px"
+                  minBodyHeight={`${items.length > 0 ?'':'220px'}`}
                 />
               </div>
               {canRequestDiscountBase ? (
@@ -1154,7 +1154,7 @@ export function InvoiceDetailPage({
                 emptyMessage="No payments or credit notes recorded yet."
                 emptyDescription="Payments collected and credit notes issued against this invoice will show up here."
                 emptyIcon={Landmark}
-                minBodyHeight="220px"
+                minBodyHeight={`${settlementRows.length > 0 ?'':'220px'}`}
               />
             </div>
           </div>
@@ -1212,7 +1212,7 @@ export function InvoiceDetailPage({
                 emptyMessage="No refund or cancellation requests yet."
                 emptyDescription="Discount, refund, and cancellation requests raised on this invoice will show up here."
                 emptyIcon={ClipboardList}
-                minBodyHeight="220px"
+                minBodyHeight={`${adjustmentRequests.length > 0 ?'':'220px'}`}
               />
             </div>
           </div>
@@ -1238,7 +1238,7 @@ export function InvoiceDetailPage({
                   emptyMessage="No financial ledger entries recorded yet."
                   emptyDescription="Debit and credit journal entries generated for this invoice will show up here."
                   emptyIcon={BookOpen}
-                  minBodyHeight="220px"
+                  minBodyHeight={`${financialLedgerEntries.length > 0 ?'':'220px'}`}
                   className="rounded-none"
                   tableClassName="min-w-[1480px]"
                   rowClassName="odd:bg-white even:bg-slate-50/40 hover:bg-emerald-50/30"

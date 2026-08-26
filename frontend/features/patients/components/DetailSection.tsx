@@ -8,8 +8,8 @@ export function DetailSection({
   defaultOpen = true,
 }: any) {
   return (
-    <details
-      open={defaultOpen}
+    <div
+      // open={defaultOpen}
       className="group rounded-lg border border-slate-200 bg-white"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
@@ -25,12 +25,10 @@ export function DetailSection({
               {count}
             </span>
           )}
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-slate-500 ring-1 ring   -slate-200 transition group-open:rotate-180">
-            <ChevronDown className="h-4 w-4" strokeWidth={2.5} />
-          </span>
+
         </div>
       </summary>
       <div className="px-4 py-3">{children}</div>
-    </details>
+    </div>
   );
 }

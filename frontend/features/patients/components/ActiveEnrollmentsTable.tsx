@@ -314,7 +314,7 @@ export function ActiveEnrollmentsTable({
           emptyMessage="No active enrollments yet."
           emptyDescription="Patients with an active membership plan will appear here."
           emptyIcon={CheckCircle2}
-          minBodyHeight="220px"
+          minBodyHeight={`${filteredRows.length > 0 ?'':'220px'}`}
           paginate
           pageSize={enrollmentPageSize}
         />

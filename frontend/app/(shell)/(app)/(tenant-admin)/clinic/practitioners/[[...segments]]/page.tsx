@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { Doctors } from "@/features/doctors/Doctors";
 import { useWorkspace } from "@/features/shell/WorkspaceContext";
-import { isNewSegment, isEditSegment } from "@/lib/routeSlugs";
+import { isNewSegment, isEditSegment, isViewSegment } from "@/lib/routeSlugs";
 
 export default function PractitionersPage() {
   const ctx = useWorkspace();
@@ -14,7 +14,9 @@ export default function PractitionersPage() {
     ? "create"
     : isEditSegment(second)
       ? "edit"
-      : "list";
-  const selectedId = view === "edit" ? first : "";
+      : isViewSegment(second)
+        ? "view"
+        : "list";
+  const selectedId = view === "edit" || view === "view" ? first : "";
   return <Doctors {...ctx} view={view} selectedId={selectedId} />;
 }

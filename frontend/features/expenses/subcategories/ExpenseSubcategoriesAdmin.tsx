@@ -18,8 +18,8 @@ import { ExpenseSubcategoryForm } from "./ExpenseSubcategoryForm";
 
 function categoryLabel(category: string) {
   return (
-    EXPENSE_CATEGORY_OPTIONS.find((option) => option.value === category)?.label ||
-    category
+    EXPENSE_CATEGORY_OPTIONS.find((option) => option.value === category)
+      ?.label || category
   );
 }
 
@@ -52,7 +52,9 @@ export function ExpenseSubcategoriesAdmin({
     const ok = await createExpenseSubcategoryConfig({
       category: values.category,
       name: values.name,
-      default_amount: values.defaultAmount ? Number(values.defaultAmount) : null,
+      default_amount: values.defaultAmount
+        ? Number(values.defaultAmount)
+        : null,
       requires_quantity: values.requiresQuantity,
     });
     if (ok) setShowCreate(false);
@@ -63,7 +65,9 @@ export function ExpenseSubcategoriesAdmin({
     const ok = await updateExpenseSubcategoryConfig(editing.id, {
       category: values.category,
       name: values.name,
-      default_amount: values.defaultAmount ? Number(values.defaultAmount) : null,
+      default_amount: values.defaultAmount
+        ? Number(values.defaultAmount)
+        : null,
       requires_quantity: values.requiresQuantity,
       is_active: values.isActive ? values.isActive === "true" : undefined,
     });
@@ -94,7 +98,7 @@ export function ExpenseSubcategoriesAdmin({
     {
       key: "defaultAmount",
       header: "Amount",
-      width: "40px",
+      width: "30px",
       render: (row: ExpenseSubcategoryConfig) => (
         <span className="text-sm">
           {row.defaultAmount != null ? money(row.defaultAmount) : "—"}
@@ -104,7 +108,7 @@ export function ExpenseSubcategoriesAdmin({
     {
       key: "requiresQuantity",
       header: "Requires Quantity",
-      width: "60px",
+      width: "70px",
       className: "text-center",
       cellClassName: "text-center",
       render: (row: ExpenseSubcategoryConfig) => (
@@ -114,14 +118,10 @@ export function ExpenseSubcategoriesAdmin({
     {
       key: "isActive",
       header: "Status",
-      width: "40px",
+      width: "50px",
       className: "text-center",
-      cellClassName: "text-center",
       render: (row: ExpenseSubcategoryConfig) => (
-        <Badge
-          tone={row.isActive ? "green" : "red"}
-          className="normal-label text-sm"
-        >
+        <Badge tone={row.isActive ? "green" : "red"} className="normal-label">
           {row.isActive ? "Active" : "Inactive"}
         </Badge>
       ),
@@ -129,9 +129,9 @@ export function ExpenseSubcategoriesAdmin({
     {
       key: "actions",
       header: "Actions",
-      width: "50px",
+      width: "30px",
       className: "text-center",
-      cellClassName: "text-right",
+      cellClassName: "flex justify-center",
       render: (row: ExpenseSubcategoryConfig) => (
         <RowActions
           actions={[
@@ -143,6 +143,7 @@ export function ExpenseSubcategoriesAdmin({
               danger: true,
             },
           ]}
+          className="right-10"
         />
       ),
     },
@@ -152,12 +153,24 @@ export function ExpenseSubcategoriesAdmin({
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
       <div className="w-full max-w-3xl rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="card-title font-bold">Manage Expense Subcategories</h3>
-            <p className="mt-1 card-desc text-slate-500">
-              Assign subcategories to a category, set a fixed default amount, and
-              flag whether it needs a quantity on the expense form.
-            </p>
+          <div className="flex">
+            <div className="w-2/3">
+              <h3 className="card-title font-bold">
+                Manage Expense Subcategories
+              </h3>
+              <p className="mt-1 card-desc text-slate-500">
+                Assign subcategories to a category, set a fixed default amount,
+                and flag whether it needs a quantity on the expense form.
+              </p>
+            </div>
+            <div className="flex items-end justify-center w-1/3 ">
+              <Button
+                onClick={() => setShowCreate(true)}
+                className="save-button h-[60%]"
+              >
+                Add Subcategory
+              </Button>
+            </div>
           </div>
           <button
             type="button"
@@ -170,23 +183,17 @@ export function ExpenseSubcategoriesAdmin({
 
         <StatusToast message={message} onClose={() => setMessage("")} />
 
-        <div className="mt-4 flex justify-end">
-          <Button
-            onClick={() => setShowCreate(true)}
-            className="save-button text-xs px-3 py-2"
-          >
-            Add Subcategory
-          </Button>
-        </div>
+        <div className="mt-4 flex justify-end"></div>
 
-        <div className="mt-3 max-h-[55vh]  overflow-auto">
+        <div className="mt-3 max-h-[55vh] max-w-[720px]  overflow-auto">
           <DataTable
             columns={columns}
             data={subcategoryConfigs}
-            emptyMessage={loading ? "Loading..." : "No subcategories configured."}
+            emptyMessage={
+              loading ? "Loading..." : "No subcategories configured."
+            }
             emptyDescription="Add a subcategory to give it a fixed default amount."
-            minBodyHeight="160px"
-            className="max-w-[800px]"
+            minBodyHeight={`${subcategoryConfigs.length > 0 ?'':'220px'}`}
           />
         </div>
       </div>
@@ -201,7 +208,7 @@ export function ExpenseSubcategoriesAdmin({
                 onClick={() => setShowCreate(false)}
                 className="p-2 rounded-md border hover:bg-slate-200 font-bold"
               >
-                <X size={16}/>
+                <X size={16} />
               </button>
             </div>
             <div className="mt-4">

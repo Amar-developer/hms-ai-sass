@@ -8,7 +8,8 @@ import { selectedSchedulePayloadsFromRHF } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
 import { pageSize } from "./constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
-import { newSegment, editSegment } from "@/lib/routeSlugs";
+import { newSegment, editSegment, viewSegment } from "@/lib/routeSlugs";
+import { ScheduleDetail } from "@/features/scheduling/components/ScheduleDetail";
 import { Pagination } from "@/app/components/common/Pagination";
 import { ScheduleFormValues } from "./schedule.schema";
 import {
@@ -141,7 +142,7 @@ export function Scheduling({
   // Bounce back to the list if a direct/bookmarked edit link no longer
   // resolves to a real schedule, but only once loading has finished.
   useEffect(() => {
-    if (view !== "edit" || !selectedId || loading) return;
+    if ((view !== "edit" && view !== "view") || !selectedId || loading) return;
     if (!selected) router.replace("/clinic/scheduling");
   }, [view, selectedId, loading, selected, router]);
 
@@ -151,7 +152,9 @@ export function Scheduling({
         ? `/clinic/scheduling/${newSegment("schedule")}`
         : nextView === "edit"
           ? `/clinic/scheduling/${encodeURIComponent(id)}/${editSegment("schedule")}`
-          : "/clinic/scheduling";
+          : nextView === "view"
+            ? `/clinic/scheduling/${encodeURIComponent(id)}/${viewSegment("schedule")}`
+            : "/clinic/scheduling";
     router.push(path);
     setMessage("");
     requestAnimationFrame(() =>
@@ -344,6 +347,19 @@ export function Scheduling({
       />
     );
 
+  if (view === "view" && selected)
+    return (
+      <ScheduleDetail
+        schedule={selected}
+        doctors={doctors}
+        branches={branches}
+        departments={departments}
+        canEdit
+        onEdit={() => open("edit", selected.id)}
+        back={() => open("list")}
+      />
+    );
+
   const scheduleQueryFields = getScheduleQueryFields({
     rows,
     branches,
@@ -430,9 +446,9 @@ export function Scheduling({
           emptyMessage="No schedules available"
           emptyDescription="Doctor weekly consultation timings created for branches and departments will show up here."
           emptyIcon={CalendarClock}
-          minBodyHeight="220px"
+          minBodyHeight={`${pageRows.length > 0 ?'':'220px'}`}
           className=" rounded-lg border border-slate-200 overflow-auto"
-          onRowClick={(row) => open("edit", row.id)}
+          onRowClick={(row) => open("view", row.id)}
           sort={sort ?? undefined}
           onSortChange={setSort}
         />

@@ -182,7 +182,7 @@ export function TenantUsers({
               emptyMessage="No users match your search."
               emptyDescription="Users added for this tenant will show up here."
               emptyIcon={Users}
-              minBodyHeight="220px"
+              minBodyHeight={`${rows.length > 0 ?'':'220px'}`}
               onRowClick={(user) => {
                 setSelectedUserId(user.id);
                 setSection("userEdit");

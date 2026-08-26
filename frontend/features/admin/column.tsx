@@ -301,7 +301,7 @@ export function getUserColumns({
       header: "Name",
       width: "180px",
       render: (user: any) => (
-        <div className="max-w-[170px] flex items-center gap-2">
+        <div className="max-w-[170px] flex items-center gap-2" title={user.name}>
           <p className="truncate font-bold">{user.name}</p>
           <CopyIdButton value={user.id} label="User ID" allowed={canCopyIds} />
         </div>
@@ -390,8 +390,8 @@ export function getRoleColumns({
       header: "Role",
       width: "200px",
       render: (role: any) => (
-        <div className="flex items-center gap-2">
-          <span className="font-bold">{role.name}</span>
+        <div className="flex items-center gap-2" >
+          <span className="font-bold" title={role.name}>{role.name}</span>
           <CopyIdButton value={role.id} label="Role ID" allowed={canCopyIds} />
           {isLocked(role) && (
             <Badge tone="purple" className="normal-label">

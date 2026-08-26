@@ -71,7 +71,7 @@ export function OPDPaymentQueue({
         </div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-          <div className="hidden grid-cols-[minmax(0,1.2fr)_130px_140px_120px_180px] gap-4 bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 md:grid">
+          <div className="hidden grid-cols-[180px_130px_140px_120px_180px] gap-4 bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 md:grid">
             <span>Patient</span>
             <span>Type</span>
             <span>Due</span>

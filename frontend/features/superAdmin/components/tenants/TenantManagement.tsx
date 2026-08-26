@@ -203,7 +203,7 @@ export function TenantManagement({
               emptyMessage="No tenants match your search."
               emptyDescription="Tenants onboarded to this workspace will show up here."
               emptyIcon={Landmark}
-              minBodyHeight="220px"
+              minBodyHeight={`${rows.length > 0 ?'':'220px'}`}
               sort={sort}
               onSortChange={setSort}
             />

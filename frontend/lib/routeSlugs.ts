@@ -14,10 +14,18 @@ export function editSegment(slug: string): string {
   return `edit-${slug}`;
 }
 
+export function viewSegment(slug: string): string {
+  return `view-${slug}`;
+}
+
 export function isNewSegment(segment: string | undefined): boolean {
   return Boolean(segment && segment.startsWith("new-"));
 }
 
 export function isEditSegment(segment: string | undefined): boolean {
   return Boolean(segment && segment.startsWith("edit-"));
+}
+
+export function isViewSegment(segment: string | undefined): boolean {
+  return Boolean(segment && segment.startsWith("view-"));
 }

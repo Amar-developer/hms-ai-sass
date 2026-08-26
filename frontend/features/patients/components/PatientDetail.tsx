@@ -949,7 +949,7 @@ export function PatientDetail({
                   emptyMessage="No WhatsApp messages found."
                   emptyDescription="Invoice, membership, reminder and care messages for this patient will show here."
                   emptyIcon={MessageCircle}
-                  minBodyHeight="180px"
+                  minBodyHeight={`${patientCommunications.length > 0 ?'':'220px'}`}
                   className="text-xs"
                 />
               </div>
@@ -1001,7 +1001,7 @@ export function PatientDetail({
             emptyMessage="No consultation records found."
             emptyDescription="Consultations recorded for this patient will show up here."
             emptyIcon={Stethoscope}
-            minBodyHeight="220px"
+            minBodyHeight={`${consultations.length > 0 ?'':'220px'}`}
             onRowClick={openConsultation}
           />
         </DetailSection>
@@ -1020,7 +1020,7 @@ export function PatientDetail({
               emptyMessage="No lab or service orders found."
               emptyDescription="Diagnostic tests, services, home care, and home visit bookings for this patient will show up here."
               emptyIcon={FlaskConical}
-              minBodyHeight="220px"
+              minBodyHeight={`${labServiceRows.length > 0 ?'':'220px'}`}
             />
           </DetailSection>
         </div>
@@ -1039,7 +1039,7 @@ export function PatientDetail({
               emptyMessage="No pharmacy issues found."
               emptyDescription="Medicines dispensed to this patient will show up here."
               emptyIcon={Pill}
-              minBodyHeight="220px"
+              minBodyHeight={`${medicineRows.length > 0 ?'':'220px'}`}
             />
           </DetailSection>
         </div>
@@ -1254,7 +1254,7 @@ export function PatientDetail({
             emptyMessage="No billing invoices found."
             emptyDescription="Invoices generated for this patient will show up here."
             emptyIcon={ReceiptText}
-            minBodyHeight="220px"
+            minBodyHeight={`${patientInvoices.length > 0 ?'':'220px'}`}
             onRowClick={openInvoice}
           />
         </DetailSection>

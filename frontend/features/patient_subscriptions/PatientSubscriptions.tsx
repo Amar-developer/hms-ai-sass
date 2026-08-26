@@ -501,7 +501,8 @@ export function PatientSubscriptions({
                 emptyMessage="No patient plans yet."
                 emptyDescription="Membership plans created for patients will show up here."
                 emptyIcon={CreditCard}
-                minBodyHeight="220px"
+                minBodyHeight={`${pagedPlans.length > 0 ?'':'220px'}`}
+                onRowClick={(plan: any) => goTo("view", plan.id)}
               />
             </div>
             <Pagination

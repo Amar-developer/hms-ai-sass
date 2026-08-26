@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, PlusCircle, Stethoscope } from "lucide-react";
-import { newSegment, editSegment } from "@/lib/routeSlugs";
+import { newSegment, editSegment, viewSegment } from "@/lib/routeSlugs";
 import {
   Card,
   RefreshButton,
@@ -13,6 +13,7 @@ import {
 import { FormField } from "@/app/components/FormElements";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { DoctorForm } from "@/features/doctors/forms/DoctorForm";
+import { DoctorDetail } from "@/features/doctors/components/DoctorDetail";
 import { Pagination } from "@/app/components/common/Pagination";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import {
@@ -177,13 +178,15 @@ export function Doctors({
           ? `/clinic/practitioners/${newSegment("practitioner")}`
           : nextView === "edit"
             ? `/clinic/practitioners/${id}/${editSegment("practitioner")}`
-            : "/clinic/practitioners";
+            : nextView === "view"
+              ? `/clinic/practitioners/${id}/${viewSegment("practitioner")}`
+              : "/clinic/practitioners";
       router.push(path);
       requestAnimationFrame(() =>
         window.scrollTo({ top: 0, behavior: "smooth" }),
       );
     };
-    if (nextView !== "create" && nextView !== "edit") {
+    if (nextView !== "create" && nextView !== "edit" && nextView !== "view") {
       finish();
       return;
     }
@@ -233,7 +236,8 @@ export function Doctors({
   // resolves to a real practitioner, but only once loading has actually
   // finished.
   useEffect(() => {
-    if (view !== "edit" || !selectedId || listLoading) return;
+    if ((view !== "edit" && view !== "view") || !selectedId || listLoading)
+      return;
     if (!selected) router.replace("/clinic/practitioners");
   }, [view, selectedId, listLoading, selected, router]);
 
@@ -298,6 +302,18 @@ export function Doctors({
         onUploadSignature={(file: File) =>
           uploadDoctorSignature(selected.id, file)
         }
+        back={() => open("list")}
+      />
+    );
+  if (view === "view" && selected)
+    return (
+      <DoctorDetail
+        doctor={selected}
+        branches={branches}
+        departments={departments}
+        feeRules={feeRules}
+        canEditDoctor={canEditDoctor}
+        onEdit={() => open("edit", selected.id)}
         back={() => open("list")}
       />
     );
@@ -404,8 +420,8 @@ export function Doctors({
             emptyMessage="No doctors match your search."
             emptyDescription="Doctors added to this clinic will show up here."
             emptyIcon={Stethoscope}
-            minBodyHeight="220px"
-            onRowClick={(row: any) => open("edit", row.id)}
+            minBodyHeight={`${pageRows.length >0 ?"":"220px"}`}
+            onRowClick={(row: any) => open("view", row.id)}
             sort={sort ?? undefined}
             onSortChange={setSort}
           />

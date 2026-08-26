@@ -148,7 +148,7 @@ const LabReports = ({
           setOpenSections((state: any) => ({ ...state, lab: !state.lab }))
         }
       >
-        <div className="mt-4 overflow-auto scrollbar-hidden rounded-2xl border">
+        <div className="mt-4 overflow-auto scrollbar-hidden rounded-lg border">
           <DataTable
             columns={columns}
             data={labSettlementRows}
@@ -157,7 +157,7 @@ const LabReports = ({
             emptyMessage="No paid lab invoices match this filter"
             emptyDescription="Lab settlement and profitability figures will appear here once invoices are paid."
             emptyIcon={FlaskConical}
-            minBodyHeight="220px"
+            minBodyHeight={`${labSettlementRows.length > 0 ?'':'220px'}`}
             className="w-full min-w-[920px] text-left text-sm"
             loading={loading}
           />

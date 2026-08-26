@@ -584,7 +584,7 @@ export function Pharmacy({
               emptyMessage="No consultation prescriptions are waiting."
               emptyDescription="Prescriptions from signed OPD consultations will show up here."
               emptyIcon={Stethoscope}
-              minBodyHeight="220px"
+              minBodyHeight={`${visiblePrescriptions.length > 0 ?'':'220px'}`}
               rowClassName="hover:bg-emerald-50/30"
               onRowClick={(row: any) => setViewConsult(row)}
             />
@@ -845,7 +845,7 @@ export function Pharmacy({
               emptyMessage="No pharmacy issues match your filters."
               emptyDescription="Pharmacy issues created for patients will show up here."
               emptyIcon={Pill}
-              minBodyHeight="220px"
+              minBodyHeight={`${pharmacyPageRows.length > 0 ?'':'220px'}`}
               onRowClick={setSelectedIssue}
               sort={worklistSort ?? undefined}
               onSortChange={setWorklistSort}

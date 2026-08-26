@@ -37,11 +37,18 @@ export function useItemsData({ apiSession, branchId }: UseItemsDataParams) {
     useState<Record<string, QueryFieldOption[]>>({});
   const [homeCareServiceFilterOptions, setHomeCareServiceFilterOptions] =
     useState<Record<string, QueryFieldOption[]>>({});
-  const [loading, setLoading] = useState(false);
+  // Starts true: on mount there is a render before load() runs, and
+  // loading=false there looks identical to "loaded, found nothing" to the
+  // edit/view not-found redirect guard in Items.tsx, which would bounce a
+  // fresh navigation straight back to the list before the fetch completes.
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
   async function load() {
-    if (!apiSession) return;
+    if (!apiSession) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [

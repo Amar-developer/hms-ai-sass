@@ -792,7 +792,7 @@ export function Billing({
             </p>
           </div>
         </div>
-        <div className="scrollbar-hidden mt-4 overflow-auto rounded-2xl border border-slate-200">
+        <div className="scrollbar-hidden mt-4 overflow-auto rounded-lg border border-slate-200">
           <DataTable
             columns={invoiceColumns}
             data={invoicePageRows}
@@ -805,7 +805,7 @@ export function Billing({
             }
             emptyDescription="Invoices raised for consultations, lab, pharmacy, and home care will show up here."
             emptyIcon={ReceiptText}
-            minBodyHeight="220px"
+            minBodyHeight={`${invoicePageRows.length > 0 ?'':'220px'}`}
             onRowClick={openInvoiceDetail}
             sort={sort ?? undefined}
             onSortChange={handleSortChange}

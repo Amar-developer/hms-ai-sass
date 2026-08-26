@@ -39,6 +39,7 @@ export function getPrescriptionColumns({
     {
       key: "prescription",
       header: "Appointment ID",
+      width:"180px",
       render: (a: any) => (
         <span className="font-bold">
           {displayDocumentNumber(
@@ -52,7 +53,7 @@ export function getPrescriptionColumns({
     {
       key: "patient",
       header: "Patient",
-      width: "120px",
+      width: "150px",
       render: (a: any) => <span className="font-semibold">{a.patient}</span>,
     },
     {

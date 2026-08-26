@@ -347,7 +347,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
               }
               emptyDescription="Staff expense claims submitted for this month will show up here."
               emptyIcon={Wallet}
-              minBodyHeight="220px"
+              minBodyHeight={`${monthRows.length > 0 ?'':'220px'}`}
               onRowClick={(row: Expense) => setSelectedExpense(row)}
               className="max-w-[975px] overflow-auto"
               sort={sort ?? undefined}
@@ -362,7 +362,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
               }
               emptyDescription="Monthly expense claim summaries across branches will show up here."
               emptyIcon={CalendarRange}
-              minBodyHeight="220px"
+              minBodyHeight={`${monthGroups.length > 0 ?'':'220px'}`}
               onRowClick={(row: { monthKey: string }) => {
                 setSelectedMonth(row.monthKey);
               }}

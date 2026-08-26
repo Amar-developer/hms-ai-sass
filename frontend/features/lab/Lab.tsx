@@ -949,7 +949,7 @@ export function Lab({
               emptyMessage="No lab orders match your filters."
               emptyDescription="Lab and service orders created for patients will show up here."
               emptyIcon={FlaskConical}
-              minBodyHeight="220px"
+              minBodyHeight={`${labPageRows.length > 0 ?'':'220px'}`}
               onRowClick={setSelectedOrder}
               sort={worklistSort ?? undefined}
               onSortChange={setWorklistSort}

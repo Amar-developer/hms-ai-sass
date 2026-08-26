@@ -238,7 +238,7 @@ function DashboardCards({
       </section>
 
       <div className="rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3 rounded-lg">
           <h4 className="text-sm font-bold text-slate-950">
             Membership Claimed by Module
           </h4>
@@ -298,7 +298,7 @@ function ClosedMonths({
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3 rounded-lg">
         <div className="flex items-center gap-2">
           <History className="h-4 w-4 text-slate-500" />
           <h4 className="text-sm font-bold text-slate-950">Closed Months</h4>
