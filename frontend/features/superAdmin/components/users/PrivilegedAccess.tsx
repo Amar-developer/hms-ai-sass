@@ -258,7 +258,7 @@ export function PrivilegedAccess({
         setMessage={setMessage}
       />
 
-      <Card>
+      <Card className="pt-2">
         <div className="flex items-start gap-3">
           <UserRoundCog className="mt-0.5" size={20} />
           <div>
@@ -381,7 +381,7 @@ export function PrivilegedAccess({
         </div>
       </Card>
 
-      <Card>
+      <Card className="pt-2">
         <div className="flex items-start gap-3">
           <Clock3 className="mt-0.5" size={20} />
           <div>

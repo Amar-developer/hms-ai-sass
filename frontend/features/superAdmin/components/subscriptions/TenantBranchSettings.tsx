@@ -137,7 +137,7 @@ export function TenantBranchSettings({
 
   return (
     <div className="space-y-5">
-      <Card className="mt-3">
+      <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
           <div>
             <h3 className="card-title font-bold">Tenant & Branch Settings</h3>
@@ -169,7 +169,7 @@ export function TenantBranchSettings({
           </div>
         )}
       </Card>
-      <Card>
+      <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h1 className="card-title font-bold">
@@ -181,7 +181,7 @@ export function TenantBranchSettings({
           </div>
           <Badge
             tone="blue"
-            className="normal-badge"
+            className="normal-label"
           >
             Tenant scoped
           </Badge>
@@ -255,7 +255,7 @@ export function TenantBranchSettings({
           </div>
         </form>
       </Card>
-      <Card>
+      <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h1 className="card-title font-bold">
@@ -268,7 +268,7 @@ export function TenantBranchSettings({
           </div>
           <Badge
             tone="blue"
-            className="normal-badge"
+            className="normal-label"
           >
             {settingsLoading ? "Loading" : "Tenant scoped"}
           </Badge>
@@ -327,7 +327,7 @@ export function TenantBranchSettings({
           </div>
         </form>
       </Card>
-      <Card>
+      <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h1 className="card-title font-bold">
@@ -340,7 +340,7 @@ export function TenantBranchSettings({
           </div>
           <Badge
             tone="blue"
-            className="normal-badge"
+            className="normal-label"
           >
             Tenant scoped
           </Badge>
@@ -374,7 +374,7 @@ export function TenantBranchSettings({
           </div>
         </form>
       </Card>
-      <Card>
+      <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h4 className="card-title font-bold">
@@ -388,12 +388,12 @@ export function TenantBranchSettings({
           <div className="text-right w-[30%] lg:w-[15%]">
             {activePlan ? (
               <>
-                <Badge tone="blue" className="normal-badge">
+                <Badge tone="blue" className="normal-label">
                   {activePlan.name}
                 </Badge>
               </>
             ) : (
-              <Badge tone="amber" className="normal-badge">
+              <Badge tone="amber" className="normal-label">
                 No active plan
               </Badge>
             )}
@@ -427,7 +427,7 @@ export function TenantBranchSettings({
                   <span className="flex flex-wrap items-center gap-2">
                     <b>{module.name}</b>
                     {key === "patient_subscriptions" && (
-                      <Badge tone="green" className="normal-badge">
+                      <Badge tone="green" className="normal-label">
                         Patient Membership
                       </Badge>
                     )}

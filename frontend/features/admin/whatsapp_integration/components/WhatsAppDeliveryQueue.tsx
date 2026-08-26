@@ -223,6 +223,7 @@ export function WhatsAppDeliveryQueue({
     {
       key: "recipient",
       header: "Recipient",
+      width:'150px',
       render: (item) => (
         <>
           <p className="font-bold text-slate-800">{item.recipient_name}</p>
@@ -233,28 +234,37 @@ export function WhatsAppDeliveryQueue({
     {
       key: "flow_key",
       header: "Flow",
-      render: (item) => flowLabels[item.flow_key] || item.flow_key,
+      width:'120px',
+      render: (item) => (
+      <div className="max-w-[100px]" title={flowLabels[item.flow_key] || item.flow_key}>
+          <p className="text-sm truncate">{flowLabels[item.flow_key] || item.flow_key}</p>
+        </div>
+      ),
     },
     {
       key: "resource_reference",
       header: "Reference",
+      width:'150px',
       render: (item) => item.resource_reference || "—",
     },
     {
       key: "status",
       header: "Status",
+       width:'120px',
       render: (item) => (
-        <Badge tone={statusTone[item.status] || "slate"} className="normal-badge">{item.status}</Badge>
+        <Badge tone={statusTone[item.status] || "slate"} className="normal-label">{item.status}</Badge>
       ),
     },
     {
       key: "attempts",
       header: "Attempts",
+       width:'150px',
       render: (item) => `${item.attempt_count}/${item.max_attempts}`,
     },
     {
       key: "created_at",
       header: "Created",
+       width:'150px',
       render: (item) => (
         <>
           <p>{dateTime(item.created_at)}</p>
@@ -269,12 +279,18 @@ export function WhatsAppDeliveryQueue({
     {
       key: "failure_reason",
       header: "Failure",
+       width:'150px',
       cellClassName: "max-w-56",
-      render: (item) => item.failure_reason || "—",
+      render: (item) => (
+        <div className="max-w-[140px]" title={item.failure_reason || "—"}>
+          <p className="truncate">{item.failure_reason || "—"}</p>
+        </div>
+      ),
     },
     {
       key: "actions",
       header: "Actions",
+       width:'150px',
       className: "text-right",
       cellClassName: "text-right",
       disableRowClick: true,
@@ -306,7 +322,7 @@ export function WhatsAppDeliveryQueue({
   ];
 
   return (
-    <Card className="border border-slate-200 px-4 py-4 text-xs shadow-sm lg:text-sm">
+    <Card className="pt-2">
       <div className="flex w-full items-center justify-between gap-3 text-left">
         <div>
           <h3 className="card-title font-bold text-slate-900">
@@ -330,7 +346,7 @@ export function WhatsAppDeliveryQueue({
       </div>
 
       {expanded && (
-        <div className="mt-4 border-t border-slate-200 pt-4">
+        <div className="mt-4 ">
           <div className="grid gap-2 sm:grid-cols-5">
             {(
               ["queued", "processing", "sent", "failed", "cancelled"] as const

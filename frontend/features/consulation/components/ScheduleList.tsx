@@ -7,19 +7,9 @@ import { displayTime,toneForQueue } from "../helpers";
 export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h4 className="card-title font-bold">Schedule List</h4>
-          <p className="mt-0.5 text-[11px] text-slate-500">
-            Patients booked for the selected doctor and date.
-          </p>
-        </div>
-        <span className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-700">
-          {rows.length} {rows.length === 1 ? "visit" : "visits"}
-        </span>
-      </div>
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="hidden grid-cols-[minmax(220px,1.5fr)_150px_180px_130px_150px] gap-4 border-b border-emerald-100 bg-emerald-50/60 px-4 py-3 text-[10px] font-black uppercase tracking-wide text-slate-600 md:grid">
+        <div className="hidden grid-cols-[minmax(220px,1.5fr)_150px_180px_130px_150px] gap-4 border-b border-emerald-100 bg-slate-100 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-600 md:grid">
           <span>Patient & Token</span>
           <span>Queue Status</span>
           <span>Appointment</span>

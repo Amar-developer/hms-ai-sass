@@ -340,11 +340,12 @@ export function Patient({
 
 
   const detailFetchInFlightRef = useRef(false);
-  // Mount-scoped, not selectedDetail-scoped: selectedDetail can already be
-  // populated on mount (usePatientDetailData seeds the header from its
-  // cross-remount cache), but the rest of the bundle — consultations, labs,
-  // invoices, etc. — still needs a fresh fetch every time this component
-  // mounts, which the App Router does on every tab switch.
+  // Keyed by patient id, not by mount: this component is rendered from
+  // ../layout.tsx (see the comment there) so it stays mounted across
+  // PatientFlow's tab switches — only `view`/`selectedId`/`section` change.
+  // fetchedForRef stops those tab switches from re-triggering a fetch for a
+  // patient we've already loaded; it only re-fires when selectedId actually
+  // changes (a different patient) or on a genuine remount (hard refresh).
   const fetchedForRef = useRef<string | null>(null);
   useEffect(() => {
     if (isInitialLoading) return;

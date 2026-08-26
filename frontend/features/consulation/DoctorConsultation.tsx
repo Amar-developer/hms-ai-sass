@@ -1061,8 +1061,8 @@ export function DoctorConsultation({
       </div>
     );
   return (
-    <Card className="p-4">
-      <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 xl:flex-row xl:items-center xl:justify-between">
+    <Card className="pt-2">
+      <div className="flex flex-col gap-4  pb-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h3 className="card-title font-bold">Doctor Schedule</h3>
           <p className="card-desc text-slate-500">
@@ -1107,16 +1107,16 @@ export function DoctorConsultation({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
-        <span className="text-[11px] font-bold text-slate-600">
+      {/* <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2"> */}
+        {/* <span className="text-[11px] font-bold text-slate-600">
           {displayDate(selectedDate)} · {branch.name}
-        </span>
+        </span> */}
         {emergencyToday > 0 && (
           <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-700">
             Emergency {emergencyToday}
           </span>
         )}
-      </div>
+      {/* </div> */}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="mt-4">
         <ScheduleList

@@ -33,7 +33,7 @@ export function AppointmentList(props: any) {
     setPage,
   } = props;
   return (
-    <Card>
+    <Card className="pt-2">
       {rescheduleAppointment && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
           <Card className="w-full max-w-md">
@@ -93,14 +93,14 @@ export function AppointmentList(props: any) {
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div>
+        {/* <div>
           <h3 className="card-title font-bold">Appointments</h3>
           <p className="card-desc text-slate-500">
             {isSuperAdmin
               ? "Combined all-tenant appointment grid for MedizinHub HMS primary tenant."
               : "Row based OP appointment view with patient, mobile, medical department, doctor, date, and consultation status."}
           </p>
-        </div>
+        </div> */}
         {showBookingAction && (
           <Button
             onClick={openBooking}
@@ -113,7 +113,7 @@ export function AppointmentList(props: any) {
           </Button>
         )}
       </div>
-      <div className="mt-4">
+      <div className="mt-2 ">
         <DataTable
           columns={columns}
           className="overflow-x-auto max-w-[1000px] scrollbar-thin"

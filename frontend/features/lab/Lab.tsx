@@ -658,17 +658,8 @@ export function Lab({
           />
         )}
         <StatusToast message={message} onClose={() => setMessage("")} />
-        <Card>
-          <div className="border-b border-slate-200 pb-3">
-            <h3 className="card-title font-bold">
-              Consultation Lab &amp; Services
-            </h3>
-            <p className="card-desc text-slate-500">
-              Lab and service referrals created from completed OPD
-              consultations.
-            </p>
-          </div>
-          <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
+        <Card className="pt-2">
+          <div className="mt-2 overflow-auto rounded-lg border border-slate-200">
             <table className="w-full min-w-[850px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>

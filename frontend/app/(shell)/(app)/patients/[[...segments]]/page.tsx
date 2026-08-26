@@ -1,40 +1,8 @@
-"use client";
-
-import { useParams } from "next/navigation";
-import { Patient } from "@/features/patients/Patient";
-import { useWorkspace } from "@/features/shell/WorkspaceContext";
-import { useShellChrome } from "@/features/shell/AppShell";
-import { isNewSegment, isEditSegment } from "@/lib/routeSlugs";
-import { PATIENT_SECTION_IDS, type PatientSectionId } from "@/features/patients/PatientFlow";
-
-const DEFAULT_PATIENT_SECTION: PatientSectionId = "home";
-
+// The patient workspace itself is rendered by ../layout.tsx, not here — see
+// the comment there. Layouts persist across navigations within /patients/**
+// (only their params update), while pages are recreated on every
+// navigation, so rendering <Patient> from this page caused a full
+// remount — and the resulting data/loading flicker — on every tab switch.
 export default function PatientsPage() {
-  const ctx = useWorkspace();
-  const { navigatePage } = useShellChrome();
-  const params = useParams();
-  const segments = (params?.segments as string[] | undefined) || [];
-  const [first, second] = segments;
-  const view = isNewSegment(first)
-    ? "create"
-    : first
-      ? isEditSegment(second)
-        ? "edit"
-        : "detail"
-      : "list";
-  const selectedId = first && !isNewSegment(first) ? first : "";
-  // /patients/{id}/{section} — same segment slot "edit" uses, so an edit
-  // link and a tab link are disambiguated purely by isEditSegment above.
-  const section = PATIENT_SECTION_IDS.includes(second as PatientSectionId)
-    ? (second as PatientSectionId)
-    : DEFAULT_PATIENT_SECTION;
-  return (
-    <Patient
-      {...ctx}
-      setActive={navigatePage}
-      view={view}
-      selectedId={selectedId}
-      section={section}
-    />
-  );
+  return null;
 }

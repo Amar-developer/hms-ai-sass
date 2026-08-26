@@ -21,7 +21,6 @@
 
   export const nav = [
     ["dashboard", "Dashboard", HeartPulse],
-    ["superadmin", "Settings", Building2],
     ["clinic", "Clinic Setup", Hospital],
     ["opd", "OPD Workspace", Stethoscope],
     ["queue", "Token Queue", Clock],
@@ -37,5 +36,9 @@
     ["billing", "Invoices", ReceiptIndianRupee],
     ["reports", "Reports", BarChart3],
     ["expense","Expense",BanknoteIcon],
+    // Both "Settings" entries (super admin vs. tenant admin — mutually
+    // exclusive per user, see Sidebar.tsx) are last so the group sits at
+    // the bottom of the sidebar, below every operational module.
+    ["superadmin", "Settings", Building2],
     ["admin", "Settings", ShieldCheck],
   ] as const;

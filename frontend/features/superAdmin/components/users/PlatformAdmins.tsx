@@ -157,7 +157,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
         </form>
       </Card>
 
-      <Card>
+      <Card className="pt-2">
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-start">
           <div>
             <h3 className="card-title font-bold">Root Super Administrators</h3>
@@ -165,13 +165,13 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
               Root access is global. Use Platform Admin or tenant roles for routine work.
             </p>
           </div>
-          <button
-            className="close-button"
+          <Button
+            className="close-button bg-white text-slate-600 hover:bg-slate-200"
             onClick={() => void load()}
             disabled={loading}
           >
             Refresh
-          </button>
+          </Button>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <FormField label="Your current password for status changes">
@@ -221,7 +221,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
                   <td className="px-4 py-3 font-bold">{admin.name}</td>
                   <td className="px-4 py-3">{admin.email}</td>
                   <td className="px-4 py-3">
-                    <Badge tone={admin.is_active ? "green" : "red"} className="normal-badge">
+                    <Badge tone={admin.is_active ? "green" : "red"} className="normal-label">
                       {admin.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </td>
@@ -230,7 +230,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
                   </td>
                   <td className="px-4 py-3">
                     <button
-                      className="rounded-lg border px-3 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-40"
+                      className="close-button disabled:cursor-not-allowed disabled:opacity-40"
                       disabled={busy || admin.id === apiSession.user.id}
                       onClick={() => void changeStatus(admin)}
                     >

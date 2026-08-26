@@ -35,8 +35,8 @@ export function getUserColumns({
       sortable: true,
       render: (user: any) => (
         <div>
-          <div className="flex items-center gap-2">
-            <b className="text-xs lg:text-sm">{user.name}</b>
+          <div className="flex items-center gap-2 max-w-[160px]">
+            <p className="text-xs lg:text-sm font-bold truncate">{user.name}</p>
 
             <CopyIdButton
               value={user.id}
@@ -54,10 +54,12 @@ export function getUserColumns({
     {
       key: "email",
       header: "Email",
-      width: "200px",
+      width: "160px",
       sortable: true,
       render: (user: any) => (
-        <span className="break-all text-xs lg:text-sm">{user.email}</span>
+        <div className="max-w-[140px]">
+          <p className="truncate text-xs lg:text-sm">{user.email}</p>
+        </div>
       ),
     },
 
@@ -154,7 +156,12 @@ export function getUserColumns({
           },
         ];
 
-        return <RowActions actions={actions} className="right-16 -bottom-5" />;
+        // portal: renders the menu fixed-positioned into document.body instead
+        // of absolutely inside this cell — otherwise the table's
+        // overflow-x-auto wrapper (which also clips overflow-y, per the CSS
+        // overflow spec) cuts the menu off whenever the table body is
+        // shorter than the menu, e.g. a single-row result.
+        return <RowActions actions={actions} portal />;
       },
     },
   ];
