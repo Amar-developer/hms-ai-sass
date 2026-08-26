@@ -101,7 +101,8 @@ export type WhatsAppFlowKey =
   | "physiotherapy_session_patient"
   | "pharmacy_dispense_patient"
   | "service_invoice_patient"
-  | "service_follow_up_patient";
+  | "service_follow_up_patient"
+  | "admin_daily_report";
 
 export type WhatsAppLanguage =
   | "en"
@@ -121,6 +122,13 @@ export type WhatsAppLanguage =
 
   export type WhatsAppFieldOption = { key: string; label: string };
 
+  export type WhatsAppAdminRecipientOption = {
+    userId: string;
+    name: string;
+    mobile: string;
+    userType: string;
+  };
+
 
   export type WhatsAppSettingsDraft = {
     enabled: boolean;
@@ -133,6 +141,8 @@ export type WhatsAppLanguage =
     maxAttempts: number;
     patientNotificationsEnabled: boolean;
     doctorNotificationsEnabled: boolean;
+    adminRecipientUserIds: string[];
+    adminRecipientOptions: WhatsAppAdminRecipientOption[];
     appointmentReminder24hEnabled: boolean;
     appointmentReminder2hEnabled: boolean;
     defaultLanguage: WhatsAppLanguage;

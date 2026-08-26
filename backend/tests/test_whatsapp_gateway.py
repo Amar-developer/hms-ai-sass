@@ -1,4 +1,6 @@
 import json
+from io import BytesIO
+from urllib.error import HTTPError
 
 import pytest
 
@@ -72,3 +74,35 @@ def test_gateway_sends_expected_template_payload(monkeypatch):
         "source": "MedizinHub HMS",
         "templateParams": ["Test Patient", "25 July 2026", "10:30 AM"],
     }
+
+
+def test_gateway_does_not_log_provider_error_body(monkeypatch, caplog):
+    sensitive_body = b'{"patient":"Test Patient","apiKey":"secret-key"}'
+
+    class FakeOpener:
+        def open(self, request, timeout):
+            raise HTTPError(
+                request.full_url,
+                422,
+                "Unprocessable Entity",
+                {},
+                BytesIO(sensitive_body),
+            )
+
+    monkeypatch.setattr(http_template, "build_opener", lambda *_args: FakeOpener())
+    monkeypatch.setattr(http_template, "validate_public_https_url", lambda _value: None)
+
+    result = HttpTemplateMessageGateway().send_template(
+        api_url="https://gateway.example.com/messages",
+        api_key="secret-key",
+        campaign_name="appointment_confirmation",
+        destination="+919876543210",
+        recipient_name="Test Patient",
+        template_parameters=["Test Patient"],
+        timeout_seconds=15,
+    )
+
+    assert result.success is False
+    assert result.status == "request_rejected"
+    assert "Test Patient" not in caplog.text
+    assert "secret-key" not in caplog.text

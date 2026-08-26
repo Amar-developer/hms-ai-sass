@@ -10,7 +10,7 @@ type FlowOption = {
   key: WhatsAppFlowKey;
   label: string;
   description: string;
-  audience: "patient" | "doctor";
+  audience: "patient" | "doctor" | "user";
 };
 
 export function WhatsAppTemplatesSection({
@@ -79,7 +79,7 @@ export function WhatsAppTemplatesSection({
   visibleCustomTemplatesByStatus: WhatsAppCustomTemplate[];
 }) {
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
         <div>
           <h4 className="card-title font-bold text-slate-800">
@@ -146,12 +146,14 @@ export function WhatsAppTemplatesSection({
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         {(showAllTemplates
           ? visibleFlowOptionsByStatus
-          : visibleFlowOptionsByStatus.slice(0, 4)
+          : visibleFlowOptionsByStatus.slice(0, 5)
         ).map((flow) => {
           const audienceEnabled =
             flow.audience === "patient"
               ? draft.patientNotificationsEnabled
-              : draft.doctorNotificationsEnabled;
+              : flow.audience === "doctor"
+                ? draft.doctorNotificationsEnabled
+                : true;
           const disabled = !draft.enabled || !audienceEnabled;
           return (
             <div

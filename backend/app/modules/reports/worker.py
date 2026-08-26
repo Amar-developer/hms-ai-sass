@@ -33,6 +33,9 @@ from app.modules.notifications.email_processor import process_due_email_deliveri
 from app.modules.integrations.whatsapp_reminders import (
     queue_due_whatsapp_appointment_reminders,
 )
+from app.modules.integrations.whatsapp_daily_report import (
+    queue_due_whatsapp_admin_daily_reports,
+)
 from app.modules.patient_intelligence.service import (
     refresh_due_patient_intelligence,
 )
@@ -154,6 +157,12 @@ def run_once() -> None:
             # Delete error logs past retention (idempotent no-op most cycles).
             purge_expired_error_logs(session)
             queue_due_whatsapp_appointment_reminders(session)
+            daily_reports = queue_due_whatsapp_admin_daily_reports(session)
+            if daily_reports:
+                logger.info(
+                    "report_worker.whatsapp_admin_daily_reports_queued",
+                    extra={"report_count": daily_reports},
+                )
             # Progressively adapt existing HMS records and refresh stale
             # Patient 360 projections without a separate scheduler service.
             refreshed = refresh_due_patient_intelligence(session, limit=500)

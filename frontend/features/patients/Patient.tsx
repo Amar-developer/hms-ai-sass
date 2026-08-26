@@ -405,6 +405,7 @@ export function Patient({
     deactivatePatient,
     activatePatient,
     enrollMembership,
+    updateMembershipBenefitUsage,
     createFamilyRelationship,
     deleteFamilyRelationship,
   } = usePatientActions({
@@ -502,6 +503,7 @@ export function Patient({
         message={message}
         onMessageClose={() => setMessage("")}
         onEnrollMembership={enrollMembership}
+        onUpdateMembershipBenefitUsage={updateMembershipBenefitUsage}
         onCreateFamilyRelationship={createFamilyRelationship}
         onDeleteFamilyRelationship={deleteFamilyRelationship}
         onBack={() => open("list")}

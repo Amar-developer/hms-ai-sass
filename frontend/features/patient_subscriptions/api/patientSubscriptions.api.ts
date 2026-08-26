@@ -77,3 +77,18 @@ export function updateEnrollment(
     },
   );
 }
+
+export function updateBenefitUsage(
+  session: ApiSession,
+  enrollmentId: string,
+  payload: any,
+) {
+  return apiFetch(
+    `/patient-subscriptions/enrollments/${enrollmentId}/benefit-usage`,
+    session,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}

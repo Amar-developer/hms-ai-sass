@@ -16,6 +16,7 @@ from app.modules.integrations.whatsapp_field_catalog import (
     flow_fields,
 )
 from app.modules.integrations.whatsapp_schemas import (
+    WhatsAppAdminRecipientOption,
     WhatsAppCustomTemplateSettings,
     WhatsAppFieldCatalogRead,
     WhatsAppFieldOption,
@@ -49,6 +50,7 @@ DEFAULT_CONFIG = {
     "max_attempts": 5,
     "patient_notifications_enabled": True,
     "doctor_notifications_enabled": True,
+    "admin_recipient_user_ids": [],
     "appointment_reminder_24h_enabled": False,
     "appointment_reminder_2h_enabled": False,
     "default_language": "en",
@@ -72,7 +74,33 @@ def _masked_secret(last_four: str | None) -> str | None:
     return f"••••••••{last_four}" if last_four else None
 
 
-def _read(row: TenantIntegrationPlugin | None) -> WhatsAppIntegrationRead:
+def _admin_recipient_options(
+    session: Session, tenant_id: str
+) -> list[WhatsAppAdminRecipientOption]:
+    users = session.exec(
+        select(User)
+        .where(
+            User.tenant_id == tenant_id,
+            User.is_active == True,  # noqa: E712
+            User.mobile.is_not(None),
+        )
+        .order_by(User.name, User.id)
+    ).all()
+    return [
+        WhatsAppAdminRecipientOption(
+            user_id=user.id,
+            name=user.name,
+            mobile=str(user.mobile),
+            user_type=user.user_type,
+        )
+        for user in users
+        if str(user.mobile or "").strip()
+    ]
+
+
+def _read(
+    session: Session, tenant_id: str, row: TenantIntegrationPlugin | None
+) -> WhatsAppIntegrationRead:
     config = {**DEFAULT_CONFIG, **(decode_config(row.config_json) if row else {})}
     saved_field_mappings = config.get("template_field_mappings") or {}
     return WhatsAppIntegrationRead(
@@ -91,6 +119,8 @@ def _read(row: TenantIntegrationPlugin | None) -> WhatsAppIntegrationRead:
         doctor_notifications_enabled=bool(
             config.get("doctor_notifications_enabled", True)
         ),
+        admin_recipient_user_ids=list(config.get("admin_recipient_user_ids") or []),
+        admin_recipient_options=_admin_recipient_options(session, tenant_id),
         appointment_reminder_24h_enabled=bool(
             config.get("appointment_reminder_24h_enabled", False)
         ),
@@ -133,7 +163,9 @@ def get_whatsapp_integration(
     session: Session, *, tenant_id: str
 ) -> WhatsAppIntegrationRead:
     _enforce_entitlement(session, tenant_id)
-    result = _read(get_tenant_plugin(session, tenant_id, PLUGIN_KEY))
+    result = _read(
+        session, tenant_id, get_tenant_plugin(session, tenant_id, PLUGIN_KEY)
+    )
     result.usage = read_whatsapp_usage(session, tenant_id=tenant_id)
     result.health = read_whatsapp_health(session, tenant_id=tenant_id)
     result.readiness = read_whatsapp_readiness(
@@ -158,8 +190,25 @@ def update_whatsapp_integration(
             detail="API key is required when the integration is enabled",
         )
 
+    eligible_recipient_ids = {
+        option.user_id for option in _admin_recipient_options(session, tenant_id)
+    }
+    invalid_recipient_ids = [
+        user_id
+        for user_id in payload.admin_recipient_user_ids
+        if user_id not in eligible_recipient_ids
+    ]
+    if invalid_recipient_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Selected WhatsApp report recipients must be active users in this"
+                " tenant with a mobile number"
+            ),
+        )
+
     config = payload.model_dump(mode="json", exclude={"api_key", "enabled"})
-    before = _read(row).model_dump()
+    before = _read(session, tenant_id, row).model_dump()
     credential_changed = bool(payload.api_key)
 
     if not row:
@@ -178,11 +227,12 @@ def update_whatsapp_integration(
     session.add(row)
     session.flush()
 
-    after = _read(row).model_dump()
+    after = _read(session, tenant_id, row).model_dump()
     # Secret fields are represented only by booleans/masks and are never
     # included in audit diffs or metadata.
     for values in (before, after):
         values.pop("api_key_masked", None)
+        values.pop("admin_recipient_options", None)
         values.pop("updated_at", None)
     record_audit_event(
         session,
@@ -198,7 +248,7 @@ def update_whatsapp_integration(
     )
     session.commit()
     session.refresh(row)
-    result = _read(row)
+    result = _read(session, tenant_id, row)
     result.usage = read_whatsapp_usage(session, tenant_id=tenant_id)
     result.health = read_whatsapp_health(session, tenant_id=tenant_id)
     result.readiness = read_whatsapp_readiness(
@@ -208,6 +258,8 @@ def update_whatsapp_integration(
 
 
 def _audience_enabled(config: dict, flow_key: str) -> bool:
+    if flow_key == "admin_daily_report":
+        return True
     if flow_key in {"appointment_booked_doctor", "appointment_cancelled_doctor"}:
         return bool(config.get("doctor_notifications_enabled", True))
     return bool(config.get("patient_notifications_enabled", True))

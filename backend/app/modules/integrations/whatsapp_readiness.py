@@ -59,7 +59,9 @@ def evaluate_whatsapp_readiness(
             continue
         is_doctor = flow_key.endswith("_doctor")
         audience_enabled = (
-            settings.doctor_notifications_enabled
+            True
+            if flow_key == "admin_daily_report"
+            else settings.doctor_notifications_enabled
             if is_doctor
             else settings.patient_notifications_enabled
         )

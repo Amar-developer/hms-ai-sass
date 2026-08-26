@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 
 from fastapi import HTTPException
 from sqlmodel import Session, select
@@ -125,6 +126,8 @@ def queue_whatsapp_template_if_allowed(
     artifact_file_id: str | None = None,
     artifact_version: int | None = None,
     not_before: datetime | None = None,
+    context: dict[str, str] | None = None,
+    recipient_name: str | None = None,
 ) -> NotificationEvent | None:
     """Persist a provider-neutral template outbox row when its tenant flow is on."""
     try:
@@ -140,9 +143,12 @@ def queue_whatsapp_template_if_allowed(
     flows = WhatsAppFlowSettings.model_validate(config.get("flows") or {})
     if not hasattr(flows, flow_key) or not getattr(flows, flow_key):
         return None
+    is_admin_report = flow_key == "admin_daily_report"
     is_doctor = flow_key.endswith("_doctor")
     audience_enabled = bool(
-        config.get(
+        True
+        if is_admin_report
+        else config.get(
             "doctor_notifications_enabled"
             if is_doctor
             else "patient_notifications_enabled",
@@ -152,7 +158,7 @@ def queue_whatsapp_template_if_allowed(
     if not audience_enabled:
         return None
     patient = None
-    if not is_doctor:
+    if not is_doctor and not is_admin_report:
         patient = patient_for_notification_resource(
             session,
             tenant_id=tenant_id,
@@ -196,7 +202,11 @@ def queue_whatsapp_template_if_allowed(
         ),
         recipient=recipient,
         subject="Template notification",
-        message="Template message queued.",
+        message=(
+            json.dumps({"recipient_name": recipient_name or "Tenant Admin", **context})
+            if context is not None
+            else "Template message queued."
+        ),
         template_key=flow_key,
         dedupe_key=dedupe_key,
         resource_type=resource_type,

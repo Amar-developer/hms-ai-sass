@@ -22,7 +22,7 @@ export function WhatsAppApiConnectionSection({
   maskedApiKey: string;
 }) {
   return (
-    <div className="mt-5 rounded-xl border border-slate-200 p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         <Link2 className="h-4 w-4 text-slate-500" />
         <h4 className="card-title font-bold text-slate-800">API connection</h4>

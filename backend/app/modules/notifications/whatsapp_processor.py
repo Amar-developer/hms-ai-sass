@@ -257,6 +257,26 @@ def _message_context(
     so a flow's available fields only need to be listed once.
     """
     language = None
+    if event.template_key == "admin_daily_report":
+        try:
+            stored = json.loads(event.message or "{}")
+        except (TypeError, ValueError) as exc:
+            raise NotificationCancelled(
+                "The saved daily report snapshot is invalid."
+            ) from exc
+        required = default_field_order("admin_daily_report")
+        if not isinstance(stored, dict) or any(key not in stored for key in required):
+            raise NotificationCancelled(
+                "The saved daily report snapshot is incomplete."
+            )
+        recipient_name = str(stored.get("recipient_name") or "Tenant Admin")
+        return (
+            recipient_name,
+            {key: str(stored[key]) for key in required},
+            None,
+            None,
+            None,
+        )
     if not str(event.template_key or "").endswith("_doctor"):
         patient = patient_for_notification_resource(
             session,
@@ -690,7 +710,7 @@ def _load_connection(
         "appointment_booked_doctor",
         "appointment_cancelled_doctor",
     }
-    if not config.get(
+    if flow_key != "admin_daily_report" and not config.get(
         "doctor_notifications_enabled"
         if is_doctor
         else "patient_notifications_enabled",
@@ -759,6 +779,8 @@ def _resolve_campaign_and_params(
 
 
 def _delivery_recipient(session: Session, event: NotificationEvent) -> str:
+    if event.template_key == "admin_daily_report":
+        return event.recipient
     if str(event.template_key or "").endswith("_doctor"):
         return event.recipient
     patient = patient_for_notification_resource(

@@ -413,8 +413,15 @@ export const flowOptions: Array<{
   key: WhatsAppFlowKey;
   label: string;
   description: string;
-  audience: "patient" | "doctor";
+  audience: "patient" | "doctor" | "user";
 }> = [
+  {
+    key: "admin_daily_report",
+    label: "Tenant admin daily clinic report",
+    description:
+      "Send today's operational totals to tenant admins daily at 10:00 PM in the tenant timezone.",
+    audience: "user",
+  },
   {
     key: "appointment_booked_patient",
     label: "Patient appointment confirmation",
@@ -580,6 +587,13 @@ export const languageOptions: Array<{
 ];
 
 export const SAMPLE_VALUES_BY_FIELD: Record<string, string> = {
+  appointments_completed: "18",
+  appointments_not_completed: "3",
+  lab_bookings_completed: "12",
+  lab_bookings_not_completed: "2",
+  homecare_completed: "6",
+  homecare_not_completed: "1",
+  pending_invoices: "9",
   recipient_name: "Test Patient",
   appointment_date: "25 July 2026",
   appointment_time: "10:30 AM",
@@ -623,10 +637,13 @@ export const initialDraft: WhatsAppSettingsDraft = {
   maxAttempts: 5,
   patientNotificationsEnabled: true,
   doctorNotificationsEnabled: true,
+  adminRecipientUserIds: [],
+  adminRecipientOptions: [],
   appointmentReminder24hEnabled: false,
   appointmentReminder2hEnabled: false,
   defaultLanguage: "en",
   templates: {
+    admin_daily_report: "hms_admin_daily_report",
     appointment_booked_patient: "",
     appointment_booked_doctor: "",
     invoice_paid_patient: "",
@@ -655,6 +672,7 @@ export const initialDraft: WhatsAppSettingsDraft = {
   },
   localizedTemplates: {},
   flows: {
+    admin_daily_report: false,
     appointment_booked_patient: true,
     appointment_booked_doctor: true,
     invoice_paid_patient: true,

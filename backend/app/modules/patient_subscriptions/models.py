@@ -78,6 +78,12 @@ class PatientSubscriptionEnrollment(SQLModel, table=True):
     used_consultations: int = Field(default=0, ge=0)
     used_free_lab_json: str = Field(default="{}")
     used_free_medicine_json: str = Field(default="{}")
+    # Tenant-admin corrections for benefits consumed before MedizinHub was
+    # introduced. These stay separate from invoice-derived usage so the next
+    # usage sync cannot erase the handover baseline.
+    manual_used_consultations: int | None = Field(default=None, ge=0)
+    manual_used_free_lab_json: str | None = Field(default=None)
+    manual_used_free_medicine_json: str | None = Field(default=None)
     paid_amount: int = Field(default=0, ge=0)
     purchase_invoice_id: str | None = Field(
         default=None, index=True, foreign_key="invoice.id"

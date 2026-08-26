@@ -402,6 +402,27 @@ export function usePatientActions({
     }
   }
 
+  async function updateMembershipBenefitUsage(enrollment: any, usage: any) {
+    if (!scopedSession || !selectedId) return false;
+    setBusy(true);
+    setMessage("");
+    try {
+      await patientsApi.updateMembershipBenefitUsage(
+        scopedSession,
+        enrollment.id,
+        usage,
+      );
+      await loadPatientDetail(scopedSession, selectedId);
+      setMessage("Patient membership benefit usage updated.");
+      return true;
+    } catch (err: any) {
+      setMessage(err.message || "Could not update membership benefit usage.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createFamilyRelationship(data: any) {
     if (!scopedSession || !selectedId) return false;
     if (!data.relatedPatientId) {
@@ -458,6 +479,7 @@ export function usePatientActions({
     deactivatePatient,
     activatePatient,
     enrollMembership,
+    updateMembershipBenefitUsage,
     createFamilyRelationship,
     deleteFamilyRelationship,
   };

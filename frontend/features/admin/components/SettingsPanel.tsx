@@ -7,7 +7,14 @@ import {
   Badge,
 } from "@/app/components/common/ui";
 import { useEffect, useState } from "react";
-import { Camera, FileSpreadsheet } from "lucide-react";
+import {
+  Building2,
+  Camera,
+  FileSpreadsheet,
+  Landmark,
+  ReceiptText,
+  SlidersHorizontal,
+} from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
 import { listValue, settingLabel, settingValueLabel } from "../helpers";
 import { MultiCheckSelect } from "./MultiCheckSelect";
@@ -66,6 +73,9 @@ export function SettingsPanel(props: any) {
     resendMonthlyReport,
     downloadMonthlyReport,
   } = props;
+  const [activeSettingsTab, setActiveSettingsTab] = useState<
+    "operations" | "numbering" | "accounts" | "reports"
+  >("operations");
   const [reportPage, setReportPage] = useState(1);
   const reportTotalPages = Math.max(1, Math.ceil(reportJobs.length / pageSize));
   const safeReportPage = Math.min(reportPage, reportTotalPages);
@@ -119,14 +129,106 @@ export function SettingsPanel(props: any) {
     setBankDetails({ ...bankDetails, [key]: value });
 
   return (
-    <div className="space-y-5">
-      <Card>
-        <h3 className="card-title font-bold">Tenant & Branch Settings</h3>
+    <div className="space-y-3">
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
+              <Building2 className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="text-base font-black tracking-tight text-slate-950">
+                Tenant & Branch Workspace
+              </h2>
+              <p className="text-xs font-medium text-slate-500">
+                Branch operations, documents, accounts and scheduled reports in one workspace
+              </p>
+            </div>
+          </div>
+          <Badge tone="blue" className="normal-badge">
+            Tenant scoped
+          </Badge>
+        </div>
+        <nav
+          className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+          aria-label="Tenant and branch workspace sections"
+          role="tablist"
+        >
+          {[
+            {
+              id: "operations" as const,
+              label: "Branch Operations",
+              icon: SlidersHorizontal,
+            },
+            {
+              id: "numbering" as const,
+              label: "Numbering & Invoice",
+              icon: ReceiptText,
+            },
+            { id: "accounts" as const, label: "Accounts", icon: Landmark },
+            {
+              id: "reports" as const,
+              label: "Monthly Reports",
+              icon: FileSpreadsheet,
+              count: reportJobs.length,
+            },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = activeSettingsTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setActiveSettingsTab(tab.id)}
+                className={`inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-xs font-bold transition-colors ${
+                  active
+                    ? "bg-brand text-brand-fg"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{tab.label}</span>
+                {Boolean("count" in tab && tab.count) && (
+                  <span
+                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                      active
+                        ? "bg-white/20 text-brand-fg"
+                        : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {"count" in tab ? tab.count : 0}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </section>
+
+      <Card
+        className={`border border-slate-200 p-4 shadow-sm ${
+          activeSettingsTab === "operations" || activeSettingsTab === "numbering"
+            ? "block"
+            : "hidden"
+        }`}
+      >
+        <h3 className="card-title font-bold">
+          {activeSettingsTab === "numbering"
+            ? "Document Numbering & Invoice Identity"
+            : "Branch Operations"}
+        </h3>
         <p className="card-desc text-slate-500">
-          Configuration affects invoice numbering, queue behavior, appointment
-          slots, payments, and communications for this tenant.
+          {activeSettingsTab === "numbering"
+            ? "Configure generated document codes, digit length, and printable invoice branding."
+            : "Configure queue behavior, appointment slots, payments, and communication providers."}
         </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div
+          className={`mt-4 gap-3 md:grid-cols-2 xl:grid-cols-4 ${
+            activeSettingsTab === "numbering" ? "grid" : "hidden"
+          }`}
+        >
           <FormField label="Document Prefix">
             <Input
               value={numberingRules.prefix || invoicePrefix}
@@ -235,6 +337,12 @@ export function SettingsPanel(props: any) {
               </div>
             </Field>
           </div>
+        </div>
+        <div
+          className={`mt-4 gap-3 md:grid-cols-2 xl:grid-cols-4 ${
+            activeSettingsTab === "operations" ? "grid" : "hidden"
+          }`}
+        >
           <Field label="Requeue After">
             <Input
               type="number"
@@ -289,7 +397,11 @@ export function SettingsPanel(props: any) {
             />
           </Field>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div
+          className={`mt-4 gap-3 md:grid-cols-2 xl:grid-cols-5 ${
+            activeSettingsTab === "numbering" ? "grid" : "hidden"
+          }`}
+        >
           {Object.entries(
             numberingRules.entities || defaultNumberingEntities,
           ).map(([key, value]: any) => (
@@ -301,7 +413,11 @@ export function SettingsPanel(props: any) {
             </FormField>
           ))}
         </div>
-        <div className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
+        <div
+          className={`mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 ${
+            activeSettingsTab === "numbering" ? "block" : "hidden"
+          }`}
+        >
           Example:{" "}
           {(numberingRules.prefix || invoicePrefix || "SUN").toUpperCase()}-
           {numberingRules.entities?.patient || "PAT"}-
@@ -316,7 +432,11 @@ export function SettingsPanel(props: any) {
             {busy ? "Saving..." : "Save Settings"}
           </ButtonLoader>
         </Button>
-        <div className="mt-5 grid gap-2 md:grid-cols-2">
+        <div
+          className={`mt-5 gap-2 md:grid-cols-2 ${
+            activeSettingsTab === "operations" ? "grid" : "hidden"
+          }`}
+        >
           {settings.slice(0, 10).map((setting: any) => (
             <div
               key={setting.id}
@@ -330,7 +450,11 @@ export function SettingsPanel(props: any) {
           ))}
         </div>
       </Card>
-      <Card>
+      <Card
+        className={`border border-slate-200 p-4 shadow-sm ${
+          activeSettingsTab === "accounts" ? "block" : "hidden"
+        }`}
+      >
         <h3 className="card-title font-bold">Accounts & Bank Details</h3>
         <p className="card-desc text-slate-500">
           Maintain tenant bank account details shown on printable invoices.
@@ -401,7 +525,11 @@ export function SettingsPanel(props: any) {
           </Button>
         </div>
       </Card>
-      <Card>
+      <Card
+        className={`border border-slate-200 p-4 shadow-sm ${
+          activeSettingsTab === "reports" ? "block" : "hidden"
+        }`}
+      >
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Monthly Email Reports</h3>

@@ -28,6 +28,8 @@ const savedSettings = {
   max_attempts: 5,
   patient_notifications_enabled: true,
   doctor_notifications_enabled: true,
+  admin_recipient_user_ids: [],
+  admin_recipient_options: [],
   usage: {
     plan_name: "Growth Clinic",
     monthly_limit: 1000,
@@ -137,6 +139,33 @@ describe("WhatsApp integration settings design", () => {
     ).toHaveProperty("disabled", false);
   });
 
+  it("organizes every settings area into workspace tabs", () => {
+    render(<WhatsAppIntegrationSettings />);
+
+    expect(
+      screen.getByRole("tablist", { name: "WhatsApp workspace sections" }),
+    ).toBeTruthy();
+    for (const label of [
+      "Overview",
+      "API Connection",
+      "Recipients",
+      "Templates",
+      "Delivery Queue",
+    ]) {
+      expect(
+        screen.getByRole("tab", { name: new RegExp(`^${label}`) }),
+      ).toBeTruthy();
+    }
+    const templatesTab = screen.getByRole("tab", { name: /^Templates/ });
+    fireEvent.click(templatesTab);
+    expect(templatesTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("Notification templates")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send Test Message" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Save WhatsApp Settings" }),
+    ).toBeTruthy();
+  });
+
   it("keeps connection actions disabled without a saved tenant session", () => {
     render(<WhatsAppIntegrationSettings />);
 
@@ -188,6 +217,63 @@ describe("WhatsApp integration settings design", () => {
     expect(screen.getByText("4%")).toBeTruthy();
   });
 
+  it("selects multiple users for admin WhatsApp templates", async () => {
+    const recipients = [
+      {
+        user_id: "user-1",
+        name: "Clinic Admin",
+        mobile: "9876543210",
+        user_type: "tenant_admin",
+      },
+      {
+        user_id: "user-2",
+        name: "Duty Manager",
+        mobile: "9123456789",
+        user_type: "staff",
+      },
+    ];
+    apiFetchMock.mockResolvedValueOnce({
+      ...savedSettings,
+      enabled: true,
+      admin_recipient_user_ids: ["user-1"],
+      admin_recipient_options: recipients,
+      flows: { ...savedSettings.flows, admin_daily_report: true },
+    });
+    render(
+      <WhatsAppIntegrationSettings
+        apiSession={{ tenantId: "tenant-1", user: { id: "admin-1" } }}
+      />,
+    );
+
+    const clinicAdmin = await screen.findByRole("checkbox", {
+      name: /Clinic Admin/i,
+    });
+    const dutyManager = screen.getByRole("checkbox", {
+      name: /Duty Manager/i,
+    });
+    expect(clinicAdmin).toHaveProperty("checked", true);
+    expect(dutyManager).toHaveProperty("checked", false);
+    fireEvent.click(dutyManager);
+
+    apiFetchMock.mockResolvedValueOnce({
+      ...savedSettings,
+      enabled: true,
+      admin_recipient_user_ids: ["user-1", "user-2"],
+      admin_recipient_options: recipients,
+      flows: { ...savedSettings.flows, admin_daily_report: true },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save WhatsApp Settings" }),
+    );
+
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
+    const [, , request] = apiFetchMock.mock.calls[1];
+    expect(JSON.parse(String(request?.body)).admin_recipient_user_ids).toEqual([
+      "user-1",
+      "user-2",
+    ]);
+  });
+
   it("manually creates and removes a custom notification template", async () => {
     apiFetchMock.mockResolvedValueOnce(savedSettings);
     render(
@@ -199,6 +285,7 @@ describe("WhatsApp integration settings design", () => {
     expect(
       await screen.findByText("Patient appointment confirmation"),
     ).toBeTruthy();
+    expect(screen.getByText("Tenant admin daily clinic report")).toBeTruthy();
     expect(screen.getByText("Doctor appointment alert")).toBeTruthy();
     expect(screen.getByText("Paid invoice receipt")).toBeTruthy();
     expect(screen.getByText("Pending payment update")).toBeTruthy();
@@ -448,6 +535,7 @@ describe("WhatsApp integration settings design", () => {
     const languageTrigger = await screen.findByRole("button", {
       name: "English (tenant default)",
     });
+    await waitFor(() => expect(languageTrigger).toHaveProperty("disabled", false));
     fireEvent.click(languageTrigger);
     fireEvent.click(screen.getByRole("button", { name: "Tamil" }));
 

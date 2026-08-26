@@ -3,14 +3,16 @@ from pathlib import Path
 import sys
 import os
 
-from alembic import context
-from sqlalchemy import engine_from_config, pool
-
-from app.core.database import SQLModel
-import app.models  # noqa
-
 BASE_DIR = Path(__file__).resolve().parents[1]
-sys.path.append(str(BASE_DIR))
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+# Imported after the sys.path insert above so `app` resolves; E402 is expected.
+from alembic import context  # noqa: E402
+from sqlalchemy import engine_from_config, pool  # noqa: E402
+
+from app.core.database import SQLModel  # noqa: E402
+import app.models  # noqa
 
 config = context.config
 
