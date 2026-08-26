@@ -491,15 +491,29 @@ export const flowOptions: Array<{
   },
   {
     key: "medicine_refill_patient",
-    label: "Medicine refill reminder",
+    label: "Monthly medicine reminder",
     description:
-      "Send a consent-aware reminder when a recurring refill is due.",
+      "Send automatically each month when the patient's configured medicine date is due.",
+    audience: "patient",
+  },
+  {
+    key: "lab_test_reminder_patient",
+    label: "Monthly lab test reminder",
+    description:
+      "Send automatically each month when the patient's configured lab-test date is due.",
     audience: "patient",
   },
   {
     key: "membership_renewal_patient",
     label: "Membership renewal reminder",
     description: "Send a reminder before an active patient membership expires.",
+    audience: "patient",
+  },
+  {
+    key: "unused_benefit_patient",
+    label: "Membership remaining benefits reminder",
+    description:
+      "Send the patient's current remaining benefits and unlimited discounts during the membership period.",
     audience: "patient",
   },
   {
@@ -510,8 +524,8 @@ export const flowOptions: Array<{
   },
   {
     key: "home_care_booking_patient",
-    label: "Home care booking confirmation",
-    description: "Trigger after a home care booking is created.",
+    label: "Home care / visit booking confirmation",
+    description: "Trigger after either a home care or home visit booking is created.",
     audience: "patient",
   },
   {
@@ -521,39 +535,9 @@ export const flowOptions: Array<{
     audience: "patient",
   },
   {
-    key: "home_visit_booking_patient",
-    label: "Home visit booking confirmation",
-    description: "Trigger after a doctor/staff home visit is booked.",
-    audience: "patient",
-  },
-  {
     key: "home_visit_reminder_patient",
     label: "Home visit reminder",
     description: "Send a reminder before a scheduled home visit.",
-    audience: "patient",
-  },
-  {
-    key: "ip_admission_patient",
-    label: "IP admission confirmation",
-    description: "Trigger when an inpatient admission is created.",
-    audience: "patient",
-  },
-  {
-    key: "ip_discharge_patient",
-    label: "IP discharge summary",
-    description: "Trigger when an inpatient discharge summary is finalized.",
-    audience: "patient",
-  },
-  {
-    key: "physiotherapy_case_patient",
-    label: "Physiotherapy case created",
-    description: "Trigger when a physiotherapy case is opened.",
-    audience: "patient",
-  },
-  {
-    key: "physiotherapy_session_patient",
-    label: "Physiotherapy session update",
-    description: "Trigger for a physiotherapy session or home program update.",
     audience: "patient",
   },
   {
@@ -643,7 +627,7 @@ export const initialDraft: WhatsAppSettingsDraft = {
   appointmentReminder2hEnabled: false,
   defaultLanguage: "en",
   templates: {
-    admin_daily_report: "hms_admin_daily_report",
+    admin_daily_report: "",
     appointment_booked_patient: "",
     appointment_booked_doctor: "",
     invoice_paid_patient: "",
@@ -656,7 +640,9 @@ export const initialDraft: WhatsAppSettingsDraft = {
     follow_up_advice_patient: "",
     appointment_reminder_patient: "",
     medicine_refill_patient: "",
+    lab_test_reminder_patient: "",
     membership_renewal_patient: "",
+    unused_benefit_patient: "",
     patient_reengagement: "",
     home_care_booking_patient: "",
     home_care_visit_patient: "",
@@ -685,7 +671,9 @@ export const initialDraft: WhatsAppSettingsDraft = {
     follow_up_advice_patient: false,
     appointment_reminder_patient: false,
     medicine_refill_patient: false,
+    lab_test_reminder_patient: false,
     membership_renewal_patient: false,
+    unused_benefit_patient: false,
     patient_reengagement: false,
     home_care_booking_patient: false,
     home_care_visit_patient: false,

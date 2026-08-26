@@ -171,7 +171,8 @@ export function WhatsAppRecipientControls({
         {draft.flows.admin_daily_report &&
           draft.adminRecipientUserIds.length === 0 && (
             <p className="mt-2 text-xs font-semibold text-amber-700">
-              Select at least one user before saving the enabled daily report.
+              No users are selected. You can save this setup, but admin reports
+              will not be sent until at least one recipient is selected.
             </p>
           )}
       </div>

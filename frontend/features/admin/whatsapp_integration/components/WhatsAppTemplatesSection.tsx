@@ -221,9 +221,26 @@ export function WhatsAppTemplatesSection({
                     onMove={(index, direction) =>
                       moveTemplateField(flow.key, index, direction)
                     }
-                    disabled={disabled || !draft.flows[flow.key]}
+                    disabled={
+                      disabled ||
+                      !draft.flows[flow.key] ||
+                      [
+                        "unused_benefit_patient",
+                        "home_care_booking_patient",
+                      ].includes(flow.key)
+                    }
                     max={MAX_TEMPLATE_PARAMETERS}
                   />
+                  {[
+                    "unused_benefit_patient",
+                    "home_care_booking_patient",
+                  ].includes(flow.key) && (
+                    <p className="mt-2 text-xs font-semibold text-emerald-700">
+                      {flow.key === "unused_benefit_patient"
+                        ? "Approved contract: exactly 6 parameters in the displayed order."
+                        : "Approved contract: exactly 6 parameters; {{6}} repeats the clinic name and the phone remains literal template text."}
+                    </p>
+                  )}
                 </div>
               )}
               {flow.key === "appointment_reminder_patient" && (

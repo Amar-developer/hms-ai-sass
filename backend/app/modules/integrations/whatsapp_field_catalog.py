@@ -137,14 +137,18 @@ FLOW_FIELD_CATALOG: dict[str, list[tuple[str, str]]] = {
     "unused_benefit_patient": [
         ("recipient_name", "Recipient name"),
         ("membership_plan_name", "Membership plan name"),
-        ("membership_plan.name", "Plan name"),
+        ("clinic_name", "Hospital/clinic name"),
+        (
+            "unused_benefits_summary",
+            "Available membership benefits (remaining)",
+        ),
         ("expiry_date", "Membership expiry date"),
+        ("clinic.phone", "Clinic assistance phone"),
+        ("membership_plan.name", "Plan name"),
         ("days_remaining", "Membership days remaining"),
         ("unused_consultations", "Unused consultations"),
         ("unused_lab_tests", "Unused lab tests"),
         ("unused_medicines", "Unused medicines"),
-        ("unused_benefits_summary", "Unused benefits summary"),
-        ("clinic_name", "Hospital/clinic name"),
     ],
     "patient_reengagement": [
         ("recipient_name", "Recipient name"),
@@ -166,6 +170,10 @@ FLOW_FIELD_CATALOG: dict[str, list[tuple[str, str]]] = {
     ],
     "home_care_booking_patient": [
         ("recipient_name", "Recipient name"),
+        ("clinic_name", "Hospital/clinic name"),
+        ("service_description", "Service description"),
+        ("booking_start_date", "Start date"),
+        ("booking_end_date", "End date"),
         ("home_care_booking.number", "Booking number"),
         ("home_care_booking.start_date", "Start date"),
         ("home_care_booking.assigned_staff_name", "Assigned staff"),
@@ -180,6 +188,10 @@ FLOW_FIELD_CATALOG: dict[str, list[tuple[str, str]]] = {
     ],
     "home_visit_booking_patient": [
         ("recipient_name", "Recipient name"),
+        ("clinic_name", "Hospital/clinic name"),
+        ("service_description", "Service description"),
+        ("booking_start_date", "Start date"),
+        ("booking_end_date", "End date"),
         ("home_care_booking.number", "Booking number"),
         ("home_care_booking.start_date", "Visit date"),
         ("home_care_booking.location", "Location"),
@@ -255,7 +267,63 @@ FLOW_DEFAULT_FIELD_ORDER: dict[str, list[str]] = {
         "appointment_date",
         "appointment_time",
     ],
+    "unused_benefit_patient": [
+        "recipient_name",
+        "membership_plan_name",
+        "clinic_name",
+        "unused_benefits_summary",
+        "expiry_date",
+        "clinic.phone",
+    ],
+    "home_care_booking_patient": [
+        "recipient_name",
+        "clinic_name",
+        "service_description",
+        "booking_start_date",
+        "booking_end_date",
+        "clinic_name",
+    ],
+    "home_visit_booking_patient": [
+        "recipient_name",
+        "clinic_name",
+        "service_description",
+        "booking_start_date",
+        "booking_end_date",
+        "clinic_name",
+    ],
 }
+
+
+# This exact order was previously saved automatically from the full catalog,
+# although the approved provider template accepts only six parameters.
+LEGACY_UNUSED_BENEFIT_FIELD_ORDER = [
+    "recipient_name",
+    "membership_plan_name",
+    "membership_plan.name",
+    "expiry_date",
+    "days_remaining",
+    "unused_consultations",
+    "unused_lab_tests",
+    "unused_medicines",
+    "unused_benefits_summary",
+    "clinic_name",
+]
+
+LEGACY_HOME_CARE_BOOKING_FIELD_ORDER = [
+    "recipient_name",
+    "home_care_booking.number",
+    "home_care_booking.start_date",
+    "home_care_booking.assigned_staff_name",
+    "clinic.name",
+]
+
+LEGACY_HOME_VISIT_BOOKING_FIELD_ORDER = [
+    "recipient_name",
+    "home_care_booking.number",
+    "home_care_booking.start_date",
+    "home_care_booking.location",
+    "clinic.name",
+]
 
 
 def flow_fields(flow_key: str) -> list[tuple[str, str]]:
@@ -290,3 +358,38 @@ def default_field_order(flow_key: str) -> list[str]:
     if pinned is not None:
         return list(pinned)
     return [key for key, _label in FLOW_FIELD_CATALOG.get(flow_key, [])]
+
+
+def normalize_saved_field_order(
+    flow_key: str, saved_fields: list[str] | None
+) -> list[str] | None:
+    """Upgrade only the known legacy mapping; preserve tenant selections."""
+    if (
+        flow_key
+        in {
+            "unused_benefit_patient",
+            "home_care_booking_patient",
+            "home_visit_booking_patient",
+        }
+        and saved_fields == []
+    ):
+        # Older settings payloads stored [] for every disabled flow. These
+        # approved templates have a fixed six-parameter contract, so an empty
+        # mapping means "not configured yet", not a different valid contract.
+        return default_field_order(flow_key)
+    if (
+        flow_key == "unused_benefit_patient"
+        and saved_fields == LEGACY_UNUSED_BENEFIT_FIELD_ORDER
+    ):
+        return default_field_order(flow_key)
+    if (
+        flow_key == "home_care_booking_patient"
+        and saved_fields == LEGACY_HOME_CARE_BOOKING_FIELD_ORDER
+    ):
+        return default_field_order(flow_key)
+    if (
+        flow_key == "home_visit_booking_patient"
+        and saved_fields == LEGACY_HOME_VISIT_BOOKING_FIELD_ORDER
+    ):
+        return default_field_order(flow_key)
+    return list(saved_fields) if saved_fields is not None else None

@@ -5,6 +5,8 @@ from decimal import Decimal
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment, AppointmentStatus
+from app.modules.lab.models import LabTestCatalog
+from app.modules.patient_intelligence import service as patient_intelligence_service
 from app.modules.patient_intelligence.service import (
     evaluate_flags,
     list_tenant_rules,
@@ -33,6 +35,14 @@ from app.modules.patients.services.search import PatientSearchService
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionPlan,
+)
+from app.modules.patient_subscriptions.services.reminder_summary import (
+    available_membership_benefits_summary,
+)
+from app.modules.patient_subscriptions.services.serialization import (
+    free_items_to_json,
+    slabs_to_json,
+    usage_to_json,
 )
 from app.modules.tenants.models import Branch, Tenant, now_utc
 
@@ -1193,6 +1203,159 @@ def test_membership_expiring_inside_configured_window_creates_tracking_actions(
         assert renewal_flag.evidence["value"] in {"1", "2"}
 
 
+def test_available_membership_benefits_summary_uses_remaining_named_items(test_engine):
+    with Session(test_engine) as session:
+        tenant, branch, patient = _patient_fixture(session)
+        blood_sugar = LabTestCatalog(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            code="RBS",
+            name="Random Blood Sugar",
+            default_price=75,
+        )
+        bp_test = LabTestCatalog(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            code="BPT",
+            name="BP Test",
+            default_price=30,
+        )
+        session.add(blood_sugar)
+        session.add(bp_test)
+        session.flush()
+        plan = PatientSubscriptionPlan(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            name="Smart Care Plan",
+            price_amount=299,
+            duration_days=90,
+            free_consultations=1,
+            lab_discount_percentage=3,
+            free_lab_test_ids_json=free_items_to_json(
+                [blood_sugar.id, bp_test.id],
+                {blood_sugar.id: 1, bp_test.id: 2},
+            ),
+            pharmacy_discount_slabs_json=slabs_to_json(
+                [
+                    {
+                        "min_amount": 100,
+                        "max_amount": 300,
+                        "discount_percentage": 3,
+                    },
+                    {
+                        "min_amount": 301,
+                        "max_amount": None,
+                        "discount_percentage": 5,
+                    },
+                ]
+            ),
+        )
+        session.add(plan)
+        session.flush()
+        enrollment = PatientSubscriptionEnrollment(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            plan_id=plan.id,
+            starts_on=date(2026, 8, 26),
+            ends_on=date(2026, 11, 23),
+            paid_amount=299,
+            used_free_lab_json=usage_to_json({blood_sugar.id: 1}),
+        )
+
+        summary = available_membership_benefits_summary(
+            session, enrollment=enrollment, plan=plan
+        )
+
+        assert "🩺 1 FREE consultation" in summary
+        assert "Random Blood Sugar" not in summary
+        assert "🎁 FREE Lab Tests Worth ₹60 – BP Test (2)" in summary
+        assert (
+            "🧪 3% OFF on eligible lab tests " "(no usage limit during membership)"
+        ) in summary
+        assert (
+            "💊 3% OFF on eligible medicines on ₹100–₹300 bills "
+            "(no usage limit during membership)"
+        ) in summary
+        assert (
+            "💊 5% OFF on eligible medicines on ₹301 and above bills "
+            "(no usage limit during membership)"
+        ) in summary
+
+
+def test_unused_benefit_reminder_is_created_once_per_membership_month(
+    test_engine, monkeypatch
+):
+    current = datetime(2026, 1, 31, 10, tzinfo=timezone.utc)
+    monkeypatch.setattr(patient_intelligence_service, "now_utc", lambda: current)
+
+    with Session(test_engine) as session:
+        tenant, branch, patient = _patient_fixture(session)
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        session.add(patient)
+        plan = PatientSubscriptionPlan(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            name="Smart Care Plan",
+            price_amount=299,
+            duration_days=90,
+            free_consultations=0,
+            lab_discount_percentage=3,
+        )
+        session.add(plan)
+        session.flush()
+        enrollment = PatientSubscriptionEnrollment(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            plan_id=plan.id,
+            starts_on=date(2026, 1, 31),
+            ends_on=date(2026, 4, 29),
+            paid_amount=299,
+        )
+        session.add(enrollment)
+        _rule(
+            session,
+            tenant.id,
+            rule_key="unused_membership_benefit_reminder",
+            name="Monthly available membership benefits",
+            flag_key="UNUSED_MEMBERSHIP_BENEFIT",
+            category=IntelligenceFlagCategory.MEMBERSHIP,
+            metric_key="unused_membership_benefit_count",
+            operator="gte",
+            threshold=Decimal("1"),
+            requires_active_membership=True,
+            action_enabled=True,
+            action_key="unused_membership_benefit_reminder",
+            action_channel="whatsapp",
+            action_template_key="unused_benefit_patient",
+            action_requires_approval=True,
+            action_cooldown_days=1,
+        )
+        session.commit()
+
+        for send_date, expected_count in (
+            (datetime(2026, 1, 31, 10, tzinfo=timezone.utc), 1),
+            (datetime(2026, 2, 15, 10, tzinfo=timezone.utc), 1),
+            (datetime(2026, 2, 28, 10, tzinfo=timezone.utc), 2),
+            (datetime(2026, 3, 31, 10, tzinfo=timezone.utc), 3),
+            (datetime(2026, 4, 28, 10, tzinfo=timezone.utc), 3),
+        ):
+            current = send_date
+            refresh_patient_intelligence(
+                session, tenant_id=tenant.id, patient_id=patient.id
+            )
+            actions = session.exec(
+                select(PatientEngagementAction).where(
+                    PatientEngagementAction.tenant_id == tenant.id,
+                    PatientEngagementAction.patient_id == patient.id,
+                    PatientEngagementAction.action_key
+                    == "unused_membership_benefit_reminder",
+                )
+            ).all()
+            assert len(actions) == expected_count
+
+
 def test_membership_renewal_action_revives_when_window_matches_again(test_engine):
     with Session(test_engine) as session:
         tenant, branch, patient = _patient_fixture(session)
@@ -1628,3 +1791,73 @@ def test_configured_no_approval_action_is_automatically_queued(
         assert action.notification_event_id == "notification_1"
         assert queued[0]["flow_key"] == "medicine_refill_patient"
         assert queued[0]["resource_type"] == "patient_engagement_action"
+
+
+def test_monthly_medicine_and_lab_triggers_create_one_action_per_due_date(
+    test_engine, monkeypatch
+):
+    current = datetime(2026, 1, 31, 10, tzinfo=timezone.utc)
+    monkeypatch.setattr(patient_intelligence_service, "now_utc", lambda: current)
+
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        patient.monthly_tracking_enabled = True
+        patient.monthly_refill_on = date(2026, 1, 31)
+        patient.monthly_lab_on = date(2026, 1, 31)
+        patient.monthly_lab_test_name = "HbA1c"
+        session.add(patient)
+        for rule_key, flag_key, metric_key, action_key, template_key in (
+            (
+                "monthly_medicine_reminder",
+                "MONTHLY_MEDICINE_REMINDER",
+                "days_until_expected_refill",
+                "monthly_medicine_reminder",
+                "medicine_refill_patient",
+            ),
+            (
+                "monthly_lab_test_reminder",
+                "MONTHLY_LAB_TEST_REMINDER",
+                "days_until_expected_lab_test",
+                "monthly_lab_test_reminder",
+                "lab_test_reminder_patient",
+            ),
+        ):
+            _rule(
+                session,
+                tenant.id,
+                rule_key=rule_key,
+                name=rule_key.replace("_", " ").title(),
+                flag_key=flag_key,
+                category=IntelligenceFlagCategory.RECURRING,
+                metric_key=metric_key,
+                operator="between",
+                threshold=Decimal("0"),
+                threshold_secondary=Decimal("0"),
+                action_enabled=True,
+                action_key=action_key,
+                action_channel="whatsapp",
+                action_template_key=template_key,
+                action_requires_approval=True,
+            )
+        session.commit()
+
+        refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+        refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+        assert len(session.exec(select(PatientEngagementAction)).all()) == 2
+
+        current = datetime(2026, 2, 28, 10, tzinfo=timezone.utc)
+        refresh_patient_intelligence(
+            session, tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        actions = session.exec(select(PatientEngagementAction)).all()
+        assert len(actions) == 4
+        assert {action.template_key for action in actions} == {
+            "medicine_refill_patient",
+            "lab_test_reminder_patient",
+        }

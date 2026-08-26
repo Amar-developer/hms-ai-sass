@@ -15,6 +15,7 @@ from app.modules.integrations.invoice_receipts import verify_invoice_receipt_sig
 from app.modules.integrations import invoice_receipts
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.files.models import FileDocument
+from app.modules.home_care.models import HomeCareBooking, HomeCareBookingItem
 from app.modules.integrations.whatsapp_field_catalog import default_field_order
 from app.modules.integrations.whatsapp_gateway import WhatsAppGatewayResult
 from app.modules.integrations.whatsapp_consent import patient_notification_language
@@ -183,6 +184,110 @@ def test_doctor_booking_template_uses_six_approved_values(test_engine):
         assert [context[field] for field in approved] == list(approved.values())
         assert media_url is None
         assert media_name is None
+
+
+@pytest.mark.parametrize(
+    ("booking_type", "template_key"),
+    [
+        ("home_care", "home_care_booking_patient"),
+        ("home_visit", "home_care_booking_patient"),
+    ],
+)
+def test_home_booking_confirmation_builds_approved_six_values(
+    test_engine, booking_type, template_key
+):
+    with Session(test_engine) as session:
+        tenant, branch, patient, _appointment = _configured_tenant(session)
+        booking = HomeCareBooking(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            booking_type=booking_type,
+            booking_number="HC-00001",
+            start_date=date(2026, 8, 28),
+            end_date=date(2026, 8, 30),
+        )
+        session.add(booking)
+        session.commit()
+        session.refresh(booking)
+        session.add_all(
+            [
+                HomeCareBookingItem(
+                    tenant_id=tenant.id,
+                    booking_id=booking.id,
+                    description="Complete Bed Bath",
+                ),
+                HomeCareBookingItem(
+                    tenant_id=tenant.id,
+                    booking_id=booking.id,
+                    description="Nursing Visit",
+                ),
+            ]
+        )
+        session.commit()
+        event = NotificationEvent(
+            tenant_id=tenant.id,
+            provider=NotificationProvider.WHATSAPP,
+            event_type=NotificationEventType.PATIENT_MESSAGE,
+            recipient=patient.mobile,
+            message="Template notification",
+            template_key=template_key,
+            resource_type="home_care_booking",
+            resource_id=booking.id,
+        )
+
+        recipient_name, context, media_url, media_name, _language = (
+            whatsapp_processor._message_context(session, event, {})
+        )
+
+        assert recipient_name == "Queue Patient"
+        assert [context[field] for field in default_field_order(template_key)] == [
+            "Queue Patient",
+            "Queue Test Clinic",
+            "Complete Bed Bath, Nursing Visit",
+            "28 August 2026",
+            "30 August 2026",
+            "Queue Test Clinic",
+        ]
+        assert media_url is None
+        assert media_name is None
+
+
+def test_delivery_queue_shows_home_care_patient_not_unknown_recipient(test_engine):
+    """The queue row must name the booked patient and the booking number.
+
+    Without a `home_care_booking` branch the display falls through to
+    "Unknown recipient" and shows the raw `hcbook_...` id as the reference.
+    """
+    with Session(test_engine) as session:
+        tenant, branch, patient, _appointment = _configured_tenant(session)
+        booking = HomeCareBooking(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            booking_type="home_care",
+            booking_number="MHB-HC-00038",
+            start_date=date(2026, 8, 26),
+            end_date=date(2026, 8, 26),
+        )
+        session.add(booking)
+        session.commit()
+        session.refresh(booking)
+        event = NotificationEvent(
+            tenant_id=tenant.id,
+            provider=NotificationProvider.WHATSAPP,
+            event_type=NotificationEventType.PATIENT_MESSAGE,
+            recipient=patient.mobile,
+            message="Template notification",
+            template_key="home_care_booking_patient",
+            resource_type="home_care_booking",
+            resource_id=booking.id,
+        )
+
+        name, reference = whatsapp_queue_service._display_context(session, event)
+
+        assert name == "Queue Patient"
+        assert reference == "MHB-HC-00038"
 
 
 def test_queue_deduplicates_and_processor_sends_template(test_engine, monkeypatch):

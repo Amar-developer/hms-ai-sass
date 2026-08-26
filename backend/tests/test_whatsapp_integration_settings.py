@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from sqlmodel import Session, select
 
 from app.core.credentials import decrypt_credential
@@ -11,6 +12,7 @@ from app.modules.integrations.whatsapp_schemas import (
     WhatsAppHealthRead,
     WhatsAppIntegrationRead,
     WhatsAppIntegrationUpdate,
+    WhatsAppTemplateSettings,
     WhatsAppTestRequest,
     WhatsAppUsageRead,
 )
@@ -24,6 +26,77 @@ from app.modules.subscriptions.services.tenant_subscriptions import (
     get_active_subscription,
 )
 from app.modules.tenants.models import Tenant
+
+
+def test_provider_campaign_identifiers_have_no_tenant_specific_defaults():
+    assert WhatsAppTemplateSettings().admin_daily_report == ""
+
+
+def test_membership_benefit_template_enforces_six_parameter_contract():
+    legacy = [
+        "recipient_name",
+        "membership_plan_name",
+        "membership_plan.name",
+        "expiry_date",
+        "days_remaining",
+        "unused_consultations",
+        "unused_lab_tests",
+        "unused_medicines",
+        "unused_benefits_summary",
+        "clinic_name",
+    ]
+    normalized = WhatsAppIntegrationUpdate.model_validate(
+        {"template_field_mappings": {"unused_benefit_patient": legacy}}
+    )
+    assert normalized.template_field_mappings["unused_benefit_patient"] == [
+        "recipient_name",
+        "membership_plan_name",
+        "clinic_name",
+        "unused_benefits_summary",
+        "expiry_date",
+        "clinic.phone",
+    ]
+
+    with pytest.raises(ValueError, match="approved six template fields"):
+        WhatsAppIntegrationUpdate.model_validate(
+            {"template_field_mappings": {"unused_benefit_patient": ["recipient_name"]}}
+        )
+
+
+@pytest.mark.parametrize(
+    "flow_key", ["home_care_booking_patient", "home_visit_booking_patient"]
+)
+def test_home_booking_template_enforces_six_parameter_contract(flow_key):
+    with pytest.raises(ValueError, match="approved six template fields"):
+        WhatsAppIntegrationUpdate.model_validate(
+            {"template_field_mappings": {flow_key: ["recipient_name"]}}
+        )
+
+
+def test_disabled_home_booking_empty_mappings_restore_approved_contract():
+    settings = WhatsAppIntegrationUpdate.model_validate(
+        {
+            "flows": {
+                "home_care_booking_patient": False,
+                "home_visit_booking_patient": False,
+            },
+            "template_field_mappings": {
+                "home_care_booking_patient": [],
+                "home_visit_booking_patient": [],
+            },
+        }
+    )
+
+    expected = [
+        "recipient_name",
+        "clinic_name",
+        "service_description",
+        "booking_start_date",
+        "booking_end_date",
+        "clinic_name",
+    ]
+    assert settings.template_field_mappings["home_care_booking_patient"] == expected
+    assert settings.template_field_mappings["home_visit_booking_patient"] == expected
 
 
 def create_tenant(client, name="WhatsApp Settings Clinic"):

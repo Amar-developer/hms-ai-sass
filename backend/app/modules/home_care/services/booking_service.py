@@ -27,6 +27,7 @@ from app.modules.home_care.services.booking_support_service import (
     HomeCareBookingSupportService,
 )
 from app.modules.identity.models import User
+from app.modules.notifications.service import queue_whatsapp_template_if_allowed
 from app.modules.settings.numbering import next_document_number
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
@@ -123,6 +124,20 @@ class HomeCareBookingLifecycleService:
         self.session.refresh(booking)
         self.booking_support.replace_booking_items(tenant_id, booking, payload.services)
         self.session.commit()
+        # Home care and home visit share one approved confirmation campaign.
+        # The booking type changes the source data, not the WhatsApp contract.
+        flow_key = "home_care_booking_patient"
+        queue_whatsapp_template_if_allowed(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=booking.branch_id,
+            flow_key=flow_key,
+            recipient=None,
+            resource_type="home_care_booking",
+            resource_id=booking.id,
+            dedupe_key=f"whatsapp:{flow_key}:{booking.id}:confirmed",
+            queued_by_user_id=actor.id,
+        )
         record_audit_event(
             self.session,
             tenant_id=tenant_id,

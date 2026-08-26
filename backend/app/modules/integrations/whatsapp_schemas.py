@@ -2,7 +2,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
-from app.modules.integrations.whatsapp_field_catalog import flow_field_keys
+from app.modules.integrations.whatsapp_field_catalog import (
+    default_field_order,
+    flow_field_keys,
+    normalize_saved_field_order,
+)
 
 
 WhatsAppFlowKey = Literal[
@@ -81,7 +85,7 @@ class WhatsAppTemplateSettings(BaseModel):
     pharmacy_dispense_patient: str = Field(default="", max_length=160)
     service_invoice_patient: str = Field(default="", max_length=160)
     service_follow_up_patient: str = Field(default="", max_length=160)
-    admin_daily_report: str = Field(default="hms_admin_daily_report", max_length=160)
+    admin_daily_report: str = Field(default="", max_length=160)
 
     @field_validator("*", mode="before")
     @classmethod
@@ -233,17 +237,28 @@ class WhatsAppIntegrationUpdate(BaseModel):
     @classmethod
     def normalize_template_field_mappings(cls, value):
         return {
-            str(flow_key): [
-                str(item or "").strip()
-                for item in (fields or [])
-                if str(item or "").strip()
-            ]
+            str(flow_key): normalize_saved_field_order(
+                str(flow_key),
+                [
+                    str(item or "").strip()
+                    for item in (fields or [])
+                    if str(item or "").strip()
+                ],
+            )
             for flow_key, fields in (value or {}).items()
         }
 
     @model_validator(mode="after")
     def validate_template_field_mappings(self):
         for flow_key, fields in self.template_field_mappings.items():
+            if flow_key in {
+                "unused_benefit_patient",
+                "home_care_booking_patient",
+                "home_visit_booking_patient",
+            } and fields != default_field_order(flow_key):
+                raise ValueError(
+                    f"{flow_key} requires exactly the approved six template fields"
+                )
             valid_keys = flow_field_keys(flow_key)
             invalid = [field for field in fields if field not in valid_keys]
             if invalid:
@@ -299,10 +314,6 @@ class WhatsAppIntegrationUpdate(BaseModel):
         if reminder_schedule_enabled and not self.flows.appointment_reminder_patient:
             raise ValueError(
                 "Enable the patient appointment reminder flow before its schedule"
-            )
-        if self.flows.admin_daily_report and not self.admin_recipient_user_ids:
-            raise ValueError(
-                "Select at least one user for the tenant admin daily report"
             )
         enabled_templates = {}
         for key, enabled in self.flows.model_dump().items():

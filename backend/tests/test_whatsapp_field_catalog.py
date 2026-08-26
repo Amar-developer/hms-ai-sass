@@ -13,6 +13,7 @@ from app.modules.integrations.whatsapp_field_catalog import (
     default_field_order,
     flow_field_keys,
     flow_field_labels,
+    normalize_saved_field_order,
 )
 
 
@@ -35,6 +36,97 @@ def test_patient_booking_default_order_stays_backward_compatible():
         "appointment_date",
         "appointment_time",
     ]
+
+
+def test_membership_benefit_default_order_matches_approved_six_parameters():
+    assert default_field_order("unused_benefit_patient") == [
+        "recipient_name",
+        "membership_plan_name",
+        "clinic_name",
+        "unused_benefits_summary",
+        "expiry_date",
+        "clinic.phone",
+    ]
+
+
+def test_legacy_ten_field_membership_mapping_is_upgraded_to_six_parameters():
+    legacy = [
+        "recipient_name",
+        "membership_plan_name",
+        "membership_plan.name",
+        "expiry_date",
+        "days_remaining",
+        "unused_consultations",
+        "unused_lab_tests",
+        "unused_medicines",
+        "unused_benefits_summary",
+        "clinic_name",
+    ]
+
+    assert normalize_saved_field_order("unused_benefit_patient", legacy) == [
+        "recipient_name",
+        "membership_plan_name",
+        "clinic_name",
+        "unused_benefits_summary",
+        "expiry_date",
+        "clinic.phone",
+    ]
+
+
+def test_home_care_and_visit_confirmation_use_approved_six_parameters():
+    approved = [
+        "recipient_name",
+        "clinic_name",
+        "service_description",
+        "booking_start_date",
+        "booking_end_date",
+        "clinic_name",
+    ]
+
+    assert default_field_order("home_care_booking_patient") == approved
+    assert default_field_order("home_visit_booking_patient") == approved
+
+
+def test_legacy_home_booking_mappings_are_upgraded_to_six_parameters():
+    approved = default_field_order("home_care_booking_patient")
+
+    assert (
+        normalize_saved_field_order(
+            "home_care_booking_patient",
+            [
+                "recipient_name",
+                "home_care_booking.number",
+                "home_care_booking.start_date",
+                "home_care_booking.assigned_staff_name",
+                "clinic.name",
+            ],
+        )
+        == approved
+    )
+    assert (
+        normalize_saved_field_order(
+            "home_visit_booking_patient",
+            [
+                "recipient_name",
+                "home_care_booking.number",
+                "home_care_booking.start_date",
+                "home_care_booking.location",
+                "clinic.name",
+            ],
+        )
+        == approved
+    )
+
+
+def test_empty_fixed_template_mappings_restore_approved_contract():
+    for flow_key in (
+        "unused_benefit_patient",
+        "home_care_booking_patient",
+        "home_visit_booking_patient",
+    ):
+        assert normalize_saved_field_order(flow_key, []) == default_field_order(
+            flow_key
+        )
 
 
 def test_every_default_field_order_is_offered_by_its_flow():
@@ -118,6 +210,17 @@ def test_entity_context_renders_values_for_a_loaded_row():
     assert context["patient.blood_group"] == "O+"
     # An entity the caller could not resolve renders empty, never "None".
     assert context["doctor.full_name"] == ""
+
+
+def test_membership_assistance_phone_comes_from_tenant_phone():
+    from app.modules.integrations.whatsapp_entity_fields import build_entity_context
+    from app.modules.tenants.models import Tenant
+
+    tenant = Tenant(name="Sri Maha Clinic", phone="9047660909")
+
+    context = build_entity_context("unused_benefit_patient", {"clinic": tenant})
+
+    assert context["clinic.phone"] == "9047660909"
 
 
 def test_membership_and_lab_entity_contexts_render_values():

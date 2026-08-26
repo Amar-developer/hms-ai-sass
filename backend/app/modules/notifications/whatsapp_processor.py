@@ -14,6 +14,7 @@ from app.modules.billing.models import CreditNote, Invoice, InvoiceItem
 from app.modules.consultations.models import Consultation
 from app.modules.files.models import FileDocument
 from app.modules.files.storage.factory import get_storage_backend_for_document
+from app.modules.home_care.models import HomeCareBooking, HomeCareBookingItem
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.integrations.invoice_receipts import (
     create_signed_invoice_receipt_url,
@@ -29,7 +30,10 @@ from app.infrastructure.integrations.ports.messaging import (
     TemplateMessageResult,
 )
 from app.modules.integrations.whatsapp_entity_fields import build_entity_context
-from app.modules.integrations.whatsapp_field_catalog import default_field_order
+from app.modules.integrations.whatsapp_field_catalog import (
+    default_field_order,
+    normalize_saved_field_order,
+)
 from app.modules.integrations.whatsapp_schemas import (
     WhatsAppCustomTemplateSettings,
     WhatsAppFlowSettings,
@@ -62,6 +66,9 @@ from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionEnrollmentStatus,
     PatientSubscriptionPlan,
+)
+from app.modules.patient_subscriptions.services.reminder_summary import (
+    available_membership_benefits_summary,
 )
 from app.modules.integrations.whatsapp_consent import patient_allows_engagement_whatsapp
 from app.modules.practitioners.models import Practitioner
@@ -376,7 +383,79 @@ def _message_context(
             "action_reason": action.reason,
             **{str(key): str(value) for key, value in values.items()},
         }
+        if (
+            action.template_key == "unused_benefit_patient"
+            and membership
+            and membership_plan
+        ):
+            # Usage can change between action creation and delivery. Resolve the
+            # remaining-benefits parameter again so the patient never receives
+            # an already-consumed benefit in the monthly reminder.
+            context["unused_benefits_summary"] = available_membership_benefits_summary(
+                session,
+                enrollment=membership,
+                plan=membership_plan,
+            )
         return patient.full_name, context, None, None, language
+    if event.template_key in {
+        "home_care_booking_patient",
+        "home_visit_booking_patient",
+    }:
+        booking = session.get(HomeCareBooking, event.resource_id or "")
+        if not booking or booking.tenant_id != event.tenant_id:
+            raise NotificationCancelled("The home care booking no longer exists.")
+        allowed_types = (
+            {"home_visit"}
+            if event.template_key == "home_visit_booking_patient"
+            else {"home_care", "home_visit"}
+        )
+        if booking.booking_type not in allowed_types:
+            raise NotificationCancelled(
+                "The booking type does not match the notification flow."
+            )
+        patient = session.get(Patient, booking.patient_id)
+        if not patient or patient.tenant_id != event.tenant_id:
+            raise NotificationCancelled("The booking patient no longer exists.")
+        tenant = session.get(Tenant, event.tenant_id)
+        items = session.exec(
+            select(HomeCareBookingItem)
+            .where(
+                HomeCareBookingItem.tenant_id == event.tenant_id,
+                HomeCareBookingItem.booking_id == booking.id,
+            )
+            .order_by(HomeCareBookingItem.created_at, HomeCareBookingItem.id)
+        ).all()
+        service_description = ", ".join(
+            dict.fromkeys(
+                item.description.strip()
+                for item in items
+                if item.description and item.description.strip()
+            )
+        )
+        if not service_description:
+            service_description = booking.booking_type.replace("_", " ").title()
+        end_date = booking.end_date or booking.start_date
+        return (
+            patient.full_name,
+            {
+                **build_entity_context(
+                    event.template_key,
+                    {
+                        "patient": patient,
+                        "clinic": tenant,
+                        "home_care_booking": booking,
+                    },
+                ),
+                "recipient_name": patient.full_name,
+                "clinic_name": tenant.name if tenant else "",
+                "service_description": service_description[:500],
+                "booking_start_date": booking.start_date.strftime("%d %B %Y"),
+                "booking_end_date": end_date.strftime("%d %B %Y"),
+            },
+            None,
+            None,
+            language,
+        )
     if event.template_key in {
         "appointment_booked_patient",
         "appointment_booked_doctor",
@@ -772,8 +851,9 @@ def _resolve_campaign_and_params(
     )
     if not campaign_name:
         raise NotificationCancelled("The notification template identifier is missing.")
-    configured_fields = (config.get("template_field_mappings") or {}).get(
-        flow_key
+    configured_fields = normalize_saved_field_order(
+        flow_key,
+        (config.get("template_field_mappings") or {}).get(flow_key),
     ) or default_field_order(flow_key)
     return campaign_name, [context.get(field, "") for field in configured_fields]
 

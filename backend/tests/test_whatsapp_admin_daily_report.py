@@ -28,6 +28,23 @@ from app.modules.patients.models import Patient
 from app.modules.tenants.models import Branch, Tenant
 
 
+def test_admin_report_configuration_can_be_saved_before_recipients_are_selected():
+    payload = WhatsAppIntegrationUpdate.model_validate(
+        {
+            "enabled": True,
+            "api_url": "https://gateway.example.com/messages",
+            "api_key": "daily-report-secret",
+            "patient_notifications_enabled": False,
+            "doctor_notifications_enabled": False,
+            "admin_recipient_user_ids": [],
+            "flows": {"admin_daily_report": True},
+        }
+    )
+
+    assert payload.flows.admin_daily_report is True
+    assert payload.admin_recipient_user_ids == []
+
+
 def test_admin_report_recipient_selection_rejects_another_tenants_user(
     test_engine, monkeypatch
 ):
