@@ -11,10 +11,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { InvoiceDetailPage } from "./InvoiceDetailPage";
 
+function openInvoiceWorkspaceTab(label: string) {
+  fireEvent.click(
+    screen.getByRole("button", { name: new RegExp(`^${label}(?:\\s|$)`) }),
+  );
+}
+
 describe("invoice payment summary", () => {
   afterEach(cleanup);
 
   it("combines free and percentage membership savings into one summary row", () => {
+    window.sessionStorage.setItem(
+      "medizinhub.billingInvoiceSection",
+      "invoice-payment",
+    );
     render(
       <InvoiceDetailPage
         detail={{
@@ -67,6 +77,29 @@ describe("invoice payment summary", () => {
       />,
     );
 
+    expect(screen.getByText("Invoice Workspace")).toBeTruthy();
+    const workspaceNav = screen.getByRole("navigation", {
+      name: "Invoice workspace sections",
+    });
+    for (const section of [
+      "Bill Items",
+      "Payment",
+      "Settlements",
+      "Adjustments",
+    ]) {
+      expect(within(workspaceNav).getByRole("button", { name: section })).toBeTruthy();
+    }
+    expect(
+      within(workspaceNav).queryByRole("button", { name: "Activity" }),
+    ).toBeNull();
+    expect(
+      within(workspaceNav)
+        .getByRole("button", { name: "Payment" })
+        .getAttribute("aria-current"),
+    ).toBe("page");
+    expect(
+      window.sessionStorage.getItem("medizinhub.billingInvoiceSection"),
+    ).toBeNull();
     expect(screen.getAllByText("Membership benefit")).toHaveLength(1);
     expect(
       screen.getByText(
@@ -133,6 +166,7 @@ describe("invoice payment summary", () => {
       />,
     );
 
+    openInvoiceWorkspaceTab("Payment");
     // The offer is only a suggestion until staff act on it: the invoice still
     // bills the full ₹600 and the summary shows no offer deduction.
     expect(screen.getByText("Offer & Discount")).toBeTruthy();
@@ -207,6 +241,7 @@ describe("invoice payment summary", () => {
       />,
     );
 
+    openInvoiceWorkspaceTab("Payment");
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(removeOffer).toHaveBeenCalledWith(
       expect.objectContaining({ id: "invoice-applied-offer" }),
@@ -269,6 +304,7 @@ describe("invoice payment summary", () => {
       />,
     );
 
+    openInvoiceWorkspaceTab("Bill Items");
     expect(screen.getByText("Payable (₹)")).toBeTruthy();
     expect(screen.getByText("Rate (₹)")).toBeTruthy();
     expect(screen.queryByText("Amount (₹)")).toBeNull();
@@ -336,6 +372,7 @@ describe("invoice payment summary", () => {
       />,
     );
 
+    openInvoiceWorkspaceTab("Bill Items");
     expect(screen.getByText("Payable (₹)")).toBeTruthy();
     expect(screen.getByText("Rate (₹)")).toBeTruthy();
     expect(screen.queryByText("Amount (₹)")).toBeNull();
@@ -397,6 +434,7 @@ describe("invoice payment summary", () => {
       />,
     );
 
+    openInvoiceWorkspaceTab("Bill Items");
     expect(screen.queryByText("0%")).toBeNull();
     expect(screen.queryByText("-₹0")).toBeNull();
     expect(screen.getAllByText("-").length).toBeGreaterThanOrEqual(5);
@@ -471,7 +509,9 @@ describe("adjustment approval permissions", () => {
       { user_type: "receptionist", roles: ["receptionist"] },
     );
 
+    openInvoiceWorkspaceTab("Adjustments");
     expect(screen.getByText("Request Full Refund")).toBeTruthy();
+    openInvoiceWorkspaceTab("Payment");
     expect(screen.getByText("Send Invoice")).toBeTruthy();
     expect(screen.queryByText("Refresh")).toBeNull();
     expect(screen.queryByText("Approve")).toBeNull();
@@ -484,6 +524,7 @@ describe("adjustment approval permissions", () => {
       { user_type: "billing", roles: ["billing"] },
     );
 
+    openInvoiceWorkspaceTab("Adjustments");
     expect(screen.getByText("Approve")).toBeTruthy();
     expect(screen.getByText("Reject")).toBeTruthy();
   });
@@ -494,6 +535,7 @@ describe("adjustment approval permissions", () => {
       { user_type: "billing", roles: ["billing"] },
     );
 
+    openInvoiceWorkspaceTab("Adjustments");
     expect(screen.queryByText("Approve")).toBeNull();
     expect(screen.queryByText("Reject")).toBeNull();
   });
@@ -512,6 +554,7 @@ describe("adjustment approval permissions", () => {
       },
     );
 
+    openInvoiceWorkspaceTab("Payment");
     expect(screen.getByText("Failed")).toBeTruthy();
     expect(
       screen.getByText(
