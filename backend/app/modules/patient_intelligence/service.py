@@ -1,5 +1,6 @@
 import json
 import calendar
+import logging
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
@@ -63,6 +64,12 @@ QUALIFYING_APPOINTMENT_STATUSES = {
 ENGAGEMENT_OPT_IN_REQUIRED_REASON = (
     "Explicit WhatsApp opt-in is required for intelligence engagement"
 )
+# Channels an engagement rule can actually be delivered on today. A rule may
+# name any channel, so this is what separates "not built yet" from "broken":
+# add the key here once its executor and its consent check exist.
+DELIVERABLE_ACTION_CHANNELS = frozenset({"whatsapp"})
+
+logger = logging.getLogger("medizinhub.patient_intelligence")
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -1385,8 +1392,30 @@ def queue_automatic_engagement_actions(
         if (
             action.status != EngagementActionStatus.RECOMMENDED
             or action.requires_approval
-            or action.channel != "whatsapp"
         ):
+            # Waiting on a human, or already handled — not a failure.
+            continue
+        if action.channel not in DELIVERABLE_ACTION_CHANNELS:
+            # A rule pointed at a channel with no executor. Fail it loudly
+            # rather than skipping: an action left sitting at RECOMMENDED
+            # forever looks identical to one still awaiting approval, so a
+            # misconfigured channel would otherwise be invisible until
+            # somebody noticed the messages never arrived.
+            action.status = EngagementActionStatus.FAILED
+            action.reason = (
+                f"No delivery channel is configured for '{action.channel}'."
+                f" Supported: {', '.join(sorted(DELIVERABLE_ACTION_CHANNELS))}."
+            )
+            action.updated_at = now_utc()
+            session.add(action)
+            logger.warning(
+                "patient_intelligence.unsupported_action_channel",
+                extra={
+                    "tenant_id": tenant_id,
+                    "action_id": action.id,
+                    "channel": action.channel,
+                },
+            )
             continue
         if not patient_allows_engagement_whatsapp(patient):
             action.status = EngagementActionStatus.SUPPRESSED

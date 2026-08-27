@@ -1,14 +1,60 @@
 import json
 from io import BytesIO
+from types import SimpleNamespace
 from urllib.error import HTTPError
 
 import pytest
 
 from app.infrastructure.integrations.adapters.messaging import http_template
 from app.infrastructure.integrations.adapters.messaging.http_template import (
+    BLOCKED_STATUS,
     HttpTemplateMessageGateway,
     normalize_mobile_number,
 )
+
+
+SEND_KWARGS = {
+    "api_url": "https://gateway.example.com/campaign",
+    "api_key": "secret-key",
+    "campaign_name": "hms_admin_daily_report",
+    "destination": "+919876543210",
+    "recipient_name": "Tenant Admin",
+    "template_parameters": ["a", "b"],
+    "timeout_seconds": 5,
+}
+
+
+@pytest.fixture
+def live_delivery(monkeypatch):
+    """Opt this test into real delivery, as production does."""
+    monkeypatch.setattr(
+        http_template,
+        "get_settings",
+        lambda: SimpleNamespace(whatsapp_live_delivery_enabled=True),
+    )
+
+
+def test_non_production_refuses_to_reach_the_provider(monkeypatch):
+    """A dev stack restored from real data must not message real patients."""
+
+    def explode(*_args, **_kwargs):
+        raise AssertionError("the adapter must not open a connection")
+
+    monkeypatch.setattr(http_template, "build_opener", explode)
+    monkeypatch.setattr(
+        http_template,
+        "get_settings",
+        lambda: SimpleNamespace(whatsapp_live_delivery_enabled=False),
+    )
+
+    result = HttpTemplateMessageGateway().send_template(**SEND_KWARGS)
+
+    assert result.success is False
+    assert result.status == BLOCKED_STATUS
+    # Terminal, so the worker does not retry against a blocked provider.
+    from app.modules.notifications.whatsapp_processor import RETRYABLE_STATUSES
+
+    assert BLOCKED_STATUS not in RETRYABLE_STATUSES
 
 
 @pytest.mark.parametrize(
@@ -29,7 +75,7 @@ def test_rejects_invalid_mobile_number():
         normalize_mobile_number("123", "+91")
 
 
-def test_gateway_sends_expected_template_payload(monkeypatch):
+def test_gateway_sends_expected_template_payload(monkeypatch, live_delivery):
     captured = {}
 
     class FakeResponse:
@@ -76,7 +122,7 @@ def test_gateway_sends_expected_template_payload(monkeypatch):
     }
 
 
-def test_gateway_does_not_log_provider_error_body(monkeypatch, caplog):
+def test_gateway_does_not_log_provider_error_body(monkeypatch, caplog, live_delivery):
     sensitive_body = b'{"patient":"Test Patient","apiKey":"secret-key"}'
 
     class FakeOpener:

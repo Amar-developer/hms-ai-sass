@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     aws_s3_kms_key_id: str | None = Field(default=None)
     aws_s3_presigned_url_ttl_seconds: int = Field(default=900, ge=60, le=86400)
     permanent_invoice_delivery_enabled: bool = Field(default=True)
+    # Whether outbound template messages actually reach the provider. Left
+    # unset this follows the environment, so a developer stack restored from a
+    # production dump cannot message real patients: every send is refused at
+    # the adapter before any network call. Set it explicitly to true to send
+    # for real from a non-production environment.
+    whatsapp_live_delivery: bool | None = Field(default=None)
 
     enable_docs: bool = Field(default=True)
 
@@ -204,6 +210,12 @@ class Settings(BaseSettings):
     def secure_cookie_enabled(self) -> bool:
         if self.secure_cookie is not None:
             return self.secure_cookie
+        return self.environment.strip().lower() in {"production", "prod"}
+
+    @property
+    def whatsapp_live_delivery_enabled(self) -> bool:
+        if self.whatsapp_live_delivery is not None:
+            return self.whatsapp_live_delivery
         return self.environment.strip().lower() in {"production", "prod"}
 
     model_config = SettingsConfigDict(

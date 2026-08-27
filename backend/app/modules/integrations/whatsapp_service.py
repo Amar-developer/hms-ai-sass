@@ -27,6 +27,7 @@ from app.modules.integrations.whatsapp_schemas import (
     WhatsAppTestRead,
     WhatsAppTestRequest,
     WhatsAppTemplateSettings,
+    audience_notifications_enabled,
 )
 from app.infrastructure.integrations.adapters.messaging.http_template import (
     normalize_mobile_number,
@@ -263,11 +264,7 @@ def update_whatsapp_integration(
 
 
 def _audience_enabled(config: dict, flow_key: str) -> bool:
-    if flow_key == "admin_daily_report":
-        return True
-    if flow_key in {"appointment_booked_doctor", "appointment_cancelled_doctor"}:
-        return bool(config.get("doctor_notifications_enabled", True))
-    return bool(config.get("patient_notifications_enabled", True))
+    return audience_notifications_enabled(config, flow_key)
 
 
 def _custom_template_audience_enabled(config: dict, audience: str) -> bool:

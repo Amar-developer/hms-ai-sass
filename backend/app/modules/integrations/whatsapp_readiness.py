@@ -3,11 +3,14 @@ from urllib.parse import urlparse
 
 from sqlmodel import Session, select
 
+from app.core.credentials import decrypt_credential
 from app.modules.audit.models import AuditEvent
+from app.modules.integrations.service import get_tenant_plugin
 from app.modules.integrations.whatsapp_schemas import (
     WhatsAppIntegrationRead,
     WhatsAppReadinessCheck,
     WhatsAppReadinessRead,
+    audience_enabled_for,
 )
 
 
@@ -16,7 +19,10 @@ def _check(key: str, label: str, status: str, message: str) -> WhatsAppReadiness
 
 
 def evaluate_whatsapp_readiness(
-    settings: WhatsAppIntegrationRead, *, successful_test_recorded: bool = False
+    settings: WhatsAppIntegrationRead,
+    *,
+    successful_test_recorded: bool = False,
+    credential_readable: bool | None = None,
 ) -> WhatsAppReadinessRead:
     checks: list[WhatsAppReadinessCheck] = []
     checks.append(
@@ -29,14 +35,31 @@ def evaluate_whatsapp_readiness(
             else "Enable and save the tenant integration.",
         )
     )
+    # Stored-and-unreadable is its own state, and the worst one: the ciphertext
+    # is present so this used to report "saved" and pass, while every send
+    # failed hours later with "Stored credential could not be decrypted". It
+    # happens whenever MEDIZINHUB_CREDENTIAL_ENCRYPTION_KEY changes — the key
+    # is a SHA-256 of that string, so any edit to it, or restoring a database
+    # from an environment that used a different one, silently orphans every
+    # credential already stored.
+    if not settings.has_api_key:
+        credential_status = "block"
+        credential_message = "Save an API credential before rollout."
+    elif credential_readable is False:
+        credential_status = "block"
+        credential_message = (
+            "The saved credential cannot be decrypted with this environment's"
+            " encryption key. Re-enter and save the API key."
+        )
+    else:
+        credential_status = "pass"
+        credential_message = "The encrypted API credential is saved and readable."
     checks.append(
         _check(
             "credential_saved",
             "Credential saved",
-            "pass" if settings.has_api_key else "block",
-            "The encrypted API credential is saved."
-            if settings.has_api_key
-            else "Save an API credential before rollout.",
+            credential_status,
+            credential_message,
         )
     )
     api = urlparse(settings.api_url)
@@ -57,15 +80,11 @@ def evaluate_whatsapp_readiness(
     for flow_key, enabled in settings.flows.model_dump().items():
         if not enabled:
             continue
-        is_doctor = flow_key.endswith("_doctor")
-        audience_enabled = (
-            True
-            if flow_key == "admin_daily_report"
-            else settings.doctor_notifications_enabled
-            if is_doctor
-            else settings.patient_notifications_enabled
-        )
-        if not audience_enabled:
+        if not audience_enabled_for(
+            flow_key,
+            patient_enabled=settings.patient_notifications_enabled,
+            doctor_enabled=settings.doctor_notifications_enabled,
+        ):
             continue
         active_flows.append(flow_key)
         if not getattr(settings.templates, flow_key, "").strip():
@@ -193,5 +212,19 @@ def read_whatsapp_readiness(
         except (TypeError, json.JSONDecodeError):
             continue
     return evaluate_whatsapp_readiness(
-        settings, successful_test_recorded=successful_test_recorded
+        settings,
+        successful_test_recorded=successful_test_recorded,
+        credential_readable=_credential_readable(session, tenant_id),
     )
+
+
+def _credential_readable(session: Session, tenant_id: str) -> bool | None:
+    """Can the stored credential still be decrypted here? None if none saved."""
+    row = get_tenant_plugin(session, tenant_id, "whatsapp")
+    if not row or not row.secret_ciphertext:
+        return None
+    try:
+        decrypt_credential(row.secret_ciphertext)
+    except ValueError:
+        return False
+    return True

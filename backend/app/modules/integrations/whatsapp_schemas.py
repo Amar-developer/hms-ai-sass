@@ -41,6 +41,53 @@ WhatsAppFlowKey = Literal[
     "admin_daily_report",
 ]
 
+WhatsAppFlowAudience = Literal["patient", "doctor", "admin"]
+
+# Flows addressed to someone other than the patient. Membership is decided by
+# the `_doctor` suffix every doctor flow already carries, so a new one is
+# classified correctly the moment it is added to WhatsAppFlowKey above.
+_ADMIN_FLOW_KEYS = frozenset({"admin_daily_report"})
+
+
+def flow_audience(flow_key: str) -> WhatsAppFlowAudience:
+    """Who a flow is addressed to — the single answer used everywhere.
+
+    Queue time, send time, settings validation, readiness, and the delivery
+    queue all need this, and each used to decide it for itself: some by the
+    `_doctor` suffix, others against a hardcoded pair of appointment flow
+    keys. Those two answers agree only while `appointment_booked_doctor` and
+    `appointment_cancelled_doctor` are the only doctor flows — a third one
+    would be treated as a doctor message when queued and as a patient message
+    when sent, then fail looking for a patient that was never involved.
+    """
+    if flow_key in _ADMIN_FLOW_KEYS:
+        return "admin"
+    if str(flow_key or "").endswith("_doctor"):
+        return "doctor"
+    return "patient"
+
+
+def audience_enabled_for(
+    flow_key: str, *, patient_enabled: bool, doctor_enabled: bool
+) -> bool:
+    """Apply the tenant's recipient toggles to one flow."""
+    audience = flow_audience(flow_key)
+    if audience == "admin":
+        # Reaches tenant staff, not patients or doctors, so neither patient
+        # nor doctor notification toggle governs it.
+        return True
+    return bool(doctor_enabled if audience == "doctor" else patient_enabled)
+
+
+def audience_notifications_enabled(config: dict, flow_key: str) -> bool:
+    """`audience_enabled_for` against a stored tenant config dict."""
+    return audience_enabled_for(
+        flow_key,
+        patient_enabled=bool(config.get("patient_notifications_enabled", True)),
+        doctor_enabled=bool(config.get("doctor_notifications_enabled", True)),
+    )
+
+
 WhatsAppLanguage = Literal[
     "en",
     "hi",
@@ -319,18 +366,11 @@ class WhatsAppIntegrationUpdate(BaseModel):
         for key, enabled in self.flows.model_dump().items():
             if not enabled:
                 continue
-            is_doctor_flow = key in {
-                "appointment_booked_doctor",
-                "appointment_cancelled_doctor",
-            }
-            audience_enabled = (
-                True
-                if key == "admin_daily_report"
-                else self.doctor_notifications_enabled
-                if is_doctor_flow
-                else self.patient_notifications_enabled
-            )
-            if audience_enabled:
+            if audience_enabled_for(
+                key,
+                patient_enabled=self.patient_notifications_enabled,
+                doctor_enabled=self.doctor_notifications_enabled,
+            ):
                 enabled_templates[key] = getattr(self.templates, key)
         missing = [key for key, value in enabled_templates.items() if not value]
         if missing:

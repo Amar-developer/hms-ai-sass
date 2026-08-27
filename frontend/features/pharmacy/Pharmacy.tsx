@@ -64,6 +64,19 @@ const pharmacyStatusTabs = [
   { id: "cancelled", label: "Cancelled", icon: Ban },
 ];
 
+function currentMonthRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const format = (date: Date) =>
+    [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+  return { fromDate: format(from), toDate: format(to) };
+}
+
 export function Pharmacy({
   apiSession,
   branchId,
@@ -137,6 +150,14 @@ export function Pharmacy({
   );
   const [issueTotal, setIssueTotal] = useState(0);
   const [issueLoading, setIssueLoading] = useState(false);
+  const [issueSummaryRows, setIssueSummaryRows] = useState<
+    PharmacyIssueSummary[]
+  >([]);
+  const [issueSummaryTotal, setIssueSummaryTotal] = useState(0);
+  const [issueTabCountRows, setIssueTabCountRows] = useState<
+    PharmacyIssueSummary[]
+  >([]);
+  const [issueTabCountTotal, setIssueTabCountTotal] = useState(0);
   const [filterOptions, setFilterOptions] = useState<
     Record<string, QueryFieldOption[]>
   >({});
@@ -313,6 +334,130 @@ export function Pharmacy({
     }
   }
 
+  function buildPharmacySummaryParams(offset: number) {
+    const params = new URLSearchParams({
+      limit: "100",
+      offset: String(offset),
+    });
+    if (branchId) params.set("branch_id", branchId);
+    if (worklistQuery.trim()) params.set("q", worklistQuery.trim());
+
+    const hasActiveFilters = Boolean(
+      worklistQuery.trim() ||
+        worklistQueryFilters.length ||
+        amountMin.trim() ||
+        amountMax.trim() ||
+        worklistFromDate ||
+        worklistToDate,
+    );
+    const defaultMonth = currentMonthRange();
+    const fromDate = hasActiveFilters ? worklistFromDate : defaultMonth.fromDate;
+    const toDate = hasActiveFilters ? worklistToDate : defaultMonth.toDate;
+    if (fromDate) params.set("from_date", fromDate);
+    if (toDate) params.set("to_date", toDate);
+
+    const filters = [...worklistQueryFilters];
+    if (amountMin.trim()) {
+      filters.push({
+        id: "amount-min",
+        field: "amount",
+        operator: "gte",
+        value: amountMin.trim(),
+      });
+    }
+    if (amountMax.trim()) {
+      filters.push({
+        id: "amount-max",
+        field: "amount",
+        operator: "lte",
+        value: amountMax.trim(),
+      });
+    }
+    if (filters.length) params.set("filters", JSON.stringify(filters));
+    return params;
+  }
+
+  function buildPharmacyTabCountParams(offset: number) {
+    const params = new URLSearchParams({
+      limit: "100",
+      offset: String(offset),
+    });
+    if (branchId) params.set("branch_id", branchId);
+    if (worklistQuery.trim()) params.set("q", worklistQuery.trim());
+    if (worklistFromDate) params.set("from_date", worklistFromDate);
+    if (worklistToDate) params.set("to_date", worklistToDate);
+
+    const filters = worklistQueryFilters.filter(
+      (row) => row.id !== PHARMACY_STATUS_TAB_ID,
+    );
+    if (amountMin.trim()) {
+      filters.push({
+        id: "amount-min",
+        field: "amount",
+        operator: "gte",
+        value: amountMin.trim(),
+      });
+    }
+    if (amountMax.trim()) {
+      filters.push({
+        id: "amount-max",
+        field: "amount",
+        operator: "lte",
+        value: amountMax.trim(),
+      });
+    }
+    if (filters.length) params.set("filters", JSON.stringify(filters));
+    return params;
+  }
+
+  async function loadPharmacySummary() {
+    if (!apiSession) return;
+    try {
+      const first = await fetchPharmacyIssuePage(
+        apiSession,
+        buildPharmacySummaryParams(0),
+      );
+      const total = Number(first?.total || 0);
+      const rows = Array.isArray(first?.items) ? [...first.items] : [];
+      for (let offset = rows.length; offset < total; offset += 100) {
+        const next = await fetchPharmacyIssuePage(
+          apiSession,
+          buildPharmacySummaryParams(offset),
+        );
+        rows.push(...(Array.isArray(next?.items) ? next.items : []));
+      }
+      setIssueSummaryRows(rows);
+      setIssueSummaryTotal(total);
+    } catch {
+      setIssueSummaryRows([]);
+      setIssueSummaryTotal(0);
+    }
+  }
+
+  async function loadPharmacyTabCounts() {
+    if (!apiSession) return;
+    try {
+      const first = await fetchPharmacyIssuePage(
+        apiSession,
+        buildPharmacyTabCountParams(0),
+      );
+      const total = Number(first?.total || 0);
+      const rows = Array.isArray(first?.items) ? [...first.items] : [];
+      for (let offset = rows.length; offset < total; offset += 100) {
+        const next = await fetchPharmacyIssuePage(
+          apiSession,
+          buildPharmacyTabCountParams(offset),
+        );
+        rows.push(...(Array.isArray(next?.items) ? next.items : []));
+      }
+      setIssueTabCountRows(rows);
+      setIssueTabCountTotal(total);
+    } catch {
+      setIssueTabCountRows([]);
+      setIssueTabCountTotal(0);
+    }
+  }
+
   async function loadPharmacyFilterOptions() {
     if (!apiSession) return;
     const params = new URLSearchParams();
@@ -332,25 +477,25 @@ export function Pharmacy({
       ?.value || "all";
   const pharmacyStatusCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    pharmacyPageRows.forEach((issue: any) => {
+    issueTabCountRows.forEach((issue: any) => {
       const status = String(issue.status || "");
       if (status) counts.set(status, (counts.get(status) || 0) + 1);
     });
     return counts;
-  }, [pharmacyPageRows]);
-  const pharmacyPageAmount = useMemo(
+  }, [issueTabCountRows]);
+  const pharmacySummaryAmount = useMemo(
     () =>
-      pharmacyPageRows.reduce(
+      issueSummaryRows.reduce(
         (total: number, issue: any) => total + Number(issue.amount || 0),
         0,
       ),
-    [pharmacyPageRows],
+    [issueSummaryRows],
   );
   const pharmacyEnterAmountCount = useMemo(
     () =>
-      pharmacyPageRows.filter((issue: any) => Number(issue.amount || 0) <= 0)
+      issueSummaryRows.filter((issue: any) => Number(issue.amount || 0) <= 0)
         .length,
-    [pharmacyPageRows],
+    [issueSummaryRows],
   );
 
   function selectPharmacyStatus(status: string) {
@@ -397,6 +542,8 @@ export function Pharmacy({
     if (!apiSession) return;
     const timer = window.setTimeout(() => {
       void loadPharmacyIssuePage(page);
+      void loadPharmacySummary();
+      void loadPharmacyTabCounts();
       void loadPharmacyFilterOptions();
     }, 250);
     return () => window.clearTimeout(timer);
@@ -437,6 +584,8 @@ export function Pharmacy({
   function refreshPharmacyWorkspace() {
     void load();
     void loadPharmacyIssuePage(page);
+    void loadPharmacySummary();
+    void loadPharmacyTabCounts();
     void loadPharmacyFilterOptions();
   }
 
@@ -874,41 +1023,135 @@ export function Pharmacy({
           />
         </div>
       </BreadcrumbSlot>
-      <Card className="p-0 mt-2">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="card-title font-bold">Pharmacy Worklist</h3>
-          {canCreatePharmacyIssue && (
-            <button
-              type="button"
-              onClick={() =>
-                router.push(`/pharmacy/${newSegment("pharmacy-order")}`)
-              }
-              className="primary-action gap-2 px-4 py-3 text-xs"
-            >
-              <PlusCircle size={16} />
-              Create Prescription
-            </button>
-          )}
-        </div>
-        <div className="mt-4">
-          {!issuesLoaded || issueLoading ? (
-            <div className="overflow-auto rounded-lg border">
-              <TableSkeleton rows={8} />
+      <div className="space-y-3">
+        <section className="grid gap-3 sm:grid-cols-3">
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
+              <Pill className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Issues
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {issueSummaryTotal}
+              </p>
             </div>
-          ) : (
-            <DataTable
-              columns={pharmacyColumns}
-              data={pharmacyPageRows}
-              emptyMessage="No pharmacy issues match your filters."
-              emptyDescription="Pharmacy issues created for patients will show up here."
-              emptyIcon={Pill}
-              minBodyHeight={`${pharmacyPageRows.length > 0 ?'':'220px'}`}
-              onRowClick={setSelectedIssue}
-              sort={worklistSort ?? undefined}
-              onSortChange={setWorklistSort}
-            />
-          )}
-        </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
+              <Clock3 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Enter Amount
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {pharmacyEnterAmountCount}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-600">
+              <BadgeCheck className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Amount
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {money(pharmacySummaryAmount)}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
+                <Pill className="h-4 w-4" />
+              </span>
+              <div>
+                <h2 className="text-base font-black tracking-tight text-slate-950">
+                  Pharmacy Workspace
+                </h2>
+                <p className="text-xs font-medium text-slate-500">
+                  Prescriptions, dispensing, issue amounts and billing in one workspace
+                </p>
+              </div>
+            </div>
+            {canCreatePharmacyIssue && (
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(`/pharmacy/${newSegment("pharmacy-order")}`)
+                }
+                className="primary-action h-9 gap-2 whitespace-nowrap px-4 text-xs"
+              >
+                <PlusCircle size={16} />
+                Create Prescription
+              </button>
+            )}
+          </div>
+          <nav
+            className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+            aria-label="Pharmacy worklist sections"
+          >
+            {pharmacyStatusTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activePharmacyStatus === tab.id;
+              const count =
+                tab.id === "all"
+                  ? issueTabCountTotal
+                  : pharmacyStatusCounts.get(tab.id) || 0;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => selectPharmacyStatus(tab.id)}
+                  className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
+                    active
+                      ? "bg-brand text-brand-fg"
+                      : "text-slate-600 hover:bg-white hover:text-slate-900"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                  <span
+                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                      active
+                        ? "bg-white/20 text-brand-fg"
+                        : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        </section>
+
+        {!issuesLoaded || issueLoading ? (
+          <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
+            <TableSkeleton rows={8} />
+          </div>
+        ) : (
+          <DataTable
+            className="scrollbar-hidden overflow-auto rounded-lg bg-white"
+            columns={pharmacyColumns}
+            data={pharmacyPageRows}
+            emptyMessage="No pharmacy issues match your filters."
+            emptyDescription="Pharmacy issues created for patients will show up here."
+            emptyIcon={Pill}
+            minBodyHeight={`${pharmacyPageRows.length > 0 ? "" : "220px"}`}
+            onRowClick={setSelectedIssue}
+            sort={worklistSort ?? undefined}
+            onSortChange={setWorklistSort}
+          />
+        )}
         {issuesLoaded && (
           <Pagination
             page={safePage}
@@ -917,7 +1160,7 @@ export function Pharmacy({
             onPage={setPage}
           />
         )}
-      </Card>
+      </div>
     </div>
   );
 }

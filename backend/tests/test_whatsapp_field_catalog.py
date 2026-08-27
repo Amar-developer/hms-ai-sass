@@ -284,3 +284,34 @@ def test_unset_values_never_render_as_none():
     assert render_value(None, "text") == ""
     assert render_value(None, "date") == ""
     assert render_value(None, "money") == ""
+
+
+def test_flow_audience_is_one_answer_for_every_caller():
+    """Queue time and send time must classify a flow identically.
+
+    These used to disagree: some callers tested the `_doctor` suffix, others a
+    hardcoded pair of appointment keys. A third doctor flow would then be
+    queued as a doctor message but sent as a patient one.
+    """
+    from app.modules.integrations.whatsapp_schemas import (
+        WhatsAppFlowKey,
+        audience_enabled_for,
+        flow_audience,
+    )
+    import typing
+
+    assert flow_audience("admin_daily_report") == "admin"
+    assert flow_audience("appointment_booked_doctor") == "doctor"
+    assert flow_audience("appointment_booked_patient") == "patient"
+    # A doctor flow that does not exist yet still classifies correctly.
+    assert flow_audience("lab_report_ready_doctor") == "doctor"
+
+    for key in typing.get_args(WhatsAppFlowKey):
+        audience = flow_audience(key)
+        assert audience in {"patient", "doctor", "admin"}
+        assert audience_enabled_for(
+            key, patient_enabled=False, doctor_enabled=False
+        ) is (audience == "admin")
+        assert (
+            audience_enabled_for(key, patient_enabled=True, doctor_enabled=True) is True
+        )

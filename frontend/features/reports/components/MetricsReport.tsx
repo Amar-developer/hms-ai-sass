@@ -16,8 +16,6 @@ import { DashboardView, MetrixProps } from "../types";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 
-
-
 function changeLine(current: number, previous: number) {
   const cur = Number(current || 0);
   const prev = Number(previous || 0);
@@ -79,80 +77,90 @@ function DashboardCards({
   return (
     <div className="space-y-4">
       <section className="space-y-3">
-        <h4 className="text-xs font-black uppercase tracking-wide text-slate-500">
-          Revenue
-        </h4>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Revenue
+          </h4>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric
             icon={IndianRupee}
-            label="Gross Revenue"
+            label="Gross"
             value={money(totals.grossRevenue)}
             hint={`${totals.invoices || 0} invoices`}
             trend={changeLine(totals.grossRevenue, previousTotals.grossRevenue)}
+            tone="emerald"
           />
           <Metric
             icon={ReceiptIndianRupee}
-            label="Paid Revenue"
+            label="Collected"
             value={money(totals.paidRevenue)}
             hint={`Due ${money(totals.balance)}`}
             trend={changeLine(totals.paidRevenue, previousTotals.paidRevenue)}
+            tone="blue"
           />
           <Metric
             icon={ReceiptIndianRupee}
-            label="Consultation Revenue"
+            label="Consultation"
             value={money(totals.consultationRevenue)}
             hint="Paid consultation invoices"
             trend={changeLine(
               totals.consultationRevenue,
               previousTotals.consultationRevenue,
             )}
+            tone="violet"
           />
           <Metric
             icon={ReceiptIndianRupee}
-            label="Lab Revenue"
+            label="Lab"
             value={money(totals.labRevenue)}
             hint="Paid lab invoices"
             trend={changeLine(totals.labRevenue, previousTotals.labRevenue)}
+            tone="sky"
           />
           <Metric
             icon={ReceiptIndianRupee}
-            label="Service Revenue"
+            label="Service"
             value={money(totals.serviceRevenue)}
             hint="Paid Service category items"
             trend={changeLine(
               totals.serviceRevenue,
               previousTotals.serviceRevenue,
             )}
+            tone="indigo"
           />
           <Metric
             icon={ReceiptIndianRupee}
-            label="Pharmacy Revenue"
+            label="Pharmacy"
             value={money(totals.pharmacyRevenue)}
             hint="Paid pharmacy invoices"
             trend={changeLine(
               totals.pharmacyRevenue,
               previousTotals.pharmacyRevenue,
             )}
+            tone="rose"
           />
           <Metric
             icon={Home}
-            label="Home Care Revenue"
+            label="Home Care"
             value={money(totals.homeCareRevenue)}
             hint="Paid home care invoices"
             trend={changeLine(
               totals.homeCareRevenue,
               previousTotals.homeCareRevenue,
             )}
+            tone="amber"
           />
           <Metric
             icon={Stethoscope}
-            label="Home Visit Revenue"
+            label="Home Visit"
             value={money(totals.homeVisitRevenue)}
             hint="Paid home visit invoices"
             trend={changeLine(
               totals.homeVisitRevenue,
               previousTotals.homeVisitRevenue,
             )}
+            tone="emerald"
           />
         </div>
       </section>
@@ -161,26 +169,29 @@ function DashboardCards({
         <h4 className="text-xs font-black uppercase tracking-wide text-slate-500">
           Settlement &amp; Profit
         </h4>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           <Metric
             icon={Stethoscope}
-            label="Doctor Fee"
+            label="Doctor Cost"
             value={money(totals.doctorFee)}
             hint={`Other settlement ${money(totals.settlement)}`}
             trend={changeLine(totals.doctorFee, previousTotals.doctorFee)}
+            tone="violet"
           />
           <Metric
             icon={ReceiptIndianRupee}
-            label="Lab Settlement"
+            label="Lab Cost"
             value={money(labSettlementSummary.purchaseCost)}
             hint={`Lab profit ${money(labSettlementSummary.profit)}`}
+            tone="amber"
           />
           <Metric
             icon={Activity}
-            label="Final Profit"
+            label="Net Profit"
             value={money(finalProfit)}
             hint={`${percent(finalProfit, totals.paidRevenue - totals.paidTax, totals.grossRevenue)} of paid/service value · Gross ${money(grossProfit)} (${percent(grossProfit, Math.max(totals.grossRevenue - totals.membershipDiscount - totals.tax, 0), totals.grossRevenue)})`}
             trend={changeLine(finalProfit, previousFinalProfit)}
+            tone="emerald"
           />
         </div>
       </section>
@@ -189,40 +200,43 @@ function DashboardCards({
         <h4 className="text-xs font-black uppercase tracking-wide text-slate-500">
           Discounts &amp; Membership
         </h4>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric
             icon={ReceiptIndianRupee}
-            label="Total Billing Discounts"
+            label="Billing Discount"
             value={money(totals.billingDiscount)}
             hint="Approved + offers + membership"
             trend={changeLine(
               totals.billingDiscount,
               previousTotals.billingDiscount,
             )}
+            tone="indigo"
           />
           <Metric
             icon={ReceiptIndianRupee}
-            label="Admin Approved Discounts"
+            label="Admin Discount"
             value={money(totals.approvedDiscount)}
             hint="Executed discount requests only"
             trend={changeLine(
               totals.approvedDiscount,
               previousTotals.approvedDiscount,
             )}
+            tone="violet"
           />
           <Metric
             icon={Users}
-            label="Membership Enrollments"
+            label="Enrollments"
             value={totals.membershipEnrollCount || 0}
             hint={`Purchase ${money(totals.membershipEnrollAmount)}`}
             trend={changeLine(
               totals.membershipEnrollCount,
               previousTotals.membershipEnrollCount,
             )}
+            tone="sky"
           />
           <Metric
             icon={ReceiptIndianRupee}
-            label="Membership Claimed"
+            label="Membership Used"
             value={money(totals.membershipDiscount)}
             hint={
               topMembershipClaim
@@ -233,12 +247,13 @@ function DashboardCards({
               totals.membershipDiscount,
               previousTotals.membershipDiscount,
             )}
+            tone="emerald"
           />
         </div>
       </section>
 
-      <div className="rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3 rounded-lg">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
           <h4 className="text-sm font-bold text-slate-950">
             Membership Claimed by Module
           </h4>
@@ -297,8 +312,8 @@ function ClosedMonths({
   }, [page, safePage]);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3 rounded-lg">
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
         <div className="flex items-center gap-2">
           <History className="h-4 w-4 text-slate-500" />
           <h4 className="text-sm font-bold text-slate-950">Closed Months</h4>
@@ -404,47 +419,60 @@ const MetricsReport = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {selected && (
-            <button
-              type="button"
-              onClick={() => setSelectedId(null)}
-              className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Current month
-            </button>
-          )}
-          <h3 className="text-sm font-black text-slate-900">
-            {selected ? `${selected.period_label} · Closed` : "Current Month"}
-          </h3>
-        </div>
-        {selected && (
-          <div className="flex items-center gap-2">
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand ring-1 ring-emerald-100">
+              <Activity className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="text-base font-black tracking-tight text-slate-950">
+                Metrics Dashboard
+              </h2>
+              <p className="text-xs font-medium text-slate-500">
+                Revenue, settlement, profit and membership usage in one view
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {selected && (
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Current month
+              </button>
+            )}
+            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-600">
+              {selected ? `${selected.period_label} closed` : "Current Month"}
+            </span>
             {snapshotMessage && (
               <span className="text-[11px] font-bold text-emerald-700">
                 {snapshotMessage}
               </span>
             )}
-            {onRecalculateSnapshot && (
+            {selected && onRecalculateSnapshot && (
               <button
                 type="button"
                 onClick={() => onRecalculateSnapshot(selected)}
                 disabled={recalculatingSnapshotId === selected.id}
-                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-8 rounded-lg border border-amber-200 bg-amber-50 px-3 text-[11px] font-bold text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {recalculatingSnapshotId === selected.id
                   ? "Recalculating..."
                   : "Recalculate"}
               </button>
             )}
-            <span className="rounded-lg bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700">
-              Frozen at month end
-            </span>
+            {selected && (
+              <span className="rounded-lg bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-700">
+                Frozen at month end
+              </span>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      </section>
 
       <DashboardCards view={view} money={money} percent={percent} />
 

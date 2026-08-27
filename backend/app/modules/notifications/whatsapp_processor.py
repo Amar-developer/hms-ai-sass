@@ -37,6 +37,8 @@ from app.modules.integrations.whatsapp_field_catalog import (
 from app.modules.integrations.whatsapp_schemas import (
     WhatsAppCustomTemplateSettings,
     WhatsAppFlowSettings,
+    audience_notifications_enabled,
+    flow_audience,
 )
 from app.modules.integrations.whatsapp_templates import (
     DEFAULT_WHATSAPP_LANGUAGE,
@@ -284,7 +286,7 @@ def _message_context(
             None,
             None,
         )
-    if not str(event.template_key or "").endswith("_doctor"):
+    if flow_audience(str(event.template_key or "")) == "patient":
         patient = patient_for_notification_resource(
             session,
             tenant_id=event.tenant_id,
@@ -785,16 +787,7 @@ def _load_connection(
     flow_key = str(event.template_key or "")
     if not hasattr(flows, flow_key) or not getattr(flows, flow_key):
         raise NotificationCancelled("The notification flow is disabled.")
-    is_doctor = flow_key in {
-        "appointment_booked_doctor",
-        "appointment_cancelled_doctor",
-    }
-    if flow_key != "admin_daily_report" and not config.get(
-        "doctor_notifications_enabled"
-        if is_doctor
-        else "patient_notifications_enabled",
-        True,
-    ):
+    if not audience_notifications_enabled(config, flow_key):
         raise NotificationCancelled(
             "Notifications for this recipient type are disabled."
         )
@@ -859,9 +852,9 @@ def _resolve_campaign_and_params(
 
 
 def _delivery_recipient(session: Session, event: NotificationEvent) -> str:
-    if event.template_key == "admin_daily_report":
-        return event.recipient
-    if str(event.template_key or "").endswith("_doctor"):
+    # Admin and doctor flows carry their own recipient on the event; only a
+    # patient flow resolves the number from the patient record and consent.
+    if flow_audience(str(event.template_key or "")) != "patient":
         return event.recipient
     patient = patient_for_notification_resource(
         session,

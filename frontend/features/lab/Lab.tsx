@@ -66,6 +66,19 @@ const labStatusTabs = [
   { id: "cancelled", label: "Cancelled", icon: Ban },
 ];
 
+function currentMonthRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const format = (date: Date) =>
+    [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+  return { fromDate: format(from), toDate: format(to) };
+}
+
 function pickReportFile(onPick: (file: File) => void) {
   const input = document.createElement("input");
   input.type = "file";
@@ -188,6 +201,10 @@ export function Lab({
   const [labOrderRows, setLabOrderRows] = useState<LabOrderSummary[]>([]);
   const [labOrderTotal, setLabOrderTotal] = useState(0);
   const [labOrderLoading, setLabOrderLoading] = useState(false);
+  const [labSummaryRows, setLabSummaryRows] = useState<LabOrderSummary[]>([]);
+  const [labSummaryTotal, setLabSummaryTotal] = useState(0);
+  const [labTabCountRows, setLabTabCountRows] = useState<LabOrderSummary[]>([]);
+  const [labTabCountTotal, setLabTabCountTotal] = useState(0);
   const [filterOptions, setFilterOptions] = useState<
     Record<string, QueryFieldOption[]>
   >({});
@@ -340,6 +357,124 @@ export function Lab({
     }
   }
 
+  function buildLabSummaryParams(offset: number) {
+    const params = new URLSearchParams({
+      limit: "100",
+      offset: String(offset),
+    });
+    if (branchId) params.set("branch_id", branchId);
+    if (worklistQuery.trim()) params.set("q", worklistQuery.trim());
+
+    const hasActiveFilters = Boolean(
+      worklistQuery.trim() ||
+        worklistQueryFilters.length ||
+        amountMin.trim() ||
+        amountMax.trim() ||
+        worklistFromDate ||
+        worklistToDate,
+    );
+    const defaultMonth = currentMonthRange();
+    const fromDate = hasActiveFilters ? worklistFromDate : defaultMonth.fromDate;
+    const toDate = hasActiveFilters ? worklistToDate : defaultMonth.toDate;
+    if (fromDate) params.set("from_date", fromDate);
+    if (toDate) params.set("to_date", toDate);
+
+    const filters = [...worklistQueryFilters];
+    if (amountMin.trim()) {
+      filters.push({
+        id: "amount-min",
+        field: "amount",
+        operator: "gte",
+        value: amountMin.trim(),
+      });
+    }
+    if (amountMax.trim()) {
+      filters.push({
+        id: "amount-max",
+        field: "amount",
+        operator: "lte",
+        value: amountMax.trim(),
+      });
+    }
+    if (filters.length) params.set("filters", JSON.stringify(filters));
+    return params;
+  }
+
+  function buildLabTabCountParams(offset: number) {
+    const params = new URLSearchParams({
+      limit: "100",
+      offset: String(offset),
+    });
+    if (branchId) params.set("branch_id", branchId);
+    if (worklistQuery.trim()) params.set("q", worklistQuery.trim());
+    if (worklistFromDate) params.set("from_date", worklistFromDate);
+    if (worklistToDate) params.set("to_date", worklistToDate);
+
+    const filters = worklistQueryFilters.filter(
+      (row) => row.id !== LAB_STATUS_TAB_ID,
+    );
+    if (amountMin.trim()) {
+      filters.push({
+        id: "amount-min",
+        field: "amount",
+        operator: "gte",
+        value: amountMin.trim(),
+      });
+    }
+    if (amountMax.trim()) {
+      filters.push({
+        id: "amount-max",
+        field: "amount",
+        operator: "lte",
+        value: amountMax.trim(),
+      });
+    }
+    if (filters.length) params.set("filters", JSON.stringify(filters));
+    return params;
+  }
+
+  async function loadLabSummary() {
+    if (!apiSession) return;
+    try {
+      const first = await listOrderPage(apiSession, buildLabSummaryParams(0));
+      const total = Number(first?.total || 0);
+      const rows = Array.isArray(first?.items) ? [...first.items] : [];
+      for (let offset = rows.length; offset < total; offset += 100) {
+        const next = await listOrderPage(
+          apiSession,
+          buildLabSummaryParams(offset),
+        );
+        rows.push(...(Array.isArray(next?.items) ? next.items : []));
+      }
+      setLabSummaryRows(rows);
+      setLabSummaryTotal(total);
+    } catch {
+      setLabSummaryRows([]);
+      setLabSummaryTotal(0);
+    }
+  }
+
+  async function loadLabTabCounts() {
+    if (!apiSession) return;
+    try {
+      const first = await listOrderPage(apiSession, buildLabTabCountParams(0));
+      const total = Number(first?.total || 0);
+      const rows = Array.isArray(first?.items) ? [...first.items] : [];
+      for (let offset = rows.length; offset < total; offset += 100) {
+        const next = await listOrderPage(
+          apiSession,
+          buildLabTabCountParams(offset),
+        );
+        rows.push(...(Array.isArray(next?.items) ? next.items : []));
+      }
+      setLabTabCountRows(rows);
+      setLabTabCountTotal(total);
+    } catch {
+      setLabTabCountRows([]);
+      setLabTabCountTotal(0);
+    }
+  }
+
   async function loadLabFilterOptions() {
     if (!apiSession) return;
     const params = new URLSearchParams();
@@ -358,25 +493,25 @@ export function Lab({
     "all";
   const labStatusCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    labPageRows.forEach((order: any) => {
+    labTabCountRows.forEach((order: any) => {
       const status = String(order.status || "");
       if (status) counts.set(status, (counts.get(status) || 0) + 1);
     });
     return counts;
-  }, [labPageRows]);
-  const labPageAmount = useMemo(
+  }, [labTabCountRows]);
+  const labSummaryAmount = useMemo(
     () =>
-      labPageRows.reduce(
+      labSummaryRows.reduce(
         (total: number, order: any) => total + Number(order.amount || 0),
         0,
       ),
-    [labPageRows],
+    [labSummaryRows],
   );
   const labUploadedReports = useMemo(
     () =>
-      labPageRows.filter((order: any) => (reportDocuments[order.id] || []).length > 0)
+      labSummaryRows.filter((order: any) => (reportDocuments[order.id] || []).length > 0)
         .length,
-    [labPageRows, reportDocuments],
+    [labSummaryRows, reportDocuments],
   );
 
   function selectLabStatus(status: string) {
@@ -441,6 +576,8 @@ export function Lab({
     if (!apiSession) return;
     const timer = window.setTimeout(() => {
       void loadLabOrderPage(page);
+      void loadLabSummary();
+      void loadLabTabCounts();
       void loadLabFilterOptions();
     }, 250);
     return () => window.clearTimeout(timer);
@@ -471,6 +608,8 @@ export function Lab({
   function refreshLabWorkspace() {
     void load();
     void loadLabOrderPage(page);
+    void loadLabSummary();
+    void loadLabTabCounts();
     void loadLabFilterOptions();
   }
 
@@ -977,6 +1116,48 @@ export function Lab({
         </div>
       </BreadcrumbSlot>
       <div className="mt-3 space-y-3">
+        <section className="grid gap-3 sm:grid-cols-3">
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
+              <FlaskConical className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Orders
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {labSummaryTotal}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-600">
+              <FileCheck2 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Reports Uploaded
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {labUploadedReports}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
+              <BadgeCheck className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Amount
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {money(labSummaryAmount)}
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
@@ -1011,7 +1192,9 @@ export function Lab({
               const Icon = tab.icon;
               const active = activeLabStatus === tab.id;
               const count =
-                tab.id === "all" ? labOrderTotal : labStatusCounts.get(tab.id) || 0;
+                tab.id === "all"
+                  ? labTabCountTotal
+                  : labStatusCounts.get(tab.id) || 0;
               return (
                 <button
                   key={tab.id}
@@ -1039,48 +1222,6 @@ export function Lab({
               );
             })}
           </nav>
-        </section>
-
-        <section className="grid gap-3 sm:grid-cols-3">
-          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
-              <FlaskConical className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                Orders
-              </p>
-              <p className="text-xl font-black text-slate-950">
-                {labOrderTotal}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-600">
-              <FileCheck2 className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                Reports Uploaded
-              </p>
-              <p className="text-xl font-black text-slate-950">
-                {labUploadedReports}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
-              <BadgeCheck className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                Page Amount
-              </p>
-              <p className="text-xl font-black text-slate-950">
-                {money(labPageAmount)}
-              </p>
-            </div>
-          </div>
         </section>
 
         {!ordersLoaded || labOrderLoading ? (

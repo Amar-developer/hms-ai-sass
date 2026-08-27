@@ -9,6 +9,7 @@ from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.integrations import whatsapp_service
 from app.modules.integrations.whatsapp_gateway import WhatsAppGatewayResult
 from app.modules.integrations.whatsapp_schemas import (
+    WhatsAppFlowSettings,
     WhatsAppHealthRead,
     WhatsAppIntegrationRead,
     WhatsAppIntegrationUpdate,
@@ -521,3 +522,59 @@ def test_settings_are_isolated_by_tenant(client, test_engine):
     assert second.status_code == 200
     assert second.json()["enabled"] is False
     assert second.json()["has_api_key"] is False
+
+
+def test_readiness_blocks_when_saved_credential_cannot_be_decrypted():
+    """Stored-but-unreadable must block, not pass.
+
+    The ciphertext is present, so the old check reported "credential saved"
+    and passed while every send failed hours later. This is what happens
+    after MEDIZINHUB_CREDENTIAL_ENCRYPTION_KEY changes, or after restoring a
+    database from an environment that used a different one.
+    """
+    settings = WhatsAppIntegrationRead(
+        enabled=True,
+        api_url="https://gateway.example.com/messages",
+        public_media_base_url="https://api.example.com",
+        api_key_masked="••••••••-key",
+        has_api_key=True,
+        default_country_code="+91",
+        timeout_seconds=15,
+        max_attempts=5,
+        patient_notifications_enabled=True,
+        doctor_notifications_enabled=True,
+        appointment_reminder_24h_enabled=False,
+        appointment_reminder_2h_enabled=False,
+        default_language="en",
+        templates=WhatsAppTemplateSettings(),
+        localized_templates={},
+        flows=WhatsAppFlowSettings(),
+    )
+
+    def credential_check(readiness):
+        return next(item for item in readiness.checks if item.key == "credential_saved")
+
+    unreadable = credential_check(
+        evaluate_whatsapp_readiness(settings, credential_readable=False)
+    )
+    assert unreadable.status == "block"
+    assert "cannot be decrypted" in unreadable.message
+    assert "Re-enter" in unreadable.message
+
+    readable = credential_check(
+        evaluate_whatsapp_readiness(settings, credential_readable=True)
+    )
+    assert readable.status == "pass"
+
+    # Unknown (not yet checked) must not invent a failure.
+    unknown = credential_check(evaluate_whatsapp_readiness(settings))
+    assert unknown.status == "pass"
+
+    missing = credential_check(
+        evaluate_whatsapp_readiness(
+            settings.model_copy(update={"has_api_key": False}),
+            credential_readable=None,
+        )
+    )
+    assert missing.status == "block"
+    assert "Save an API credential" in missing.message

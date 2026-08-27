@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  PlusCircle,
+  ShieldCheck,
+} from "lucide-react";
 import {
   Button,
   Card,
@@ -83,6 +89,10 @@ export function PatientSubscriptions({
   const [confirmDelete, setConfirmDelete] = useState("");
   const [planPage, setPlanPage] = useState(1);
   const [confirm, setConfirm] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<
+    "plans" | "active" | "queued"
+  >("plans");
+  const [activeEnrollmentPlanId, setActiveEnrollmentPlanId] = useState("all");
   const {
     plans,
     enrollments,
@@ -308,6 +318,26 @@ export function PatientSubscriptions({
     });
     return counts;
   }, [activeEnrollments]);
+  const activeEnrollmentPlanTabs = useMemo(
+    () => [
+      { id: "all", label: "All Plans", count: activeEnrollments.length },
+      ...plans.map((plan: any) => ({
+        id: plan.id,
+        label: plan.name,
+        count: activeEnrollmentCountByPlan.get(plan.id) || 0,
+      })),
+    ],
+    [activeEnrollments.length, activeEnrollmentCountByPlan, plans],
+  );
+  const planFilteredActiveEnrollments = useMemo(
+    () =>
+      activeEnrollmentPlanId === "all"
+        ? activeEnrollments
+        : activeEnrollments.filter(
+            (row: any) => row.plan_id === activeEnrollmentPlanId,
+          ),
+    [activeEnrollmentPlanId, activeEnrollments],
+  );
   const pagedPlans = plans.slice(
     (safePlanPage - 1) * pageSize,
     safePlanPage * pageSize,
@@ -316,6 +346,15 @@ export function PatientSubscriptions({
   function requestDeletePlan(plan: any) {
     setConfirmDelete(plan.id);
   }
+
+  useEffect(() => {
+    if (
+      activeEnrollmentPlanId !== "all" &&
+      !plans.some((plan: any) => plan.id === activeEnrollmentPlanId)
+    ) {
+      setActiveEnrollmentPlanId("all");
+    }
+  }, [activeEnrollmentPlanId, plans]);
 
   return (
     <div className="">
@@ -469,28 +508,80 @@ export function PatientSubscriptions({
             </Card>
           )}
 
-          <Card>
-            <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-              <div>
-                <h3 className="text-base lg:text-lg font-bold">Plans</h3>
-                <p className="card-desc text-slate-500">
-                  Create and manage branch-specific patient membership plans.
-                </p>
+          <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand ring-1 ring-emerald-100">
+                  <ShieldCheck className="h-4 w-4" />
+                </span>
+                <div>
+                  <h2 className="text-base font-black tracking-tight text-slate-950">
+                    Patient Membership Workspace
+                  </h2>
+                  <p className="text-xs font-medium text-slate-500">
+                    Plans, active memberships and queued enrollments
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <RefreshButton onRefresh={load} />
-                {canCreatePlan && (
-                  <Button
+              <div className="flex flex-wrap items-center gap-2">
+                <RefreshButton
+                  onRefresh={load}
+                  className="h-9 rounded-lg border border-slate-200 px-3 text-xs"
+                />
+                {activeTab === "plans" && canCreatePlan && (
+                  <button
                     type="button"
                     onClick={() => goTo("create")}
-                    className="save-button text-xs"
+                    className="primary-action h-9 gap-2 whitespace-nowrap px-4 text-xs"
                   >
+                    <PlusCircle className="h-4 w-4" />
                     Create Plan
-                  </Button>
+                  </button>
                 )}
               </div>
             </div>
-            <div className="mt-4">
+            <nav
+              className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+              aria-label="Patient membership sections"
+            >
+              {[
+                ["plans", "Plans", CreditCard, plans.length],
+                ["active", "Active Enrollments", CheckCircle2, activeEnrollments.length],
+                ["queued", "Queued Enrollments", Clock, queuedEnrollments.length],
+              ].map(([id, label, Icon, count]: any) => {
+                const active = activeTab === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => setActiveTab(id)}
+                    className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
+                      active
+                        ? "bg-brand text-brand-fg"
+                        : "text-slate-600 hover:bg-white hover:text-slate-900"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                    <span
+                      className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                        active
+                          ? "bg-white/20 text-brand-fg"
+                          : "bg-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+          </section>
+
+          {activeTab === "plans" && (
+          <Card>
+            <div>
               <DataTable
                 columns={getPlanColumns({
                   activeEnrollmentCountByPlan,
@@ -518,9 +609,45 @@ export function PatientSubscriptions({
               onPage={setPlanPage}
             />
           </Card>
-          <div className="mt-3">
+          )}
+          {activeTab === "active" && (
+          <div>
+            <div className="mb-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <nav
+                className="scrollbar-hidden flex gap-1 overflow-x-auto bg-slate-50 px-3 py-1.5"
+                aria-label="Active enrollment plan sections"
+              >
+                {activeEnrollmentPlanTabs.map((tab) => {
+                  const active = activeEnrollmentPlanId === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      aria-current={active ? "page" : undefined}
+                      onClick={() => setActiveEnrollmentPlanId(tab.id)}
+                      className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
+                        active
+                          ? "bg-brand text-brand-fg"
+                          : "text-slate-600 hover:bg-white hover:text-slate-900"
+                      }`}
+                    >
+                      {tab.label}
+                      <span
+                        className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                          active
+                            ? "bg-white/20 text-brand-fg"
+                            : "bg-slate-200 text-slate-600"
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
             <ActiveEnrollmentsTable
-              rows={activeEnrollments}
+              rows={planFilteredActiveEnrollments}
               patientMap={patientMap}
               canManage={canDeletePlans}
               canAdjustBenefits={canAdjustBenefitUsage}
@@ -530,12 +657,16 @@ export function PatientSubscriptions({
               onCancel={requestCancelEnrollment}
               labTests={labTests}
               medicines={medicines}
+              hidePlanFilter
             />
           </div>
+          )}
+          {activeTab === "queued" && (
           <QueuedEnrollmentsTable
             rows={queuedEnrollments}
             patientMap={patientMap}
           />
+          )}
         </>
       )}
       {confirm && (

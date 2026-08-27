@@ -1,10 +1,12 @@
 export function Insight({ label, value }: any) {
   return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <p className="text-xs font-bold uppercase text-slate-500 lg:h-8">
+    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+      <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
         {label}
       </p>
-      <p className="mt-1 text-xl font-bold">{value}</p>
+      <p className="mt-0.5 text-xl font-black leading-none text-slate-950">
+        {value}
+      </p>
     </div>
   );
 }

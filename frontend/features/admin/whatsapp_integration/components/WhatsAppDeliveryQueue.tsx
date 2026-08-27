@@ -214,7 +214,12 @@ export function WhatsAppDeliveryQueue({
 
   const page = Math.floor(offset / 20) + 1;
   const pages = Math.max(1, Math.ceil(data.total / 20));
-  const completed = data.counts.sent + data.counts.failed;
+  // Cancelled counts against the rate: those messages were never delivered
+  // either. Leaving them out let a clinic that had exhausted its monthly
+  // quota — or whose patients had no mobile number on file — read a green
+  // success rate while nothing was reaching anyone.
+  const completed =
+    data.counts.sent + data.counts.failed + data.counts.cancelled;
   const successRate = completed
     ? Math.round((data.counts.sent / completed) * 100)
     : 0;
