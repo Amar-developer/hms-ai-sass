@@ -181,6 +181,15 @@ class InvoiceRead(BaseModel):
     updated_at: datetime
 
 
+class InvoiceListSummary(BaseModel):
+    invoice_count: int = 0
+    due_amount: Decimal = Decimal("0")
+    discount_amount: Decimal = Decimal("0")
+    revenue_amount: Decimal = Decimal("0")
+    paid_amount: Decimal = Decimal("0")
+    settlement_amount: Decimal = Decimal("0")
+
+
 class InvoiceMembershipBenefitRead(BaseModel):
     has_active_subscription: bool = False
     is_applied: bool = False

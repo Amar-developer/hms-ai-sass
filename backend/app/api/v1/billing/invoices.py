@@ -21,6 +21,7 @@ from app.modules.billing.schemas import (
     InvoiceItemSupplierOptionRead,
     InvoiceItemSupplierUpdate,
     InvoiceItemRead,
+    InvoiceListSummary,
     InvoiceOfferApply,
     InvoiceRead,
     PaymentRead,
@@ -36,6 +37,7 @@ from app.modules.billing.services.invoice_items import (
     update_invoice_item_supplier,
 )
 from app.modules.billing.services.invoice_queries import (
+    get_billing_invoice_summary,
     get_billing_invoice_detail,
     list_billing_invoice_filter_options,
     list_billing_invoices,
@@ -366,6 +368,44 @@ def list_invoice_page(
         list_sort=parse_list_sort(sort),
         offset=offset,
         limit=limit,
+        current_user=current_user,
+    )
+
+
+@router.get(
+    "/invoices/summary",
+    response_model=InvoiceListSummary,
+)
+def get_invoice_summary(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    patient_id: str | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    source: str | None = Query(default=None),
+    payment_state: str | None = Query(default=None),
+    from_date: date | None = None,
+    to_date: date | None = None,
+    filters: str | None = Query(default=None, max_length=8000),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
+) -> InvoiceListSummary:
+    return get_billing_invoice_summary(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
+        q=q,
+        source=source,
+        payment_state=payment_state,
+        from_date=from_date,
+        to_date=to_date,
+        list_filters=parse_list_filters(filters),
         current_user=current_user,
     )
 

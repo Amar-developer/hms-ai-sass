@@ -13,6 +13,7 @@ from app.core.pagination import Page
 from app.modules.billing.repositories.read_repository import BillingReadRepository
 from app.modules.billing.schemas import (
     InvoiceDetailRead,
+    InvoiceListSummary,
     InvoiceRead,
     PendingConsultationInvoiceRead,
 )
@@ -152,6 +153,36 @@ def list_billing_invoice_page(
         list_filters=list_filters,
     )
     return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+def get_billing_invoice_summary(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    patient_id: str | None,
+    q: str | None,
+    source: str | None,
+    payment_state: str | None,
+    from_date: date | None,
+    to_date: date | None,
+    list_filters: list[ListFilter],
+    current_user: User,
+) -> InvoiceListSummary:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    scoped_branch = scoped_branch_id(current_user, branch_id)
+    summary = BillingReadRepository(session).summarize_invoices(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch,
+        patient_id=patient_id,
+        q=q,
+        source=source,
+        payment_state=payment_state,
+        from_date=from_date,
+        to_date=to_date,
+        list_filters=list_filters,
+    )
+    return InvoiceListSummary(**summary)
 
 
 def list_billing_invoice_filter_options(

@@ -240,6 +240,78 @@ class BillingReadRepository:
         ).subquery()
         return int(self.session.exec(select(func.count()).select_from(filtered)).one())
 
+    def summarize_invoices(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        patient_id: str | None,
+        q: str | None = None,
+        source: str | None = None,
+        payment_state: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> dict[str, Decimal | int]:
+        filtered = self._invoice_list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=patient_id,
+            q=q,
+            source=source,
+            payment_state=payment_state,
+            from_date=from_date,
+            to_date=to_date,
+            list_filters=list_filters,
+        ).subquery()
+        cancelled = filtered.c.status == InvoiceStatus.CANCELLED
+        due_closed = filtered.c.status.in_(
+            (
+                InvoiceStatus.CANCELLED,
+                InvoiceStatus.REFUNDED,
+                InvoiceStatus.PARTIALLY_REFUNDED,
+            )
+        )
+        paid_share = case(
+            (
+                and_(filtered.c.total_amount > 0, ~cancelled),
+                filtered.c.doctor_share_amount
+                * filtered.c.paid_amount
+                / filtered.c.total_amount,
+            ),
+            else_=0,
+        )
+        row = self.session.exec(
+            select(
+                func.count(),
+                func.coalesce(
+                    func.sum(case((~due_closed, filtered.c.balance_amount), else_=0)),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(case((~cancelled, filtered.c.discount_amount), else_=0)),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(case((~cancelled, filtered.c.total_amount), else_=0)),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(case((~cancelled, filtered.c.paid_amount), else_=0)),
+                    0,
+                ),
+                func.coalesce(func.sum(paid_share), 0),
+            ).select_from(filtered)
+        ).one()
+        return {
+            "invoice_count": int(row[0] or 0),
+            "due_amount": row[1] or Decimal("0"),
+            "discount_amount": row[2] or Decimal("0"),
+            "revenue_amount": row[3] or Decimal("0"),
+            "paid_amount": row[4] or Decimal("0"),
+            "settlement_amount": row[5] or Decimal("0"),
+        }
+
     def invoice_filter_options(
         self,
         *,

@@ -114,6 +114,7 @@ When adding a new list route, document all three shapes here or in the owning mo
 | `GET` | `/api/v1/billing/discount-offers/filter-options` | `billing.manage` or `billing.read` | Discount offer filter metadata |
 | `GET` | `/api/v1/billing/discount-offers/page` | `billing.manage` or `billing.read` | Paginated discount offer list |
 | `GET` | `/api/v1/billing/invoices/filter-options` | `billing.manage`, `invoices.read`, or billing read role | Invoice filter metadata |
+| `GET` | `/api/v1/billing/invoices/summary` | `billing.manage`, `billing.read`, or `invoices.read` | Filter-aware invoice dashboard totals |
 | `GET` | `/api/v1/billing/tax-rules/filter-options` | `billing.manage` or settings/billing read access | Tax rule filter metadata |
 | `GET` | `/api/v1/billing/tax-rules/page` | `billing.manage` or settings/billing read access | Paginated tax rule list |
 | `GET` | `/api/v1/consultations/filter-options` | `consultations.read` | Consultation filter metadata |
@@ -274,6 +275,7 @@ Patient APIs enforce the `patients` module entitlement and branch scope for bran
 | `POST` | `/api/v1/patient-subscriptions/enrollments` | `patient_subscriptions.create` |
 | `GET` | `/api/v1/patient-subscriptions/enrollments` | `patient_subscriptions.read` |
 | `PATCH` | `/api/v1/patient-subscriptions/enrollments/{enrollment_id}` | `patient_subscriptions.edit` |
+| `PATCH` | `/api/v1/patient-subscriptions/enrollments/{enrollment_id}/benefit-usage` | Tenant admin with `patient_subscriptions.edit` | Correct handover-era benefit usage with an audit reason |
 | `DELETE` | `/api/v1/patient-subscriptions/enrollments/{enrollment_id}` | `patient_subscriptions.delete` |
 | `POST` | `/api/v1/patient-subscriptions/benefits/preview` | `patient_subscriptions.read` |
 

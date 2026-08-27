@@ -2,18 +2,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FlaskConical, Plus, PlusCircle, Trash2 } from "lucide-react";
+import {
+  BadgeCheck,
+  Ban,
+  Clock3,
+  FileCheck2,
+  FlaskConical,
+  PlusCircle,
+  TestTube2,
+  Trash2,
+} from "lucide-react";
 import { newSegment } from "@/lib/routeSlugs";
 import {
   ActionButton,
   Button,
   Card,
-  Input,
   RefreshButton,
   StatusToast,
 } from "@/app/components/common/ui";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { displayDateTime, formatPrice } from "@/utils/helper";
+import { displayDateTime, formatPrice, money } from "@/utils/helper";
 import { pageSize } from "./constants";
 import {
   downloadBlob,
@@ -33,7 +41,6 @@ import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTri
 import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
-import { FormField } from "@/app/components/FormElements";
 import {
   useLabActions,
   useLabAvailableTestSearch,
@@ -48,6 +55,16 @@ import type { SortState } from "@/utils/types";
 import { displayDocumentNumber } from "@/lib/documentNumbers";
 
 const MAX_REPORT_DOCUMENTS = 5;
+const LAB_STATUS_TAB_ID = "lab-worklist-status-tab";
+
+const labStatusTabs = [
+  { id: "all", label: "All Orders", icon: FlaskConical },
+  { id: "ordered", label: "Ordered", icon: Clock3 },
+  { id: "sample_collected", label: "Sample Collected", icon: TestTube2 },
+  { id: "result_ready", label: "Result Ready", icon: FileCheck2 },
+  { id: "report_delivered", label: "Delivered", icon: BadgeCheck },
+  { id: "cancelled", label: "Cancelled", icon: Ban },
+];
 
 function pickReportFile(onPick: (file: File) => void) {
   const input = document.createElement("input");
@@ -336,6 +353,51 @@ export function Lab({
   const totalPages = Math.max(1, Math.ceil(labOrderTotal / pageSize));
   const safePage = Math.min(page, totalPages);
   const labPageRows = labOrderRows;
+  const activeLabStatus =
+    worklistQueryFilters.find((row) => row.id === LAB_STATUS_TAB_ID)?.value ||
+    "all";
+  const labStatusCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    labPageRows.forEach((order: any) => {
+      const status = String(order.status || "");
+      if (status) counts.set(status, (counts.get(status) || 0) + 1);
+    });
+    return counts;
+  }, [labPageRows]);
+  const labPageAmount = useMemo(
+    () =>
+      labPageRows.reduce(
+        (total: number, order: any) => total + Number(order.amount || 0),
+        0,
+      ),
+    [labPageRows],
+  );
+  const labUploadedReports = useMemo(
+    () =>
+      labPageRows.filter((order: any) => (reportDocuments[order.id] || []).length > 0)
+        .length,
+    [labPageRows, reportDocuments],
+  );
+
+  function selectLabStatus(status: string) {
+    const otherFilters = worklistQueryFilters.filter(
+      (row) => row.id !== LAB_STATUS_TAB_ID,
+    );
+    setWorklistQueryFilters(
+      status === "all"
+        ? otherFilters
+        : [
+            ...otherFilters,
+            {
+              id: LAB_STATUS_TAB_ID,
+              field: "status",
+              operator: "equals",
+              value: status,
+            },
+          ],
+    );
+    setPage(1);
+  }
 
   const invoicedOrderIds = useMemo(
     () => new Set([...invoicedLabOrderIds(orders), ...localInvoicedOrderIds]),
@@ -914,39 +976,131 @@ export function Lab({
           />
         </div>
       </BreadcrumbSlot>
-      <Card className="mt-5">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="card-title font-bold">Lab / Service Worklist</h3>
-          {canCreateLabOrder && (
-            <button
-              type="button"
-              onClick={() => router.push(`/lab/${newSegment("lab-order")}`)}
-              className="primary-action gap-2 px-4 py-3 text-xs"
-            >
-             <PlusCircle size={16} />
-              Create Lab Order
-            </button>
-          )}
-        </div>
-        <div className="mt-4">
-          {!ordersLoaded || labOrderLoading ? (
-            <div className="overflow-auto rounded-lg border">
-              <TableSkeleton rows={8} />
+      <div className="mt-3 space-y-3">
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
+                <FlaskConical className="h-4 w-4" />
+              </span>
+              <div>
+                <h2 className="text-base font-black tracking-tight text-slate-950">
+                  Lab / Service Workspace
+                </h2>
+                <p className="text-xs font-medium text-slate-500">
+                  Lab orders, services, reports and billing in one workspace
+                </p>
+              </div>
             </div>
-          ) : (
-            <DataTable
-              columns={worklistColumns}
-              data={labPageRows}
-              emptyMessage="No lab orders match your filters."
-              emptyDescription="Lab and service orders created for patients will show up here."
-              emptyIcon={FlaskConical}
-              minBodyHeight={`${labPageRows.length > 0 ?'':'220px'}`}
-              onRowClick={setSelectedOrder}
-              sort={worklistSort ?? undefined}
-              onSortChange={setWorklistSort}
-            />
-          )}
-        </div>
+            {canCreateLabOrder && (
+              <button
+                type="button"
+                onClick={() => router.push(`/lab/${newSegment("lab-order")}`)}
+                className="primary-action h-9 gap-2 whitespace-nowrap px-4 text-xs"
+              >
+                <PlusCircle size={16} />
+                Create Lab Order
+              </button>
+            )}
+          </div>
+          <nav
+            className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+            aria-label="Lab and service worklist sections"
+          >
+            {labStatusTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeLabStatus === tab.id;
+              const count =
+                tab.id === "all" ? labOrderTotal : labStatusCounts.get(tab.id) || 0;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => selectLabStatus(tab.id)}
+                  className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
+                    active
+                      ? "bg-brand text-brand-fg"
+                      : "text-slate-600 hover:bg-white hover:text-slate-900"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                  <span
+                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                      active
+                        ? "bg-white/20 text-brand-fg"
+                        : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-3">
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
+              <FlaskConical className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Orders
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {labOrderTotal}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-600">
+              <FileCheck2 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Reports Uploaded
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {labUploadedReports}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
+              <BadgeCheck className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Page Amount
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {money(labPageAmount)}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {!ordersLoaded || labOrderLoading ? (
+          <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
+            <TableSkeleton rows={8} />
+          </div>
+        ) : (
+          <DataTable
+            className="scrollbar-hidden overflow-auto rounded-lg bg-white"
+            columns={worklistColumns}
+            data={labPageRows}
+            emptyMessage="No lab orders match your filters."
+            emptyDescription="Lab and service orders created for patients will show up here."
+            emptyIcon={FlaskConical}
+            minBodyHeight={`${labPageRows.length > 0 ? "" : "220px"}`}
+            onRowClick={setSelectedOrder}
+            sort={worklistSort ?? undefined}
+            onSortChange={setWorklistSort}
+          />
+        )}
         {ordersLoaded && (
           <Pagination
             page={safePage}
@@ -955,7 +1109,7 @@ export function Lab({
             onPage={setPage}
           />
         )}
-      </Card>
+      </div>
       {replaceDocPicker && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">

@@ -8,6 +8,7 @@ export type BookingFormProps = {
   visitServices: any[];
   serviceLoadError: string;
   editing?: any;
+  initialBookingType?: "home_care" | "home_visit";
   branchId?: string;
   busy: boolean;
   patientCreateBusy: boolean;

@@ -32,6 +32,14 @@ import {
 } from "@/app/components/FormElements";
 import { homeCareHourOptions } from "../forms/HomeCareForms";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  ClipboardList,
+  FileText,
+  HeartPulse,
+  ReceiptText,
+} from "lucide-react";
 
 export function BookingDetail({
   booking,
@@ -57,6 +65,10 @@ export function BookingDetail({
   canCopyIds = false,
   apiSession,
 }: any) {
+  const [activeSection, setActiveSection] = useState("overview");
+  useEffect(() => {
+    setActiveSection("overview");
+  }, [booking?.id]);
   if (!booking) {
     return (
       <Card>
@@ -95,44 +107,29 @@ export function BookingDetail({
   const hasBillableLog = (booking.visit_logs || []).some(
     (row: any) => row.status === "completed",
   );
+  const detailTabs = [
+    { id: "overview", label: "Overview", icon: FileText },
+    {
+      id: "logs",
+      label: "Service Logs",
+      icon: ClipboardList,
+      count: (booking.visit_logs || []).length,
+    },
+    { id: "billing", label: "Billing", icon: ReceiptText },
+  ];
   return (
-    <div className="grid gap-4">
-      <Card className="p-0">
-        <div className="border p-2 rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-bold">{booking.booking_number}</h3>
-              <CopyIdButton
-                value={booking.id}
-                label="Home Care Booking ID"
-                allowed={canCopyIds}
-              />
-            </div>
-            <p className="text-xs text-slate-500">
-              {booking.patient_name || patientName(patient)} ·{" "}
-              {booking.patient_number ||
-                patientCode(patient) ||
-                patient?.mobile ||
-                ""}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-end gap-2">
-            {canManage && !locked ? (
-              <div className="min-w-44">
-                <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">
-                  Booking Status
-                </p>
-                <SearchableSelect
-                  value={booking.status}
-                  onChange={onStatusChange}
-                  options={editableBookingStatuses}
-                  searchable={false}
-                  disabled={busy === "booking-status"}
-                  className="[&>button]:h-9"
-                />
-              </div>
-            ) : (
-              <div className=" pb-2">
+    <div className="space-y-3">
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col justify-between gap-3 px-4 py-3 lg:flex-row lg:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
+              <HeartPulse className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-black tracking-tight text-slate-950">
+                  Home Care / Visit Workspace
+                </h2>
                 <Badge
                   className="normal-label"
                   tone={String(
@@ -148,17 +145,122 @@ export function BookingDetail({
                               ? "blue"
                               : booking.status == "cancelled"
                                 ? "red"
-                                : "slate  ",
+                                : "slate",
                   )}
                 >
                   {humanizeOptionLabel(booking.status)}
                 </Badge>
               </div>
+              <p className="text-xs font-medium text-slate-500">
+                Patient services, visit logs and billing in one workspace
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-black text-slate-900">
+                  {booking.booking_number}
+                </span>
+              <CopyIdButton
+                value={booking.id}
+                label="Home Care Booking ID"
+                allowed={canCopyIds}
+              />
+                <span className="text-slate-400">·</span>
+                <span className="text-slate-500">
+                  {booking.patient_name || patientName(patient)} ·{" "}
+              {booking.patient_number ||
+                patientCode(patient) ||
+                patient?.mobile ||
+                ""}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-end justify-end gap-2">
+            {canManage && (
+              <ActionButton
+                onClick={onEdit}
+                disabled={locked}
+                title={locked ? "Locked after billing/completion" : undefined}
+              >
+                Edit
+              </ActionButton>
             )}
-            <ActionButton onClick={onBack}>Back to list</ActionButton>
+            {canManage && (
+              <ActionButton
+                tone="danger"
+                onClick={onCancel}
+                disabled={locked || busy === "cancel-booking"}
+                title={locked ? "Locked after billing/completion" : undefined}
+              >
+                <ButtonLoader loading={busy === "cancel-booking"}>
+                  {busy === "cancel-booking"
+                    ? "Cancelling..."
+                    : "Cancel Booking"}
+                </ButtonLoader>
+              </ActionButton>
+            )}
+            {canManage && !locked ? (
+              <div className="min-w-44">
+                <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">
+                  Booking Status
+                </p>
+                <SearchableSelect
+                  value={booking.status}
+                  onChange={onStatusChange}
+                  options={editableBookingStatuses}
+                  searchable={false}
+                  disabled={busy === "booking-status"}
+                  className="[&>button]:h-9"
+                />
+              </div>
+            ) : null}
+            <ActionButton onClick={onBack}>
+              <ArrowLeft className="mr-1 h-4 w-4" /> Back to list
+            </ActionButton>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3 md:max-w-2xl lg:max-w-4xl">
+        <nav
+          className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+          aria-label="Home care booking sections"
+        >
+          {detailTabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeSection === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                aria-current={active ? "page" : undefined}
+                onClick={() => setActiveSection(tab.id)}
+                className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
+                  active
+                    ? "bg-brand text-brand-fg"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+                {Boolean(tab.count) && (
+                  <span
+                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                      active
+                        ? "bg-white/20 text-brand-fg"
+                        : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </section>
+      <div>
+        <section
+          id="homecare-overview"
+          className={activeSection === "overview" ? "block" : "hidden"}
+        >
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           <Info
             title="Patient"
             value={booking.patient_name || patientName(patient)}
@@ -188,7 +290,7 @@ export function BookingDetail({
             )}
           </div>
         )}
-        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 md:max-w-2xl lg:max-w-5xl">
+        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4">
           <div className="mb-3">
             <p className="text-xs font-bold uppercase text-slate-500">
               Requested Services
@@ -215,7 +317,12 @@ export function BookingDetail({
             </div>
           )}
         </div>
-        <div className="mt-4 rounded-lg bg-slate-50 p-4 md:max-w-2xl lg:max-w-5xl">
+        </section>
+        <section
+          id="homecare-service-logs"
+          className={activeSection === "logs" ? "block" : "hidden"}
+        >
+        <div className="rounded-lg bg-slate-50 p-4">
           <div className="mb-3 flex flex-col justify-between gap-2 md:flex-row md:items-center">
             <div>
               <p className="card-title font-bold uppercase text-slate-900">
@@ -226,9 +333,38 @@ export function BookingDetail({
                 tracked with zero amount.
               </p>
             </div>
-            <Badge tone="blue" className="normal-label">
-              Billable total {money(actualTotal)}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="blue" className="normal-label">
+                Billable total {money(actualTotal)}
+              </Badge>
+              {(invoiceDetail?.invoice ||
+                String(booking.status).toLowerCase() !== "cancelled") && (
+                <Button
+                  type="button"
+                  className="rounded-lg px-3 py-2 text-xs"
+                  onClick={
+                    invoiceDetail?.invoice ? onOpenInvoiceModule : onInvoice
+                  }
+                  disabled={
+                    busy === "invoice" ||
+                    (!invoiceDetail?.invoice && !hasBillableLog)
+                  }
+                  title={
+                    !invoiceDetail?.invoice && !hasBillableLog
+                      ? "Add at least one completed service log before generating an invoice"
+                      : undefined
+                  }
+                >
+                  <ButtonLoader loading={busy === "invoice"}>
+                    {invoiceDetail?.invoice
+                      ? "Go to Payment"
+                      : busy === "invoice"
+                        ? "Generating..."
+                        : "Generate Invoice"}
+                  </ButtonLoader>
+                </Button>
+              )}
+            </div>
           </div>
           {!locked && visitForm && canCreateVisit && (
             <form
@@ -376,9 +512,13 @@ export function BookingDetail({
                 onChange={(value: string) => setVisitField("notes", value)}
                 rows={2}
                 className="md:col-span-3"
+                inputClass="block min-h-[58px] resize-none"
               />
-              <div className="flex items-end">
-                <Button disabled={busy === "visit-log"} className="save-button">
+              <div className="flex h-full items-end">
+                <Button
+                  disabled={busy === "visit-log"}
+                  className="save-button h-9 min-w-24 px-4 py-0"
+                >
                   <ButtonLoader loading={busy === "visit-log"}>
                     {busy === "visit-log" ? "Saving..." : "Add Log"}
                   </ButtonLoader>
@@ -475,51 +615,12 @@ export function BookingDetail({
             </table>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {canManage && (
-            <ActionButton
-              onClick={onEdit}
-              disabled={locked}
-              title={locked ? "Locked after billing/completion" : undefined}
-            >
-              Edit
-            </ActionButton>
-          )}
-          {canManage && (
-            <ActionButton
-              tone="danger"
-              onClick={onCancel}
-              disabled={locked || busy === "cancel-booking"}
-              title={locked ? "Locked after billing/completion" : undefined}
-            >
-              <ButtonLoader loading={busy === "cancel-booking"}>
-                {busy === "cancel-booking" ? "Cancelling..." : "Cancel Booking"}
-              </ButtonLoader>
-            </ActionButton>
-          )}
-          {(invoiceDetail?.invoice ||
-            String(booking.status).toLowerCase() !== "cancelled") && (
-            <Button
-              type="button"
-              className="rounded-lg px-3 py-2 text-xs"
-              onClick={invoiceDetail?.invoice ? onOpenInvoiceModule : onInvoice}
-              disabled={!invoiceDetail?.invoice && !hasBillableLog}
-              title={
-                !invoiceDetail?.invoice && !hasBillableLog
-                  ? "Add at least one completed service log before generating an invoice"
-                  : undefined
-              }
-            >
-              {invoiceDetail?.invoice ? "View Invoice" : "Generate Invoice"}
-            </Button>
-          )}
-          {locked && (
-            <span className="text-xs font-bold text-slate-400">
-              🔒 {humanizeOptionLabel(booking.status)} — editing locked
-            </span>
-          )}
-        </div>
-      </Card>
+        </section>
+      </div>
+      <section
+        id="homecare-billing"
+        className={activeSection === "billing" ? "block" : "hidden"}
+      >
       <Card className="p-0">
         <h3 className="text-base font-bold">Billing Summary</h3>
         {invoiceDetail?.invoice ? (
@@ -556,6 +657,7 @@ export function BookingDetail({
           </p>
         )}
       </Card>
+      </section>
       <ActivityLog
         resourceType="home_care_booking"
         resourceId={booking?.id}

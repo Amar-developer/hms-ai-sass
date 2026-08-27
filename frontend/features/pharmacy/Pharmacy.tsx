@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pill, Plus, PlusCircle, Stethoscope } from "lucide-react";
+import {
+  BadgeCheck,
+  Ban,
+  Clock3,
+  PackageCheck,
+  Pill,
+  PlusCircle,
+  Stethoscope,
+} from "lucide-react";
 import { newSegment } from "@/lib/routeSlugs";
 import {
   Button,
@@ -15,7 +23,7 @@ import {
 import { FormField, NumberField } from "@/app/components/FormElements";
 import { SearchPicker } from "@/app/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { today } from "@/utils/helper";
+import { money, today } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import { DataTable } from "@/app/components/common/DataTable";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
@@ -45,6 +53,16 @@ import { type QueryFieldOption, type QueryFilterRow } from "@/utils/queryFilter"
 import type { SortState } from "@/utils/types";
 
 const pageSize = 10;
+const PHARMACY_STATUS_TAB_ID = "pharmacy-worklist-status-tab";
+
+const pharmacyStatusTabs = [
+  { id: "all", label: "All Issues", icon: Pill },
+  { id: "requested", label: "Requested", icon: Clock3 },
+  { id: "partially_dispensed", label: "Partial", icon: PackageCheck },
+  { id: "dispensed", label: "Dispensed", icon: BadgeCheck },
+  { id: "billed", label: "Billed", icon: BadgeCheck },
+  { id: "cancelled", label: "Cancelled", icon: Ban },
+];
 
 export function Pharmacy({
   apiSession,
@@ -309,6 +327,51 @@ export function Pharmacy({
   const totalPages = Math.max(1, Math.ceil(issueTotal / pageSize));
   const safePage = Math.min(page, totalPages);
   const pharmacyPageRows = issuePageRows;
+  const activePharmacyStatus =
+    worklistQueryFilters.find((row) => row.id === PHARMACY_STATUS_TAB_ID)
+      ?.value || "all";
+  const pharmacyStatusCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    pharmacyPageRows.forEach((issue: any) => {
+      const status = String(issue.status || "");
+      if (status) counts.set(status, (counts.get(status) || 0) + 1);
+    });
+    return counts;
+  }, [pharmacyPageRows]);
+  const pharmacyPageAmount = useMemo(
+    () =>
+      pharmacyPageRows.reduce(
+        (total: number, issue: any) => total + Number(issue.amount || 0),
+        0,
+      ),
+    [pharmacyPageRows],
+  );
+  const pharmacyEnterAmountCount = useMemo(
+    () =>
+      pharmacyPageRows.filter((issue: any) => Number(issue.amount || 0) <= 0)
+        .length,
+    [pharmacyPageRows],
+  );
+
+  function selectPharmacyStatus(status: string) {
+    const otherFilters = worklistQueryFilters.filter(
+      (row) => row.id !== PHARMACY_STATUS_TAB_ID,
+    );
+    setWorklistQueryFilters(
+      status === "all"
+        ? otherFilters
+        : [
+            ...otherFilters,
+            {
+              id: PHARMACY_STATUS_TAB_ID,
+              field: "status",
+              operator: "equals",
+              value: status,
+            },
+          ],
+    );
+    setPage(1);
+  }
   useEffect(() => {
     if (!medicineId && medicines[0]?.id) setMedicineId(medicines[0].id);
   }, [medicines, medicineId]);

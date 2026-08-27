@@ -313,8 +313,10 @@ export function useHomeCareActions({
       await load();
       if (loadLiveData) await loadLiveData(apiSession);
       setMessage("Home care invoice generated.");
+      return detail;
     } catch (err: any) {
       setError(err.message || "Unable to generate invoice.");
+      return undefined;
     } finally {
       setBusy("");
     }

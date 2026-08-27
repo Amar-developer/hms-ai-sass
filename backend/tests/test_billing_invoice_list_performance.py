@@ -137,6 +137,69 @@ def test_invoice_page_filters_and_count_run_in_database(test_engine):
     assert due_count == 1
 
 
+def test_invoice_summary_uses_the_same_filters_as_the_invoice_page(test_engine):
+    tenant_id = "tenant_invoice_summary"
+    with Session(test_engine) as session:
+        patient = Patient(
+            tenant_id=tenant_id,
+            patient_number="PAT-SUMMARY-001",
+            full_name="Filtered Summary Patient",
+            mobile="9000000199",
+        )
+        session.add(patient)
+        session.flush()
+        session.add_all(
+            [
+                Invoice(
+                    tenant_id=tenant_id,
+                    branch_id="branch_invoice_summary",
+                    patient_id=patient.id,
+                    invoice_number="SUMMARY-DUE-001",
+                    pharmacy_issue_id="pharmacy-summary-1",
+                    status=InvoiceStatus.ISSUED,
+                    subtotal_amount=250,
+                    discount_amount=50,
+                    total_amount=200,
+                    paid_amount=50,
+                    balance_amount=150,
+                    doctor_share_amount=40,
+                ),
+                Invoice(
+                    tenant_id=tenant_id,
+                    branch_id="branch_invoice_summary",
+                    patient_id=patient.id,
+                    invoice_number="SUMMARY-PAID-001",
+                    lab_order_id="lab-summary-1",
+                    status=InvoiceStatus.PAID,
+                    subtotal_amount=100,
+                    total_amount=100,
+                    paid_amount=100,
+                    balance_amount=0,
+                    doctor_share_amount=20,
+                ),
+            ]
+        )
+        session.commit()
+
+    with Session(test_engine) as session:
+        summary = BillingReadRepository(session).summarize_invoices(
+            tenant_id=tenant_id,
+            branch_id="branch_invoice_summary",
+            patient_id=None,
+            source="pharmacy",
+            payment_state="due",
+        )
+
+    assert summary == {
+        "invoice_count": 1,
+        "due_amount": 150,
+        "discount_amount": 50,
+        "revenue_amount": 200,
+        "paid_amount": 50,
+        "settlement_amount": 10,
+    }
+
+
 def test_invoice_detail_read_does_not_repair_or_write_ledger(test_engine):
     with Session(test_engine) as session:
         invoice = Invoice(

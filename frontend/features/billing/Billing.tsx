@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ReceiptText } from "lucide-react";
-import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
-import { FormField } from "@/app/components/FormElements";
+import {
+  BadgeCheck,
+  CircleDollarSign,
+  Clock3,
+  Landmark,
+  Percent,
+  ReceiptText,
+  RotateCcw,
+} from "lucide-react";
+import { Card, RefreshButton } from "@/app/components/common/ui";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
 import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
@@ -14,16 +21,18 @@ import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
 import { money } from "@/utils/helper";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
-import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import {
   useBillingActions,
-  useBillingReports,
   useInvoiceDeliveryStatuses,
   usePaymentMethods,
 } from "./api";
-import { fetchInvoiceFilterOptions, fetchInvoicePage } from "./api/billing.api";
+import {
+  fetchInvoiceFilterOptions,
+  fetchInvoicePage,
+  fetchInvoiceSummary,
+} from "./api/billing.api";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getInvoiceColumns } from "./Column";
 import { getBillingTableSchema, getBillingQueryFields } from "./filterSchema";
@@ -83,8 +92,10 @@ export function Billing({
   const [invoiceRows, setInvoiceRows] = useState<any[]>([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [paidStatusCounts, setPaidStatusCounts] = useState<Record<string, number>>({});
+  const [invoiceSummary, setInvoiceSummary] = useState<any>(null);
   const [invoiceListLoading, setInvoiceListLoading] = useState(false);
   const invoiceLoadSequence = useRef(0);
+  const invoiceSummaryLoadSequence = useRef(0);
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
     Boolean(
@@ -100,11 +111,6 @@ export function Billing({
     "billing.manage",
     "settlements.read",
   );
-  const now = new Date();
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const monthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const monthEnd = `${monthEndDate.getFullYear()}-${String(monthEndDate.getMonth() + 1).padStart(2, "0")}-${String(monthEndDate.getDate()).padStart(2, "0")}`;
-
   const { patientMap } = usePatientReferencesQuery(
     apiSession,
     invoiceRows.map((invoice: any) => invoice.patient_id),
@@ -177,6 +183,32 @@ export function Billing({
     setPaidStatusCounts(Object.fromEntries(entries));
   }
 
+  async function loadInvoiceSummary(
+    filterOverrides: Partial<typeof filters> = {},
+    nextQueryFilters = queryFilters,
+  ) {
+    if (!apiSession) return;
+    const requestSequence = ++invoiceSummaryLoadSequence.current;
+    const effectiveFilters = { ...filters, ...filterOverrides };
+    const params = new URLSearchParams();
+    if (branchId) params.set("branch_id", branchId);
+    if (effectiveFilters.query.trim())
+      params.set("q", effectiveFilters.query.trim());
+    const { paidStatus, restFilters } = splitPaidStatusFilter(nextQueryFilters);
+    if (paidStatus && paidStatus !== "all")
+      params.set("payment_state", paidStatus);
+    if (effectiveFilters.fromDate)
+      params.set("from_date", effectiveFilters.fromDate);
+    if (effectiveFilters.toDate) params.set("to_date", effectiveFilters.toDate);
+    if (restFilters.length) params.set("filters", JSON.stringify(restFilters));
+    const summary = await fetchInvoiceSummary(apiSession, params).catch(
+      () => null,
+    );
+    if (requestSequence === invoiceSummaryLoadSequence.current) {
+      setInvoiceSummary(summary);
+    }
+  }
+
   async function loadInvoiceFilterOptions() {
     if (!apiSession) return;
     const params = new URLSearchParams();
@@ -194,23 +226,6 @@ export function Billing({
     apiSession,
     invoiceRows,
   );
-
-  const {
-    dueReport,
-    currentMonthDueReport,
-    revenueReport,
-    collectionReport,
-    settlement,
-    setSettlement,
-    loadReports,
-  } = useBillingReports(apiSession, {
-    branchId,
-    invoiceCount: (liveInvoices || []).length,
-    monthStart,
-    monthEnd,
-    canViewRevenueSummary,
-    canViewSettlementSummary,
-  });
 
   const {
     busy,
@@ -234,11 +249,10 @@ export function Billing({
     submitInvoiceAction: runInvoiceAction,
     submitAdjustmentRequest: runAdjustmentRequest,
     submitRequestAction: runRequestAction,
-    finalizeSettlement,
   } = useBillingActions(apiSession, {
     refreshInvoices: () => loadInvoicePage(page),
-    loadReports,
-    setSettlement,
+    loadReports: loadInvoiceSummary,
+    setSettlement: () => undefined,
     branchId,
   });
 
@@ -253,21 +267,28 @@ export function Billing({
 
   const billingSchema = getBillingTableSchema({ filterOptions });
 
-  const payableSettlement = Number(
-    settlement?.payable_settlement_amount ??
-      settlement?.doctor_share_paid_basis ??
-      settlement?.settlement_amount ??
-      0,
-  );
-  const finalizedSettlement = Number(
-    settlement?.finalized_settlement_amount ?? 0,
-  );
-  const settlementRecovery = Number(
-    settlement?.settlement_recovery_amount ?? 0,
-  );
-  const canFinalizeSettlement =
-    hasPermission("billing.manage") &&
-    Boolean(settlement?.can_finalize ?? payableSettlement > 0);
+  const payableSettlement = Number(invoiceSummary?.settlement_amount || 0);
+  const activePaymentState =
+    splitPaidStatusFilter(queryFilters).paidStatus || "all";
+
+  function selectPaymentState(paymentState: string) {
+    const otherFilters = queryFilters.filter(
+      (row) => row.field !== "paidStatus",
+    );
+    handleQueryFiltersChange(
+      paymentState === "all"
+        ? otherFilters
+        : [
+            ...otherFilters,
+            {
+              id: "invoice-payment-state-tab",
+              field: "paidStatus",
+              operator: "equals",
+              value: paymentState,
+            },
+          ],
+    );
+  }
 
   useEffect(() => {
     setPage(1);
@@ -280,6 +301,7 @@ export function Billing({
     const timer = window.setTimeout(() => {
       void loadInvoicePage(page);
       void loadPaidStatusCounts();
+      void loadInvoiceSummary();
       void loadInvoiceFilterOptions();
     }, 250);
     return () => window.clearTimeout(timer);
@@ -337,7 +359,8 @@ export function Billing({
       await Promise.all([
         loadLiveData(apiSession),
         loadInvoicePage(page),
-        loadReports(true),
+        loadInvoiceSummary(),
+        loadPaidStatusCounts(),
       ]);
       setMessage("Invoices refreshed.");
     } catch (err: any) {
@@ -667,132 +690,132 @@ export function Billing({
           />
         </div>
       </BreadcrumbSlot>
-      {(canViewRevenueSummary || canViewSettlementSummary) && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          {canViewRevenueSummary && (
-            <Card className="border p-2">
-              <p className="text-xs lg:text-sm text-slate-500">
-                Due Collection
+      <div className="flex flex-col gap-3">
+        <section className="order-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
+              <ReceiptText className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="text-base font-black tracking-tight text-slate-950">
+                Invoice Workspace
+              </h2>
+              <p className="text-xs font-medium text-slate-500">
+                Invoices, collections and payment status in one workspace
               </p>
-              <p className="mt-1 text-xl lg:text-2xl font-bold">
-                {money(dueReport?.total_due_amount)}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                Current month {money(currentMonthDueReport?.total_due_amount)} ·
-                Carried forward{" "}
-                {money(
-                  Math.max(
-                    Number(dueReport?.total_due_amount || 0) -
-                      Number(currentMonthDueReport?.total_due_amount || 0),
-                    0,
-                  ),
-                )}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                {dueReport?.invoice_count ?? 0} outstanding invoices
-              </p>
-            </Card>
-          )}
-          {canViewRevenueSummary && (
-            <Card className="border p-2">
-              <p className="text-xs lg:text-sm text-slate-500">
-                Billing Discounts
-              </p>
-              <p className="mt-1 text-xl lg:text-2xl font-bold">
-                {money(revenueReport?.total_discount_amount)}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                Approved {money(revenueReport?.total_approved_discount_amount)}{" "}
-                · Offers {money(revenueReport?.total_offer_discount_amount)} ·
-                Membership{" "}
-                {money(revenueReport?.total_membership_discount_amount)}
-              </p>
-            </Card>
-          )}
-          {canViewRevenueSummary && (
-            <Card className="border p-2">
-              <p className="text-xs lg:text-sm text-slate-500">Revenue</p>
-              <p className="mt-1 text-xl lg:text-2xl font-bold">
-                {money(
-                  revenueReport?.total_billed_amount ??
-                    revenueReport?.total_invoice_amount,
-                )}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                Current-month billed value
-              </p>
-            </Card>
-          )}
-          {canViewRevenueSummary && (
-            <Card className="border p-2">
-              <p className="text-xs lg:text-sm text-slate-500">Paid</p>
-              <p className="mt-1 text-xl lg:text-2xl font-bold">
-                {money(collectionReport?.net_collected_amount)}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                Collected {money(collectionReport?.collected_amount)} · Refunds{" "}
-                {money(collectionReport?.refunded_amount)}
-              </p>
-            </Card>
-          )}
-          {canViewSettlementSummary && (
-            <Card className="border p-2">
-              <p className="text-xs lg:text-sm text-slate-500">Settlement</p>
-              <p className="mt-1 text-xl font-bold lg:text-2xl">
-                {money(payableSettlement)}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                {settlementRecovery > 0
-                  ? `Recover ${money(settlementRecovery)} after refunds`
-                  : finalizedSettlement > 0
-                    ? `Finalized ${money(finalizedSettlement)}`
-                    : "No finalized settlement yet"}
-              </p>
-              {canFinalizeSettlement ? (
-                <button
-                  type="button"
-                  onClick={finalizeSettlement}
-                  className="mt-2 rounded-lg border px-3 py-2 text-xs font-bold"
-                  disabled={busy === "settlement"}
-                >
-                  <ButtonLoader loading={busy === "settlement"}>
-                    {busy === "settlement" ? "Finalizing..." : "Finalize"}
-                  </ButtonLoader>
-                </button>
-              ) : (
-                <Badge
-                  tone={
-                    settlementRecovery > 0
-                      ? "red"
-                      : payableSettlement > 0
-                        ? "amber"
-                        : "green"
-                  }
-                  className="inline w-2/3 rounded-lg text-[11px] normal-badge lg:text-sm"
-                >
-                  {settlementRecovery > 0
-                    ? "Recovery due"
-                    : payableSettlement > 0
-                      ? "Pending finalization"
-                      : "Finalized"}
-                </Badge>
-              )}
-            </Card>
-          )}
-        </div>
-      )}
-
-      <Card className="mt-5">
-        <div className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
-          <div>
-            <h3 className="card-title font-bold">Invoices & Payments</h3>
-            <p className="card-desc text-slate-500">
-              Track invoice source, patient dues, settlement share, and payment
-              collection in one list.
-            </p>
+            </div>
           </div>
-        </div>
-        <div className="scrollbar-hidden mt-4 overflow-auto rounded-lg border border-slate-200">
+          <nav
+            className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+            aria-label="Invoice list sections"
+          >
+            {[
+              {
+                id: "all",
+                label: "All Invoices",
+                icon: ReceiptText,
+              },
+              { id: "due", label: "Due", icon: Clock3 },
+              { id: "paid", label: "Paid", icon: BadgeCheck },
+              {
+                id: "partially_paid",
+                label: "Partially Paid",
+                icon: CircleDollarSign,
+              },
+              { id: "refunded", label: "Refunded", icon: RotateCcw },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const active = activePaymentState === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => selectPaymentState(tab.id)}
+                  className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
+                    active
+                      ? "bg-brand text-brand-fg"
+                      : "text-slate-600 hover:bg-white hover:text-slate-900"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                  <span
+                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                      active
+                        ? "bg-white/20 text-brand-fg"
+                        : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {paidStatusCounts[tab.id] ?? 0}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        </section>
+
+        {(canViewRevenueSummary || canViewSettlementSummary) && (
+          <section className="order-1 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {canViewRevenueSummary && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
+                  <Clock3 className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Due Collection</p>
+                  <p className="text-xl font-black text-slate-950">{money(invoiceSummary?.due_amount)}</p>
+                </div>
+              </div>
+            )}
+            {canViewRevenueSummary && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600">
+                  <Percent className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Billing Discounts</p>
+                  <p className="text-xl font-black text-slate-950">{money(invoiceSummary?.discount_amount)}</p>
+                </div>
+              </div>
+            )}
+            {canViewRevenueSummary && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-600">
+                  <CircleDollarSign className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Revenue</p>
+                  <p className="text-xl font-black text-slate-950">{money(invoiceSummary?.revenue_amount)}</p>
+                </div>
+              </div>
+            )}
+            {canViewRevenueSummary && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
+                  <BadgeCheck className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Paid</p>
+                  <p className="text-xl font-black text-slate-950">{money(invoiceSummary?.paid_amount)}</p>
+                </div>
+              </div>
+            )}
+            {canViewSettlementSummary && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-600">
+                  <Landmark className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Settlement</p>
+                  <p className="text-xl font-black text-slate-950">{money(payableSettlement)}</p>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        <div className="scrollbar-hidden order-3 overflow-auto rounded-lg border border-slate-200 bg-white">
           <DataTable
             columns={invoiceColumns}
             data={invoicePageRows}
@@ -811,13 +834,15 @@ export function Billing({
             onSortChange={handleSortChange}
           />
         </div>
-        <Pagination
-          page={safePage}
-          totalPages={totalPages}
-          total={invoiceTotal}
-          onPage={setPage}
-        />
-      </Card>
+        <div className="order-4">
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            total={invoiceTotal}
+            onPage={setPage}
+          />
+        </div>
+      </div>
     </div>
   );
 }
