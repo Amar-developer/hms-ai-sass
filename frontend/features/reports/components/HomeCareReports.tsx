@@ -6,12 +6,15 @@ import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBad
 
 const HomeCareReports = ({
   homeCareReportRows,
+  variant = "combined",
   openSections,
   setOpenSections,
   money,
   onOpenInvoices,
   loading,
 }: HomeCareReportsProps) => {
+  const isVisitReport = variant === "home_visit";
+  const isCombinedReport = variant === "combined";
   const moneyOrDash = (value: any) =>
     Number(value || 0) === 0 ? "-" : money(value);
   const columns = [
@@ -140,18 +143,30 @@ const HomeCareReports = ({
 
   return (
     <CollapsibleReportSection
-      title="Home Care / Visit Invoice Report"
-      subtitle="Paid home care and home visit invoices split by booking type."
+      title={
+        isCombinedReport
+          ? "Home Care / Visit Invoice Report"
+          : isVisitReport
+            ? "Home Visit Invoice Report"
+            : "Home Care Invoice Report"
+      }
+      subtitle={
+        isCombinedReport
+          ? "Paid home care and home visit invoices split by booking type."
+          : isVisitReport
+          ? "Paid home visit invoices, settlement, and realized profit."
+          : "Paid home care invoices, settlement, and realized profit."
+      }
       badge={`${homeCareReportRows.length} invoices`}
-      isOpen={openSections.homeCare}
+      isOpen={openSections[variant] ?? openSections.homeCare}
       onToggle={() =>
         setOpenSections((state: any) => ({
           ...state,
-          homeCare: !state.homeCare,
+          [variant]: !(state[variant] ?? state.homeCare),
         }))
       }
     >
-      <div className="mt-4 overflow-auto scrollbar-hidden rounded-lg border">
+      <div className="overflow-auto scrollbar-hidden rounded-lg border border-slate-200">
         <DataTable
           columns={columns}
           data={homeCareReportRows}

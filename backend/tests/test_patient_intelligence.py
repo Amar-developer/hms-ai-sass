@@ -1271,7 +1271,7 @@ def test_available_membership_benefits_summary_uses_remaining_named_items(test_e
         assert "Random Blood Sugar" not in summary
         assert "🎁 FREE Lab Tests Worth ₹60 – BP Test (2)" in summary
         assert (
-            "🧪 3% OFF on eligible lab tests " "(no usage limit during membership)"
+            "🧪 3% OFF on eligible lab tests (no usage limit during membership)"
         ) in summary
         assert (
             "💊 3% OFF on eligible medicines on ₹100–₹300 bills "
@@ -1861,3 +1861,64 @@ def test_monthly_medicine_and_lab_triggers_create_one_action_per_due_date(
             "medicine_refill_patient",
             "lab_test_reminder_patient",
         }
+
+
+def test_unsupported_action_channel_fails_loudly(test_engine):
+    """A rule pointing at a channel with no executor must not sit silent.
+
+    SMS and email are not integrated yet. Before this, such an action was
+    skipped with `continue` and stayed at RECOMMENDED forever — visually
+    identical to one awaiting approval, so nobody would learn the messages
+    were never going out.
+    """
+    from app.modules.patient_intelligence.service import (
+        DELIVERABLE_ACTION_CHANNELS,
+        queue_automatic_engagement_actions,
+    )
+
+    assert "sms" not in DELIVERABLE_ACTION_CHANNELS
+
+    with Session(test_engine) as session:
+        tenant, _branch, patient = _patient_fixture(session)
+        patient.whatsapp_consent_status = WhatsAppConsentStatus.OPTED_IN
+        session.add(patient)
+        action = PatientEngagementAction(
+            tenant_id=tenant.id,
+            patient_id=patient.id,
+            action_key="sms_refill",
+            channel="sms",
+            template_key="medicine_refill_patient",
+            status=EngagementActionStatus.RECOMMENDED,
+            requires_approval=False,
+            reason="Configured action for SMS refill",
+            dedupe_key=f"test-sms:{patient.id}",
+        )
+        session.add(action)
+        session.flush()
+
+        queue_automatic_engagement_actions(
+            session, tenant_id=tenant.id, patient=patient, actions=[action]
+        )
+
+        assert action.status == EngagementActionStatus.FAILED
+        assert "sms" in action.reason
+        assert "whatsapp" in action.reason
+
+        # An action still waiting on a human is left alone, not failed.
+        pending = PatientEngagementAction(
+            tenant_id=tenant.id,
+            patient_id=patient.id,
+            action_key="wa_refill",
+            channel="whatsapp",
+            template_key="medicine_refill_patient",
+            status=EngagementActionStatus.RECOMMENDED,
+            requires_approval=True,
+            reason="Configured action for WhatsApp refill",
+            dedupe_key=f"test-wa:{patient.id}",
+        )
+        session.add(pending)
+        session.flush()
+        queue_automatic_engagement_actions(
+            session, tenant_id=tenant.id, patient=patient, actions=[pending]
+        )
+        assert pending.status == EngagementActionStatus.RECOMMENDED

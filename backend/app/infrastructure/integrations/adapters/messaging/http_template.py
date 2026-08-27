@@ -6,10 +6,14 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from app.core.config import get_settings
 from app.infrastructure.integrations.ports.messaging import TemplateMessageResult
 
 
 MAX_RESPONSE_BYTES = 65_536
+# Not in RETRYABLE_STATUSES, so a blocked send fails terminally instead of
+# retrying against a provider it is never allowed to reach.
+BLOCKED_STATUS = "blocked_non_production"
 
 
 class _NoRedirectHandler(HTTPRedirectHandler):
@@ -116,6 +120,17 @@ class HttpTemplateMessageGateway:
         media_url: str | None = None,
         media_filename: str | None = None,
     ) -> TemplateMessageResult:
+        if not get_settings().whatsapp_live_delivery_enabled:
+            # Refused before the request is built, so a non-production stack
+            # restored from real data cannot message real patients even when
+            # every tenant flow, template, and consent flag says it may.
+            return TemplateMessageResult(
+                False,
+                BLOCKED_STATUS,
+                "Outbound delivery is disabled outside production."
+                " Set MEDIZINHUB_WHATSAPP_LIVE_DELIVERY=true to send for real.",
+                None,
+            )
         validate_public_https_url(api_url)
         payload: dict[str, object] = {
             "apiKey": api_key,

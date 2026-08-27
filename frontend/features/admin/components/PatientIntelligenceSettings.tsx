@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  BrainCircuit,
+  Library,
+  ListChecks,
+  PlusCircle,
+  RefreshCw,
+} from "lucide-react";
 
 import {
   ActionButton,
@@ -204,6 +211,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [showAdvancedRules, setShowAdvancedRules] = useState(false);
+  const [activeTab, setActiveTab] = useState<"content" | "rules">("content");
 
   async function load() {
     if (!apiSession) return;
@@ -253,6 +261,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
       await saveIntelligenceRule(apiSession, payload, editingId || undefined);
       setEditing(EMPTY_RULE);
       setEditingId("");
+      setShowAdvancedRules(false);
       await load();
       setMessage(editingId ? "Rule updated." : "Rule created.");
     } catch (error: any) {
@@ -346,21 +355,80 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
   return (
     <div className="space-y-5">
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <Card>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="card-title font-bold">Patient Intelligence</h3>
-            <p className="card-desc text-slate-500">
-              Tenant-owned tracking, badge, and WhatsApp engagement rules. All
-              rule definitions come from the database and can be changed here.
-            </p>
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand ring-1 ring-emerald-100">
+              <BrainCircuit className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="text-base font-black tracking-tight text-slate-950">
+                Patient Intelligence Workspace
+              </h2>
+              <p className="text-xs font-medium text-slate-500">
+                Tracking, badges, content and WhatsApp engagement rules
+              </p>
+            </div>
           </div>
-          <ActionButton onClick={adaptExistingData} disabled={busy}>
-            Recalculate Existing Patients
-          </ActionButton>
+          <div className="flex flex-wrap items-center gap-2">
+            {activeTab === "rules" && (
+              <ActionButton
+                tone="primary"
+                onClick={() => {
+                  setEditing(EMPTY_RULE);
+                  setEditingId("");
+                  setShowAdvancedRules(true);
+                }}
+              >
+                <PlusCircle className="h-4 w-4" />
+                Add Rule
+              </ActionButton>
+            )}
+            <ActionButton onClick={adaptExistingData} disabled={busy}>
+              <RefreshCw className="h-4 w-4" />
+              Recalculate Patients
+            </ActionButton>
+          </div>
         </div>
-      </Card>
+        <nav
+          className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+          aria-label="Patient intelligence sections"
+        >
+          {[
+            ["content", "Content Library", Library, contentItems.length],
+            ["rules", "Rules", ListChecks, rules.length],
+          ].map(([id, label, Icon, count]: any) => {
+            const active = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-current={active ? "page" : undefined}
+                onClick={() => setActiveTab(id)}
+                className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
+                  active
+                    ? "bg-brand text-brand-fg"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+                <span
+                  className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                    active
+                      ? "bg-white/20 text-brand-fg"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      </section>
 
+      {activeTab === "content" && (
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -541,7 +609,10 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
           ))}
         </div>
       </Card>
+      )}
 
+      {activeTab === "rules" && (
+        <>
       {showAdvancedRules && <Card>
         <h4 className="font-bold">{editingId ? "Edit Rule" : "Create Rule"}</h4>
         <p className="mt-1 text-sm text-slate-500">
@@ -594,7 +665,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
 
           <div className="flex gap-2 md:col-span-2 xl:col-span-4">
             <Button disabled={busy}>{busy ? "Saving..." : editingId ? "Update Rule" : "Create Rule"}</Button>
-            {editingId && <ActionButton onClick={() => { setEditing(EMPTY_RULE); setEditingId(""); }}>Cancel</ActionButton>}
+            {showAdvancedRules && <ActionButton onClick={() => { setEditing(EMPTY_RULE); setEditingId(""); setShowAdvancedRules(false); }}>Cancel</ActionButton>}
           </div>
         </form>
       </Card>}
@@ -602,13 +673,6 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h4 className="font-bold">Configured Rules</h4>
-          <div className="flex flex-wrap gap-2">
-            <ActionButton
-              onClick={() => setShowAdvancedRules((value) => !value)}
-            >
-              {showAdvancedRules ? "Hide Advanced Rule Editor" : "Advanced Rule Editor"}
-            </ActionButton>
-          </div>
         </div>
         <div className="mt-3 space-y-2">
           {!busy && rules.length === 0 && (
@@ -633,6 +697,8 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
           ))}
         </div>
       </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ from app.modules.integrations.whatsapp_schemas import (
     WhatsAppQueueItemRead,
     WhatsAppQueueListRead,
     WhatsAppQueueTodaySummary,
+    flow_audience,
 )
 from app.modules.integrations.whatsapp_usage import enforce_whatsapp_monthly_limit
 from app.modules.notifications.models import (
@@ -152,10 +153,7 @@ def _display_context(
     if event.resource_type == "appointment":
         appointment = session.get(Appointment, event.resource_id or "")
         if appointment and appointment.tenant_id == event.tenant_id:
-            if event.template_key in {
-                "appointment_booked_doctor",
-                "appointment_cancelled_doctor",
-            }:
+            if flow_audience(str(event.template_key or "")) == "doctor":
                 recipient = session.get(Practitioner, appointment.practitioner_id or "")
             else:
                 recipient = session.get(Patient, appointment.patient_id)

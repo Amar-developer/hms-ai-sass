@@ -87,3 +87,59 @@ describe("WhatsApp delivery queue", () => {
     expect(onMessage).toHaveBeenCalledWith("Notification queued for retry.");
   });
 });
+
+describe("delivery success rate", () => {
+  beforeEach(() => apiFetchMock.mockReset());
+  afterEach(cleanup);
+
+  async function openQueueWith(counts: Record<string, number>) {
+    apiFetchMock.mockResolvedValue({ ...queueResponse, items: [], counts });
+    render(
+      <WhatsAppDeliveryQueue
+        apiSession={{ tenantId: "tenant-1" }}
+        tenantId="tenant-1"
+        onMessage={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Delivery queue/i }));
+    return screen.findByText(/Delivery success rate/i);
+  }
+
+  it("counts cancelled messages as undelivered", async () => {
+    // A clinic out of monthly quota: nothing reached anyone, so a rate built
+    // only from sent-vs-failed would have read a reassuring 100%.
+    const label = await openQueueWith({
+      queued: 0,
+      processing: 0,
+      sent: 0,
+      failed: 0,
+      cancelled: 8,
+    });
+
+    expect(label.textContent).toContain("0%");
+  });
+
+  it("counts sent, failed and cancelled together", async () => {
+    const label = await openQueueWith({
+      queued: 0,
+      processing: 0,
+      sent: 6,
+      failed: 2,
+      cancelled: 2,
+    });
+
+    expect(label.textContent).toContain("60%");
+  });
+
+  it("shows zero rather than NaN when nothing has completed", async () => {
+    const label = await openQueueWith({
+      queued: 4,
+      processing: 0,
+      sent: 0,
+      failed: 0,
+      cancelled: 0,
+    });
+
+    expect(label.textContent).toContain("0%");
+  });
+});

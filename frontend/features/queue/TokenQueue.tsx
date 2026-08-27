@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import {
   Badge,
-  Card,
   Input,
   RefreshButton,
   SearchableSelect,
@@ -350,68 +349,9 @@ export function TokenQueue({
           />
         </BreadcrumbSlot>
       )}
-      <Card className="">
-      <div className="flex flex-col justify-between gap-4 border p-2 rounded-lg border-slate-200 pb-4 xl:flex-row xl:items-end">
-        <div className="flex items-center gap-2">
-          <div className="">
-            <div className="card-title font-bold p-1">
-              Patient Queue & Token
-            </div>
-            <p className="card-desc text-xs text-slate-500">
-              {apiSession
-                ? "Reception can manually call, skip, requeue, or close remaining tokens at end of day."
-                : "Emergency tokens appear first. Skipped patients can be requeued."}
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[160px_180px_160px_auto] xl:items-end">
-          <FormField label="Date">
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(event: any) =>
-                setSelectedDate(event.target.value || today)
-              }
-            />
-          </FormField>
-          <FormField label="Display Mode">
-            <SearchableSelect
-              value={displayMode}
-              onChange={(value: string) =>
-                setDisplayMode(value as "reception" | "called_only")
-              }
-              options={display_mode_options}
-              placeholder="Select display mode"
-              searchable={false}
-            />
-          </FormField>
-          <FormField label="Call Language">
-            <SearchableSelect
-              value={tokenLanguage}
-              onChange={(value: string) =>
-                setTokenLanguage(value as "english" | "tamil" | "both")
-              }
-              options={call_language_options}
-              placeholder="Select language"
-              searchable={false}
-            />
-          </FormField>
-          <FormField label="Day Close">
-            <button
-              type="button"
-              onClick={() => setShowCancelModal(true)}
-              disabled={busyId === "end-of-day" || queue.length === 0}
-              className="danger-action h-10 whitespace-nowrap text-xs"
-            >
-              <ButtonLoader loading={busyId === "end-of-day"}>
-                {busyId === "end-of-day" ? "Closing..." : "Cancel Remaining"}
-              </ButtonLoader>
-            </button>
-          </FormField>
-        </div>
-      </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="space-y-3">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           ["Today", dayRows.length, CalendarDays, "bg-blue-50 text-blue-700"],
           ["Open", queue.length, ClipboardList, "bg-violet-50 text-violet-700"],
@@ -425,26 +365,89 @@ export function TokenQueue({
         ].map(([label, value, Icon, tone]: any) => (
           <div
             key={label}
-            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4"
+            className="flex min-h-[74px] items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
           >
             <span
-              className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${tone}`}
+              className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${tone}`}
             >
-              <Icon className="h-5 w-5" />
+              <Icon className="h-4 w-4" />
             </span>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+              <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                 {label}
               </p>
-              <p className="mt-0.5 text-2xl font-black leading-none text-slate-950">
+              <p className="mt-0.5 text-xl font-black leading-none text-slate-950">
                 {value}
               </p>
             </div>
           </div>
         ))}
-      </div>
+      </section>
 
-      <div className="mt-0 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand ring-1 ring-emerald-100">
+              <Ticket className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="text-base font-black tracking-tight text-slate-950">
+                Token Queue Workspace
+              </h2>
+              <p className="text-xs font-medium text-slate-500">
+                Manage today&apos;s queue, calling and end-of-day closure
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[160px_180px_160px_auto] xl:items-end">
+            <FormField label="Date">
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(event: any) =>
+                  setSelectedDate(event.target.value || today)
+                }
+              />
+            </FormField>
+            <FormField label="Display Mode">
+              <SearchableSelect
+                value={displayMode}
+                onChange={(value: string) =>
+                  setDisplayMode(value as "reception" | "called_only")
+                }
+                options={display_mode_options}
+                placeholder="Select display mode"
+                searchable={false}
+              />
+            </FormField>
+            <FormField label="Call Language">
+              <SearchableSelect
+                value={tokenLanguage}
+                onChange={(value: string) =>
+                  setTokenLanguage(value as "english" | "tamil" | "both")
+                }
+                options={call_language_options}
+                placeholder="Select language"
+                searchable={false}
+              />
+            </FormField>
+            <FormField label="Day Close">
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(true)}
+                disabled={busyId === "end-of-day" || queue.length === 0}
+                className="danger-action h-10 whitespace-nowrap px-4 text-xs"
+              >
+                <ButtonLoader loading={busyId === "end-of-day"}>
+                  {busyId === "end-of-day" ? "Closing..." : "Cancel Remaining"}
+                </ButtonLoader>
+              </button>
+            </FormField>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
         {displayLoading &&
           Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-[72px] w-full rounded-lg" />
@@ -492,9 +495,9 @@ export function TokenQueue({
               );
             },
           )}
-      </div>
+      </section>
 
-      <div className="mt-3">
+      <section>
         <DataTable
           columns={queueColumns}
           data={pagedQueue}
@@ -505,7 +508,7 @@ export function TokenQueue({
           emptyIcon={Ticket}
           minBodyHeight={`${pagedQueue.length > 0 ?'':'220px'}`}
         />
-      </div>
+      </section>
       <Pagination
         page={safePage}
         totalPages={totalPages}
@@ -534,7 +537,7 @@ export function TokenQueue({
           }}
         />
       )}
-      </Card>
+      </div>
     </>
   );
 }

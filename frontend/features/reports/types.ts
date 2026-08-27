@@ -19,6 +19,7 @@ export type FileColumn<T> = {
 
 export type HomeCareReportsProps = {
   homeCareReportRows: any[];
+  variant?: "combined" | "home_care" | "home_visit";
   openSections: any;
   setOpenSections: any;
   money: any;

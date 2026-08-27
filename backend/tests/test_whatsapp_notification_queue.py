@@ -1496,3 +1496,125 @@ def test_patient_opt_out_blocks_patient_flows_but_not_doctor_flows(
         session.refresh(queued)
         assert queued.status == NotificationStatus.CANCELLED
         assert "opted out" in str(queued.failure_reason).lower()
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected_reason"),
+    [
+        pytest.param(
+            lambda session, tenant, patient: setattr(
+                patient, "whatsapp_consent_status", WhatsAppConsentStatus.OPTED_OUT
+            ),
+            "opted out",
+            id="opted_out",
+        ),
+        pytest.param(
+            lambda session, tenant, patient: setattr(patient, "mobile", None),
+            "No valid mobile number",
+            id="no_mobile_number",
+        ),
+    ],
+)
+def test_unqueueable_message_is_visible_in_the_delivery_queue(
+    test_engine, monkeypatch, mutate, expected_reason
+):
+    """A message that never reaches the outbox must still be explainable.
+
+    These refusals used to return None with no row, no log and no audit
+    entry, so the delivery queue showed nothing at all and staff read the
+    silence as "the message was sent".
+    """
+    monkeypatch.setattr(
+        events, "enforce_module_enabled", lambda _session, _tenant, _module: None
+    )
+    with Session(test_engine) as session:
+        tenant, branch, patient, appointment = _configured_tenant(session)
+        mutate(session, tenant, patient)
+        session.add(patient)
+        session.commit()
+
+        result = events.queue_whatsapp_template_if_allowed(
+            session,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            flow_key="appointment_booked_patient",
+            recipient=None,
+            resource_type="appointment",
+            resource_id=appointment.id,
+            dedupe_key=f"whatsapp:appointment:{appointment.id}:booked",
+        )
+
+        assert result is None
+        row = session.exec(
+            select(NotificationEvent).where(
+                NotificationEvent.tenant_id == tenant.id,
+                NotificationEvent.dedupe_key
+                == f"blocked:whatsapp:appointment:{appointment.id}:booked",
+            )
+        ).one()
+        assert row.status == NotificationStatus.CANCELLED
+        assert expected_reason in row.failure_reason
+        assert row.template_key == "appointment_booked_patient"
+
+        # The delivery queue names the patient rather than showing a bare id.
+        name, _reference = whatsapp_queue_service._display_context(session, row)
+        assert name == "Queue Patient"
+
+        # Re-triggering does not pile up duplicate rows.
+        events.queue_whatsapp_template_if_allowed(
+            session,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            flow_key="appointment_booked_patient",
+            recipient=None,
+            resource_type="appointment",
+            resource_id=appointment.id,
+            dedupe_key=f"whatsapp:appointment:{appointment.id}:booked",
+        )
+        assert (
+            len(
+                session.exec(
+                    select(NotificationEvent).where(
+                        NotificationEvent.tenant_id == tenant.id,
+                        NotificationEvent.dedupe_key.like("blocked:%"),
+                    )
+                ).all()
+            )
+            == 1
+        )
+
+
+def test_blocked_record_does_not_block_the_real_send_once_fixed(
+    test_engine, monkeypatch
+):
+    """The blocked row uses its own dedupe key, so a fixed cause still sends."""
+    monkeypatch.setattr(
+        events, "enforce_module_enabled", lambda _session, _tenant, _module: None
+    )
+    with Session(test_engine) as session:
+        tenant, branch, patient, appointment = _configured_tenant(session)
+        patient.mobile = None
+        session.add(patient)
+        session.commit()
+        dedupe = f"whatsapp:appointment:{appointment.id}:booked"
+        kwargs = dict(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            flow_key="appointment_booked_patient",
+            recipient=None,
+            resource_type="appointment",
+            resource_id=appointment.id,
+            dedupe_key=dedupe,
+        )
+
+        assert events.queue_whatsapp_template_if_allowed(session, **kwargs) is None
+
+        patient.mobile = "98765 43210"
+        session.add(patient)
+        session.commit()
+
+        event = events.queue_whatsapp_template_if_allowed(session, **kwargs)
+
+        assert event is not None
+        assert event.status == NotificationStatus.QUEUED
+        assert event.dedupe_key == dedupe

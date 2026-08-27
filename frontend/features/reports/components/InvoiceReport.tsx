@@ -1,5 +1,5 @@
 import { ReceiptText } from "lucide-react";
-import { Card, Badge } from "@/app/components/common/ui";
+import { Badge } from "@/app/components/common/ui";
 import {
   approvedDiscountUsage,
   offerDiscountUsage,
@@ -254,11 +254,13 @@ const InvoiceReport = ({
     },
   ];
   return (
-    <Card>
-      <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
+    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col justify-between gap-2 border-b border-slate-200 px-4 py-3 md:flex-row md:items-center">
         <div>
-          <h3 className="card-title font-bold">Invoice Profit Details</h3>
-          <p className="card-desc text-slate-500">
+          <h3 className="text-base font-black tracking-tight text-slate-950">
+            Invoice Profit Details
+          </h3>
+          <p className="mt-0.5 text-xs font-medium text-slate-500">
             Paid invoice rows and totals update from the current filters.
           </p>
         </div>
@@ -266,9 +268,9 @@ const InvoiceReport = ({
           {filteredInvoices.length} paid invoices
         </Badge>
       </div>
-      <div className="mt-4 overflow-auto scrollbar-hidden rounded-lg border">
+      <div className="p-4">
         <DataTable
-          className="w-full min-w-[1120px] text-left text-sm"
+          className="overflow-auto scrollbar-hidden rounded-lg bg-white"
           columns={invoiceColumns}
           data={invoicePageRows}
           onRowClick={(row: any) => onOpenInvoices(row.id)}
@@ -312,14 +314,16 @@ const InvoiceReport = ({
           }
         />
       </div>
-      <Pagination
-        page={safeInvoicePage}
-        totalPages={totalInvoicePages}
-        total={filteredInvoices.length}
-        onPage={setInvoicePage}
-        pageSize={pageSize}
-      />
-    </Card>
+      <div className="px-4 pb-4">
+        <Pagination
+          page={safeInvoicePage}
+          totalPages={totalInvoicePages}
+          total={filteredInvoices.length}
+          onPage={setInvoicePage}
+          pageSize={pageSize}
+        />
+      </div>
+    </section>
   );
 };
 

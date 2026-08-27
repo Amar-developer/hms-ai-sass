@@ -148,7 +148,7 @@ const LabReports = ({
           setOpenSections((state: any) => ({ ...state, lab: !state.lab }))
         }
       >
-        <div className="mt-4 overflow-auto scrollbar-hidden rounded-lg border">
+        <div className="overflow-auto scrollbar-hidden rounded-lg border border-slate-200">
           <DataTable
             columns={columns}
             data={labSettlementRows}
