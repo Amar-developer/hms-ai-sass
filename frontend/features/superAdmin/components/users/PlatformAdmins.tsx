@@ -205,7 +205,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
               {loading && admins.length === 0 && (
                 <tr>
                   <td colSpan={5} className="p-0">
-                    <TableSkeleton />
+                    <TableSkeleton columns={5} />
                   </td>
                 </tr>
               )}

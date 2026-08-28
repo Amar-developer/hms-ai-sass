@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useWorkspaceController } from "@/features/shell/WorkspaceContext";
+import { BrandLoader } from "@/app/components/common/loader/BrandLoader";
 
 export default function RootRedirect() {
   const router = useRouter();
@@ -26,9 +27,5 @@ export default function RootRedirect() {
     shellProps.lastPath,
   ]);
 
-  return (
-    <div className="flex h-screen w-screen items-center justify-center bg-white">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
-    </div>
-  );
+  return <BrandLoader />;
 }

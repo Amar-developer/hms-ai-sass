@@ -320,9 +320,103 @@ body {
   }
 }
 
+.brand-loader-logo {
+  filter: drop-shadow(0 8px 18px rgb(2 160 216 / 0.1));
+}
+
+.brand-loader-stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.brand-loader-stroke-left {
+  animation: brand-loader-draw-left 2.25s ease-in-out infinite;
+}
+
+.brand-loader-stroke-right {
+  animation: brand-loader-draw-right 2.25s ease-in-out infinite;
+}
+
+.brand-loader-details {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: brand-loader-show-details 2.25s ease-in-out infinite;
+}
+
+@keyframes brand-loader-draw-left {
+  0%,
+  8% {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+  14% {
+    opacity: 1;
+  }
+  52%,
+  88% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes brand-loader-draw-right {
+  0%,
+  18% {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+  24% {
+    opacity: 1;
+  }
+  62%,
+  88% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes brand-loader-show-details {
+  0%,
+  55% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  68%,
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
-  .skeleton-shimmer::after {
+  .skeleton-shimmer::after,
+  .brand-loader-stroke-left,
+  .brand-loader-stroke-right,
+  .brand-loader-details {
     animation: none;
+  }
+
+  .brand-loader-stroke {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+
+  .brand-loader-details {
+    opacity: 1;
+    transform: none;
   }
 }

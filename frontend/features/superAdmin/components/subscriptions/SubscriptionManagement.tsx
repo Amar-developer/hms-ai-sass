@@ -16,6 +16,7 @@ import { SubscriptionCreatePlan } from "./SubscriptionCreatePlan";
 import { SubscriptionCreditsPage } from "./SubscriptionCreditsPage";
 import { SubscriptionDetailModal } from "./SubscriptionDetailModal";
 import { SubscriptionEditPlan } from "./SubscriptionEditPlan";
+import { SettingsWorkspaceHeader } from "../shared/SettingsWorkspaceHeader";
 import { Info } from "@/app/components/common/Info";
 import { Pagination } from "@/app/components/common/Pagination";
 import {
@@ -40,6 +41,9 @@ export function SubscriptionManagement({
   modules = [],
 }: any) {
   const [view, setView] = useState("list");
+  const [activeTab, setActiveTab] = useState<"subscriptions" | "plans">(
+    "subscriptions",
+  );
   const [filters, setFilters] = useState({
     tenant: "",
     plan: "all",
@@ -319,49 +323,59 @@ export function SubscriptionManagement({
   });
 
   return (
-    <div className="mt-3">
-      <Card className="pt-2">
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-          <div>
-            <p className="card-title font-bold">Subscription Management</p>
-            <p className="card-desc text-slate-500">
-              Search tenant subscriptions, review SaaS revenue, and open focused
-              pages for plan setup, upgrades, and credits.
-            </p>
-          </div>
-          <div className="flex flex-wrap justify-start lg:justify-around items-center  gap-2 w-[38%] lg:w-[30%]">
+    <div className="space-y-3">
+      <SettingsWorkspaceHeader<"subscriptions" | "plans">
+        icon={CreditCard}
+        title="Subscription Workspace"
+        description="Manage tenant subscriptions, plan catalog, upgrades, and credits."
+        tabs={[
+          {
+            id: "subscriptions",
+            label: "Subscriptions",
+            icon: CreditCard,
+            count: subscriptions.length,
+          },
+          {
+            id: "plans",
+            label: "Plan Catalog",
+            icon: Receipt,
+            count: catalogPlans.length,
+          },
+        ]}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
             <CreateActionButton
               label="Create Custom Plan"
               onClick={() => openSubscriptionView("createPlan")}
             />
-            <div className="flex justify-between gap-2 w-full">
-              <button
-                type="button"
-                onClick={() => openSubscriptionView("assign")}
-                className="close-button"
-              >
-                Assign / Upgrade
-              </button>
-              <button
-                type="button"
-                onClick={() => openSubscriptionView("credits")}
-                className="close-button"
-              >
-                Additional Credits
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => openSubscriptionView("assign")}
+              className="close-button"
+            >
+              Assign / Upgrade
+            </button>
+            <button
+              type="button"
+              onClick={() => openSubscriptionView("credits")}
+              className="close-button"
+            >
+              Additional Credits
+            </button>
+          </div>
+        }
+      />
+      <StatusToast message={message} onClose={() => setMessage("")} />
+      {announcements.length > 0 && (
+        <div className="overflow-hidden rounded-lg bg-amber-50 p-3 text-sm font-bold text-amber-800">
+          <div className="animate-pulse whitespace-nowrap">
+            {announcements.map((item) => item.message).join("  |  ")}
           </div>
         </div>
-        <StatusToast message={message} onClose={() => setMessage("")} />
-        {announcements.length > 0 && (
-          <div className="mt-4 overflow-hidden rounded-2xl bg-amber-50 p-3 text-sm font-bold text-amber-800">
-            <div className="animate-pulse whitespace-nowrap">
-              {announcements.map((item) => item.message).join("  |  ")}
-            </div>
-          </div>
-        )}
-      </Card>
-      <div className="grid gap-4 md:grid-cols-4 mt-3">
+      )}
+      {activeTab === "subscriptions" && <div className="grid gap-4 md:grid-cols-4">
         <Info
           label="Active Subscriptions"
           value={revenue?.total_active_subscriptions ?? "-"}
@@ -378,8 +392,8 @@ export function SubscriptionManagement({
           label="Pending Invoice"
           value={`₹${revenue?.pending_invoice_amount ?? 0}`}
         />
-      </div>
-      <div className="mt-3">
+      </div>}
+      {activeTab === "subscriptions" && <div>
         <Card className="pt-2">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
             <div>
@@ -441,8 +455,8 @@ export function SubscriptionManagement({
             onPage={setPage}
           />
         </Card>
-      </div>
-      <div className="mt-3">
+      </div>}
+      {activeTab === "plans" && <div>
         <Card className="pt-2">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
             <div>
@@ -472,7 +486,7 @@ export function SubscriptionManagement({
             </div>
           </div>
         </Card>
-      </div>
+      </div>}
       {detailSubscription && (
         <SubscriptionDetailModal
           subscription={detailSubscription}

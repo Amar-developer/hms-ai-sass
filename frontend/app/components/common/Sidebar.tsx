@@ -1,6 +1,7 @@
 import { ChevronDown, Hospital, Settings } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { superAdminPath } from "@/features/superAdmin/routing";
 
 interface SidebarProps {
   visibleNav: any[];
@@ -182,20 +183,21 @@ export function Sidebar(props: SidebarProps) {
                   >
                     {props.superAdminSections.map(
                       ([sectionId, sectionLabel, SectionIcon]) => (
-                        <button
+                        <Link
                           key={sectionId}
+                          href={superAdminPath(sectionId)}
                           onClick={() => {
-                            props.navigatePage({
-                              id: "superadmin",
-                              section: sectionId,
-                            });
+                            props.beginNavigation(
+                              "superadmin",
+                              superAdminPath(sectionId),
+                            );
                             setPopupMenu(null);
                           }}
                           className="flex w-full items-center gap-3 px-2 py-2 text-xs"
                         >
                           <SectionIcon size={15} />
                           {sectionLabel}
-                        </button>
+                        </Link>
                       ),
                     )}
                   </div>
@@ -207,14 +209,14 @@ export function Sidebar(props: SidebarProps) {
 
                       {props.superAdminSections.map(
                         ([sectionId, sectionLabel, SectionIcon]: any) => (
-                          <button
+                          <Link
                             key={sectionId}
-                            type="button"
+                            href={superAdminPath(sectionId)}
                             onClick={() => {
-                              props.navigatePage({
-                                id: "superadmin",
-                                section: sectionId,
-                              });
+                              props.beginNavigation(
+                                "superadmin",
+                                superAdminPath(sectionId),
+                              );
                             }}
                        className={`flex w-full items-start justify-start gap-3 px-2 py-2 text-xs ${
                             props.superAdminSection == sectionId
@@ -228,7 +230,7 @@ export function Sidebar(props: SidebarProps) {
                                 {sectionLabel}
                               </span>
                             )}
-                          </button>
+                          </Link>
                         ),
                       )}
                     </div>
@@ -298,13 +300,11 @@ export function Sidebar(props: SidebarProps) {
                     </div>
                     {props.visibleTenantAdminSections.map(
                       ([sectionId, sectionLabel, SectionIcon]) => (
-                        <button
+                        <Link
                           key={sectionId}
+                          href={`/admin/${sectionId}`}
                           onClick={() => {
-                            props.navigatePage({
-                              id: "admin",
-                              section: sectionId,
-                            });
+                            props.beginNavigation("admin", `/admin/${sectionId}`);
                             setPopupMenu(null);
                           }}
                           className={`flex w-full items-start justify-start gap-3 px-2 py-2 text-xs ${
@@ -315,7 +315,7 @@ export function Sidebar(props: SidebarProps) {
                         >
                           <SectionIcon size={15} />
                           {sectionLabel}
-                        </button>
+                        </Link>
                       ),
                     )}
                   </div>
@@ -328,14 +328,11 @@ export function Sidebar(props: SidebarProps) {
                     <div className="mt-2 grid gap-1 pl-5">
                       {props.visibleTenantAdminSections.map(
                         ([sectionId, sectionLabel, SectionIcon]: any) => (
-                          <button
+                          <Link
                             key={sectionId}
-                            type="button"
+                            href={`/admin/${sectionId}`}
                             onClick={() => {
-                              props.navigatePage({
-                                id: "admin",
-                                section: sectionId,
-                              });
+                              props.beginNavigation("admin", `/admin/${sectionId}`);
                             }}
                             className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                               props.tenantAdminSection === sectionId
@@ -349,7 +346,7 @@ export function Sidebar(props: SidebarProps) {
                                 {sectionLabel}
                               </span>
                             )}
-                          </button>
+                          </Link>
                         ),
                       )}
                     </div>
@@ -440,13 +437,11 @@ export function Sidebar(props: SidebarProps) {
                     </div>
                     {props.visibleClinicSections.map(
                       ([sectionId, sectionLabel, SectionIcon]: any) => (
-                        <button
+                        <Link
                           key={sectionId}
+                          href={`/clinic/${sectionId}`}
                           onClick={() => {
-                            props.navigatePage({
-                              id: "clinic",
-                              section: sectionId,
-                            });
+                            props.beginNavigation("clinic", `/clinic/${sectionId}`);
                             setPopupMenu(null);
                           }}
                           className={`flex w-full items-center gap-3 px-2 py-2 text-xs ${
@@ -458,15 +453,16 @@ export function Sidebar(props: SidebarProps) {
                         >
                           <SectionIcon size={15} />
                           {sectionLabel}
-                        </button>
+                        </Link>
                       ),
                     )}
                     {props.clinicModuleSections.map(
                       ([moduleId, moduleLabel, ModuleIcon]: any) => (
-                        <button
+                        <Link
                           key={moduleId}
+                          href={`/clinic/${moduleId}`}
                           onClick={() => {
-                            props.navigatePage(moduleId);
+                            props.beginNavigation(moduleId, `/clinic/${moduleId}`);
                             setPopupMenu(null);
                           }}
                           className={`flex w-full items-center gap-3 px-2 py-2 text-xs ${
@@ -477,7 +473,7 @@ export function Sidebar(props: SidebarProps) {
                         >
                           <ModuleIcon size={15} />
                           {moduleLabel}
-                        </button>
+                        </Link>
                       ),
                     )}
                   </div>
@@ -488,14 +484,11 @@ export function Sidebar(props: SidebarProps) {
                   <div className="mt-2 grid gap-1 pl-5">
                     {props.visibleClinicSections.map(
                       ([sectionId, sectionLabel, SectionIcon]: any) => (
-                        <button
+                        <Link
                           key={sectionId}
-                          type="button"
+                          href={`/clinic/${sectionId}`}
                           onClick={() => {
-                            props.navigatePage({
-                              id: "clinic",
-                              section: sectionId,
-                            });
+                            props.beginNavigation("clinic", `/clinic/${sectionId}`);
                           }}
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                             props.activePage === "clinic" &&
@@ -508,16 +501,16 @@ export function Sidebar(props: SidebarProps) {
                           <span className="truncate text-xs">
                             {sectionLabel}
                           </span>
-                        </button>
+                        </Link>
                       ),
                     )}
                     {props.clinicModuleSections.map(
                       ([moduleId, moduleLabel, ModuleIcon]: any) => (
-                        <button
+                        <Link
                           key={moduleId}
-                          type="button"
+                          href={`/clinic/${moduleId}`}
                           onClick={() => {
-                            props.navigatePage(moduleId);
+                            props.beginNavigation(moduleId, `/clinic/${moduleId}`);
                           }}
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                             props.activePage === moduleId
@@ -529,7 +522,7 @@ export function Sidebar(props: SidebarProps) {
                           <span className="truncate text-xs">
                             {moduleLabel}
                           </span>
-                        </button>
+                        </Link>
                       ),
                     )}
                   </div>
@@ -602,20 +595,21 @@ export function Sidebar(props: SidebarProps) {
                   >
                     {props.reportSections.map(
                       ([sectionId, sectionLabel, SectionIcon]) => (
-                        <button
+                        <Link
                           key={sectionId}
+                          href={`/reports/${sectionId}`}
                           onClick={() => {
-                            props.navigatePage({
-                              id: "reports",
-                              section: sectionId,
-                            });
+                            props.beginNavigation(
+                              "reports",
+                              `/reports/${sectionId}`,
+                            );
                             setPopupMenu(null);
                           }}
                           className={`flex w-full items-center gap-3 px-2 py-2 text-xs ${props.reportSection == sectionId ? "w-full rounded-full bg-brand px-4 py-2 text-left font-bold text-brand-fg" : "py-3"}`}
                         >
                           <SectionIcon size={15} />
                           {sectionLabel}
-                        </button>
+                        </Link>
                       ),
                     )}
                   </div>
@@ -624,14 +618,14 @@ export function Sidebar(props: SidebarProps) {
                   <div className="mt-2 grid gap-1 pl-5">
                     {props.reportSections.map(
                       ([sectionId, sectionLabel, SectionIcon]: any) => (
-                        <button
+                        <Link
                           key={sectionId}
-                          type="button"
+                          href={`/reports/${sectionId}`}
                           onClick={() => {
-                            props.navigatePage({
-                              id: "reports",
-                              section: sectionId,
-                            });
+                            props.beginNavigation(
+                              "reports",
+                              `/reports/${sectionId}`,
+                            );
                           }}
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                             props.reportsSection == sectionId
@@ -645,7 +639,7 @@ export function Sidebar(props: SidebarProps) {
                               {sectionLabel}
                             </span>
                           )}
-                        </button>
+                        </Link>
                       ),
                     )}
                   </div>

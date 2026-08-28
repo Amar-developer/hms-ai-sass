@@ -2,11 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge, Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
+import {
+  Badge,
+  Card,
+  RefreshButton,
+  SearchableSelect,
+  StatusToast,
+} from "@/app/components/common/ui";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
 import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
-import { BreadcrumbSlot } from "@/features/shell/AppShell";
+import { BreadcrumbSlot, useShellChrome } from "@/features/shell/AppShell";
 import { sortRows } from "@/utils/sortRows";
 import {
   applyQueryFilters,
@@ -22,7 +28,12 @@ import {
   groupRolesByName,
   tenantSelectOptions,
 } from "./helpers";
-import { tenantTypes, tenant_status_options } from "./constants";
+import {
+  platformSectionsForUser,
+  superAdminSettingsSections,
+  tenantTypes,
+  tenant_status_options,
+} from "./constants";
 import { Overview } from "./components/overview/Overview";
 import { TenantManagement } from "./components/tenants/TenantManagement";
 import { EditTenant } from "./components/tenants/EditTenant";
@@ -61,6 +72,7 @@ export function SuperAdminDashboard({
   selectedDetailId = "",
 }: any) {
   const router = useRouter();
+  const { beginNavigation } = useShellChrome();
   const currentSection = section || "overview";
 
   // Tenants/Roles/Users/Departments/Branches share one global search+sort+
@@ -112,7 +124,9 @@ export function SuperAdminDashboard({
   };
 
   function changeSection(nextSection: string) {
-    router.push(superAdminPath(nextSection, pendingIds.current));
+    const path = superAdminPath(nextSection, pendingIds.current);
+    beginNavigation("superadmin", path);
+    router.push(path);
   }
   const [confirmAction, setConfirmAction] = useState<any>(null);
   function requestSuspendTenant(tenant: any) {
@@ -148,17 +162,34 @@ export function SuperAdminDashboard({
       apiSession?.user?.user_type === "support_admin",
   );
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
+  const settingsModuleId = (() => {
+    if (["createTenant", "tenantEdit"].includes(currentSection)) {
+      return "tenants";
+    }
+    if (
+      ["roleCreate", "roleEdit", "rolePermissions", "roleAssign"].includes(
+        currentSection,
+      )
+    ) {
+      return "roles";
+    }
+    return currentSection;
+  })();
+  const permittedSettingsModuleIds = new Set(
+    platformSectionsForUser(apiSession?.user).map(([id]) => id),
+  );
+  const settingsModuleOptions = superAdminSettingsSections
+    .filter(([id]) => permittedSettingsModuleIds.has(id))
+    .map(([id, label]) => ({ value: id, label }));
+  const showSettingsModulePicker = settingsModuleOptions.some(
+    (option) => option.value === settingsModuleId,
+  );
 
   const selectableTenants = tenantSelectOptions(data.tenants);
   const selected =
     selectableTenants.find((t) => t.id === data.selectedId) ||
     selectableTenants.find((t) => t.is_primary) ||
     selectableTenants[0];
-  const settingsTenant = ["settings", "whatsappSettings"].includes(
-    currentSection,
-  )
-    ? selected
-    : null;
   const customerTenants = tenantSelectOptions(
     data.tenants.filter((t) => !t.is_primary),
   );
@@ -514,29 +545,25 @@ export function SuperAdminDashboard({
 
   return (
     <div className="min-w-0 ">
-      <Card className="rounded-lg">
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-          <div>
-            <h3 className="card-title font-bold">
-              {settingsTenant?.name || "MedizinHub HMS Primary Tenant"}
-            </h3>
-            <p className="card-desc text-slate-500">
-              {settingsTenant
-                ? "Manage tenant settings, branches, numbering, modules, and providers for the selected tenant."
-                : "Manage tenants, roles, subscriptions, and platform settings from separate pages."}
-            </p>
-          </div>
-          <Badge tone="blue" className="normal-label">
-            {isRoot
-              ? "Root Platform Access"
-              : apiSession?.user?.user_type === "support_admin"
-                ? "Temporary Support Access"
-                : "Scoped Platform Access"}
-          </Badge>
-        </div>
-      </Card>
       <StatusToast message={data.message} onClose={() => data.setMessage("")} />
-      {activeListConfig && (
+      {showSettingsModulePicker && (
+        <BreadcrumbSlot>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="hidden shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:inline">
+              Settings module
+            </span>
+            <SearchableSelect
+              value={settingsModuleId}
+              onChange={openListing}
+              options={settingsModuleOptions}
+              placeholder="Open settings module"
+              searchable={false}
+              className="w-[170px] sm:w-[210px]"
+            />
+          </div>
+        </BreadcrumbSlot>
+      )}
+      {activeListConfig && !["tenants", "roles"].includes(currentSection) && (
         <BreadcrumbSlot>
           <div className="flex items-center gap-2">
             <AdaptiveResultCount
@@ -642,11 +669,15 @@ export function SuperAdminDashboard({
           templates={data.primaryTemplates}
           busy={data.busy}
           createTenant={actions.createTenant}
+          back={() => changeSection("tenants")}
         />
       )}
       {currentSection === "roles" && (
         <RolesManagement
           selected={selected}
+          tenants={selectableTenants}
+          selectedId={data.selectedId}
+          setSelectedId={setSelectedTenantId}
           rows={listRows}
           canCopyIds={canCopyIds}
           setSelectedRoleId={setSelectedRoleId}
@@ -856,21 +887,38 @@ export function SuperAdminDashboard({
         />
       )}
       {currentSection === "whatsappSettings" && (
-        <div className="space-y-5">
-          <Card className="mt-3">
-            <div className="grid gap-4 md:grid-cols-[200px_250px_auto] md:items-end">
-              <TenantPicker
-                tenants={customerTenants}
-                selectedId={data.selectedId}
-                setSelectedId={setSelectedTenantId}
+        <div className="space-y-3">
+          <BreadcrumbSlot>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="hidden shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:inline">
+                Tenant
+              </span>
+              <SearchableSelect
+                value={data.selectedId}
+                onChange={setSelectedTenantId}
+                options={customerTenants.map((tenant: any) => ({
+                  value: tenant.id,
+                  label: tenant.name,
+                }))}
+                placeholder="Select tenant"
+                searchable={false}
+                className="w-[150px] sm:w-[190px]"
               />
-              <Badge tone={tenantWhatsAppEnabled ? "green" : "slate"} className="normal-badge">
-                {tenantWhatsAppEnabled
-                  ? "Included in active subscription"
-                  : "Not included in active subscription"}
+              <Badge
+                tone={tenantWhatsAppEnabled ? "green" : "slate"}
+                className="normal-label inline-flex whitespace-nowrap"
+              >
+                <span className="sm:hidden">
+                  {tenantWhatsAppEnabled ? "Included" : "Not included"}
+                </span>
+                <span className="hidden sm:inline">
+                  {tenantWhatsAppEnabled
+                    ? "Included in active subscription"
+                    : "Not included in active subscription"}
+                </span>
               </Badge>
             </div>
-          </Card>
+          </BreadcrumbSlot>
           {tenantWhatsAppEnabled ? (
             <WhatsAppIntegrationSettings
               apiSession={apiSession}

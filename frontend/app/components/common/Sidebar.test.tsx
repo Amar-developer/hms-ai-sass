@@ -13,7 +13,10 @@ describe("Sidebar module navigation", () => {
 
     render(
       <Sidebar
-        visibleNav={[["billing", "Invoices", ReceiptText]]}
+        visibleNav={[
+          ["clinic", "Clinic Setup", ReceiptText],
+          ["billing", "Invoices", ReceiptText],
+        ]}
         activePage="expense"
         navigatePage={navigatePage}
         beginNavigation={beginNavigation}
@@ -21,7 +24,7 @@ describe("Sidebar module navigation", () => {
         canAccessPlatformWorkspace={false}
         reportsOpen={false}
         setReportsOpen={vi.fn()}
-        clinicOpen={false}
+        clinicOpen
         setClinicOpen={vi.fn()}
         reportsSection="metrix"
         setReportsSection={vi.fn()}
@@ -37,7 +40,7 @@ describe("Sidebar module navigation", () => {
         setSuperAdminSection={vi.fn()}
         visibleTenantAdminSections={[]}
         visibleClinicSections={[]}
-        clinicModuleSections={[]}
+        clinicModuleSections={[["expense", "Expense", ReceiptText]]}
         enabled={() => true}
         clinic={{}}
         setSidebarOpen={vi.fn()}
@@ -56,6 +59,14 @@ describe("Sidebar module navigation", () => {
     link.addEventListener("click", (event) => event.preventDefault());
     fireEvent.click(link);
     expect(beginNavigation).toHaveBeenCalledWith("billing", "/billing");
+    expect(navigatePage).not.toHaveBeenCalled();
+
+    beginNavigation.mockClear();
+    const expenseLink = screen.getByRole("link", { name: /expense/i });
+    expect(expenseLink.getAttribute("href")).toBe("/clinic/expense");
+    expenseLink.addEventListener("click", (event) => event.preventDefault());
+    fireEvent.click(expenseLink);
+    expect(beginNavigation).toHaveBeenCalledWith("expense", "/clinic/expense");
     expect(navigatePage).not.toHaveBeenCalled();
   });
 });

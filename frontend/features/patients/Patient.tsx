@@ -17,7 +17,7 @@ import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
 import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
-import { BreadcrumbSlot } from "@/features/shell/AppShell";
+import { BreadcrumbSlot, useShellChrome } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
 import { canReadPatientLinkedModule } from "./patientModuleAccess";
 import {
@@ -60,6 +60,7 @@ export function Patient({
   section?: PatientSectionId;
 }) {
   const router = useRouter();
+  const { beginNavigation } = useShellChrome();
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const userPermissions = apiSession?.user?.permissions || [];
@@ -387,6 +388,7 @@ export function Patient({
           : nextView === "detail" && id
             ? `/patients/${id}`
             : "/patients";
+    beginNavigation("patients", path);
     router.push(path);
     setMessage("");
     requestAnimationFrame(() =>
@@ -401,11 +403,12 @@ export function Patient({
 
   function openPatientSection(id: string, nextSection: PatientSectionId) {
     if (!id) return;
-    router.push(
+    const path =
       nextSection === "home"
         ? `/patients/${id}`
-        : `/patients/${id}/${nextSection}`,
-    );
+        : `/patients/${id}/${nextSection}`;
+    beginNavigation("patients", path);
+    router.push(path);
   }
 
   const {

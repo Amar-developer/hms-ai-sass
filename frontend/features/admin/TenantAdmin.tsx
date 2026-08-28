@@ -17,7 +17,7 @@ import { FormField } from "@/app/components/FormElements";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
 import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
-import { BreadcrumbSlot } from "@/features/shell/AppShell";
+import { BreadcrumbSlot, useShellChrome } from "@/features/shell/AppShell";
 import { sortRows } from "@/utils/sortRows";
 import {
   applyQueryFilters,
@@ -68,6 +68,7 @@ export function TenantAdmin({
   basePath = "/admin",
 }: any) {
   const router = useRouter();
+  const { beginNavigation } = useShellChrome();
   const [confirm, setConfirm] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
   const [reportBusy, setReportBusy] = useState("");
@@ -123,6 +124,7 @@ export function TenantAdmin({
     if (opts.replace) {
       router.replace(path);
     } else {
+      beginNavigation(basePath.split("/").filter(Boolean)[0] || "admin", path);
       router.push(path);
     }
     requestAnimationFrame(() =>
