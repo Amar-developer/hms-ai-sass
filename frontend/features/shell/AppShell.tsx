@@ -911,7 +911,11 @@ export function AppShell({
         <main
           ref={mainScrollRef}
           className={`
+<<<<<<< Updated upstream
     scrollbar-hidden relative h-full min-w-0 flex-1 overflow-y-auto bg-white [scrollbar-gutter:stable]
+=======
+    scrollbar-hidden h-full min-w-0 flex-1 overflow-y-auto global-bg
+>>>>>>> Stashed changes
     md:ml-16
     lg:ml-0
   `}
@@ -932,7 +936,14 @@ export function AppShell({
             />
           )}
 
+<<<<<<< Updated upstream
           <div className=" border-slate-100  px-4 py-2 lg:px-5 bg-[#f4f6f5d9]">
+=======
+          {showNavigationSkeleton ? (
+            <BreadcrumbBarSkeleton />
+          ) : (
+            <div className=" border-slate-100  px-4 py-2 lg:px-5 ">
+>>>>>>> Stashed changes
               <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-2">
                   {/* Back / Forward group */}
@@ -958,14 +969,14 @@ export function AppShell({
                   {/* Divider */}
 
                   {/* Breadcrumb */}
-                  <div className="flex min-w-0 items-center gap-2 p-2 rounded-lg">
+                  <div className="flex min-w-0 items-center gap-2 p-2 rounded-lg  ">
                     <Button
                       type="button"
                       onClick={() => navigatePage("dashboard")}
                       disabled={
                         activePage === "dashboard" || !enabled("dashboard")
                       }
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold text-brand hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold hover:bg-white hover:text-emerald-600 disbaled:cursor-pointer disabled:bg-emerlad-600 disabled:text-white"
                     >
                       <Home size={14} /> Dashboard
                     </Button>
@@ -1080,7 +1091,13 @@ export function AppShell({
             </div>
 
           <section
+<<<<<<< Updated upstream
             className=" py-2 px-6 bg-[#f4f6f5d9]"
+=======
+            className=" py-2 px-6 bg-[#f4f6f5d9] "
+            aria-busy={showNavigationSkeleton}
+            aria-live="polite"
+>>>>>>> Stashed changes
           >
             <ShellChromeContext.Provider value={shellChromeValue}>
               {children}

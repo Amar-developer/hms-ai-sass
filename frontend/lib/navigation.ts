@@ -6,7 +6,7 @@
     Clock,
     Dumbbell,
     FlaskConical,
-    HeartPulse,
+    LayoutDashboard,
     Home,
     PackageOpen,
     Pill,
@@ -20,7 +20,7 @@
   } from "lucide-react";
 
   export const nav = [
-    ["dashboard", "Dashboard", HeartPulse],
+    ["dashboard", "Dashboard", LayoutDashboard],
     ["clinic", "Clinic Setup", Hospital],
     ["opd", "OPD Workspace", Stethoscope],
     ["queue", "Token Queue", Clock],

@@ -1,11 +1,12 @@
-import './globals.css';
-import { QueryProvider } from '@/features/shell/QueryProvider';
+import "./globals.css";
+import { QueryProvider } from "@/features/shell/QueryProvider";
+import { Poppins, Montserrat } from "next/font/google";
 
 export const metadata = {
-  title: 'MedizinHub HMS',
-  description: 'Plug and play healthcare SaaS workspace',
+  title: "MedizinHub HMS",
+  description: "Plug and play healthcare SaaS workspace",
   icons: {
-    icon: '/favicon.ico',
+    icon: "/favicon.ico",
   },
 };
 

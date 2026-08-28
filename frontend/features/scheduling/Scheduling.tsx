@@ -27,6 +27,7 @@ import { getScheduleColumns } from "./column";
 import { getScheduleTableSchema, getScheduleQueryFields } from "./filterSchema";
 import type { QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
+import DataHeader from "@/app/components/common/DataHeader";
 
 export function Scheduling({
   apiSession,
@@ -415,35 +416,16 @@ export function Scheduling({
           />
         </div>
       </BreadcrumbSlot>
-      <div className="p-2 bg-white rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div className="flex">
-          <div className="p-2 rounded-lg mr-2 text-emarald-900 bg-emerald-50">
-            <ClipboardList className="text-emerald-600" />
-          </div>
-          <div>
-            <h3 className="card-title font-bold">
-              Doctor Scheduling & Availability
-            </h3>
-            <p className="card-desc text-slate-500">
-              Tenant-scoped weekly consultation timings mapped to doctor,
-              branch, medical department, room, and slot duration.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => open("create")}
-            className="primary-action gap-2 px-4 py-3 text-xs"
-          >
-            <PlusCircle size={16} />
-            Create Schedule
-          </button>
-        </div>
-      </div>
-
+      <DataHeader
+        title="Doctor Scheduling & Availability"
+        description="Tenant-scoped weekly consultation timings mapped to doctor,
+              branch, medical department, room, and slot duration."
+        buttonText="Create Schedule"
+        cardIcon={ClipboardList}
+        open={open}
+      />
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-3 overflow-x-auto max-w-[1000px] rounded-lg">
+      <div className="table-wrapper-width">
         <DataTable
           columns={columns}
           data={pageRows}
@@ -452,7 +434,7 @@ export function Scheduling({
           emptyDescription="Doctor weekly consultation timings created for branches and departments will show up here."
           emptyIcon={CalendarClock}
           minBodyHeight={`${pageRows.length > 0 ? "" : "220px"}`}
-          className=" rounded-lg border border-slate-200 overflow-auto"
+          className="table-width"
           onRowClick={(row) => open("view", row.id)}
           sort={sort ?? undefined}
           onSortChange={setSort}

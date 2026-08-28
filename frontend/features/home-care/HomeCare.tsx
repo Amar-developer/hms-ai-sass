@@ -18,6 +18,7 @@ import { BookingDetail } from "./components/BookingDetail";
 import { pageSize } from "@/utils/constants";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import {
   useHomeCareActions,
@@ -33,6 +34,7 @@ import { sortRows } from "@/utils/sortRows";
 import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 import { HeartPulse, Home, MapPin, PlusCircle } from "lucide-react";
+import DataHeader from "@/app/components/common/DataHeader";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
 
@@ -346,9 +348,15 @@ export function HomeCare({
     });
   }
 
+<<<<<<< Updated upstream
   function openCreate() {
     resetForm(bookingTypeTab);
     navigateHomeCare(`/home_care/${newSegment("visit")}`);
+=======
+  function openCreate() {
+    resetForm(bookingTypeTab);
+    router.push(`/home_care/${newSegment("visit")}`);
+>>>>>>> Stashed changes
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -516,36 +524,21 @@ export function HomeCare({
       {view === "list" && (
         <div className="space-y-3">
           <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-3">
-                <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-50 text-brand">
-                  <HeartPulse className="h-4 w-4" />
-                </span>
-                <div>
-                  <h2 className="text-base font-black tracking-tight text-slate-950">
-                    Home Care / Visit Workspace
-                  </h2>
-                  <p className="text-xs font-medium text-slate-500">
-                    Patient bookings, scheduled services, visits and billing in one workspace
-                  </p>
-                </div>
-              </div>
-              {canCreateBooking && (
-                <button
-                  type="button"
-                  onClick={openCreate}
-                  className="primary-action h-9 gap-2 whitespace-nowrap px-4 text-xs"
-                >
-                  <PlusCircle size={16} />
-                  New Booking
-                </button>
-              )}
-            </div>
-            <nav
-              className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
-              aria-label="Home care workspace sections"
-            >
-              {[
+            <DataHeader
+             title="Home Care / Visit Workspace"
+             description="Patient bookings, scheduled services, visits and billing in one workspace"
+             cardIcon={HeartPulse}
+             canCreate={canCreateBooking}
+             buttonText="New Booking"
+             open={openCreate}
+            />
+            <StatusTabsNav
+              ariaLabel="Home care workspace sections"
+              activeId={bookingTypeTab}
+              onSelect={(id) =>
+                setBookingTypeTab(id as "home_care" | "home_visit")
+              }
+              tabs={[
                 {
                   id: "home_care" as const,
                   label: "Home Care",
@@ -562,36 +555,8 @@ export function HomeCare({
                     (booking: any) => bookingTypeOf(booking) === "home_visit",
                   ).length,
                 },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                const active = bookingTypeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => setBookingTypeTab(tab.id)}
-                    className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
-                      active
-                        ? "bg-brand text-brand-fg"
-                        : "text-slate-600 hover:bg-white hover:text-slate-900"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {tab.label}
-                    <span
-                      className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
-                        active
-                          ? "bg-white/20 text-brand-fg"
-                          : "bg-slate-200 text-slate-600"
-                      }`}
-                    >
-                      {tab.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </nav>
+              ]}
+            />
           </section>
           <BookingsList
             bookings={pagedBookings}

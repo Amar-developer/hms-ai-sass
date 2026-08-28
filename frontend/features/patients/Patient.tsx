@@ -31,6 +31,7 @@ import { getPatientTableSchema, getPatientQueryFields } from "./filterSchema";
 import { type QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 import type { AppNavigationTarget } from "@/lib/navigationTarget";
+import DataHeader from "@/app/components/common/DataHeader";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -592,35 +593,18 @@ export function Patient({
           />
         </div>
       </BreadcrumbSlot>
-      <div className="flex flex-col bg-white p-2 rounded-lg justify-between gap-4 lg:flex-row lg:items-start ">
-        <div className="flex">
-          <div className="p-2 rounded-lg mr-2 text-emarald-900 bg-emerald-50">
-            <Users className="text-emerald-600" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="card-title font-bold">EMR / Patient Management</h3>
-            <p className="mt-1 max-w-3xl card-desc text-slate-500">
-              Tenant-scoped patient registry with history, alerts, treatment
-              timeline, and audited record views.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {canCreatePatient && (
-            <button
-              type="button"
-              onClick={() => open("create")}
-              className="primary-action shrink-0 gap-2 px-5 py-3 text-xs shadow-sm"
-            >
-              <PlusCircle size={16} />
-              Create Patient
-            </button>
-          )}
-        </div>
-      </div>
+
+      <DataHeader
+        title="EMR / Patient Management"
+        description="Tenant-scoped patient registry with history, alerts, treatment
+              timeline, and audited record views"
+        canCreate={canCreatePatient}
+        cardIcon={Users}
+        buttonText="Create Patient"
+        open={open}
+      />
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-3 overflow-x-auto  rounded-lg  bg-white z-0 scrollbar-hidden">
-        <div className="min-w-[1120px] ">
+        <div className="table-wrapper-width">
           <DataTable
             columns={patientColumns}
             data={pageRows}
@@ -632,9 +616,9 @@ export function Patient({
             onRowClick={(row: any) => open("detail", row.id)}
             sort={sort ?? undefined}
             onSortChange={handleSortChange}
+            className="table-width"
           />
         </div>
-      </div>
       <Pagination
         page={safePage}
         totalPages={totalPages}

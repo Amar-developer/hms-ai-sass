@@ -18,6 +18,7 @@ import {
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
 import { Badge, Button } from "@/app/components/common/ui";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import { PatientDetail } from "./components/PatientDetail";
 import { PatientFlagBadges } from "./components/PatientFlagBadges";
 
@@ -118,7 +119,7 @@ export function PatientFlow({
     })();
 
   return (
-    <div className="grid gap-4 ">
+    <div className="grid gap-2">
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col justify-between gap-3 px-4 py-3 md:flex-row md:items-start ">
           <div className="flex items-start gap-4 ">
@@ -207,33 +208,12 @@ export function PatientFlow({
           </div>
         </div>
 
-        <nav
-          className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
-          aria-label="Patient workspace sections"
-        >
-          {SECTION_TABS.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = tab.id === activeSection;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-current={isActive ? "page" : undefined}
-                onClick={() => onSectionChange(tab.id)}
-                className={`inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-xs font-bold transition-colors ${
-                  isActive
-                    ? "bg-brand text-brand-fg"
-                    : "text-slate-600 hover:bg-white hover:text-slate-900"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+        <StatusTabsNav
+          ariaLabel="Patient workspace sections"
+          activeId={activeSection}
+          onSelect={(id) => onSectionChange(id as PatientSectionId)}
+          tabs={SECTION_TABS}
+        />
       </section>
 
       <div

@@ -26,6 +26,7 @@ import {
   type QueryFilterRow,
 } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
+import DataHeader from "@/app/components/common/DataHeader";
 
 function itemCodePreview(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -544,7 +545,7 @@ export function Items({
   }
 
   return (
-    <div className="space-y-6 scroll-mt-24" ref={containerRef}>
+    <div className="space-y-4 scroll-mt-24" ref={containerRef}>
       <BreadcrumbSlot>
         <div className="flex items-center gap-2">
           <AdaptiveResultCount
@@ -582,30 +583,15 @@ export function Items({
       </BreadcrumbSlot>
 
       {/* Item List */}
-      <Card className="p-3 bg-white">
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center p-2 bg-white rounded-lg">
-          <div className="flex">
-            <div className="p-2 rounded-lg mr-2 text-emarald-900 bg-emerald-50">
-              <PackageOpen className="text-emerald-600" />
-            </div>
-            <div>
-              <h3 className="card-title font-bold">Item List</h3>
-              <p className="card-desc text-slate-500">
-                Configure items used across healthcare services
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => open("create", "", "medicine")}
-            className="primary-action gap-2 px-4 py-3 text-xs"
-          >
-            <PlusCircle size={16} />
-            Create Item
-          </button>
-        </div>
+        <DataHeader
+          title="Item List"
+          description="Configure items used across healthcare services"
+          cardIcon={PackageOpen}
+          buttonText="Create Item"
+          open={open}
+        />
         <StatusToast message={message} onClose={() => setMessage("")} />
-        <div className="mt-4">
+        <div className="table-wrapper-width">
           <DataTable
             columns={itemColumns}
             data={pagedRows}
@@ -617,6 +603,7 @@ export function Items({
             sort={sort ?? undefined}
             onSortChange={setSort}
             onRowClick={openView}
+            className="table-width"
           />
           {confirmAction && (
             <ConfirmModal
@@ -633,7 +620,6 @@ export function Items({
           total={sortedRows.length}
           onPage={setPage}
         />
-      </Card>
     </div>
   );
 }

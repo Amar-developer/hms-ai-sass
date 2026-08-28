@@ -17,6 +17,7 @@ import {
 
 import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
 import { SearchableSelect } from "@/app/components/common/ui";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import type { Props as AppointmentWorkspaceProps } from "@/features/appointments/types";
 import { DoctorConsultation } from "@/features/consulation/DoctorConsultation";
 import { uniqueDepartmentRows } from "@/lib/options";
@@ -61,7 +62,11 @@ const sectionTabs = [
     label: "Appointments",
     icon: CalendarDays,
     path: "/opd/appointments",
-    permissions: ["appointments.read", "appointments.manage", "appointments.create"],
+    permissions: [
+      "appointments.read",
+      "appointments.manage",
+      "appointments.create",
+    ],
   },
   {
     id: "schedule",
@@ -93,7 +98,12 @@ const sectionTabs = [
     label: "Prescriptions",
     icon: Pill,
     path: "/opd/prescriptions",
-    permissions: ["pharmacy.read", "pharmacy.create", "pharmacy.edit", "pharmacy.manage"],
+    permissions: [
+      "pharmacy.read",
+      "pharmacy.create",
+      "pharmacy.edit",
+      "pharmacy.manage",
+    ],
   },
   {
     id: "invoices",
@@ -107,11 +117,7 @@ const sectionTabs = [
     label: "Payments",
     icon: CreditCard,
     path: "/opd/payments",
-    permissions: [
-      "billing.manage",
-      "payments.manage",
-      "payments.create",
-    ],
+    permissions: ["billing.manage", "payments.manage", "payments.create"],
   },
   {
     id: "templates",
@@ -153,7 +159,9 @@ function pendingLabReferralCount({
   orders: any[];
 }) {
   const orderedConsultationIds = new Set(
-    orders.map((order: any) => String(order.consultation_id || "")).filter(Boolean),
+    orders
+      .map((order: any) => String(order.consultation_id || ""))
+      .filter(Boolean),
   );
   const dismissedIds = new Set(
     readDismissedConsultationIds("medizinhub.labDismissedConsultations"),
@@ -186,7 +194,9 @@ function pendingPrescriptionCount({
   issues: any[];
 }) {
   const issuedConsultationIds = new Set(
-    issues.map((issue: any) => String(issue.consultation_id || "")).filter(Boolean),
+    issues
+      .map((issue: any) => String(issue.consultation_id || ""))
+      .filter(Boolean),
   );
   const dismissedIds = new Set(
     readDismissedConsultationIds("medizinhub.pharmacyDismissedConsultations"),
@@ -215,7 +225,7 @@ export function OPDWorkspace({
   const permissionKeys = workspace.apiSession?.user?.permissions || [];
   const isTenantAdmin = Boolean(
     workspace.apiSession?.user?.user_type === "tenant_admin" ||
-      workspace.apiSession?.user?.roles?.includes("tenant_admin"),
+    workspace.apiSession?.user?.roles?.includes("tenant_admin"),
   );
   const hasAnyPermission = (keys: readonly string[]) => {
     if (!workspace.apiSession) return true;
@@ -260,7 +270,10 @@ export function OPDWorkspace({
 
   useEffect(() => {
     let cancelled = false;
-    if (!workspace.apiSession || (!canLoadBillingQueue && !canLoadPaymentsQueue)) {
+    if (
+      !workspace.apiSession ||
+      (!canLoadBillingQueue && !canLoadPaymentsQueue)
+    ) {
       setBillingPendingCount(0);
       setPaymentPendingCount(0);
       return;
@@ -414,7 +427,8 @@ export function OPDWorkspace({
                   OPD Workspace
                 </h2>
                 <p className="text-xs font-medium text-slate-500">
-                  Appointments, consultation, diagnostics and billing in one workspace
+                  Appointments, consultation, diagnostics and billing in one
+                  workspace
                 </p>
               </div>
             </div>
@@ -452,49 +466,25 @@ export function OPDWorkspace({
           </div>
         </div>
 
-        <nav
-          className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
-          aria-label="OPD workspace sections"
-        >
-          {visibleTabs.map((tab) => {
-            const Icon = tab.icon;
-            const active =
-              effectiveSection === tab.id ||
-              (effectiveSection === "new" && tab.id === "appointments");
-            return (
-              <button
-                key={tab.id}
-                ref={(node) => {
-                  tabRefs.current[tab.id] = node;
-                }}
-                type="button"
-                aria-current={active ? "page" : undefined}
-                onClick={() => openSection(tab.path)}
-                className={`inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-xs font-bold transition-colors ${
-                  active
-                    ? "bg-brand text-brand-fg"
-                    : "text-slate-600 hover:bg-white hover:text-slate-900"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{tab.label}</span>
-                <span className="grid h-5 w-6 place-items-center">
-                  {tabCounts[tab.id] ? (
-                  <span
-                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
-                      active
-                        ? "bg-white text-emerald-600"
-                        : "bg-slate-200 text-slate-600"
-                    }`}
-                  >
-                    {tabCounts[tab.id]}
-                  </span>
-                  ) : null}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
+        <StatusTabsNav
+          ariaLabel="OPD workspace sections"
+          activeId={
+            effectiveSection === "new" ? "appointments" : effectiveSection
+          }
+          onSelect={(id) =>
+            openSection(visibleTabs.find((tab) => tab.id === id)?.path || "")
+          }
+          hideZeroCount
+          reserveBadgeSpace
+          badgeActiveClassName="bg-white text-emerald-600"
+          tabRefs={tabRefs}
+          tabs={visibleTabs.map((tab) => ({
+            id: tab.id,
+            label: tab.label,
+            icon: tab.icon,
+            count: tabCounts[tab.id] || 0,
+          }))}
+        />
       </section>
 
       {effectiveSection === "appointments" || effectiveSection === "new" ? (

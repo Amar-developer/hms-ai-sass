@@ -106,18 +106,24 @@ export function PatientForm({
               "whatsappPreferredLanguage",
             ) || "en",
       monthlyTrackingEnabled: Boolean(
-        patientField(patient, "monthly_tracking_enabled", "monthlyTrackingEnabled"),
+        patientField(
+          patient,
+          "monthly_tracking_enabled",
+          "monthlyTrackingEnabled",
+        ),
       ),
       monthlyRefillOn: patientDateInputValue(
         patientField(patient, "monthly_refill_on", "monthlyRefillOn"),
       ),
       monthlyRefillNotes:
-        patientField(patient, "monthly_refill_notes", "monthlyRefillNotes") || "",
+        patientField(patient, "monthly_refill_notes", "monthlyRefillNotes") ||
+        "",
       monthlyLabOn: patientDateInputValue(
         patientField(patient, "monthly_lab_on", "monthlyLabOn"),
       ),
       monthlyLabTestName:
-        patientField(patient, "monthly_lab_test_name", "monthlyLabTestName") || "",
+        patientField(patient, "monthly_lab_test_name", "monthlyLabTestName") ||
+        "",
       monthlyLabNotes:
         patientField(patient, "monthly_lab_notes", "monthlyLabNotes") || "",
       familyRelatedPatientId: "",
@@ -215,18 +221,24 @@ export function PatientForm({
               "whatsappPreferredLanguage",
             ) || "en",
       monthlyTrackingEnabled: Boolean(
-        patientField(patient, "monthly_tracking_enabled", "monthlyTrackingEnabled"),
+        patientField(
+          patient,
+          "monthly_tracking_enabled",
+          "monthlyTrackingEnabled",
+        ),
       ),
       monthlyRefillOn: patientDateInputValue(
         patientField(patient, "monthly_refill_on", "monthlyRefillOn"),
       ),
       monthlyRefillNotes:
-        patientField(patient, "monthly_refill_notes", "monthlyRefillNotes") || "",
+        patientField(patient, "monthly_refill_notes", "monthlyRefillNotes") ||
+        "",
       monthlyLabOn: patientDateInputValue(
         patientField(patient, "monthly_lab_on", "monthlyLabOn"),
       ),
       monthlyLabTestName:
-        patientField(patient, "monthly_lab_test_name", "monthlyLabTestName") || "",
+        patientField(patient, "monthly_lab_test_name", "monthlyLabTestName") ||
+        "",
       monthlyLabNotes:
         patientField(patient, "monthly_lab_notes", "monthlyLabNotes") || "",
       familyRelatedPatientId: "",
@@ -250,7 +262,9 @@ export function PatientForm({
       );
       setFamilyPatientOptions(
         (Array.isArray(rows) ? rows : [])
-          .filter((row: any) => row.id !== patient?.id && !linkedIds.has(row.id))
+          .filter(
+            (row: any) => row.id !== patient?.id && !linkedIds.has(row.id),
+          )
           .map((row: any) => ({
             value: row.id,
             label: row.full_name || row.patient_number || row.id,
@@ -334,30 +348,33 @@ export function PatientForm({
   }, [dateOfBirth, setValue]);
 
   return (
-    <Card>
+    <Card className="p-0">
       {/* Header */}
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center ">
-        <div>
-          <h3 className="card-title font-bold">{title}</h3>
-          <p className="card-desc text-slate-500">
-            {patient?.patient_number || "Create tenant-scoped patient record."}
-          </p>
-        </div>
-        <button type="button" onClick={back} className="close-button bg-white font-bold">
-          Back
-        </button>
-      </div>
-      {error && (
-        <p className="mt-3 text-sm font-bold text-red-500">{error}</p>
-      )}
+
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="mt-4 space-y-3"
+        className="space-y-3 bg-white rounded-lg p-4"
       >
-        <section className="rounded-lg border border-slate-200 bg-white p-3">
-          <div>
-            <h4 className="text-sm font-black text-slate-900">Basic Details</h4>
+        <section className="rounded-lg bg-white">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center ">
+            <div>
+              <h3 className="card-title font-bold">{title}</h3>
+              <p className="card-desc text-slate-500">
+                {patient?.patient_number ||
+                  "Create tenant-scoped patient record."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={back}
+              className="close-button bg-white font-bold"
+            >
+              Back to patients
+            </button>
           </div>
+          {error && (
+            <p className="mt-3 text-sm font-bold text-red-500">{error}</p>
+          )}
           <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <FormField label="Full Name" required>
               <Input
@@ -622,7 +639,9 @@ export function PatientForm({
                   monthlyTrackingEnabled ? "bg-emerald-600" : "bg-slate-400"
                 }`}
               />
-              {monthlyTrackingEnabled ? "Monthly Patient On" : "Monthly Patient Off"}
+              {monthlyTrackingEnabled
+                ? "Monthly Patient On"
+                : "Monthly Patient Off"}
             </button>
           </div>
           {monthlyTrackingEnabled ? (
@@ -634,9 +653,7 @@ export function PatientForm({
                 <Input type="date" {...register("monthlyLabOn")} />
               </FormField>
             </div>
-          ) : (
-            null
-          )}
+          ) : null}
         </section>
 
         {apiSession && (
@@ -689,7 +706,7 @@ export function PatientForm({
         )}
 
         <div className="flex flex-wrap gap-2">
-          <Button disabled={busy} className='save-button'>
+          <Button disabled={busy} className="save-button">
             {busy ? "Saving..." : patient ? "Save Patient" : "Create Patient"}
           </Button>
 
@@ -808,7 +825,7 @@ export function MembershipEnrollForm({
         />
       </FormField>
       <div className="md:col-span-5">
-        <Button disabled={loading || !selectedPlan} className='save-button'>
+        <Button disabled={loading || !selectedPlan} className="save-button">
           {loading ? "Saving..." : "Enroll & Create Invoice"}
         </Button>
         {activePlans.length === 0 && (

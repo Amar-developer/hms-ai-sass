@@ -285,7 +285,7 @@ export function BookingForm({
   }, [lineItems, setValue]);
 
   return (
-    <Card className="p-3 bg-white">
+    <Card className="p-4 bg-white">
       <div className="flex justify-between gap-3">
         <div>
           <h3 className="card-title font-bold">

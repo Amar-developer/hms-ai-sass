@@ -180,7 +180,7 @@ export function UserForm({
       : canResetTenantUserPassword(apiSession, user);
 
   return (
-    <Card className="bg-white p-3">
+    <Card className="bg-white p-4">
       <Header
         title={title}
         subtitle={user?.email || "Create tenant-scoped users only."}

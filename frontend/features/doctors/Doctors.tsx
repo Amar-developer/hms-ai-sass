@@ -32,6 +32,7 @@ import { getDoctorTableSchema, getDoctorQueryFields } from "./filterSchema";
 import type { QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import DataHeader from "@/app/components/common/DataHeader";
 
 const pageSize = 10;
 
@@ -389,35 +390,17 @@ export function Doctors({
           />
         </div>
       </BreadcrumbSlot>
-      <div className="bg-white p-2 rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div className="flex">
-          <div className="p-2 rounded-lg mr-2 text-emarald-900 bg-emerald-50">
-          <UserCog className="text-emerald-600"/>
-        </div>
-        <div>
-          <h3 className="card-title font-bold">Doctor Management</h3>
-          <p className="card-desc te  xt-slate-500">
-            Create, update, deactivate, and map doctors to tenants, branches,
-            and medical departments.
-          </p>
-        </div>
-        </div>
-        <div className="flex justify-start items-center gap-2">
-          {canCreateDoctor && (
-            <button
-              type="button"
-              onClick={() => open("create")}
-              className="primary-action gap-2 px-4 py-2 text-xs lg:w-full"
-            >
-              <PlusCircle size={16} />
-              Create Doctor
-            </button>
-          )}
-        </div>
-      </div>
+      <DataHeader
+        title="Doctor Management"
+        description="Create, update, deactivate, and map doctors to tenants, branches,
+            and medical departments."
+        canCreate={canCreateDoctor}
+        buttonText="Create Doctor"
+        cardIcon={UserCog}
+        open={open}
+      />
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-4 overflow-x-auto scrollbar-thin rounded-lg border border-slate-200">
-        <div className="min-w-[1080px]">
+        <div className="table-wrapper-width">
           <DataTable
             columns={doctorColumns}
             data={pageRows}
@@ -429,9 +412,9 @@ export function Doctors({
             onRowClick={(row: any) => open("view", row.id)}
             sort={sort ?? undefined}
             onSortChange={setSort}
+            className="table-width"
           />
         </div>
-      </div>
       <Pagination
         page={safePage}
         totalPages={totalPages}

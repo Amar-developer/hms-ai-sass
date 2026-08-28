@@ -22,6 +22,7 @@ import {
 } from "@/app/components/common/ui";
 import { FormField, NumberField } from "@/app/components/FormElements";
 import { SearchPicker } from "@/app/components/clinicalRows";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { money, today } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
@@ -49,8 +50,12 @@ import {
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { getPharmacyColumns, getPrescriptionColumns } from "./Column";
 import { getPharmacyTableSchema, getPharmacyQueryFields } from "./filterSchema";
-import { type QueryFieldOption, type QueryFilterRow } from "@/utils/queryFilter";
+import {
+  type QueryFieldOption,
+  type QueryFilterRow,
+} from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
+import DataHeader from "@/app/components/common/DataHeader";
 
 const pageSize = 10;
 const PHARMACY_STATUS_TAB_ID = "pharmacy-worklist-status-tab";
@@ -122,9 +127,7 @@ export function Pharmacy({
   const [supplierName, setSupplierName] = useState("Demo Pharma Supplier");
   const [purchaseQty, setPurchaseQty] = useState("50");
   const [purchaseOrderId, setPurchaseOrderId] = useState("PO-001");
-  const [purchaseDate, setPurchaseDate] = useState(() =>
-    today(),
-  );
+  const [purchaseDate, setPurchaseDate] = useState(() => today());
   const [purchaseDiscount, setPurchaseDiscount] = useState("0");
   const [lineDiscount, setLineDiscount] = useState("0");
   const [cgst, setCgst] = useState("6");
@@ -284,9 +287,13 @@ export function Pharmacy({
         rows: issuePageRows,
         filterOptions,
       }),
-    [worklistSourceOptions, worklistStatusOptions, issuePageRows, filterOptions],
+    [
+      worklistSourceOptions,
+      worklistStatusOptions,
+      issuePageRows,
+      filterOptions,
+    ],
   );
-
 
   const { patients, patientMap } = usePatientReferencesQuery(
     apiSession,
@@ -344,14 +351,16 @@ export function Pharmacy({
 
     const hasActiveFilters = Boolean(
       worklistQuery.trim() ||
-        worklistQueryFilters.length ||
-        amountMin.trim() ||
-        amountMax.trim() ||
-        worklistFromDate ||
-        worklistToDate,
+      worklistQueryFilters.length ||
+      amountMin.trim() ||
+      amountMax.trim() ||
+      worklistFromDate ||
+      worklistToDate,
     );
     const defaultMonth = currentMonthRange();
-    const fromDate = hasActiveFilters ? worklistFromDate : defaultMonth.fromDate;
+    const fromDate = hasActiveFilters
+      ? worklistFromDate
+      : defaultMonth.fromDate;
     const toDate = hasActiveFilters ? worklistToDate : defaultMonth.toDate;
     if (fromDate) params.set("from_date", fromDate);
     if (toDate) params.set("to_date", toDate);
@@ -716,6 +725,17 @@ export function Pharmacy({
     const amount = Number(editingAmountValue || 0);
     const ok = await updateIssueAmount(issue, amount);
     if (ok) {
+      // updateIssueAmount only reloads usePharmacyWorkspace's own `issues`
+      // list — the worklist table renders the separately server-paginated
+      // `issuePageRows`/`issueSummaryRows` (the latter feeding the "Enter
+      // Amount" count and total amount tiles), which that reload never
+      // touches, so the edited amount only showed up after a manual
+      // refresh/page reload. Patch them in place here instead of waiting on
+      // another fetch.
+      const patchAmount = (rows: typeof issuePageRows) =>
+        rows.map((row) => (row.id === issue.id ? { ...row, amount } : row));
+      setIssuePageRows(patchAmount);
+      setIssueSummaryRows(patchAmount);
       setEditingAmountId("");
       setEditingAmountValue("");
     }
@@ -790,7 +810,7 @@ export function Pharmacy({
               emptyMessage="No consultation prescriptions are waiting."
               emptyDescription="Prescriptions from signed OPD consultations will show up here."
               emptyIcon={Stethoscope}
-              minBodyHeight={`${visiblePrescriptions.length > 0 ?'':'220px'}`}
+              minBodyHeight={`${visiblePrescriptions.length > 0 ? "" : "220px"}`}
               rowClassName="hover:bg-emerald-50/30"
               onRowClick={(row: any) => setViewConsult(row)}
             />
@@ -811,7 +831,7 @@ export function Pharmacy({
         >
           Back to Worklist
         </button>
-        <Card className="p-3 bg-white">
+        <Card className="p-4 bg-white">
           <h3 className="card-title font-bold">
             Create Direct Prescription Order
           </h3>
@@ -953,11 +973,11 @@ export function Pharmacy({
           detail={consultDetail}
           loading={loadingDetail}
           busy={busy}
-            onClose={() => setViewConsult(null)}
-            onCreate={(a: any, pricePayload?: any) => {
-              setViewConsult(null);
-              createFromConsultation(a, pricePayload);
-            }}
+          onClose={() => setViewConsult(null)}
+          onCreate={(a: any, pricePayload?: any) => {
+            setViewConsult(null);
+            createFromConsultation(a, pricePayload);
+          }}
         />
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
@@ -984,38 +1004,7 @@ export function Pharmacy({
             queryFields={pharmacyQueryFields}
             queryFilters={worklistQueryFilters}
             onQueryFiltersChange={setWorklistQueryFilters}
-          >
-            {/* <FormField label="Price Min">
-              <Input
-                type="number"
-                value={amountMin}
-                onChange={(e: any) => setAmountMin(e.target.value)}
-                placeholder="Min amount"
-              />
-            </FormField>
-            <FormField label="Price Max">
-              <Input
-                type="number"
-                value={amountMax}
-                onChange={(e: any) => setAmountMax(e.target.value)}
-                placeholder="Max amount"
-              />
-            </FormField>
-            <FormField label="From">
-              <Input
-                type="date"
-                value={worklistFromDate}
-                onChange={(e: any) => setWorklistFromDate(e.target.value)}
-              />
-            </FormField>
-            <FormField label="To">
-              <Input
-                type="date"
-                value={worklistToDate}
-                onChange={(e: any) => setWorklistToDate(e.target.value)}
-              />
-            </FormField> */}
-          </AdaptiveFilterTrigger>
+          ></AdaptiveFilterTrigger>
           <AdaptiveSortTrigger
             fields={pharmacySchema.sortFields}
             sort={worklistSort}
@@ -1067,71 +1056,30 @@ export function Pharmacy({
         </section>
 
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
-                <Pill className="h-4 w-4" />
-              </span>
-              <div>
-                <h2 className="text-base font-black tracking-tight text-slate-950">
-                  Pharmacy Workspace
-                </h2>
-                <p className="text-xs font-medium text-slate-500">
-                  Prescriptions, dispensing, issue amounts and billing in one workspace
-                </p>
-              </div>
-            </div>
-            {canCreatePharmacyIssue && (
-              <button
-                type="button"
-                onClick={() =>
-                  router.push(`/pharmacy/${newSegment("pharmacy-order")}`)
-                }
-                className="primary-action h-9 gap-2 whitespace-nowrap px-4 text-xs"
-              >
-                <PlusCircle size={16} />
-                Create Prescription
-              </button>
-            )}
-          </div>
-          <nav
-            className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
-            aria-label="Pharmacy worklist sections"
-          >
-            {pharmacyStatusTabs.map((tab) => {
-              const Icon = tab.icon;
-              const active = activePharmacyStatus === tab.id;
-              const count =
+          <DataHeader
+            title="Pharmacy Workspace"
+            description="Prescriptions, dispensing, issue amounts and billing in one workspace"
+            cardIcon={Pill}
+            canCreate={canCreatePharmacyIssue}
+            buttonText="Create Prescription"
+            open={() =>
+              router.push(`/pharmacy/${newSegment("pharmacy-order")}`)
+            }
+          />
+          <StatusTabsNav
+            ariaLabel="Pharmacy worklist sections"
+            activeId={activePharmacyStatus}
+            onSelect={selectPharmacyStatus}
+            tabs={pharmacyStatusTabs.map((tab) => ({
+              id: tab.id,
+              label: tab.label,
+              icon: tab.icon,
+              count:
                 tab.id === "all"
                   ? issueTabCountTotal
-                  : pharmacyStatusCounts.get(tab.id) || 0;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => selectPharmacyStatus(tab.id)}
-                  className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
-                    active
-                      ? "bg-brand text-brand-fg"
-                      : "text-slate-600 hover:bg-white hover:text-slate-900"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                  <span
-                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
-                      active
-                        ? "bg-white/20 text-brand-fg"
-                        : "bg-slate-200 text-slate-600"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
+                  : pharmacyStatusCounts.get(tab.id) || 0,
+            }))}
+          />
         </section>
 
         {!issuesLoaded || issueLoading ? (
@@ -1139,18 +1087,20 @@ export function Pharmacy({
             <TableSkeleton rows={8} columns={pharmacyColumns.length} showHeader />
           </div>
         ) : (
-          <DataTable
-            className="scrollbar-hidden overflow-auto rounded-lg bg-white"
-            columns={pharmacyColumns}
-            data={pharmacyPageRows}
-            emptyMessage="No pharmacy issues match your filters."
-            emptyDescription="Pharmacy issues created for patients will show up here."
-            emptyIcon={Pill}
-            minBodyHeight={`${pharmacyPageRows.length > 0 ? "" : "220px"}`}
-            onRowClick={setSelectedIssue}
-            sort={worklistSort ?? undefined}
-            onSortChange={setWorklistSort}
-          />
+          <div className="table-wrapper-width">
+            <DataTable
+              className="table-width"
+              columns={pharmacyColumns}
+              data={pharmacyPageRows}
+              emptyMessage="No pharmacy issues match your filters."
+              emptyDescription="Pharmacy issues created for patients will show up here."
+              emptyIcon={Pill}
+              minBodyHeight={`${pharmacyPageRows.length > 0 ? "" : "220px"}`}
+              onRowClick={setSelectedIssue}
+              sort={worklistSort ?? undefined}
+              onSortChange={setWorklistSort}
+            />
+          </div>
         )}
         {issuesLoaded && (
           <Pagination

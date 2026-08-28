@@ -288,8 +288,8 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
 
       <ExpenseSummaryTiles expenses={rows} />
 
-      <Card className="p-3 bg-white">
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+      <Card className="">
+        <div className=" px-4 py-3 bg-white rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
             {selectedMonth && (
               <button
@@ -312,17 +312,17 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
           </div>
           <div className="flex items-center gap-2">
             {canManageSubcategories && (
-              <button
+              <Button
                 type="button"
                 onClick={() => setShowSubcategoryAdmin(true)}
-                className="border bg-white rounded-lg px-3 py-2 text-xs font-bold hover:bg-slate-100"
+                className="border close-button rounded-lg  text-xs font-bold hover:bg-slate-100"
               >
                 Manage Subcategories
-              </button>
+              </Button>
             )}
             <Button
               onClick={() => setShowForm(true)}
-              className="flex items-center justify-between rounded-lg gap-2 w-28 text-xs px-3 py-2 lg:px-4 lg:py-3"
+              className="flex items-center justify-between rounded-lg gap-2 w-28 text-xs save-button"
             >
               <div className="flex items-center">
                 <PlusCircle size={16} />
@@ -332,7 +332,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
           </div>
         </div>
 
-        <div className="mt-4 overflow-auto max-w-[975px]">
+        <div className="table-wrapper-width mt-2">
           {selectedMonth ? (
             <DataTable
               columns={getExpenseColumns(
@@ -349,7 +349,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
               emptyIcon={Wallet}
               minBodyHeight={`${monthRows.length > 0 ?'':'220px'}`}
               onRowClick={(row: Expense) => setSelectedExpense(row)}
-              className="max-w-[975px] overflow-auto"
+              className="table-width"
               sort={sort ?? undefined}
               onSortChange={setSort}
             />

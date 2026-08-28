@@ -214,6 +214,12 @@ body {
   @apply block truncate w-full;
 }
 
+.table-width{
+  @apply w-full min-w-[700px] scrollbar-hidden
+}
+.table-wrapper-width {
+  @apply w-full min-w-[700px] mt-3
+}
 /* The doctor consultation prescription renders into this portal target
    instead of the app tree, then gets captured to a PDF via html2canvas (see
    exportPrescriptionPdf) and downloaded directly — no window.print() dialog,
@@ -318,6 +324,7 @@ body {
   100% {
     transform: translateX(100%);
   }
+<<<<<<< Updated upstream
 }
 
 .brand-loader-logo {
@@ -420,3 +427,14 @@ body {
     transform: none;
   }
 }
+=======
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+}
+
+>>>>>>> Stashed changes

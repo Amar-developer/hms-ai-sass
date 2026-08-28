@@ -14,6 +14,7 @@ import { Card, RefreshButton } from "@/app/components/common/ui";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
 import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
@@ -705,16 +706,12 @@ export function Billing({
               </p>
             </div>
           </div>
-          <nav
-            className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
-            aria-label="Invoice list sections"
-          >
-            {[
-              {
-                id: "all",
-                label: "All Invoices",
-                icon: ReceiptText,
-              },
+          <StatusTabsNav
+            ariaLabel="Invoice list sections"
+            activeId={activePaymentState}
+            onSelect={selectPaymentState}
+            tabs={[
+              { id: "all", label: "All Invoices", icon: ReceiptText },
               { id: "due", label: "Due", icon: Clock3 },
               { id: "paid", label: "Paid", icon: BadgeCheck },
               {
@@ -723,36 +720,11 @@ export function Billing({
                 icon: CircleDollarSign,
               },
               { id: "refunded", label: "Refunded", icon: RotateCcw },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const active = activePaymentState === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => selectPaymentState(tab.id)}
-                  className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
-                    active
-                      ? "bg-brand text-brand-fg"
-                      : "text-slate-600 hover:bg-white hover:text-slate-900"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                  <span
-                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
-                      active
-                        ? "bg-white/20 text-brand-fg"
-                        : "bg-slate-200 text-slate-600"
-                    }`}
-                  >
-                    {paidStatusCounts[tab.id] ?? 0}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
+            ].map((tab) => ({
+              ...tab,
+              count: paidStatusCounts[tab.id] ?? 0,
+            }))}
+          />
         </section>
 
         {(canViewRevenueSummary || canViewSettlementSummary) && (

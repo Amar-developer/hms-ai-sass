@@ -36,11 +36,11 @@ export function getPatientColumns({
     {
       key: "s.no",
       header: "S.No",
-      width: "50px",
+      width: "80px",
       className: "text-center",
       cellClassName: "text-center",
       sortable: true,
-      render: (_, index: number) => index + 1,
+      render: (_, index) => index + 1,
     },
     {
       key: "full_name",
@@ -130,7 +130,7 @@ export function getPatientColumns({
                 ? "purple"
                 : "red"
           }
-         className="normal-label"
+          className="normal-label"
         >
           {row.status}
         </Badge>
@@ -178,6 +178,15 @@ export function getConsultationColumns({
   onOpen: (row: any) => void;
 }): Column<any>[] {
   return [
+    {
+      key: "s.no",
+      header: "S.No",
+      width: "80px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index) => index + 1,
+    },
     {
       key: "created_at",
       header: "Date",
@@ -241,8 +250,18 @@ export function getInvoiceColumns({
 }): Column<any>[] {
   return [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "80px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index) => index + 1,
+    },
+    {
       key: "invoice_number",
       header: "Invoice",
+      width: "150px",
       render: (row: any) => (
         <span className="font-black">{row.invoice_number}</span>
       ),
@@ -250,6 +269,7 @@ export function getInvoiceColumns({
     {
       key: "source",
       header: "Source",
+      width: "150px",
       render: (row: any) => (
         <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase">
           {invoiceSource(row).label}
@@ -259,23 +279,27 @@ export function getInvoiceColumns({
     {
       key: "status",
       header: "Status",
+      width: "150px",
       render: (row: any) => String(row.status || "").replaceAll("_", " "),
     },
     {
       key: "total_amount",
       header: "Total",
+      width: "150px",
       cellClassName: "text-left",
       render: (row: any) => money(row.total_amount),
     },
     {
       key: "paid_amount",
       header: "Paid",
+      width: "150px",
       cellClassName: "text-left",
       render: (row: any) => money(row.paid_amount),
     },
     {
       key: "balance_amount",
       header: "Due",
+      width: "150px",
       cellClassName: "text-left",
       render: (row: any) => money(invoicePatientDueAmount(row)),
     },
@@ -290,6 +314,15 @@ export function getLabOrderColumns({
   onOpen: (row: any) => void;
 }): Column<any>[] {
   return [
+    {
+      key: "s.no",
+      header: "S.No",
+      width: "80px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index) => index + 1,
+    },
     {
       key: "date",
       header: "Date",
@@ -352,6 +385,15 @@ export function getMedicineColumns({
   onOpen: (row: any) => void;
 }): Column<any>[] {
   return [
+    {
+      key: "s.no",
+      header: "S.No",
+      width: "80px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index) => index + 1,
+    },
     {
       key: "date",
       header: "Date",
