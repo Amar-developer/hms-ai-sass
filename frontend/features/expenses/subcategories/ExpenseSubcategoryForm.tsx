@@ -140,7 +140,7 @@ export function ExpenseSubcategoryForm({
         <Button
           type="button"
           onClick={onCancel}
-          className="close-button hover:bg-slate-300 bg-slate-100 text-slate-900"
+          className="close-button"
         >
           Cancel
         </Button>

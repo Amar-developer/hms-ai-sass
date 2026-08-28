@@ -48,11 +48,11 @@ export function DataTable<T>({
   return (
     <div className={className}>
       <div
-        className="overflow-auto scrollbar-thin rounded-lg border border-slate-300 bg-white"
+        className="overflow-auto scrollbar-hidden rounded-lg border border-slate-300 bg-white"
         style={minBodyHeight ? { minHeight: minBodyHeight } : undefined}
       >
         <table
-          className={`w-full min-w-[920px] table-fixed text-left text-sm ${tableClassName ?? ""}`}
+          className={`w-full min-w-[700px] table-fixed text-left  text-sm ${tableClassName ?? ""}`}
         >
         <thead className="bg-slate-50 text-xs uppercase text-slate-500">
           <tr>

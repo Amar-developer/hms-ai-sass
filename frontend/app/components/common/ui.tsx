@@ -1028,7 +1028,7 @@ export function Button({
   return (
     <button
       {...props}
-      className={`rounded-lg bg-brand ${className} font-bold text-brand-fg transition hover:bg-brand-hover disabled:bg-slate-300`}
+      className={`rounded-lg ${className} font-bold  transition hover:bg-brand-hover bg-brand text-white`}
     >
       {children}
     </button>

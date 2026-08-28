@@ -958,14 +958,14 @@ export function AppShell({
                   {/* Divider */}
 
                   {/* Breadcrumb */}
-                  <div className="flex min-w-0 items-center gap-2 p-2 rounded-lg">
+                  <div className="flex min-w-0 items-center gap-2 p-2 rounded-lg  ">
                     <Button
                       type="button"
                       onClick={() => navigatePage("dashboard")}
                       disabled={
                         activePage === "dashboard" || !enabled("dashboard")
                       }
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold text-brand hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold hover:bg-white hover:text-emerald-600 disbaled:cursor-pointer disabled:bg-emerlad-600 disabled:text-white"
                     >
                       <Home size={14} /> Dashboard
                     </Button>

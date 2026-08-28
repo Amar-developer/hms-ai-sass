@@ -18,6 +18,7 @@ import {
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import { FormField } from "@/app/components/FormElements";
 import {
   deleteIntelligenceContent,
@@ -187,9 +188,7 @@ function ruleSummary(rule: any, options: any) {
     rule.threshold_secondary != null && rule.threshold_secondary !== ""
       ? ` and ${rule.threshold_secondary}`
       : "";
-  const window = rule.window_days
-    ? ` in ${rule.window_days} day window`
-    : "";
+  const window = rule.window_days ? ` in ${rule.window_days} day window` : "";
   return `${metric} ${operator} ${rule.threshold}${second}${window} → ${humanizeKey(
     rule.flag_key,
   )}`;
@@ -222,7 +221,9 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
       setContentItems(result.content);
       setOptions(result.configuration);
     } catch (error: any) {
-      setMessage(error.message || "Could not load Patient Intelligence settings.");
+      setMessage(
+        error.message || "Could not load Patient Intelligence settings.",
+      );
     } finally {
       setBusy(false);
     }
@@ -244,7 +245,9 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
     event.preventDefault();
     if (
       editing.action_enabled &&
-      (!editing.action_key || !editing.action_channel || !editing.action_template_key)
+      (!editing.action_key ||
+        !editing.action_channel ||
+        !editing.action_template_key)
     ) {
       setMessage(
         "Configured actions need an action key, channel, and template key. Fill them or turn off Create configured action.",
@@ -275,7 +278,9 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
     setBusy(true);
     try {
       const result: any = await recalculatePatientIntelligence(apiSession);
-      setMessage(`${result.patients_processed || 0} patient records recalculated.`);
+      setMessage(
+        `${result.patients_processed || 0} patient records recalculated.`,
+      );
     } catch (error: any) {
       setMessage(error.message || "Could not recalculate existing patients.");
     } finally {
@@ -390,165 +395,38 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
             </ActionButton>
           </div>
         </div>
-        <nav
-          className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
-          aria-label="Patient intelligence sections"
-        >
-          {[
-            ["content", "Content Library", Library, contentItems.length],
-            ["rules", "Rules", ListChecks, rules.length],
-          ].map(([id, label, Icon, count]: any) => {
-            const active = activeTab === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                aria-current={active ? "page" : undefined}
-                onClick={() => setActiveTab(id)}
-                className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
-                  active
-                    ? "bg-brand text-brand-fg"
-                    : "text-slate-600 hover:bg-white hover:text-slate-900"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-                <span
-                  className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
-                    active
-                      ? "bg-white/20 text-brand-fg"
-                      : "bg-slate-200 text-slate-600"
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
+        <StatusTabsNav
+          ariaLabel="Patient intelligence sections"
+          activeId={activeTab}
+          onSelect={(id) => setActiveTab(id as "content" | "rules")}
+          tabs={[
+            {
+              id: "content",
+              label: "Content Library",
+              icon: Library,
+              count: contentItems.length,
+            },
+            {
+              id: "rules",
+              label: "Rules",
+              icon: ListChecks,
+              count: rules.length,
+            },
+          ]}
+        />
       </section>
 
       {activeTab === "content" && (
-      <Card className="p-3 bg-white">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h4 className="card-title font-bold">Content Library</h4>
-            <p className="card-desc mt-1 text-slate-500">
-              Tenant-managed health tips and awareness text for WhatsApp
-              templates. No AI text is generated here; staff controls the exact
-              approved message body.
-            </p>
-          </div>
-          {contentEditingId && (
-            <ActionButton
-              onClick={() => {
-                setContentEditing(EMPTY_CONTENT);
-                setContentEditingId("");
-              }}
-            >
-              Create New Content
-            </ActionButton>
-          )}
-        </div>
-        <form onSubmit={saveContent} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <FormField label="Content Key" required>
-            <Input
-              required
-              value={contentEditing.content_key}
-              disabled={Boolean(contentEditingId)}
-              onChange={(event: any) =>
-                updateContent(
-                  "content_key",
-                  event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"),
-                )
-              }
-              placeholder="monthly_diabetes_awareness"
-            />
-          </FormField>
-          <FormField label="Title" required>
-            <Input
-              required
-              value={contentEditing.title}
-              onChange={(event: any) => updateContent("title", event.target.value)}
-              placeholder="Monthly awareness message"
-            />
-          </FormField>
-          <FormField label="Category" required>
-            <Select
-              required
-              value={contentEditing.category}
-              onChange={(event: any) => updateContent("category", event.target.value)}
-            >
-              {CONTENT_CATEGORIES.map((category) => (
-                <option key={category.key} value={category.key}>
-                  {category.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Language" required>
-            <Input
-              required
-              value={contentEditing.language}
-              onChange={(event: any) =>
-                updateContent("language", event.target.value.toLowerCase())
-              }
-              placeholder="en"
-            />
-          </FormField>
-          <FormField label="Target Flag">
-            <Select
-              value={contentEditing.audience_flag_key}
-              onChange={(event: any) =>
-                updateContent("audience_flag_key", event.target.value)
-              }
-            >
-              <option value="">Any matching health/awareness rule</option>
-              {Array.from(new Set(rules.map((rule: any) => rule.flag_key)))
-                .filter(Boolean)
-                .sort()
-                .map((flagKey: any) => (
-                  <option key={flagKey} value={flagKey}>
-                    {humanizeKey(flagKey)}
-                  </option>
-                ))}
-            </Select>
-          </FormField>
-          <FormField label="Priority">
-            <Input
-              type="number"
-              min="0"
-              value={contentEditing.priority}
-              onChange={(event: any) => updateContent("priority", event.target.value)}
-            />
-          </FormField>
-          <label className="flex items-center gap-2 text-sm font-semibold">
-            <input
-              type="checkbox"
-              checked={contentEditing.is_enabled}
-              onChange={(event) => updateContent("is_enabled", event.target.checked)}
-            />
-            Content enabled
-          </label>
-          <FormField label="Message Body" required className="md:col-span-2 xl:col-span-4">
-            <textarea
-              required
-              value={contentEditing.body_text}
-              onChange={(event: any) => updateContent("body_text", event.target.value)}
-              maxLength={2000}
-              rows={4}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-400"
-              placeholder="Enter the exact approved WhatsApp content text to insert into the template."
-            />
-            <p className="mt-1 text-xs font-semibold text-slate-400">
-              Use this body with WhatsApp field {"{{content_body}}"}. Keep the
-              wording tenant-approved and clinically safe.
-            </p>
-          </FormField>
-          <div className="flex gap-2 md:col-span-2 xl:col-span-4">
-            <Button disabled={busy}>
-              {busy ? "Saving..." : contentEditingId ? "Update Content" : "Create Content"}
-            </Button>
+        <Card className="p-3 bg-white">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 className="card-title font-bold">Content Library</h4>
+              <p className="card-desc mt-1 text-slate-500">
+                Tenant-managed health tips and awareness text for WhatsApp
+                templates. No AI text is generated here; staff controls the
+                exact approved message body.
+              </p>
+            </div>
             {contentEditingId && (
               <ActionButton
                 onClick={() => {
@@ -556,147 +434,635 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
                   setContentEditingId("");
                 }}
               >
-                Cancel
+                Create New Content
               </ActionButton>
             )}
           </div>
-        </form>
-        <div className="mt-4 space-y-2">
-          {!busy && contentItems.length === 0 && (
-            <p className="text-sm text-slate-500">
-              No content added yet. Health-tip rules can still run, but
-              {" {{content_body}}"} will stay empty until content is configured.
-            </p>
-          )}
-          {contentItems.map((content: any) => (
-            <div
-              key={content.id}
-              className="flex flex-col justify-between gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center"
+          <form
+            onSubmit={saveContent}
+            className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+          >
+            <FormField label="Content Key" required>
+              <Input
+                required
+                value={contentEditing.content_key}
+                disabled={Boolean(contentEditingId)}
+                onChange={(event: any) =>
+                  updateContent(
+                    "content_key",
+                    event.target.value
+                      .toLowerCase()
+                      .replace(/[^a-z0-9_]/g, "_"),
+                  )
+                }
+                placeholder="monthly_diabetes_awareness"
+              />
+            </FormField>
+            <FormField label="Title" required>
+              <Input
+                required
+                value={contentEditing.title}
+                onChange={(event: any) =>
+                  updateContent("title", event.target.value)
+                }
+                placeholder="Monthly awareness message"
+              />
+            </FormField>
+            <FormField label="Category" required>
+              <Select
+                required
+                value={contentEditing.category}
+                onChange={(event: any) =>
+                  updateContent("category", event.target.value)
+                }
+              >
+                {CONTENT_CATEGORIES.map((category) => (
+                  <option key={category.key} value={category.key}>
+                    {category.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField label="Language" required>
+              <Input
+                required
+                value={contentEditing.language}
+                onChange={(event: any) =>
+                  updateContent("language", event.target.value.toLowerCase())
+                }
+                placeholder="en"
+              />
+            </FormField>
+            <FormField label="Target Flag">
+              <Select
+                value={contentEditing.audience_flag_key}
+                onChange={(event: any) =>
+                  updateContent("audience_flag_key", event.target.value)
+                }
+              >
+                <option value="">Any matching health/awareness rule</option>
+                {Array.from(new Set(rules.map((rule: any) => rule.flag_key)))
+                  .filter(Boolean)
+                  .sort()
+                  .map((flagKey: any) => (
+                    <option key={flagKey} value={flagKey}>
+                      {humanizeKey(flagKey)}
+                    </option>
+                  ))}
+              </Select>
+            </FormField>
+            <FormField label="Priority">
+              <Input
+                type="number"
+                min="0"
+                value={contentEditing.priority}
+                onChange={(event: any) =>
+                  updateContent("priority", event.target.value)
+                }
+              />
+            </FormField>
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                checked={contentEditing.is_enabled}
+                onChange={(event) =>
+                  updateContent("is_enabled", event.target.checked)
+                }
+              />
+              Content enabled
+            </label>
+            <FormField
+              label="Message Body"
+              required
+              className="md:col-span-2 xl:col-span-4"
             >
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <b>{content.title}</b>
-                  <Badge tone={content.is_enabled ? "green" : "slate"}>
-                    {content.is_enabled ? "Enabled" : "Disabled"}
-                  </Badge>
-                  <Badge tone="blue">{humanizeKey(content.category)}</Badge>
-                  {content.audience_flag_key && (
-                    <Badge tone="purple">{humanizeKey(content.audience_flag_key)}</Badge>
-                  )}
-                </div>
-                <p className="mt-1 text-xs text-slate-500 line-clamp-2">
-                  {content.body_text}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-400">
-                  Content key: {humanizeKey(content.content_key)} · Language:{" "}
-                  {content.language} · Priority: {content.priority}
-                </p>
-              </div>
-              <div className="flex gap-2">
+              <textarea
+                required
+                value={contentEditing.body_text}
+                onChange={(event: any) =>
+                  updateContent("body_text", event.target.value)
+                }
+                maxLength={2000}
+                rows={4}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-400"
+                placeholder="Enter the exact approved WhatsApp content text to insert into the template."
+              />
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                Use this body with WhatsApp field {"{{content_body}}"}. Keep the
+                wording tenant-approved and clinically safe.
+              </p>
+            </FormField>
+            <div className="flex gap-2 md:col-span-2 xl:col-span-4">
+              <Button disabled={busy}>
+                {busy
+                  ? "Saving..."
+                  : contentEditingId
+                    ? "Update Content"
+                    : "Create Content"}
+              </Button>
+              {contentEditingId && (
                 <ActionButton
                   onClick={() => {
-                    setContentEditing(editableContent(content));
-                    setContentEditingId(content.id);
+                    setContentEditing(EMPTY_CONTENT);
+                    setContentEditingId("");
                   }}
                 >
-                  Edit
+                  Cancel
                 </ActionButton>
-                <ActionButton tone="danger" disabled={busy} onClick={() => deleteContent(content)}>
-                  Delete
-                </ActionButton>
-              </div>
+              )}
             </div>
-          ))}
-        </div>
-      </Card>
+          </form>
+          <div className="mt-4 space-y-2">
+            {!busy && contentItems.length === 0 && (
+              <p className="text-sm text-slate-500">
+                No content added yet. Health-tip rules can still run, but
+                {" {{content_body}}"} will stay empty until content is
+                configured.
+              </p>
+            )}
+            {contentItems.map((content: any) => (
+              <div
+                key={content.id}
+                className="flex flex-col justify-between gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center"
+              >
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <b>{content.title}</b>
+                    <Badge tone={content.is_enabled ? "green" : "slate"}>
+                      {content.is_enabled ? "Enabled" : "Disabled"}
+                    </Badge>
+                    <Badge tone="blue">{humanizeKey(content.category)}</Badge>
+                    {content.audience_flag_key && (
+                      <Badge tone="purple">
+                        {humanizeKey(content.audience_flag_key)}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500 line-clamp-2">
+                    {content.body_text}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Content key: {humanizeKey(content.content_key)} · Language:{" "}
+                    {content.language} · Priority: {content.priority}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <ActionButton
+                    onClick={() => {
+                      setContentEditing(editableContent(content));
+                      setContentEditingId(content.id);
+                    }}
+                  >
+                    Edit
+                  </ActionButton>
+                  <ActionButton
+                    tone="danger"
+                    disabled={busy}
+                    onClick={() => deleteContent(content)}
+                  >
+                    Delete
+                  </ActionButton>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       {activeTab === "rules" && (
         <>
-      {showAdvancedRules && <Card>
-        <h4 className="font-bold">{editingId ? "Edit Rule" : "Create Rule"}</h4>
-        <p className="mt-1 text-sm text-slate-500">
-          To combine rules into one badge, reuse the same Generated Flag. To
-          show only one tier such as Silver, Gold, or Premium, give those rules
-          the same Exclusive Group. Turn off auto-resolve and set Expires After
-          Days when a badge should stay for a grace period.
-        </p>
-        <form onSubmit={save} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <FormField label="Rule Key" required>
-            <Input value={editing.rule_key} disabled={Boolean(editingId)} onChange={(e: any) => update("rule_key", e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"))} />
-          </FormField>
-          <FormField label="Rule Name" required><Input value={editing.name} onChange={(e: any) => update("name", e.target.value)} /></FormField>
-          <FormField label="Category" required><Select required value={editing.category} onChange={(e: any) => update("category", e.target.value)}><option value="">Select category</option>{options.categories.map((value: string) => <option key={value} value={value}>{humanizeKey(value)}</option>)}</Select></FormField>
-          <FormField label="Generated Flag" required><Input value={editing.flag_key} onChange={(e: any) => update("flag_key", e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, "_"))} placeholder="PREMIUM_PATIENT" /></FormField>
+          {showAdvancedRules && (
+            <Card className="p-3 bg-white">
+              <div className="font-bold card-title">
+                {editingId ? "Edit Rule" : "Create Rule"}
+              </div>
+              <p className="mt-1 card-desc text-slate-500">
+                To combine rules into one badge, reuse the same Generated Flag.
+                To show only one tier such as Silver, Gold, or Premium, give
+                those rules the same Exclusive Group. Turn off auto-resolve and
+                set Expires After Days when a badge should stay for a grace
+                period.
+              </p>
+              <form
+                onSubmit={save}
+                className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+              >
+                <FormField label="Rule Key" required>
+                  <Input
+                    value={editing.rule_key}
+                    disabled={Boolean(editingId)}
+                    onChange={(e: any) =>
+                      update(
+                        "rule_key",
+                        e.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9_]/g, "_"),
+                      )
+                    }
+                  />
+                </FormField>
+                <FormField label="Rule Name" required>
+                  <Input
+                    value={editing.name}
+                    onChange={(e: any) => update("name", e.target.value)}
+                  />
+                </FormField>
+                <FormField label="Category" required>
+                  <Select
+                    required
+                    value={editing.category}
+                    onChange={(e: any) => update("category", e.target.value)}
+                  >
+                    <option value="">Select category</option>
+                    {options.categories.map((value: string) => (
+                      <option key={value} value={value}>
+                        {humanizeKey(value)}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="Generated Flag" required>
+                  <Input
+                    value={editing.flag_key}
+                    onChange={(e: any) =>
+                      update(
+                        "flag_key",
+                        e.target.value
+                          .toUpperCase()
+                          .replace(/[^A-Z0-9_]/g, "_"),
+                      )
+                    }
+                    placeholder="PREMIUM_PATIENT"
+                  />
+                </FormField>
 
-          <FormField label="Metric" required><Select required value={editing.metric_key} onChange={(e: any) => update("metric_key", e.target.value)}><option value="">Select metric</option>{options.metrics.map((metric: any) => <option key={metric.key} value={metric.key}>{metric.label}</option>)}</Select></FormField>
-          <FormField label="Operator" required><Select required value={editing.operator} onChange={(e: any) => update("operator", e.target.value)}><option value="">Select operator</option>{options.operators.map((value: string) => <option key={value} value={value}>{operatorLabel(value)}</option>)}</Select></FormField>
-          <FormField label="Threshold" required><Input type="number" step="0.01" value={editing.threshold} onChange={(e: any) => update("threshold", e.target.value)} /></FormField>
-          <FormField label="Second Threshold"><Input type="number" step="0.01" disabled={editing.operator !== "between"} value={editing.threshold_secondary} onChange={(e: any) => update("threshold_secondary", e.target.value)} /></FormField>
-          <FormField label="Window Days"><Input type="number" min="1" value={editing.window_days} onChange={(e: any) => update("window_days", e.target.value)} /></FormField>
-          <FormField label="Severity" required><Input required value={editing.severity} onChange={(e: any) => update("severity", e.target.value)} /></FormField>
-          <FormField label="Priority" required><Input required type="number" min="0" value={editing.priority} onChange={(e: any) => update("priority", e.target.value)} /></FormField>
-          <FormField label="Exclusive Group"><Input value={editing.exclusive_group} onChange={(e: any) => update("exclusive_group", e.target.value)} placeholder="patient_value_tier" /></FormField>
-          <FormField label="Score Dimension"><Select value={editing.score_dimension} onChange={(e: any) => update("score_dimension", e.target.value)}><option value="">No score</option>{(options.score_dimensions || []).map((item: any) => <option key={item.key} value={item.key}>{item.label}</option>)}</Select></FormField>
-          <FormField label="Score Weight"><Input type="number" min="0" step="0.01" value={editing.score_weight} onChange={(e: any) => update("score_weight", e.target.value)} placeholder="e.g. 10" /></FormField>
-          <FormField label="Required Flags"><Input value={editing.required_flag_keys} onChange={(e: any) => update("required_flag_keys", e.target.value)} placeholder="FLAG_ONE, FLAG_TWO" /></FormField>
-          <FormField label="Expires After Days"><Input type="number" min="1" value={editing.expires_after_days} onChange={(e: any) => update("expires_after_days", e.target.value)} /></FormField>
+                <FormField label="Metric" required>
+                  <Select
+                    required
+                    value={editing.metric_key}
+                    onChange={(e: any) => update("metric_key", e.target.value)}
+                  >
+                    <option value="">Select metric</option>
+                    {options.metrics.map((metric: any) => (
+                      <option key={metric.key} value={metric.key}>
+                        {metric.label}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="Operator" required>
+                  <Select
+                    required
+                    value={editing.operator}
+                    onChange={(e: any) => update("operator", e.target.value)}
+                  >
+                    <option value="">Select operator</option>
+                    {options.operators.map((value: string) => (
+                      <option key={value} value={value}>
+                        {operatorLabel(value)}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="Threshold" required>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editing.threshold}
+                    onChange={(e: any) => update("threshold", e.target.value)}
+                  />
+                </FormField>
+                <FormField label="Second Threshold">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    disabled={editing.operator !== "between"}
+                    value={editing.threshold_secondary}
+                    onChange={(e: any) =>
+                      update("threshold_secondary", e.target.value)
+                    }
+                  />
+                </FormField>
+                <FormField label="Window Days">
+                  <Input
+                    type="number"
+                    min="1"
+                    value={editing.window_days}
+                    onChange={(e: any) => update("window_days", e.target.value)}
+                  />
+                </FormField>
+                <FormField label="Severity" required>
+                  <Input
+                    required
+                    value={editing.severity}
+                    onChange={(e: any) => update("severity", e.target.value)}
+                  />
+                </FormField>
+                <FormField label="Priority" required>
+                  <Input
+                    required
+                    type="number"
+                    min="0"
+                    value={editing.priority}
+                    onChange={(e: any) => update("priority", e.target.value)}
+                  />
+                </FormField>
+                <FormField label="Exclusive Group">
+                  <Input
+                    value={editing.exclusive_group}
+                    onChange={(e: any) =>
+                      update("exclusive_group", e.target.value)
+                    }
+                    placeholder="patient_value_tier"
+                  />
+                </FormField>
+                <FormField label="Score Dimension">
+                  <Select
+                    value={editing.score_dimension}
+                    onChange={(e: any) =>
+                      update("score_dimension", e.target.value)
+                    }
+                  >
+                    <option value="">No score</option>
+                    {(options.score_dimensions || []).map((item: any) => (
+                      <option key={item.key} value={item.key}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="Score Weight">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editing.score_weight}
+                    onChange={(e: any) =>
+                      update("score_weight", e.target.value)
+                    }
+                    placeholder="e.g. 10"
+                  />
+                </FormField>
+                <FormField label="Required Flags">
+                  <Input
+                    value={editing.required_flag_keys}
+                    onChange={(e: any) =>
+                      update("required_flag_keys", e.target.value)
+                    }
+                    placeholder="FLAG_ONE, FLAG_TWO"
+                  />
+                </FormField>
+                <FormField label="Expires After Days">
+                  <Input
+                    type="number"
+                    min="1"
+                    value={editing.expires_after_days}
+                    onChange={(e: any) =>
+                      update("expires_after_days", e.target.value)
+                    }
+                  />
+                </FormField>
 
-          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={editing.requires_active_membership} onChange={(e) => update("requires_active_membership", e.target.checked)} />Require active paid membership</label>
-          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={editing.auto_resolve} onChange={(e) => update("auto_resolve", e.target.checked)} />Auto-resolve when unmatched</label>
-          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={editing.is_enabled} onChange={(e) => update("is_enabled", e.target.checked)} />Rule enabled</label>
-          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={editing.display_as_patient_badge} onChange={(e) => update("display_as_patient_badge", e.target.checked)} />Show beside patient names</label>
+                <div className="flex col-span-4 grid grid-cols-3 justify-between w-full m-2 flex-col gap-5">
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={editing.requires_active_membership}
+                      onChange={(e) =>
+                        update("requires_active_membership", e.target.checked)
+                      }
+                    />
+                    Require active paid membership
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={editing.auto_resolve}
+                      onChange={(e) => update("auto_resolve", e.target.checked)}
+                    />
+                    Auto-resolve when unmatched
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={editing.is_enabled}
+                      onChange={(e) => update("is_enabled", e.target.checked)}
+                    />
+                    Rule enabled
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={editing.display_as_patient_badge}
+                      onChange={(e) =>
+                        update("display_as_patient_badge", e.target.checked)
+                      }
+                    />
+                    Show beside patient names
+                  </label>
+                  {editing.display_as_patient_badge && (
+                    <>
+                      <FormField label="Badge Label" required>
+                        <Input
+                          value={editing.badge_label}
+                          onChange={(e: any) =>
+                            update("badge_label", e.target.value)
+                          }
+                        />
+                      </FormField>
+                      <FormField label="Background Color" required>
+                        <Input
+                          value={editing.badge_background_color}
+                          onChange={(e: any) =>
+                            update("badge_background_color", e.target.value)
+                          }
+                          placeholder="#RRGGBB"
+                        />
+                      </FormField>
+                      <FormField label="Text Color" required>
+                        <Input
+                          value={editing.badge_text_color}
+                          onChange={(e: any) =>
+                            update("badge_text_color", e.target.value)
+                          }
+                          placeholder="#RRGGBB"
+                        />
+                      </FormField>
+                      <FormField label="Border Color" required>
+                        <Input
+                          value={editing.badge_border_color}
+                          onChange={(e: any) =>
+                            update("badge_border_color", e.target.value)
+                          }
+                          placeholder="#RRGGBB"
+                        />
+                      </FormField>
+                    </>
+                  )}
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={editing.action_enabled}
+                      onChange={(e) =>
+                        update("action_enabled", e.target.checked)
+                      }
+                    />
+                    Create configured action
+                  </label>
+                  {editing.action_enabled && (
+                    <>
+                      <FormField label="Action Key" required>
+                        <Input
+                          value={editing.action_key}
+                          onChange={(e: any) =>
+                            update("action_key", e.target.value)
+                          }
+                        />
+                      </FormField>
+                      <FormField label="Channel" required>
+                        <Select
+                          required
+                          value={editing.action_channel}
+                          onChange={(e: any) =>
+                            update("action_channel", e.target.value)
+                          }
+                        >
+                          <option value="">Select channel</option>
+                          {options.channels.map((value: string) => (
+                            <option key={value} value={value}>
+                              {humanizeKey(value)}
+                            </option>
+                          ))}
+                        </Select>
+                      </FormField>
+                      <FormField label="Template Key" required>
+                        <Input
+                          value={editing.action_template_key}
+                          onChange={(e: any) =>
+                            update("action_template_key", e.target.value)
+                          }
+                        />
+                      </FormField>
+                      <FormField label="Cooldown Days">
+                        <Input
+                          type="number"
+                          min="1"
+                          value={editing.action_cooldown_days}
+                          onChange={(e: any) =>
+                            update("action_cooldown_days", e.target.value)
+                          }
+                        />
+                      </FormField>
+                      <label className="flex items-center gap-2 text-sm font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={editing.action_requires_approval}
+                          onChange={(e) =>
+                            update("action_requires_approval", e.target.checked)
+                          }
+                        />
+                        Staff approval required
+                      </label>
+                    </>
+                  )}
+                </div>
 
-          {editing.display_as_patient_badge && <>
-            <FormField label="Badge Label" required><Input value={editing.badge_label} onChange={(e: any) => update("badge_label", e.target.value)} /></FormField>
-            <FormField label="Background Color" required><Input value={editing.badge_background_color} onChange={(e: any) => update("badge_background_color", e.target.value)} placeholder="#RRGGBB" /></FormField>
-            <FormField label="Text Color" required><Input value={editing.badge_text_color} onChange={(e: any) => update("badge_text_color", e.target.value)} placeholder="#RRGGBB" /></FormField>
-            <FormField label="Border Color" required><Input value={editing.badge_border_color} onChange={(e: any) => update("badge_border_color", e.target.value)} placeholder="#RRGGBB" /></FormField>
-          </>}
-
-          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={editing.action_enabled} onChange={(e) => update("action_enabled", e.target.checked)} />Create configured action</label>
-          {editing.action_enabled && <>
-            <FormField label="Action Key" required><Input value={editing.action_key} onChange={(e: any) => update("action_key", e.target.value)} /></FormField>
-            <FormField label="Channel" required><Select required value={editing.action_channel} onChange={(e: any) => update("action_channel", e.target.value)}><option value="">Select channel</option>{options.channels.map((value: string) => <option key={value} value={value}>{humanizeKey(value)}</option>)}</Select></FormField>
-            <FormField label="Template Key" required><Input value={editing.action_template_key} onChange={(e: any) => update("action_template_key", e.target.value)} /></FormField>
-            <FormField label="Cooldown Days"><Input type="number" min="1" value={editing.action_cooldown_days} onChange={(e: any) => update("action_cooldown_days", e.target.value)} /></FormField>
-            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={editing.action_requires_approval} onChange={(e) => update("action_requires_approval", e.target.checked)} />Staff approval required</label>
-          </>}
-
-          <div className="flex gap-2 md:col-span-2 xl:col-span-4">
-            <Button disabled={busy}>{busy ? "Saving..." : editingId ? "Update Rule" : "Create Rule"}</Button>
-            {showAdvancedRules && <ActionButton onClick={() => { setEditing(EMPTY_RULE); setEditingId(""); setShowAdvancedRules(false); }}>Cancel</ActionButton>}
-          </div>
-        </form>
-      </Card>}
-
-      <Card className="p-3 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h4 className="font-bold">Configured Rules</h4>
-        </div>
-        <div className="mt-3 space-y-2">
-          {!busy && rules.length === 0 && (
-            <p className="card-desc text-slate-500">
-              No rules configured. Use the advanced editor to create database
-              rules for Silver, Gold, Premium, membership, or any tenant-specific
-              patient flag.
-            </p>
+                <div className="flex gap-2 md:col-span-2 xl:col-span-4">
+                  <Button disabled={busy} className="save-button">
+                    {busy
+                      ? "Saving..."
+                      : editingId
+                        ? "Update Rule"
+                        : "Create Rule"}
+                  </Button>
+                  {showAdvancedRules && (
+                    <ActionButton
+                      onClick={() => {
+                        setEditing(EMPTY_RULE);
+                        setEditingId("");
+                        setShowAdvancedRules(false);
+                      }}
+                    >
+                      Cancel
+                    </ActionButton>
+                  )}
+                </div>
+              </form>
+            </Card>
           )}
-          {rules.map((rule: any) => (
-            <div key={rule.id} className="flex flex-col justify-between gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center">
-              <div>
-                <div className="flex flex-wrap items-center gap-2"><b>{rule.name}</b><Badge tone={rule.is_enabled ? "green" : "slate"}>{rule.is_enabled ? "Enabled" : "Disabled"}</Badge>{rule.display_as_patient_badge && <span style={{ backgroundColor: rule.badge_background_color, color: rule.badge_text_color, borderColor: rule.badge_border_color }} className="rounded-full border px-2 py-0.5 text-xs font-bold">{rule.badge_label}</span>}</div>
-                <p className="mt-1 text-xs text-slate-500">{ruleSummary(rule, options)}</p>
-                <p className="mt-1 text-[11px] text-slate-400">Rule key: {humanizeKey(rule.rule_key)}{rule.action_template_key ? ` · Template: ${humanizeKey(rule.action_template_key)}` : ""}{rule.score_dimension ? ` · ${humanizeKey(rule.score_dimension)} +${rule.score_weight || 0}` : ""}</p>
-              </div>
-              <div className="flex gap-2">
-                <ActionButton onClick={() => { setEditing(editableRule(rule)); setEditingId(rule.id); setShowAdvancedRules(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Edit</ActionButton>
-                <ActionButton tone="danger" disabled={busy} onClick={() => deleteRule(rule)}>Delete</ActionButton>
-              </div>
+
+          <Card className="p-3 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h4 className="font-bold">Configured Rules</h4>
             </div>
-          ))}
-        </div>
-      </Card>
+            <div className="mt-3 space-y-2">
+              {!busy && rules.length === 0 && (
+                <p className="card-desc text-slate-500">
+                  No rules configured. Use the advanced editor to create
+                  database rules for Silver, Gold, Premium, membership, or any
+                  tenant-specific patient flag.
+                </p>
+              )}
+              {rules.map((rule: any) => (
+                <div
+                  key={rule.id}
+                  className="flex flex-col justify-between gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center"
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <b>{rule.name}</b>
+                      <Badge tone={rule.is_enabled ? "green" : "slate"}>
+                        {rule.is_enabled ? "Enabled" : "Disabled"}
+                      </Badge>
+                      {rule.display_as_patient_badge && (
+                        <span
+                          style={{
+                            backgroundColor: rule.badge_background_color,
+                            color: rule.badge_text_color,
+                            borderColor: rule.badge_border_color,
+                          }}
+                          className="rounded-full border px-2 py-0.5 text-xs font-bold"
+                        >
+                          {rule.badge_label}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {ruleSummary(rule, options)}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Rule key: {humanizeKey(rule.rule_key)}
+                      {rule.action_template_key
+                        ? ` · Template: ${humanizeKey(rule.action_template_key)}`
+                        : ""}
+                      {rule.score_dimension
+                        ? ` · ${humanizeKey(rule.score_dimension)} +${rule.score_weight || 0}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <ActionButton
+                      onClick={() => {
+                        setEditing(editableRule(rule));
+                        setEditingId(rule.id);
+                        setShowAdvancedRules(true);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      Edit
+                    </ActionButton>
+                    <ActionButton
+                      tone="danger"
+                      disabled={busy}
+                      onClick={() => deleteRule(rule)}
+                    >
+                      Delete
+                    </ActionButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
         </>
       )}
     </div>

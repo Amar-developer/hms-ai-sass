@@ -51,6 +51,7 @@ import {
 } from "../Column";
 import { BmiTrendChart, type VitalReading } from "./workspace/BmiTrendChart";
 import { Column } from "@/utils/types";
+import { Pagination } from "@/app/components/common/Pagination";
 
 // Placeholder vitals — the patient schema has no height/weight/vitals model
 // yet, so the BMI trend renders illustrative data until that's added.
@@ -115,7 +116,7 @@ export function PatientDetail({
   ]);
   const canAdjustMembershipUsage = Boolean(
     apiSession?.user?.user_type === "tenant_admin" ||
-      apiSession?.user?.roles?.includes("tenant_admin"),
+    apiSession?.user?.roles?.includes("tenant_admin"),
   );
   const canReadBilling = hasAnyPermission([
     "billing.manage",
@@ -404,19 +405,31 @@ export function PatientDetail({
   };
   const communicationColumns: Column<any>[] = [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "80px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index) => index + 1,
+    },
+    {
       key: "created_at",
       header: "Date",
+      width: "120px",
       render: (row) => fmtDate(row.sent_at || row.created_at),
     },
     {
       key: "template_key",
       header: "Template",
+      width: "120px",
       render: (row) =>
         communicationFlowLabels[row.template_key] || row.template_key || "-",
     },
     {
       key: "status",
       header: "Status",
+      width: "120px",
       render: (row) => (
         <Badge
           tone={
@@ -437,16 +450,19 @@ export function PatientDetail({
     {
       key: "resource_type",
       header: "Source",
+      width: "120px",
       render: (row) => String(row.resource_type || "-").replaceAll("_", " "),
     },
     {
       key: "recipient_masked",
       header: "Recipient",
+      width: "120px",
       render: (row) => row.recipient_masked || "-",
     },
     {
       key: "failure_reason",
       header: "Failure",
+      width: "auto",
       render: (row) => row.failure_reason || "-",
     },
   ];
@@ -969,14 +985,14 @@ export function PatientDetail({
           ) : (
             <Empty text="You do not have permission to update patient tracking." />
           )}
-          <div className="rounded-lg p-2 bg-white ">
+          <div className="rounded-lg p-2 bg-white p-3">
             <h5 className="text-sm font-black text-slate-950">
               WhatsApp Message History
             </h5>
             <p className="mt-1 text-xs font-semibold text-slate-500">
               All WhatsApp templates sent or queued for this patient.
             </p>
-            <div className="mt-3">
+            <div className="tablw-wrapper-width mt-3">
               <DataTable
                 columns={communicationColumns}
                 data={patientCommunications}
@@ -984,7 +1000,9 @@ export function PatientDetail({
                 emptyDescription="Invoice, membership, reminder and care messages for this patient will show here."
                 emptyIcon={MessageCircle}
                 minBodyHeight={`${patientCommunications.length > 0 ? "" : "220px"}`}
-                className="text-xs"
+                className="table-width"
+                paginate
+                pageSize={10}
               />
             </div>
           </div>
@@ -1024,11 +1042,6 @@ export function PatientDetail({
       )}
 
       {activeSection === "consultations" && (
-        // <DetailSection
-        //   title="Consultations"
-        //   description="Click a consultation to open the consultation workspace."
-        //   count={consultations.length}
-        // >
         <DataTable
           columns={consultationColumns}
           data={consultations}
@@ -1038,16 +1051,10 @@ export function PatientDetail({
           minBodyHeight={`${consultations.length > 0 ? "" : "220px"}`}
           onRowClick={openConsultation}
         />
-        // </DetailSection>
       )}
 
       {activeSection === "labs" && (
         <div className="grid gap-5">
-          {/* <DetailSection
-            title="Lab & Service"
-            description="Ordered diagnostic tests, services, home care, and home visit bookings."
-            count={labServiceRows.length}
-          > */}
           <DataTable
             columns={labOrderColumns}
             data={labServiceRows}
@@ -1056,17 +1063,11 @@ export function PatientDetail({
             emptyIcon={FlaskConical}
             minBodyHeight={`${labServiceRows.length > 0 ? "" : "220px"}`}
           />
-          {/* </DetailSection> */}
         </div>
       )}
 
       {activeSection === "medicines" && (
         <div className="grid gap-5">
-          {/* <DetailSection
-            title="Medicines"
-            description="Pharmacy issues and dispensed medicines."
-            count={medicineRows.length}
-          > */}
           <DataTable
             columns={medicineColumns}
             data={medicineRows}
@@ -1075,69 +1076,51 @@ export function PatientDetail({
             emptyIcon={Pill}
             minBodyHeight={`${medicineRows.length > 0 ? "" : "220px"}`}
           />
-          {/* </DetailSection> */}
         </div>
       )}
 
       {activeSection === "consultations" && physioCases.length > 0 && (
-        <DetailSection
-          title="Physiotherapy"
-          description="Cases, treatment goals, and planned sessions."
-          count={physioCases.length}
-        >
-          <div className="grid gap-3 lg:grid-cols-2">
-            {physioCases.map((c: any) => (
-              <button
-                type="button"
-                key={c.id}
-                onClick={() => goToModule("physiotherapy")}
-                title="Open in Physiotherapy"
-                className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
-              >
-                <span className="font-bold">
-                  {c.case_number || fmtDate(c.assessment_date)}
-                </span>
-                <StatusBadge status={c.status} />
-              </button>
-            ))}
-          </div>
-        </DetailSection>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {physioCases.map((c: any) => (
+            <button
+              type="button"
+              key={c.id}
+              onClick={() => goToModule("physiotherapy")}
+              title="Open in Physiotherapy"
+              className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
+            >
+              <span className="font-bold">
+                {c.case_number || fmtDate(c.assessment_date)}
+              </span>
+              <StatusBadge status={c.status} />
+            </button>
+          ))}
+        </div>
       )}
 
       {activeSection === "consultations" && patientIpAdmissions.length > 0 && (
-        <DetailSection
-          title="IP Admissions"
-          description="Admission, bed, diagnosis, and discharge status."
-          count={patientIpAdmissions.length}
-        >
-          <div className="space-y-3">
-            {patientIpAdmissions.map((adm: any) => (
-              <button
-                type="button"
-                key={adm.id}
-                onClick={() => goToModule("ip")}
-                title="Open in IP Admission"
-                className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
-              >
-                <span className="font-bold">
-                  {adm.admission_number || fmtDate(adm.admission_date)}
-                </span>
-                <StatusBadge status={adm.status} />
-              </button>
-            ))}
-          </div>
-        </DetailSection>
+        <div className="space-y-3">
+          {patientIpAdmissions.map((adm: any) => (
+            <button
+              type="button"
+              key={adm.id}
+              onClick={() => goToModule("ip")}
+              title="Open in IP Admission"
+              className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
+            >
+              <span className="font-bold">
+                {adm.admission_number || fmtDate(adm.admission_date)}
+              </span>
+              <StatusBadge status={adm.status} />
+            </button>
+          ))}
+        </div>
       )}
 
       {activeSection === "membership" &&
         canReadMembership &&
         resolvedMembershipEnrollments.length > 0 && (
-          <DetailSection
-            title="Billing & Membership"
-            description="Membership plan history and benefit usage."
-            count={resolvedMembershipEnrollments.length}
-            defaultOpen={false}
-          >
+          <div>
             <div className="grid gap-3 md:grid-cols-4">
               <CompactMetric
                 label="Membership Saved"
@@ -1267,16 +1250,10 @@ export function PatientDetail({
                 </div>
               </div>
             )}
-          </DetailSection>
+          </div>
         )}
 
       {activeSection === "billing" && (
-        // <DetailSection
-        //   title="Billing Invoices"
-        //   description="Patient invoices, paid amount, and due amount."
-        //   count={patientInvoices.length}
-        //   defaultOpen={false}
-        // >
         <div>
           <div className="mb-3 grid gap-3 md:grid-cols-3">
             <CompactMetric label="Overall Billed" value={money(totalBilled)} />
@@ -1293,7 +1270,6 @@ export function PatientDetail({
             onRowClick={openInvoice}
           />
         </div>
-        // </DetailSection>
       )}
 
       <ActivityLog

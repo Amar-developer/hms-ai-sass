@@ -50,9 +50,14 @@ import { listOrderFilterOptions, listOrderPage } from "./api/lab.api";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getLabColumns } from "./Column";
 import { getLabTableSchema, getLabQueryFields } from "./filterSchema";
-import { type QueryFieldOption, type QueryFilterRow } from "@/utils/queryFilter";
-import type { SortState } from "@/utils/types";
+import {
+  type QueryFieldOption,
+  type QueryFilterRow,
+} from "@/utils/queryFilter";
+import type { Column, SortState } from "@/utils/types";
 import { displayDocumentNumber } from "@/lib/documentNumbers";
+import DataHeader from "@/app/components/common/DataHeader";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 
 const MAX_REPORT_DOCUMENTS = 5;
 const LAB_STATUS_TAB_ID = "lab-worklist-status-tab";
@@ -367,14 +372,16 @@ export function Lab({
 
     const hasActiveFilters = Boolean(
       worklistQuery.trim() ||
-        worklistQueryFilters.length ||
-        amountMin.trim() ||
-        amountMax.trim() ||
-        worklistFromDate ||
-        worklistToDate,
+      worklistQueryFilters.length ||
+      amountMin.trim() ||
+      amountMax.trim() ||
+      worklistFromDate ||
+      worklistToDate,
     );
     const defaultMonth = currentMonthRange();
-    const fromDate = hasActiveFilters ? worklistFromDate : defaultMonth.fromDate;
+    const fromDate = hasActiveFilters
+      ? worklistFromDate
+      : defaultMonth.fromDate;
     const toDate = hasActiveFilters ? worklistToDate : defaultMonth.toDate;
     if (fromDate) params.set("from_date", fromDate);
     if (toDate) params.set("to_date", toDate);
@@ -509,8 +516,9 @@ export function Lab({
   );
   const labUploadedReports = useMemo(
     () =>
-      labSummaryRows.filter((order: any) => (reportDocuments[order.id] || []).length > 0)
-        .length,
+      labSummaryRows.filter(
+        (order: any) => (reportDocuments[order.id] || []).length > 0,
+      ).length,
     [labSummaryRows, reportDocuments],
   );
 
@@ -830,7 +838,6 @@ export function Lab({
     ],
   );
 
-
   if (!apiSession)
     return (
       <Card>
@@ -843,6 +850,85 @@ export function Lab({
 
   if (workspaceMode === "consultation") {
     const visibleReferrals = visibleConsultationReferrals;
+    const consultationReferralColumns: Column<any>[] = [
+      {
+        key: "appointment_id",
+        header: "Appointment ID",
+        width: "160px",
+        cellClassName: "font-bold",
+        render: (a: any) =>
+          displayDocumentNumber(
+            a.appointmentNumber || a.appointment_number,
+            numberingRules,
+            "appointment",
+          ) || "-",
+      },
+      {
+        key: "patient",
+        header: "Patient",
+        width: "180px",
+        cellClassName: "font-semibold",
+        render: (a: any) => a.patient,
+      },
+      {
+        key: "doctor",
+        header: "Doctor",
+        width: "160px",
+        cellClassName: "text-slate-600",
+        render: (a: any) =>
+          a.doctor && a.doctor !== "Unassigned" ? a.doctor : "-",
+      },
+      {
+        key: "date",
+        header: "Date & Time",
+        width: "160px",
+        cellClassName: "whitespace-nowrap text-slate-600",
+        render: (a: any) =>
+          displayDateTime(
+            a.referralDate ||
+              a.consultationSignedAt ||
+              a.consultationCreatedAt ||
+              a.appointmentDate,
+          ),
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        width: "140px",
+        className: "text-right",
+        disableRowClick: true,
+        render: (a: any) => (
+          <div className="flex justify-end gap-2">
+            {canCreateLabOrder && (
+              <Button
+                disabled={busy === a.consultationId}
+                onClick={(event: any) => {
+                  event.stopPropagation();
+                  createFromConsultation(a);
+                }}
+                className="rounded-lg px-4 py-2 text-xs"
+              >
+                {busy === a.consultationId ? "Creating..." : "Create Order"}
+              </Button>
+            )}
+            <ActionButton
+              onClick={(event: any) => {
+                event.stopPropagation();
+                setDismissedConsultations((ids: string[]) => [
+                  ...ids,
+                  a.consultationId,
+                ]);
+              }}
+              className="close-button"
+              aria-label="Remove"
+              title="Remove"
+            >
+              <Trash2 className="h-4 w-4" />
+            </ActionButton>
+          </div>
+        ),
+      },
+    ];
     return (
       <div className="space-y-3">
         {viewConsult && (
@@ -861,91 +947,12 @@ export function Lab({
         <StatusToast message={message} onClose={() => setMessage("")} />
         <Card className="pt-2">
           <div className="mt-2 overflow-auto rounded-lg border border-slate-200">
-            <table className="w-full min-w-[850px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Appointment ID</th>
-                  <th className="px-4 py-3">Patient</th>
-                  <th className="px-4 py-3">Doctor</th>
-                  <th className="px-4 py-3">Date &amp; Time</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 bg-white">
-                {visibleReferrals.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 py-6 text-center text-slate-500"
-                    >
-                      No consultation lab or service referrals are waiting.
-                    </td>
-                  </tr>
-                ) : (
-                  visibleReferrals.map((a: any) => (
-                    <tr
-                      key={a.id}
-                      onClick={() => loadConsultDetail(a)}
-                      className="cursor-pointer transition-colors hover:bg-emerald-50/30"
-                    >
-                      <td className="px-4 py-3 font-bold">
-                        {displayDocumentNumber(
-                          a.appointmentNumber || a.appointment_number,
-                          numberingRules,
-                          "appointment",
-                        ) || "-"}
-                      </td>
-                      <td className="px-4 py-3 font-semibold">{a.patient}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {a.doctor && a.doctor !== "Unassigned"
-                          ? a.doctor
-                          : "-"}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                        {displayDateTime(
-                          a.referralDate ||
-                            a.consultationSignedAt ||
-                            a.consultationCreatedAt ||
-                            a.appointmentDate,
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          {canCreateLabOrder && (
-                            <Button
-                              disabled={busy === a.consultationId}
-                              onClick={(event: any) => {
-                                event.stopPropagation();
-                                createFromConsultation(a);
-                              }}
-                              className="rounded-lg px-4 py-2 text-xs"
-                            >
-                              {busy === a.consultationId
-                                ? "Creating..."
-                                : "Create Order"}
-                            </Button>
-                          )}
-                          <ActionButton
-                            onClick={(event: any) => {
-                              event.stopPropagation();
-                              setDismissedConsultations((ids: string[]) => [
-                                ...ids,
-                                a.consultationId,
-                              ]);
-                            }}
-                            className="close-button"
-                            aria-label="Remove"
-                            title="Remove"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </ActionButton>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+            <DataTable
+              columns={consultationReferralColumns}
+              data={visibleReferrals}
+              onRowClick={(a: any) => loadConsultDetail(a)}
+              emptyMessage="No consultation lab or service referrals are waiting."
+            />
           </div>
         </Card>
       </div>
@@ -963,7 +970,7 @@ export function Lab({
         >
           Back to Worklist
         </button>
-        <Card className="p-3 bg-white">
+        <Card className="p-4 bg-white">
           <h3 className="card-title font-bold">
             Create Direct Lab &amp; Service Order
           </h3>
@@ -1159,69 +1166,28 @@ export function Lab({
         </section>
 
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
-                <FlaskConical className="h-4 w-4" />
-              </span>
-              <div>
-                <h2 className="text-base font-black tracking-tight text-slate-950">
-                  Lab / Service Workspace
-                </h2>
-                <p className="text-xs font-medium text-slate-500">
-                  Lab orders, services, reports and billing in one workspace
-                </p>
-              </div>
-            </div>
-            {canCreateLabOrder && (
-              <button
-                type="button"
-                onClick={() => router.push(`/lab/${newSegment("lab-order")}`)}
-                className="primary-action h-9 gap-2 whitespace-nowrap px-4 text-xs"
-              >
-                <PlusCircle size={16} />
-                Create Lab Order
-              </button>
-            )}
-          </div>
-          <nav
-            className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
-            aria-label="Lab and service worklist sections"
-          >
-            {labStatusTabs.map((tab) => {
-              const Icon = tab.icon;
-              const active = activeLabStatus === tab.id;
-              const count =
+          <DataHeader
+            title="Lab / Service Workspace"
+            description=" Lab orders, services, reports and billing in one workspace"
+            cardIcon={FlaskConical}
+            canCreate={canCreateLabOrder}
+            buttonText="Create Lab Order"
+            open={() => router.push(`/lab/${newSegment("lab-order")}`)}
+          />
+          <StatusTabsNav
+            ariaLabel="Lab and service worklist sections"
+            activeId={activeLabStatus}
+            onSelect={selectLabStatus}
+            tabs={labStatusTabs.map((tab) => ({
+              id: tab.id,
+              label: tab.label,
+              icon: tab.icon,
+              count:
                 tab.id === "all"
                   ? labTabCountTotal
-                  : labStatusCounts.get(tab.id) || 0;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => selectLabStatus(tab.id)}
-                  className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
-                    active
-                      ? "bg-brand text-brand-fg"
-                      : "text-slate-600 hover:bg-white hover:text-slate-900"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                  <span
-                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
-                      active
-                        ? "bg-white/20 text-brand-fg"
-                        : "bg-slate-200 text-slate-600"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
+                  : labStatusCounts.get(tab.id) || 0,
+            }))}
+          />
         </section>
 
         {!ordersLoaded || labOrderLoading ? (
@@ -1229,18 +1195,20 @@ export function Lab({
             <TableSkeleton rows={8} columns={worklistColumns.length} showHeader />
           </div>
         ) : (
-          <DataTable
-            className="scrollbar-hidden overflow-auto rounded-lg bg-white"
-            columns={worklistColumns}
-            data={labPageRows}
-            emptyMessage="No lab orders match your filters."
-            emptyDescription="Lab and service orders created for patients will show up here."
-            emptyIcon={FlaskConical}
-            minBodyHeight={`${labPageRows.length > 0 ? "" : "220px"}`}
-            onRowClick={setSelectedOrder}
-            sort={worklistSort ?? undefined}
-            onSortChange={setWorklistSort}
-          />
+          <div className="table-wrapper-width">
+            <DataTable
+              className="table-width"
+              columns={worklistColumns}
+              data={labPageRows}
+              emptyMessage="No lab orders match your filters."
+              emptyDescription="Lab and service orders created for patients will show up here."
+              emptyIcon={FlaskConical}
+              minBodyHeight={`${labPageRows.length > 0 ? "" : "220px"}`}
+              onRowClick={setSelectedOrder}
+              sort={worklistSort ?? undefined}
+              onSortChange={setWorklistSort}
+            />
+          </div>
         )}
         {ordersLoaded && (
           <Pagination

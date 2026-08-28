@@ -30,7 +30,7 @@ export function ListCard({
   return (
     <Card className="p-0">
       {/* HEADER */}
-      <div className="flex flex-col rounded-lg mb-2 justify-between bg-white gap-3 lg:flex-row lg:items-center p-2">
+      <div className="flex flex-col rounded-lg mb-2 justify-between bg-white gap-3 lg:flex-row lg:items-center px-4 py-3 w-full mun-w-[700px">
         <div className="flex justify-center items-center">
           <div className="p-2 rounded-lg mr-2 text-emarald-900 bg-emerald-50">
             {title == "Users" ? (
@@ -73,7 +73,7 @@ export function ListCard({
       </div>
 
       {/* TABLE */}
-      <div>
+      <div className="table-wrapper-width">
         <DataTable
           columns={columns}
           data={rows}
@@ -85,6 +85,7 @@ export function ListCard({
           emptyDescription="Items will show up here once added."
           emptyIcon={Inbox}
           minBodyHeight={`${rows.length > 0 ? "" : "220px"}`}
+          className="table-width"
         />
       </div>
     </Card>

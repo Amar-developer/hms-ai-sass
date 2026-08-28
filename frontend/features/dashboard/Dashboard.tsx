@@ -380,15 +380,15 @@ export function Dashboard({
                   <Activity className="h-4 w-4" />
                 </span>
                 <div>
-                  <h2 className="text-base font-black tracking-tight text-slate-950">
+                  <h2 className="card-title font-black tracking-tight text-slate-950">
                     Operations Dashboard
                   </h2>
-                  <p className="text-xs font-medium text-slate-500">
+                  <p className="card-desc font-medium text-slate-500">
                     Today workload, collections, queue pressure and module usage
                   </p>
                 </div>
               </div>
-              <Badge tone="blue" className="normal-badge">
+              <Badge tone="blue" className="normal-label">
                 Tenant Admin Only
               </Badge>
             </div>

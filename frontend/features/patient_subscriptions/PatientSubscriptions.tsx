@@ -17,6 +17,7 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import { canDeleteMembershipPlans } from "../patients/helpers";
 import { ActiveEnrollmentsTable } from "../patients/components/ActiveEnrollmentsTable";
 import { PlanDetailPage } from "../patients/components/PlanDetailPage";
@@ -540,43 +541,28 @@ export function PatientSubscriptions({
                 )}
               </div>
             </div>
-            <nav
-              className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
-              aria-label="Patient membership sections"
-            >
-              {[
-                ["plans", "Plans", CreditCard, plans.length],
-                ["active", "Active Enrollments", CheckCircle2, activeEnrollments.length],
-                ["queued", "Queued Enrollments", Clock, queuedEnrollments.length],
-              ].map(([id, label, Icon, count]: any) => {
-                const active = activeTab === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => setActiveTab(id)}
-                    className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
-                      active
-                        ? "bg-brand text-brand-fg"
-                        : "text-slate-600 hover:bg-white hover:text-slate-900"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {label}
-                    <span
-                      className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
-                        active
-                          ? "bg-white/20 text-brand-fg"
-                          : "bg-slate-200 text-slate-600"
-                      }`}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </nav>
+            <StatusTabsNav
+              ariaLabel="Patient membership sections"
+              activeId={activeTab}
+              onSelect={(id) =>
+                setActiveTab(id as "plans" | "active" | "queued")
+              }
+              tabs={[
+                { id: "plans", label: "Plans", icon: CreditCard, count: plans.length },
+                {
+                  id: "active",
+                  label: "Active Enrollments",
+                  icon: CheckCircle2,
+                  count: activeEnrollments.length,
+                },
+                {
+                  id: "queued",
+                  label: "Queued Enrollments",
+                  icon: Clock,
+                  count: queuedEnrollments.length,
+                },
+              ]}
+            />
           </section>
 
           {activeTab === "plans" && (
