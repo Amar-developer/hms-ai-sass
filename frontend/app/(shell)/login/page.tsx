@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AuthScreen } from "@/features/auth/AuthScreen";
 import { AppErrorBoundary } from "@/features/shared/AppErrorBoundary";
 import { useWorkspaceController } from "@/features/shell/WorkspaceContext";
+import { BrandLoader } from "@/app/components/common/loader/BrandLoader";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,11 +18,7 @@ export default function LoginPage() {
   }, [authenticated, initializing, shellProps.active, router]);
 
   if (initializing || authenticated) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-white">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
-      </div>
-    );
+    return <BrandLoader />;
   }
 
   return (

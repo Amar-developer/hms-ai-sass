@@ -89,7 +89,7 @@ export function DataTable<T>({
           {loading && (
             <tr>
               <td colSpan={columns.length} className="p-0">
-                <TableSkeleton />
+                <TableSkeleton columns={columns.length} />
               </td>
             </tr>
           )}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Building2, CreditCard, Hash, PackageSearch, Plug } from "lucide-react";
 import {
   Badge,
   Button,
@@ -16,6 +17,7 @@ import { formatTenantType } from "../../helpers";
 import { Empty } from "@/app/components/common/Empty";
 import { Info } from "@/app/components/common/Info";
 import { TenantPicker } from "../shared/TenantPicker";
+import { SettingsWorkspaceHeader } from "../shared/SettingsWorkspaceHeader";
 import { useTenantBranchSettings } from "../../api";
 
 function CatalogPluginControl({
@@ -93,6 +95,9 @@ export function TenantBranchSettings({
   modules,
   reloadPlans,
 }: any) {
+  const [activeTab, setActiveTab] = useState<
+    "profile" | "banking" | "numbering" | "catalogs" | "modules"
+  >("profile");
   const {
     visibleSelected,
     activePlan,
@@ -136,25 +141,37 @@ export function TenantBranchSettings({
   }, [selectedId, setSelectedId, tenants]);
 
   return (
-    <div className="space-y-5">
-      <Card className="pt-2">
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-          <div>
-            <h3 className="card-title font-bold">Tenant & Branch Settings</h3>
-            <p className="card-desc text-slate-500">
-              Configuration page for tenant type, enabled modules, branch
-              settings, queue rules, invoice prefix, and communication
-              providers.
-            </p>
-          </div>
-          <div className="w-[30%] lg:w-[25%]">
+    <div className="space-y-3">
+      <SettingsWorkspaceHeader<
+        "profile" | "banking" | "numbering" | "catalogs" | "modules"
+      >
+        icon={Building2}
+        title="Tenant & Branch Settings"
+        description="Configure tenant identity, banking, numbering, catalogs, and module access."
+        tabs={[
+          { id: "profile", label: "Tenant Profile", icon: Building2 },
+          { id: "banking", label: "Bank Details", icon: CreditCard },
+          { id: "numbering", label: "Document Numbering", icon: Hash },
+          { id: "catalogs", label: "Catalog Providers", icon: Plug },
+          { id: "modules", label: "Module Access", icon: PackageSearch },
+        ]}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        actions={
+          <div className="w-[220px]">
             <TenantPicker
               tenants={tenants}
               selectedId={selectedId}
               setSelectedId={setSelectedId}
             />
           </div>
-        </div>
+        }
+      />
+      {activeTab === "profile" && <Card className="pt-2">
+        <h3 className="card-title font-bold">Tenant Profile</h3>
+        <p className="card-desc text-slate-500">
+          Current organization identity and operating context.
+        </p>
         {visibleSelected && (
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <Info label="Tenant" value={visibleSelected.name} />
@@ -168,8 +185,8 @@ export function TenantBranchSettings({
             <Info label="Timezone" value={visibleSelected.timezone || "-"} />
           </div>
         )}
-      </Card>
-      <Card className="pt-2">
+      </Card>}
+      {activeTab === "banking" && <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h1 className="card-title font-bold">
@@ -254,8 +271,8 @@ export function TenantBranchSettings({
             </Button>
           </div>
         </form>
-      </Card>
-      <Card className="pt-2">
+      </Card>}
+      {activeTab === "numbering" && <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h1 className="card-title font-bold">
@@ -326,8 +343,8 @@ export function TenantBranchSettings({
             </span>
           </div>
         </form>
-      </Card>
-      <Card className="pt-2">
+      </Card>}
+      {activeTab === "catalogs" && <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h1 className="card-title font-bold">
@@ -373,8 +390,8 @@ export function TenantBranchSettings({
             </span>
           </div>
         </form>
-      </Card>
-      <Card className="pt-2">
+      </Card>}
+      {activeTab === "modules" && <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h4 className="card-title font-bold">
@@ -440,11 +457,7 @@ export function TenantBranchSettings({
         <p className="mt-4 text-xs font-semibold text-slate-500">
           {selectedModules.length} modules enabled by the active plan.
         </p>
-      </Card>
-      <p className="text-xs text-slate-500">
-        Detailed branch settings reuse the tenant admin settings APIs. A
-        dedicated branch CRUD/settings API page can be added next.
-      </p>
+      </Card>}
     </div>
   );
 }

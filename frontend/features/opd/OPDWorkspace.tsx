@@ -26,6 +26,7 @@ import { OPDPaymentQueue } from "./components/OPDPaymentQueue";
 import { ClinicalTemplateManager } from "./components/ClinicalTemplateManager";
 import { Lab } from "@/features/lab/Lab";
 import { Pharmacy } from "@/features/pharmacy/Pharmacy";
+import { useShellChrome } from "@/features/shell/AppShell";
 import {
   fetchOPDBillingQueueRows,
   fetchOPDPaymentQueueRows,
@@ -210,6 +211,7 @@ export function OPDWorkspace({
   ...workspace
 }: OPDWorkspaceProps) {
   const router = useRouter();
+  const { beginNavigation } = useShellChrome();
   const permissionKeys = workspace.apiSession?.user?.permissions || [];
   const isTenantAdmin = Boolean(
     workspace.apiSession?.user?.user_type === "tenant_admin" ||
@@ -373,6 +375,7 @@ export function OPDWorkspace({
   }, [effectiveSection]);
 
   const openSection = (path: string) => {
+    beginNavigation("opd", path);
     router.push(path);
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
@@ -392,7 +395,9 @@ export function OPDWorkspace({
     ) {
       workspace.setDepartmentId(departmentId);
     }
-    router.push(opdAppointmentPath(id));
+    const path = opdAppointmentPath(id);
+    beginNavigation("opd", path);
+    router.push(path);
   };
 
   return (

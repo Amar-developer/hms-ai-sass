@@ -1226,7 +1226,7 @@ export function Lab({
 
         {!ordersLoaded || labOrderLoading ? (
           <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
-            <TableSkeleton rows={8} />
+            <TableSkeleton rows={8} columns={worklistColumns.length} showHeader />
           </div>
         ) : (
           <DataTable

@@ -422,7 +422,7 @@ export function ErrorLogs({ apiSession, selectedId = "" }: any) {
               {busy === "load" && rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="p-0">
-                    <TableSkeleton />
+                    <TableSkeleton columns={6} />
                   </td>
                 </tr>
               )}

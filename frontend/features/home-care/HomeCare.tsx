@@ -27,7 +27,7 @@ import {
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
 import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
-import { BreadcrumbSlot } from "@/features/shell/AppShell";
+import { BreadcrumbSlot, useShellChrome } from "@/features/shell/AppShell";
 import { getHomeCareTableSchema, getHomeCareQueryFields } from "./filterSchema";
 import { sortRows } from "@/utils/sortRows";
 import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
@@ -55,6 +55,11 @@ export function HomeCare({
   selectedId = "",
 }: any) {
   const router = useRouter();
+  const { beginNavigation } = useShellChrome();
+  const navigateHomeCare = (path: string) => {
+    beginNavigation("home_care", path);
+    router.push(path);
+  };
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   // const [view, setView] = useState<View>("list");
   const {
@@ -264,7 +269,7 @@ export function HomeCare({
     setBusy,
     setError,
     setMessage,
-    navigateToView: (id: string) => router.push(`/home_care/${id}`),
+    navigateToView: (id: string) => navigateHomeCare(`/home_care/${id}`),
     setInvoiceDetail,
     load,
   });
@@ -274,7 +279,7 @@ export function HomeCare({
     const target = readNotificationTarget("home_care_booking");
     if (!target || !bookings.some((row: any) => row.id === target.resourceId))
       return;
-    router.push(`/home_care/${target.resourceId}`);
+    navigateHomeCare(`/home_care/${target.resourceId}`);
   }, [apiSession?.tenantId, bookings.length, view, router]);
   useEffect(() => {
     setPage(1);
@@ -343,17 +348,17 @@ export function HomeCare({
 
   function openCreate() {
     resetForm(bookingTypeTab);
-    router.push(`/home_care/${newSegment("visit")}`);
+    navigateHomeCare(`/home_care/${newSegment("visit")}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function openView(booking: any) {
-    router.push(`/home_care/${booking.id}`);
+    navigateHomeCare(`/home_care/${booking.id}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function openInvoice(booking: any) {
-    router.push(`/home_care/${booking.id}/invoice`);
+    navigateHomeCare(`/home_care/${booking.id}/invoice`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -380,13 +385,13 @@ export function HomeCare({
 
   function startEdit(booking: any) {
     if (isBookingLocked(booking)) {
-      router.push(`/home_care/${booking.id}`);
+      navigateHomeCare(`/home_care/${booking.id}`);
       setError(
         `This booking is ${humanizeOptionLabel(booking.status)} and can no longer be edited.`,
       );
       return;
     }
-    router.push(`/home_care/${booking.id}/${editSegment("visit")}`);
+    navigateHomeCare(`/home_care/${booking.id}/${editSegment("visit")}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -435,7 +440,7 @@ export function HomeCare({
   }
 
   function backToList() {
-    router.push("/home_care");
+    navigateHomeCare("/home_care");
   }
 
   const isFormView = view === "create" || view === "edit";

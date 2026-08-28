@@ -13,6 +13,7 @@ import {
 import { FormField } from "@/app/components/FormElements";
 import { displayDateTime } from "@/utils/helper";
 import { PlatformAdmins } from "./PlatformAdmins";
+import { SettingsWorkspaceHeader } from "../shared/SettingsWorkspaceHeader";
 import {
   usePrivilegedAccess,
   type PrivilegedAccount,
@@ -102,6 +103,9 @@ export function PrivilegedAccess({
   const [grantUserId, setGrantUserId] = useState("");
   const [grantTenantId, setGrantTenantId] = useState("");
   const [grantDurationMinutes, setGrantDurationMinutes] = useState("60");
+  const [activeTab, setActiveTab] = useState<
+    "root" | "accounts" | "grants"
+  >("root");
 
   const supportAccounts = useMemo(
     () =>
@@ -250,15 +254,39 @@ export function PrivilegedAccess({
   }
 
   return (
-    <div className="space-y-5">
-      <PlatformAdmins
-        apiSession={apiSession}
-        busy={busy}
-        setBusy={setBusy}
-        setMessage={setMessage}
+    <div className="space-y-3">
+      <SettingsWorkspaceHeader<"root" | "accounts" | "grants">
+        icon={ShieldCheck}
+        title="Privileged Access Workspace"
+        description="Manage root administrators, platform accounts, and temporary tenant access."
+        tabs={[
+          { id: "root", label: "Root Administrators", icon: ShieldCheck },
+          {
+            id: "accounts",
+            label: "Platform Accounts",
+            icon: UserRoundCog,
+            count: accounts.length,
+          },
+          {
+            id: "grants",
+            label: "Support Grants",
+            icon: Clock3,
+            count: grants.length,
+          },
+        ]}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
+      {activeTab === "root" && (
+        <PlatformAdmins
+          apiSession={apiSession}
+          busy={busy}
+          setBusy={setBusy}
+          setMessage={setMessage}
+        />
+      )}
 
-      <Card className="pt-2">
+      {activeTab === "accounts" && <Card className="pt-2">
         <div className="flex items-start gap-3">
           <UserRoundCog className="mt-0.5" size={20} />
           <div>
@@ -379,9 +407,9 @@ export function PrivilegedAccess({
             </div>
           ))}
         </div>
-      </Card>
+      </Card>}
 
-      <Card className="pt-2">
+      {activeTab === "grants" && <Card className="pt-2">
         <div className="flex items-start gap-3">
           <Clock3 className="mt-0.5" size={20} />
           <div>
@@ -502,7 +530,7 @@ export function PrivilegedAccess({
             </tbody>
           </table>
         </div>
-      </Card>
+      </Card>}
     </div>
   );
 }

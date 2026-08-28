@@ -25,9 +25,6 @@ import { reportSections } from "@/features/reports/constants";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
-import { useNavigationSkeleton } from "@/app/components/common/loader/useNavigationSkeleton";
-import { ModuleSkeleton } from "@/app/components/common/loader/ModuleSkeleton";
-import { BreadcrumbBarSkeleton } from "@/app/components/common/loader/BreadcrumbBarSkeleton";
 import type { AppNavigationTarget } from "@/lib/navigationTarget";
 import {
   opdAppointmentPath,
@@ -38,6 +35,7 @@ import { Button } from "@/app/components/common/ui";
 
 type ShellChromeValue = {
   navigatePage: (target: AppNavigationTarget) => void;
+  beginNavigation: (page: string, path: string) => void;
   activePage: string;
   enabled: (id: string) => boolean;
   nav: any;
@@ -201,10 +199,6 @@ export function AppShell({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [pendingNavigation, setPendingNavigation] = useState<{
-    page: string;
-    path: string;
-  } | null>(null);
   const [clinicOpen, setClinicOpen] = useState(false);
   // Doctors/Scheduling/Items/Expense are full standalone modules with their
   // own routes, now rooted at /clinic/{id} — nested visually under the
@@ -242,19 +236,9 @@ export function AppShell({
         : canAccessPlatformWorkspace
           ? "superadmin"
           : visibleNav[0]?.[0] || "dashboard";
-  const activePage =
-    pendingNavigation?.page ||
-    (isKnownRouteSegment ? effectiveRouteSegment : resolvedActivePage);
-  // pendingNavigation is set the instant a nav click fires and cleared once
-  // its exact pathname lands (see the effect below) — that window is exactly
-  // "a route change or module switch is in flight", independent of the
-  // sidebar, which keeps rendering the live nav state throughout. Next's
-  // own loading.tsx Suspense fallback only fires for server data fetches,
-  // so client-rendered modules swap with no transition state at all unless
-  // we drive the header + content skeletons off this signal ourselves.
-  const showNavigationSkeleton = useNavigationSkeleton(
-    Boolean(pendingNavigation),
-  );
+  const activePage = isKnownRouteSegment
+    ? effectiveRouteSegment
+    : resolvedActivePage;
   const primaryRole = apiSession?.user?.roles?.[0] || role;
   const roleLabel =
     primaryRole
@@ -319,7 +303,9 @@ export function AppShell({
     ? parseSuperAdminSegments(pathname.split("/").slice(2)).section
     : "overview";
   function setSuperAdminSection(value: string) {
-    router.push(superAdminPath(value));
+    const path = superAdminPath(value);
+    beginNavigation("superadmin", path);
+    router.push(path);
   }
   const activeSuperAdminSection = isVisibleSuperAdminSection(superAdminSection)
     ? superAdminSection
@@ -335,7 +321,9 @@ export function AppShell({
     ? pathname.split("/")[2] || "files"
     : "files";
   function setTenantAdminSection(value: string) {
-    router.push(`/admin/${value}`);
+    const path = `/admin/${value}`;
+    beginNavigation("admin", path);
+    router.push(path);
   }
 
   // Clinic section (only /clinic/...)
@@ -344,7 +332,9 @@ export function AppShell({
     : "users";
 
   function setClinicSection(value: string) {
-    router.push(`/clinic/${value}`);
+    const path = `/clinic/${value}`;
+    beginNavigation("clinic", path);
+    router.push(path);
   }
   const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(false);
   const visibleTenantAdminSections = tenantAdminSections.filter(
@@ -389,6 +379,7 @@ export function AppShell({
     : visibleClinicSections[0]?.[0] || clinicSection;
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const mainScrollRef = useRef<HTMLElement>(null);
   const [reportsOpen, setReportsOpen] = useState(true);
   // Report tabs are real nested routes (/reports/metrix, /reports/lab, ...),
   // so the active tab is derived from the URL rather than tracked separately
@@ -398,7 +389,9 @@ export function AppShell({
     ? pathname.split("/")[2] || "metrix"
     : "metrix";
   function setReportsSection(value: string) {
-    router.push(`/reports/${value}`);
+    const path = `/reports/${value}`;
+    beginNavigation("reports", path);
+    router.push(path);
   }
   const [sideBarOpen, setSidebarOpen] = useState(true);
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
@@ -642,8 +635,10 @@ export function AppShell({
   }
 
   function beginNavigation(page: string, path: string) {
-    if (pathname === path) return;
-    setPendingNavigation({ page, path });
+    // Link/router navigation owns the transition. Keeping the mounted route
+    // visible avoids masking a stalled development server behind a loader.
+    void page;
+    void path;
   }
 
   // Permission/entitlement gating can make the pathname's module unavailable
@@ -682,37 +677,14 @@ export function AppShell({
   ]);
 
   useEffect(() => {
-    if (!pendingNavigation) return;
-    const normalizePath = (value: string) => value.replace(/\/$/, "") || "/";
-    if (normalizePath(pathname) === normalizePath(pendingNavigation.path)) {
-      setPendingNavigation(null);
-    }
-  }, [pathname, pendingNavigation]);
-
-  // App Router navigation can remain pending when a development RSC bundle or
-  // its cache becomes stale. Never leave the whole workspace behind an
-  // indefinite skeleton: retry as a document navigation after a bounded wait.
-  // This is deliberately a last resort; normal module switches stay client-side.
-  useEffect(() => {
-    if (!pendingNavigation) return;
-    const timer = window.setTimeout(() => {
-      const currentPath = window.location.pathname.replace(/\/$/, "") || "/";
-      const destinationPath =
-        pendingNavigation.path.replace(/\/$/, "") || "/";
-      if (currentPath === destinationPath) {
-        setPendingNavigation(null);
-        return;
-      }
-      window.location.assign(pendingNavigation.path);
-    }, 8_000);
-    return () => window.clearTimeout(timer);
-  }, [pendingNavigation]);
-
-  useEffect(() => {
     if (!rememberWorkspacePath || !pathname || pathname === "/login") return;
     const query = searchParams.toString();
     rememberWorkspacePath(query ? `${pathname}?${query}` : pathname);
   }, [pathname, rememberWorkspacePath, searchParams]);
+
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [pathname]);
 
   // Direct/bookmarked navigation into Clinic (or into Doctors/Scheduling/
   // Items, now nested under it) should land with the dropdown already
@@ -761,6 +733,7 @@ export function AppShell({
 
   const shellChromeValue: ShellChromeValue = {
     navigatePage,
+    beginNavigation,
     activePage,
     enabled,
     nav,
@@ -936,8 +909,9 @@ export function AppShell({
         </aside>
 
         <main
+          ref={mainScrollRef}
           className={`
-    scrollbar-hidden h-full min-w-0 flex-1 overflow-y-auto bg-white
+    scrollbar-hidden relative h-full min-w-0 flex-1 overflow-y-auto bg-white [scrollbar-gutter:stable]
     md:ml-16
     lg:ml-0
   `}
@@ -958,10 +932,7 @@ export function AppShell({
             />
           )}
 
-          {showNavigationSkeleton ? (
-            <BreadcrumbBarSkeleton />
-          ) : (
-            <div className=" border-slate-100  px-4 py-2 lg:px-5 bg-[#f4f6f5d9]">
+          <div className=" border-slate-100  px-4 py-2 lg:px-5 bg-[#f4f6f5d9]">
               <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-2">
                   {/* Back / Forward group */}
@@ -1107,19 +1078,12 @@ export function AppShell({
                 />
               </div>
             </div>
-          )}
 
           <section
             className=" py-2 px-6 bg-[#f4f6f5d9]"
-            aria-busy={showNavigationSkeleton}
-            aria-live="polite"
           >
             <ShellChromeContext.Provider value={shellChromeValue}>
-              {showNavigationSkeleton ? (
-                <ModuleSkeleton label="Loading page" />
-              ) : (
-                children
-              )}
+              {children}
             </ShellChromeContext.Provider>
           </section>
         </main>

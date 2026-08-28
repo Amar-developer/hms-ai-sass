@@ -1136,7 +1136,7 @@ export function Pharmacy({
 
         {!issuesLoaded || issueLoading ? (
           <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
-            <TableSkeleton rows={8} />
+            <TableSkeleton rows={8} columns={pharmacyColumns.length} showHeader />
           </div>
         ) : (
           <DataTable
