@@ -113,10 +113,10 @@ export function AppointmentList(props: any) {
           </Button>
         )}
       </div>
-      <div className="">
+      <div className="w-full overflow-x-auto">
         <DataTable
           columns={columns}
-          className="overflow-x-auto max-w-[90vw] lg:max-w-[78vw] scrollbar-hidden"
+          className="w-full min-w-[700px] scrollbar-hidden"
           data={rows}
           loading={rowsLoading}
           emptyMessage="No appointments found."
