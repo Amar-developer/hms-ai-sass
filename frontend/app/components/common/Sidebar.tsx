@@ -1,6 +1,5 @@
 import { ChevronDown, Hospital, Settings } from "lucide-react";
 import Link from "next/link";
-import { BrandBlock } from "./BrandBlock";
 import { useEffect, useRef, useState } from "react";
 
 interface SidebarProps {
@@ -113,21 +112,15 @@ export function Sidebar(props: SidebarProps) {
   return (
     <aside
       className={`
-    app-sidebar h-screen shrink-0 overflow-y-auto border-r border-slate-200 bg-white px-2 py-2 text-slate-900
+    app-sidebar h-full shrink-0 overflow-y-auto bg-white px-2 py-2 text-slate-900
     hidden md:block
     transition-all duration-300 scrollbar-hidden
-    ${props.tabletCollapsed ? "md:w-18" : "md:w-64"}
-    lg:w-50
+    ${props.tabletCollapsed ? "md:w-16" : "md:w-64"}
+    lg:w-64
   `}
       ref={sidebarRef}
     >
-      <BrandBlock
-        tabletCollapsed={props.tabletCollapsed}
-        setTabletCollapsed={props.setTabletCollapsed}
-        setSidebarOpen={props.setSidebarOpen}
-        sideBarOpen={props.sideBarOpen}
-      />
-      <nav className="mt-4 space-y-2 ">
+      <nav className="space-y-2">
         {props.visibleNav.map(([id, label, Icon]: any) => {
           const isActive = props.activePage === id;
           if (id === "superadmin" && !props.isSuperAdmin) {

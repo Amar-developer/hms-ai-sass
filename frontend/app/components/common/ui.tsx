@@ -888,9 +888,10 @@ export function SearchableSelect<T = string>({
         }
         className={`flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:${text}`}
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center gap-2">
           <span
-            className={displayLabel ? "truncate" : "truncate text-slate-400"}
+            title={displayLabel || undefined}
+            className={displayLabel ? "block truncate" : "block truncate text-slate-400"}
           >
             {capitalizeFirst(displayLabel) || placeholder}
           </span>
@@ -907,7 +908,7 @@ export function SearchableSelect<T = string>({
         </span>
 
         <ChevronDown
-          className={`${open ? "rotate-180" : ""} h-4 w-4 font-bold text-black`}
+          className={`${open ? "rotate-180" : ""} h-4 w-4 shrink-0 font-bold text-black`}
         />
       </button>
 

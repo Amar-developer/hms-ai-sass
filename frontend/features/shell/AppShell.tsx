@@ -10,7 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, HeartPulse, Home } from "lucide-react";
+import { ChevronRight, Home } from "lucide-react";
 import { SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { canUseTenantAdminSection } from "../admin/permissions";
@@ -25,7 +25,6 @@ import { reportSections } from "@/features/reports/constants";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
-import { activeTenantOptions } from "@/utils/helper";
 import { useNavigationSkeleton } from "@/app/components/common/loader/useNavigationSkeleton";
 import { ModuleSkeleton } from "@/app/components/common/loader/ModuleSkeleton";
 import { BreadcrumbBarSkeleton } from "@/app/components/common/loader/BreadcrumbBarSkeleton";
@@ -157,8 +156,6 @@ export function AppShell({
     nav,
     enabled,
     clinic,
-    clinics,
-    tenants = [],
     clinicId,
     changeClinic,
     branchId,
@@ -184,10 +181,6 @@ export function AppShell({
     isSuperAdmin ||
     apiSession?.user?.user_type === "platform_admin" ||
     apiSession?.user?.user_type === "support_admin",
-  );
-  const canManagePlatformTenants = Boolean(
-    isSuperAdmin ||
-    apiSession?.user?.permissions?.includes("platform.tenants.manage"),
   );
   const visiblePlatformSections = platformSectionsForUser(apiSession?.user);
   // The Sidebar's "Settings" dropdown (superadmin) must not repeat the
@@ -299,20 +292,6 @@ export function AppShell({
     .map((department: any) => department.name)
     .filter(Boolean);
   const displayClinicName = clinic.name || "Hospital / Clinic";
-  const visibleTenantOptions = activeTenantOptions(tenants);
-  const tenantOptions = canManagePlatformTenants
-    ? visibleTenantOptions.length
-      ? visibleTenantOptions.map((tenant: any) => ({
-          value: tenant.id,
-          label: tenant.name || tenant.id,
-        }))
-      : [
-          {
-            value: apiSession?.tenantId || clinic.id,
-            label: displayClinicName,
-          },
-        ]
-    : clinics;
   const superAdminSectionParents: Record<string, string> = {
     tenantEdit: "tenants",
     createTenant: "tenants",
@@ -394,7 +373,8 @@ export function AppShell({
   // top-level row — visibleNav itself stays untouched since prefetching,
   // the search palette, and activePage resolution all still need them.
   const sidebarVisibleNav = visibleNav.filter(
-    ([id]: any) => !clinicModuleIds.includes(id),
+    ([id]: any) =>
+      !clinicModuleIds.includes(id) && !["admin", "superadmin"].includes(id),
   );
   const activeTenantAdminSection = visibleTenantAdminSections.some(
     ([id]: any) => id === tenantAdminSection,
@@ -799,19 +779,53 @@ export function AppShell({
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-white text-slate-900">
+    <div className="flex h-screen flex-col overflow-hidden bg-white text-slate-900">
       {/* {isInitialLoading && <PageLoader label={"Loading"} />} */}
+      <AppHeader
+        isPlatformWorkspace={canAccessPlatformWorkspace}
+        apiSession={apiSession}
+        branchId={branchId}
+        setBranchId={setBranchId}
+        clinic={clinic}
+        canChangeBranch={canChangeBranch}
+        isDoctorUser={isDoctorUser}
+        branchName={branchName}
+        departmentNames={departmentNames}
+        displayClinicName={displayClinicName}
+        searchItems={searchItems}
+        profileOpen={profileOpen}
+        setProfileOpen={setProfileOpen}
+        profileOpenRef={profileOpenRef}
+        roleLabel={roleLabel}
+        handleLogout={handleLogout}
+        setShowPassword={setShowPassword}
+        navigatePage={navigatePage}
+        settingsSections={
+          canAccessPlatformWorkspace
+            ? visiblePlatformSettingsSections
+            : visibleTenantAdminSections
+        }
+        activeSettingsSection={
+          canAccessPlatformWorkspace
+            ? activeSuperAdminSection
+            : activeTenantAdminSection
+        }
+        tabletCollapsed={tabletCollapsed}
+        setTabletCollapsed={setTabletCollapsed}
+        setSidebarOpen={setSidebarOpen}
+        sideBarOpen={sideBarOpen}
+      />
       {/* Sidebar */}
       {!isDesktop && (
         <div
           className={`
-    fixed left-0 top-0 z-40 h-screen border-r border-slate-200 bg-white
+    fixed bottom-0 left-0 top-14 z-40 bg-white
     transition-all duration-300
 
-    md:w-14
+    md:w-16
     ${!tabletCollapsed ? "md:w-64" : ""}
 
-    lg:hidden lg:w-50
+    hidden md:block lg:hidden lg:w-64
   `}
         >
           {/* Tablet view Sidebar */}
@@ -855,14 +869,14 @@ export function AppShell({
           </div>
         </div>
       )}
-      <div className="h-full lg:flex">
+      <div className="min-h-0 flex-1 lg:flex">
         <aside
-          className={`scrollbar-hidden hidden h-screen shrink-0 overflow-y-auto overflow-x-hidden border-r border-slate-200 bg-white p-2 px-0 md:w-64 lg:block lg:w-64`}
+          className="scrollbar-hidden hidden h-full w-64 shrink-0 overflow-y-auto overflow-x-hidden bg-white px-0 py-2 lg:block"
         >
           {/* Desktop view */}
           {isDesktop && (
             <div
-              className={`fixed left-0 top-0 z-40 h-screen w-fit transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
+              className={`h-full w-fit transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
                 sideBarOpen ? "translate-x-0" : "-translate-x-full"
               }`}
             >
@@ -923,36 +937,11 @@ export function AppShell({
 
         <main
           className={`
-    scrollbar-hidden h-screen min-w-0 flex-1 overflow-y-auto global-bg
-    md:ml-14
+    scrollbar-hidden h-full min-w-0 flex-1 overflow-y-auto bg-white
+    md:ml-16
     lg:ml-0
   `}
         >
-          <AppHeader
-            isSuperAdmin={canManagePlatformTenants}
-            apiSession={apiSession}
-            tenantOptions={tenantOptions}
-            switchTenant={switchTenant}
-            branchId={branchId}
-            setBranchId={setBranchId}
-            clinic={clinic}
-            canChangeBranch={canChangeBranch}
-            isDoctorUser={isDoctorUser}
-            branchName={branchName}
-            departmentNames={departmentNames}
-            displayClinicName={displayClinicName}
-            searchItems={searchItems}
-            profileOpen={profileOpen}
-            setProfileOpen={setProfileOpen}
-            profileOpenRef={profileOpenRef}
-            roleLabel={roleLabel}
-            handleLogout={handleLogout}
-            setShowPassword={setShowPassword}
-            setReportsOpen={setReportsOpen}
-            navigatePage={navigatePage}
-            // setTabletCollapsed={setTabletCollapsed}
-          />
-
           {(showPassword || passwordChangeRequired) && (
             <ChangePassword
               apiSession={apiSession}
@@ -1134,34 +1123,6 @@ export function AppShell({
             </ShellChromeContext.Provider>
           </section>
         </main>
-      </div>
-    </div>
-  );
-}
-
-type BrandBlockProps = {
-  compact?: boolean;
-  setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
-};
-
-export function BrandBlock({
-  compact = false,
-  setSidebarOpen,
-}: BrandBlockProps) {
-  return (
-    <div className="flex items-center gap-3">
-      <div
-        className={`${compact ? "rounded-xl p-2" : "rounded-2xl p-3"} bg-brand text-brand-fg`}
-      >
-        <HeartPulse size={compact ? 20 : 24} />
-      </div>
-      <div className="min-w-0">
-        <h1 className={`${compact ? "text-base" : "text-sm"} font-bold`}>
-          MedizinHub HMS
-        </h1>
-        <p className="truncate text-sm text-slate-500">
-          Healthcare SaaS Workspace
-        </p>
       </div>
     </div>
   );
