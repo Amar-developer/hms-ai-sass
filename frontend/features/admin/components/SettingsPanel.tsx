@@ -208,7 +208,7 @@ export function SettingsPanel(props: any) {
       </section>
 
       <Card
-        className={`border border-slate-200 p-4 shadow-sm ${
+        className={`border border-slate-200 p-4 bg-white shadow-sm ${
           activeSettingsTab === "operations" || activeSettingsTab === "numbering"
             ? "block"
             : "hidden"
@@ -451,7 +451,7 @@ export function SettingsPanel(props: any) {
         </div>
       </Card>
       <Card
-        className={`border border-slate-200 p-4 shadow-sm ${
+        className={`border border-slate-200 p-4 bg-white shadow-sm ${
           activeSettingsTab === "accounts" ? "block" : "hidden"
         }`}
       >
@@ -526,7 +526,7 @@ export function SettingsPanel(props: any) {
         </div>
       </Card>
       <Card
-        className={`border border-slate-200 p-4 shadow-sm ${
+        className={`border border-slate-200 p-4 bg-white shadow-sm ${
           activeSettingsTab === "reports" ? "block" : "hidden"
         }`}
       >

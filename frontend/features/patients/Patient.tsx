@@ -54,7 +54,11 @@ export function Patient({
   view = "list",
   selectedId = "",
   section = "home",
-}: PatientProps & { view?: string; selectedId?: string; section?: PatientSectionId }) {
+}: PatientProps & {
+  view?: string;
+  selectedId?: string;
+  section?: PatientSectionId;
+}) {
   const router = useRouter();
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
@@ -85,11 +89,11 @@ export function Patient({
   const canDeletePatient = hasPermission("patients.delete");
   const canReadIntelligence = Boolean(
     (!enabledModules || enabledModules.includes("patient_intelligence")) &&
-      hasPermission(
-        "patient_intelligence.read",
-        "patient_intelligence.manage",
-        "patient_intelligence.rules.manage",
-      ),
+    hasPermission(
+      "patient_intelligence.read",
+      "patient_intelligence.manage",
+      "patient_intelligence.rules.manage",
+    ),
   );
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
   const [query, setQuery] = useState("");
@@ -117,8 +121,13 @@ export function Patient({
     setRows,
     loadTenants,
     loadData,
-  } =
-    usePatientListData({ apiSession, tenantId, setTenantId, setBusy, setMessage });
+  } = usePatientListData({
+    apiSession,
+    tenantId,
+    setTenantId,
+    setBusy,
+    setMessage,
+  });
 
   const {
     selectedDetail,
@@ -149,7 +158,8 @@ export function Patient({
     initialId: selectedId,
   });
 
-  const selected = selectedDetail || rows.find((row: any) => row.id === selectedId);
+  const selected =
+    selectedDetail || rows.find((row: any) => row.id === selectedId);
 
   const patientSchema = getPatientTableSchema({ isSuperAdmin, tenants });
   const patientQueryFields = getPatientQueryFields({
@@ -334,10 +344,8 @@ export function Patient({
         Date.now() - pending.at < 10000
       )
         setMessage(pending.message);
-    } catch {
-    }
+    } catch {}
   }, []);
-
 
   const detailFetchInFlightRef = useRef(false);
   // Keyed by patient id, not by mount: this component is rendered from
@@ -393,7 +401,11 @@ export function Patient({
 
   function openPatientSection(id: string, nextSection: PatientSectionId) {
     if (!id) return;
-    router.push(nextSection === "home" ? `/patients/${id}` : `/patients/${id}/${nextSection}`);
+    router.push(
+      nextSection === "home"
+        ? `/patients/${id}`
+        : `/patients/${id}/${nextSection}`,
+    );
   }
 
   const {
@@ -577,13 +589,18 @@ export function Patient({
           />
         </div>
       </BreadcrumbSlot>
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start ">
-        <div className="min-w-0 ">
-          <h3 className="card-title font-bold">EMR / Patient Management</h3>
-          <p className="mt-1 max-w-3xl card-desc text-slate-500">
-            Tenant-scoped patient registry with history, alerts, treatment
-            timeline, and audited record views.
-          </p>
+      <div className="flex flex-col bg-white p-2 rounded-lg justify-between gap-4 lg:flex-row lg:items-start ">
+        <div className="flex">
+          <div className="p-2 rounded-lg mr-2 text-emarald-900 bg-emerald-50">
+            <Users className="text-emerald-600" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="card-title font-bold">EMR / Patient Management</h3>
+            <p className="mt-1 max-w-3xl card-desc text-slate-500">
+              Tenant-scoped patient registry with history, alerts, treatment
+              timeline, and audited record views.
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {canCreatePatient && (
@@ -592,7 +609,7 @@ export function Patient({
               onClick={() => open("create")}
               className="primary-action shrink-0 gap-2 px-5 py-3 text-xs shadow-sm"
             >
-             <PlusCircle size={16} />
+              <PlusCircle size={16} />
               Create Patient
             </button>
           )}
@@ -608,7 +625,7 @@ export function Patient({
             emptyMessage="No patients match your search."
             emptyDescription="Patients registered here will show up in this list once added."
             emptyIcon={Users}
-            minBodyHeight={`${pageRows.length > 0 ?'':'220px'}`}
+            minBodyHeight={`${pageRows.length > 0 ? "" : "220px"}`}
             onRowClick={(row: any) => open("detail", row.id)}
             sort={sort ?? undefined}
             onSortChange={handleSortChange}

@@ -10,7 +10,7 @@ export function Pagination({
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
   return (
-    <div className="mt-4 flex flex-col justify-between gap-3 table-data text-slate-500 sm:flex-row sm:items-center">
+    <div className="mt-2 flex flex-col justify-between gap-3 border p-2 rounded-lg bg-white table-data text-slate-500 sm:flex-row sm:items-center ">
       <span>
         Showing {start}-{end} of {total}
       </span>

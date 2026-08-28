@@ -80,7 +80,7 @@ export function WorklistDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="flex w-full max-w-3xl max-h-[85vh] flex-col overflow-hidden p-5">
+      <Card className="flex w-full max-w-3xl max-h-[85vh] flex-col overflow-hidden p-5 bg-white">
         <div className="flex items-start justify-between gap-3 sticky top-0 z-10 bg-white pb-3">
           <div>
             <div className="flex items-center gap-2">
@@ -108,14 +108,14 @@ export function WorklistDetailModal({
             </p>
           ) : (
             <table className="w-full text-left text-sm rounded-lg">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500 rounded-lg">
+              <thead className="bg-white text-xs uppercase text-slate-500 rounded-lg">
                 <tr>
                   <th className="w-16 px-4 py-3">#</th>
                   <th className="px-4 py-3">Lab Test / Service</th>
                   <th className="w-36 px-4 py-3 text-right">Price</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-white bg-white">
                 {pricedItems.map((item: any, index: number) => (
                   <tr key={item.id}>
                     <td className="px-4 py-3 text-slate-500">{index + 1}</td>
@@ -135,7 +135,7 @@ export function WorklistDetailModal({
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+              <tfoot className="border-t-2 border-slate-200 bg-white">
                 <tr>
                   <td colSpan={2} className="px-4 py-3 text-right font-bold">
                     Total
@@ -149,7 +149,7 @@ export function WorklistDetailModal({
           )}
         </div>
         {loadError && (
-          <p className="mt-2 text-xs font-semibold text-red-600">{loadError}</p>
+          <p className="mt-2 bg-white text-xs font-semibold text-red-600">{loadError}</p>
         )}
         </div>
         {canGenerateInvoice && (

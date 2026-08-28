@@ -12,6 +12,7 @@ type UseConsultationActionsParams = {
   setAppointments: (updater: (appointments: any[]) => any[]) => void;
   refetchAppointments: () => Promise<any[]>;
   setBusy: (value: boolean) => void;
+  setPendingAction: (value: "draft" | "sign" | null) => void;
   setMessage: (value: string) => void;
   setSelectedAppointmentId: (id: string) => void;
   nextEligibleAppointment: (excludeId?: string) => any;
@@ -59,6 +60,7 @@ export function useConsultationActions({
   setAppointments,
   refetchAppointments,
   setBusy,
+  setPendingAction,
   setMessage,
   setSelectedAppointmentId,
   nextEligibleAppointment,
@@ -283,6 +285,7 @@ export function useConsultationActions({
 
   async function saveBackendDraft() {
     setBusy(true);
+    setPendingAction("draft");
     setMessage("");
     try {
       const consultationId = await ensureBackendConsultation();
@@ -300,6 +303,7 @@ export function useConsultationActions({
       setMessage(err.message || "Could not save consultation.");
     } finally {
       setBusy(false);
+      setPendingAction(null);
     }
   }
 
@@ -334,6 +338,7 @@ export function useConsultationActions({
       return;
     }
     setBusy(true);
+    setPendingAction("sign");
     setMessage("");
     try {
       const consultationId = await ensureBackendConsultation();
@@ -357,6 +362,7 @@ export function useConsultationActions({
       setMessage(err.message || "Could not sign consultation.");
     } finally {
       setBusy(false);
+      setPendingAction(null);
     }
   }
 

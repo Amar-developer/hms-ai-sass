@@ -451,7 +451,7 @@ export function PatientDetail({
     },
   ];
   const monthlyTrackingCards = (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
       <h5 className="text-sm font-black text-slate-950">
         Monthly Lab & Medicine Tracking
       </h5>
@@ -570,10 +570,10 @@ export function PatientDetail({
   return (
     <div className="relative space-y-5">
       {loading && <OverlayLoader />}
-      <Card className="">
+      <Card className={`${activeSection ==='home'?'bg-white p-2':''}`}>
         <StatusToast message={message} onClose={onMessageClose} />
         {activeSection === "home" && (
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className=" grid gap-3 md:grid-cols-3">
             <Info
               title="Age / Gender"
               value={`${patient.age_years ?? "-"} / ${displayPatientGender(patient.gender)}`}
@@ -620,7 +620,7 @@ export function PatientDetail({
           </div>
         )}
         {activeSection === "membership" && canReadMembership && (
-          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/40 p-3">
+          <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h5 className="text-sm font-black text-slate-950">
@@ -827,7 +827,7 @@ export function PatientDetail({
       </Card>
 
       {activeSection === "home" && (
-        <Card className="p-4">
+        <Card className="p-4 bg-white">
           <h3 className="mb-1 text-sm font-black text-slate-900">BMI Trend</h3>
           <p className="mb-3 text-xs text-slate-500">
             Updated to today from the patient&apos;s latest recorded vitals.
@@ -969,7 +969,7 @@ export function PatientDetail({
           ) : (
             <Empty text="You do not have permission to update patient tracking." />
           )}
-          <div className="rounded-lg pt-2 bg-white ">
+          <div className="rounded-lg p-2 bg-white ">
             <h5 className="text-sm font-black text-slate-950">
               WhatsApp Message History
             </h5>
@@ -1278,7 +1278,7 @@ export function PatientDetail({
         //   defaultOpen={false}
         // >
         <div>
-          <div className="mb-3 grid gap-3 md:grid-cols-3">
+          <div className="mb-3 grid gap-3 md:grid-cols-3 bg-white p-2 rounded-lg">
             <CompactMetric label="Overall Billed" value={money(totalBilled)} />
             <CompactMetric label="Overall Paid" value={money(totalPaid)} />
             <CompactMetric label="Overall Due" value={money(totalDue)} />

@@ -296,7 +296,7 @@ export function ActiveEnrollmentsTable({
   }
 
   return (
-    <Card>
+    <Card className="bg-white p-3">
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="text-base lg:text-lg font-bold">Active Enrollments</h3>

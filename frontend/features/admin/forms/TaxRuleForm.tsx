@@ -57,7 +57,7 @@ export function TaxRuleForm({
   }, [rule?.id]);
 
   return (
-    <Card>
+    <Card className="p-2 bg-white">
       <Header
         title={title}
         subtitle="Tax is selected by branch and service scope during invoice generation."

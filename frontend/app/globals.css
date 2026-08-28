@@ -50,7 +50,11 @@
     @apply rounded-full text-xs lg:text-sm py-1 px-1 font-normal;
   }
 }
-
+@layer components {
+  .global-bg{
+    @apply bg-[#f4f6f5d9]
+  }
+}
 @layer components {
   .table-data {
     @apply text-xs lg:text-sm;

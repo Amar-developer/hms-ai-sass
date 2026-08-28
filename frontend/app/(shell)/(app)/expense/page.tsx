@@ -1,11 +1,14 @@
 "use client";
 
-import { useWorkspace } from "@/features/shell/WorkspaceContext";
-import { useShellChrome } from "@/features/shell/AppShell";
-import Expense from "@/features/expenses/Expenses";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-export default function ExpenseFlowPage() {
-  const ctx = useWorkspace();
-  const { navigatePage } = useShellChrome();
-  return <Expense {...ctx}  setActive={navigatePage} />
+// Expense now lives at /clinic/expense — this stub keeps old bookmarks/links
+// working by forwarding straight through.
+export default function ExpenseRedirect() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/clinic/expense");
+  }, [router]);
+  return null;
 }

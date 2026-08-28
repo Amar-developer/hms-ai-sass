@@ -429,11 +429,11 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
       </section>
 
       {activeTab === "content" && (
-      <Card>
+      <Card className="p-3 bg-white">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h4 className="font-bold">Content Library</h4>
-            <p className="mt-1 text-sm text-slate-500">
+            <h4 className="card-title font-bold">Content Library</h4>
+            <p className="card-desc mt-1 text-slate-500">
               Tenant-managed health tips and awareness text for WhatsApp
               templates. No AI text is generated here; staff controls the exact
               approved message body.
@@ -670,13 +670,13 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
         </form>
       </Card>}
 
-      <Card>
+      <Card className="p-3 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h4 className="font-bold">Configured Rules</h4>
         </div>
         <div className="mt-3 space-y-2">
           {!busy && rules.length === 0 && (
-            <p className="text-sm text-slate-500">
+            <p className="card-desc text-slate-500">
               No rules configured. Use the advanced editor to create database
               rules for Silver, Gold, Premium, membership, or any tenant-specific
               patient flag.

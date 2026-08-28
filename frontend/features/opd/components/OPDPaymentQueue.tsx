@@ -36,14 +36,6 @@ export function OPDPaymentQueue({ apiSession, branchId, onOpenInvoice }: any) {
 
   return (
     <Card className="pt-2">
-      <div className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="card-title font-bold">OPD Payment Queue</h3>
-          <p className="card-desc text-slate-500">
-            Generated OPD invoices with pending payment.
-          </p>
-        </div>
-      </div>
 
       <StatusToast message={message} onClose={() => setMessage("")} />
 
@@ -54,7 +46,7 @@ export function OPDPaymentQueue({ apiSession, branchId, onOpenInvoice }: any) {
       ) : rows.length === 0 ? (
         <div className="grid min-h-44 place-items-center px-6 text-center">
           <div>
-            <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+            <span className="mx-auto grid h-12 w-12 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
               <CheckCircle2 className="h-6 w-6" />
             </span>
             <p className="mt-3 text-sm font-black text-slate-900">
@@ -66,7 +58,7 @@ export function OPDPaymentQueue({ apiSession, branchId, onOpenInvoice }: any) {
           </div>
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="hidden grid-cols-[180px_120px_130px_100px_150px_180px] gap-4 bg-slate-50 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
             <span>Patient</span>
             <span>Invoice No</span>

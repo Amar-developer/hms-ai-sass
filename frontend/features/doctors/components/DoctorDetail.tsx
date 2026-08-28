@@ -42,7 +42,7 @@ export function  DoctorDetail({
   });
 
   return (
-    <Card>
+    <Card className="p-3 bg-white">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="card-title font-bold">Doctor Details</h3>

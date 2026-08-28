@@ -105,7 +105,7 @@ export function DepartmentForm({
       : "This medical department already exists in one or more branches. Remove those branch mappings before creating an all-branches department.";
 
   return (
-    <Card className="mt-3">
+    <Card className="p-3 bg-white">
       <Header
         title={title}
         subtitle={

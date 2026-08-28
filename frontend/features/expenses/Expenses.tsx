@@ -288,7 +288,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
 
       <ExpenseSummaryTiles expenses={rows} />
 
-      <Card className="p-0">
+      <Card className="p-3 bg-white">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
             {selectedMonth && (
@@ -315,7 +315,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
               <button
                 type="button"
                 onClick={() => setShowSubcategoryAdmin(true)}
-                className="border rounded-lg px-3 py-2 text-xs font-bold hover:bg-slate-100"
+                className="border bg-white rounded-lg px-3 py-2 text-xs font-bold hover:bg-slate-100"
               >
                 Manage Subcategories
               </button>

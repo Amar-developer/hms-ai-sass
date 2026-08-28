@@ -48,7 +48,7 @@ export function DataTable<T>({
   return (
     <div className={className}>
       <div
-        className="overflow-auto scrollbar-thin rounded-lg border border-slate-300"
+        className="overflow-auto scrollbar-thin rounded-lg border border-slate-300 bg-white"
         style={minBodyHeight ? { minHeight: minBodyHeight } : undefined}
       >
         <table

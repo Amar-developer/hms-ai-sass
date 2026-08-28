@@ -260,7 +260,7 @@ export function BookingDetail({
           id="homecare-overview"
           className={activeSection === "overview" ? "block" : "hidden"}
         >
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 bg-white p-2 rounded-lg">
           <Info
             title="Patient"
             value={booking.patient_name || patientName(patient)}
@@ -323,7 +323,7 @@ export function BookingDetail({
           className={activeSection === "logs" ? "block" : "hidden"}
         >
         <div className="rounded-lg bg-slate-50 p-4">
-          <div className="mb-3 flex flex-col justify-between gap-2 md:flex-row md:items-center">
+          <div className="mb-3 flex flex-col justify-between gap-2 md:flex-row md:items-center bg-white">
             <div>
               <p className="card-title font-bold uppercase text-slate-900">
                 Actual Service Logs
@@ -621,7 +621,7 @@ export function BookingDetail({
         id="homecare-billing"
         className={activeSection === "billing" ? "block" : "hidden"}
       >
-      <Card className="p-0">
+      <Card className="p-3 bg-white">
         <h3 className="text-base font-bold">Billing Summary</h3>
         {invoiceDetail?.invoice ? (
           <div className="mt-4 rounded-lg border p-4 text-sm">
@@ -634,7 +634,7 @@ export function BookingDetail({
                   allowed={canCopyIds}
                 />
               </div>
-              <Badge>{humanizeOptionLabel(invoiceDetail.invoice.status)}</Badge>
+              <Badge className="normal-label">{humanizeOptionLabel(invoiceDetail.invoice.status)}</Badge>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 text-slate-600">
               <span>Total</span>

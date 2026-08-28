@@ -525,7 +525,8 @@ export const flowOptions: Array<{
   {
     key: "home_care_booking_patient",
     label: "Home care / visit booking confirmation",
-    description: "Trigger after either a home care or home visit booking is created.",
+    description:
+      "Trigger after either a home care or home visit booking is created.",
     audience: "patient",
   },
   {

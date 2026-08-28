@@ -223,7 +223,7 @@ export function ActivityLog({
   ].sort((a, b) => parseInstant(a.at).getTime() - parseInstant(b.at).getTime());
   return (
     <div ref={containerRef}>
-      <Card className="">
+      <Card className="mt-3">
         <h4 className="text-sm font-black text-slate-950">Comments</h4>
         <div className="mt-2 flex gap-2">
           <MentionCommentInput

@@ -142,7 +142,7 @@ export function OPDInvoiceQueue({
           </div>
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="hidden grid-cols-[180px_100px_130px_130px_160px_180px] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
             <span>Patient</span>
             <span>Token</span>

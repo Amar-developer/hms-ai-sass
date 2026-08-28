@@ -580,8 +580,8 @@ export function PatientSubscriptions({
           </section>
 
           {activeTab === "plans" && (
-          <Card>
-            <div>
+          <Card className="mt-3">
+            <div className="max-w-[78vw]">
               <DataTable
                 columns={getPlanColumns({
                   activeEnrollmentCountByPlan,

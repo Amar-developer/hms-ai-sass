@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  UsersRound,
-} from "lucide-react";
+import { UsersRound,ListCollapse } from "lucide-react";
 import {
   Button,
   Card,
@@ -57,7 +55,11 @@ export function DoctorConsultation({
     scopedAppointments,
     refetch: refetchAppointments,
     setLocal: setAppointments,
-  } = useAppointmentsQuery(apiSession, { clinicId: clinic?.id, branchId, patients });
+  } = useAppointmentsQuery(apiSession, {
+    clinicId: clinic?.id,
+    branchId,
+    patients,
+  });
   const isDoctorUser = Boolean(
     apiSession?.user?.user_type === "doctor" ||
     apiSession?.user?.roles?.includes("doctor"),
@@ -154,11 +156,12 @@ export function DoctorConsultation({
       ? ""
       : sessionStorage.getItem("medizinhub.consultationDoctorId") || "",
   );
-  const [selectedAppointmentId, setSelectedAppointmentId] = useState(() =>
-    appointmentId ||
-    (typeof window === "undefined"
-      ? ""
-      : sessionStorage.getItem("medizinhub.consultationAppointmentId") || ""),
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState(
+    () =>
+      appointmentId ||
+      (typeof window === "undefined"
+        ? ""
+        : sessionStorage.getItem("medizinhub.consultationAppointmentId") || ""),
   );
   const [feeType, setFeeType] = useState("OP");
   const [treatmentType, setTreatmentType] = useState("general_consultation");
@@ -205,12 +208,19 @@ export function DoctorConsultation({
   const [referDoctor, setReferDoctor] = useState(false);
   const [referDoctorId, setReferDoctorId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPatientWorkList, setShowPatientWorkList] = useState(false);
+  // `busy` covers every write action (queue calls, addendum, draft, sign)
+  // and stays true across all of them so buttons can't be double-clicked —
+  // but that also means both Save Draft and Complete would show a spinner
+  // together if it drove their ButtonLoader directly. This tracks which one
+  // is actually in flight so only that button's loader/label lights up.
+  const [pendingAction, setPendingAction] = useState<"draft" | "sign" | null>(
+    null,
+  );
   const [message, setMessage] = useState("");
   const [consultationValidationAttempted, setConsultationValidationAttempted] =
     useState(false);
-  const [selectedDate, setSelectedDate] = useState(() =>
-    today(),
-  );
+  const [selectedDate, setSelectedDate] = useState(() => today());
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -245,10 +255,7 @@ export function DoctorConsultation({
     );
     if (practitionerId) {
       setDoctorId(practitionerId);
-      sessionStorage.setItem(
-        "medizinhub.consultationDoctorId",
-        practitionerId,
-      );
+      sessionStorage.setItem("medizinhub.consultationDoctorId", practitionerId);
     }
     const appointmentDate = appointmentDateKey(appointment);
     if (appointmentDate) setSelectedDate(appointmentDate);
@@ -718,9 +725,7 @@ export function DoctorConsultation({
     const templateMedicines = Array.isArray(content.medicines)
       ? content.medicines
       : [];
-    const templateLabs = Array.isArray(content.labs)
-      ? content.labs
-      : [];
+    const templateLabs = Array.isArray(content.labs) ? content.labs : [];
     setComplaints(templateComplaints.join("\n"));
     setDiagnosisRows(templateDiagnoses.join("\n"));
     if (content.doctor_notes) setNotes(content.doctor_notes);
@@ -743,8 +748,15 @@ export function DoctorConsultation({
     }));
     setReferralItems(labRows);
     setLabNeeded(labRows.length > 0);
-    setLabTests(labRows.map((lab: any) => lab.name).filter(Boolean).join(", "));
-    setMessage(`Template ${template.name} applied. You can edit or remove any item.`);
+    setLabTests(
+      labRows
+        .map((lab: any) => lab.name)
+        .filter(Boolean)
+        .join(", "),
+    );
+    setMessage(
+      `Template ${template.name} applied. You can edit or remove any item.`,
+    );
   }
   function structuredPayload() {
     return {
@@ -874,7 +886,6 @@ export function DoctorConsultation({
 
     setReferDoctor(false);
     setReferDoctorId("");
-
   };
 
   const {
@@ -895,6 +906,7 @@ export function DoctorConsultation({
     setAppointments,
     refetchAppointments,
     setBusy,
+    setPendingAction,
     setMessage,
     setSelectedAppointmentId,
     nextEligibleAppointment,
@@ -943,103 +955,120 @@ export function DoctorConsultation({
   }
   if (view === "workspace")
     return (
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(280px,0.72fr)_minmax(0,2fr)]">
-        <OPDPatientWorklist
-          rows={selectedDateQueue}
-          patients={patients}
-          selectedId={selected?.id}
-          selectedDate={selectedDate}
-          setSelectedDate={(value) => {
-            setSelectedDate(value);
-            setSelectedAppointmentId("");
-          }}
-          doctorId={doctorId}
-          setDoctorId={(value) => {
-            setDoctorId(value);
-            setSelectedAppointmentId("");
-            sessionStorage.setItem("medizinhub.consultationDoctorId", value);
-          }}
-          doctors={doctorList}
-          doctorLocked={isDoctorUser}
-          onSelect={openConsultation}
-        />
-        <div className="min-w-0 space-y-4">
+      <div
+        className={`grid items-start gap-4 ${showPatientWorkList ? "grid-cols-[minmax(280px,0.72fr)_minmax(0,2fr)]" : ""}`}
+      >
+        {!showPatientWorkList && (
+          <div
+            className="w-[50%] cursor-pointer bg-white p-2 flex items-center rounded-lg border-slate-300 border w-fit hover:scale-105"
+            onClick={() => setShowPatientWorkList(true)}
+          >
+            <ListCollapse size={18}/>
+            <span className="text-xs font-semibold pl-2">Open WorkList</span>
+          </div>
+        )}
+        {showPatientWorkList && (
+          <OPDPatientWorklist
+            rows={selectedDateQueue}
+            patients={patients}
+            selectedId={selected?.id}
+            selectedDate={selectedDate}
+            setSelectedDate={(value) => {
+              setSelectedDate(value);
+              setSelectedAppointmentId("");
+            }}
+            doctorId={doctorId}
+            setDoctorId={(value) => {
+              setDoctorId(value);
+              setSelectedAppointmentId("");
+              sessionStorage.setItem("medizinhub.consultationDoctorId", value);
+            }}
+            doctors={doctorList}
+            doctorLocked={isDoctorUser}
+            onSelect={openConsultation}
+            setShowPatientWorkList={setShowPatientWorkList}
+            showPatientWorkList={showPatientWorkList}
+          />
+        )}
+        <div className={`min-w-0 space-y-4}`}>
           <StatusToast message={message} onClose={() => setMessage("")} />
           {selected ? (
             <ConsultationWorkspace
-          selected={selected}
-          patient={patient}
-          selectedPatientHistory={selectedPatientHistory}
-          templates={templates}
-          applyClinicalTemplate={applyClinicalTemplate}
-          setComplaints={setComplaints}
-          complaints={complaints}
-          setDiagnosisRows={setDiagnosisRows}
-          diagnosisRows={diagnosisRows}
-          treatmentType={treatmentType}
-          setTreatmentType={setTreatmentType}
-          remarks={remarks}
-          setRemarks={setRemarks}
-          vitals={vitals}
-          setVitals={setVitals}
-          notes={notes}
-          setNotes={setNotes}
-          medicineRows={medicineRows}
-          medicineItems={medicineItems}
-          removeMedicineItem={removeMedicineItem}
-          medicineCatalog={medicineCatalog}
-          selectedMedicineId={selectedMedicineId}
-          setSelectedMedicineId={setSelectedMedicineId}
-          medicineDosage={medicineDosage}
-          setMedicineDosage={setMedicineDosage}
-          medicineFrequency={medicineFrequency}
-          setMedicineFrequency={setMedicineFrequency}
-          medicineDuration={medicineDuration}
-          setMedicineDuration={setMedicineDuration}
-          medicineInstructions={medicineInstructions}
-          setMedicineInstructions={setMedicineInstructions}
-          addMedicineFromText={addMedicineFromText}
-          referralRows={referralRows}
-          referralItems={referralItems}
-          removeReferralItem={removeReferralItem}
-          labNeeded={labNeeded}
-          setLabNeeded={setLabNeeded}
-          labTests={labTests}
-          setLabTests={setLabTests}
-          labCatalog={labCatalog}
-          branchId={branchId}
-          selectedLabTestId={selectedLabTestId}
-          setSelectedLabTestId={setSelectedLabTestId}
-          labPriority={labPriority}
-          setLabPriority={setLabPriority}
-          labInstructions={labInstructions}
-          setLabInstructions={setLabInstructions}
-          addLabFromText={addLabFromText}
-          referDoctor={referDoctor}
-          setReferDoctor={setReferDoctor}
-          referDoctorId={referDoctorId}
-          setReferDoctorId={setReferDoctorId}
-          practitioners={practitioners}
-          doctor={doctor}
-          addendumNote={addendumNote}
-          setAddendumNote={setAddendumNote}
-          addendums={addendums}
-          saveAddendum={saveAddendum}
-          busy={busy}
-          apiSession={apiSession}
-          saveBackendDraft={saveBackendDraft}
-          markDone={markDone}
-          signBackendConsultation={signBackendConsultation}
-          validationAttempted={consultationValidationAttempted}
-          requeuePatient={requeuePatient}
-          callPatient={callPatient}
-          skipPatient={skipPatient}
-          cancelAppointment={cancelAppointment}
-          openPatientDetails={openPatientDetails}
-          callNextInWorkspace={callNextInWorkspace}
-          nextPatient={nextEligibleAppointment(selected?.id)}
-          onOpenConsultationInvoices={onOpenConsultationInvoices}
-          setActive={setActive}
+              selected={selected}
+              patient={patient}
+              selectedPatientHistory={selectedPatientHistory}
+              templates={templates}
+              applyClinicalTemplate={applyClinicalTemplate}
+              setComplaints={setComplaints}
+              complaints={complaints}
+              setDiagnosisRows={setDiagnosisRows}
+              diagnosisRows={diagnosisRows}
+              treatmentType={treatmentType}
+              setTreatmentType={setTreatmentType}
+              remarks={remarks}
+              setRemarks={setRemarks}
+              vitals={vitals}
+              setVitals={setVitals}
+              notes={notes}
+              setNotes={setNotes}
+              medicineRows={medicineRows}
+              medicineItems={medicineItems}
+              removeMedicineItem={removeMedicineItem}
+              medicineCatalog={medicineCatalog}
+              selectedMedicineId={selectedMedicineId}
+              setSelectedMedicineId={setSelectedMedicineId}
+              medicineDosage={medicineDosage}
+              setMedicineDosage={setMedicineDosage}
+              medicineFrequency={medicineFrequency}
+              setMedicineFrequency={setMedicineFrequency}
+              medicineDuration={medicineDuration}
+              setMedicineDuration={setMedicineDuration}
+              medicineInstructions={medicineInstructions}
+              setMedicineInstructions={setMedicineInstructions}
+              addMedicineFromText={addMedicineFromText}
+              referralRows={referralRows}
+              referralItems={referralItems}
+              removeReferralItem={removeReferralItem}
+              labNeeded={labNeeded}
+              setLabNeeded={setLabNeeded}
+              labTests={labTests}
+              setLabTests={setLabTests}
+              labCatalog={labCatalog}
+              branchId={branchId}
+              selectedLabTestId={selectedLabTestId}
+              setSelectedLabTestId={setSelectedLabTestId}
+              labPriority={labPriority}
+              setLabPriority={setLabPriority}
+              labInstructions={labInstructions}
+              setLabInstructions={setLabInstructions}
+              addLabFromText={addLabFromText}
+              referDoctor={referDoctor}
+              setReferDoctor={setReferDoctor}
+              referDoctorId={referDoctorId}
+              setReferDoctorId={setReferDoctorId}
+              practitioners={practitioners}
+              doctor={doctor}
+              addendumNote={addendumNote}
+              setAddendumNote={setAddendumNote}
+              addendums={addendums}
+              saveAddendum={saveAddendum}
+              busy={busy}
+              pendingAction={pendingAction}
+              apiSession={apiSession}
+              saveBackendDraft={saveBackendDraft}
+              markDone={markDone}
+              signBackendConsultation={signBackendConsultation}
+              validationAttempted={consultationValidationAttempted}
+              requeuePatient={requeuePatient}
+              callPatient={callPatient}
+              skipPatient={skipPatient}
+              cancelAppointment={cancelAppointment}
+              openPatientDetails={openPatientDetails}
+              callNextInWorkspace={callNextInWorkspace}
+              nextPatient={nextEligibleAppointment(selected?.id)}
+              onOpenConsultationInvoices={onOpenConsultationInvoices}
+              setActive={setActive}
+              showPatientWorkList={showPatientWorkList}
             />
           ) : (
             <Card className="grid min-h-[320px] place-items-center border-dashed shadow-none">
@@ -1108,14 +1137,14 @@ export function DoctorConsultation({
       </div>
 
       {/* <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2"> */}
-        {/* <span className="text-[11px] font-bold text-slate-600">
+      {/* <span className="text-[11px] font-bold text-slate-600">
           {displayDate(selectedDate)} · {branch.name}
         </span> */}
-        {emergencyToday > 0 && (
-          <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-700">
-            Emergency {emergencyToday}
-          </span>
-        )}
+      {emergencyToday > 0 && (
+        <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-700">
+          Emergency {emergencyToday}
+        </span>
+      )}
       {/* </div> */}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="mt-4">

@@ -343,7 +343,7 @@ export function PatientForm({
             {patient?.patient_number || "Create tenant-scoped patient record."}
           </p>
         </div>
-        <button type="button" onClick={back} className="close-button font-bold">
+        <button type="button" onClick={back} className="close-button bg-white font-bold">
           Back
         </button>
       </div>
@@ -528,7 +528,7 @@ export function PatientForm({
           </div>
         </section>
 
-        <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <section className="rounded-lg border border-slate-200 bg-white p-3">
           <div>
             <h4 className="text-sm font-black text-slate-900">
               WhatsApp Preference
@@ -586,7 +586,7 @@ export function PatientForm({
           </div>
         </section>
 
-        <section className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+        <section className="rounded-lg border border-blue-100 bg-white p-3">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
             <div>
               <h4 className="text-sm font-black text-slate-900">
@@ -696,7 +696,7 @@ export function PatientForm({
           <button
             type="button"
             onClick={back}
-            className="close-button font-bold"
+            className="close-button font-bold bg-white"
           >
             Cancel
           </button>
