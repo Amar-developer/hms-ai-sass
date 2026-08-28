@@ -181,6 +181,36 @@ def test_login_does_not_write_debug_output(test_engine, monkeypatch, capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_login_accepts_username_and_legacy_email_payloads(test_engine, monkeypatch):
+    monkeypatch.setattr(
+        auth_service_module, "_enforce_login_rate_limit", lambda *_: None
+    )
+    with Session(test_engine) as session:
+        session.add(
+            User(
+                name="Username Login User",
+                username="front.desk",
+                email="front.desk@medizinhub.test",
+                password_hash=hash_password("SecretPass123"),
+                is_super_admin=True,
+            )
+        )
+        session.commit()
+
+        username_login = AuthService(session).login(
+            LoginRequest(identifier="FRONT.DESK", password="SecretPass123")
+        )
+        email_login = AuthService(session).login(
+            LoginRequest(
+                email="front.desk@medizinhub.test",
+                password="SecretPass123",
+            )
+        )
+
+    assert username_login.response.user.username == "front.desk"
+    assert email_login.response.user.email == "front.desk@medizinhub.test"
+
+
 def test_login_rate_limit_is_shared_and_returns_retry_after(
     unauthenticated_client, monkeypatch
 ):

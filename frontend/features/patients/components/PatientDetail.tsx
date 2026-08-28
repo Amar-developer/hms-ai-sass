@@ -570,7 +570,7 @@ export function PatientDetail({
   return (
     <div className="relative space-y-5">
       {loading && <OverlayLoader />}
-      <Card className={`${activeSection ==='home'?'bg-white p-2':''}`}>
+      <Card className={activeSection === "home" ? "p-0 shadow-none" : ""}>
         <StatusToast message={message} onClose={onMessageClose} />
         {activeSection === "home" && (
           <div className=" grid gap-3 md:grid-cols-3">
@@ -1278,7 +1278,7 @@ export function PatientDetail({
         //   defaultOpen={false}
         // >
         <div>
-          <div className="mb-3 grid gap-3 md:grid-cols-3 bg-white p-2 rounded-lg">
+          <div className="mb-3 grid gap-3 md:grid-cols-3">
             <CompactMetric label="Overall Billed" value={money(totalBilled)} />
             <CompactMetric label="Overall Paid" value={money(totalPaid)} />
             <CompactMetric label="Overall Due" value={money(totalDue)} />

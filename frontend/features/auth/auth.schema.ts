@@ -1,8 +1,8 @@
 import {z} from 'zod'
-import { emailSchema, passwordSchema } from '../../app/validations/common'
+import { passwordSchema } from '../../app/validations/common'
 
 export const authSchema = z.object({
-    email:emailSchema,
+    identifier: z.string().trim().min(3, "Enter your username or email"),
     password:passwordSchema
 })
 

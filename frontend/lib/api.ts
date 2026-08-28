@@ -28,6 +28,7 @@ export type ApiSession = {
     tenant_id?: string | null;
     tenant_name?: string | null;
     branch_id?: string | null;
+    username?: string | null;
     email?: string;
     is_super_admin?: boolean;
     user_type?: string;

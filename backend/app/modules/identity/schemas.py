@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+import re
+
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 
 def _validate_email(value: str | None) -> str | None:
@@ -25,8 +27,25 @@ def _unique_strings(values: list[str] | None) -> list[str] | None:
     return list(dict.fromkeys(values))
 
 
+def _validate_username(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if not normalized:
+        return None
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{2,79}", normalized):
+        raise ValueError(
+            "Username must be 3-80 characters using letters, numbers, dots, hyphens, or underscores"
+        )
+    return normalized
+
+
 class LoginRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=220)
+    identifier: str = Field(
+        min_length=3,
+        max_length=220,
+        validation_alias=AliasChoices("identifier", "email"),
+    )
     password: str = Field(min_length=8, max_length=128)
     tenant_id: str | None = None
 
@@ -51,6 +70,7 @@ class BootstrapSuperAdminRequest(BaseModel):
 
 class UserCreate(BaseModel):
     name: str = Field(min_length=2, max_length=160)
+    username: str | None = Field(default=None, min_length=3, max_length=80)
     email: str = Field(min_length=5, max_length=220)
     password: str = Field(min_length=8, max_length=128)
     user_type: str = Field(default="staff", min_length=2, max_length=60)
@@ -63,6 +83,11 @@ class UserCreate(BaseModel):
     @classmethod
     def validate_email(cls, value: str) -> str:
         return str(_validate_email(value))
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def validate_username(cls, value: str | None) -> str | None:
+        return _validate_username(value)
 
 
 class SuperAdminCreate(BaseModel):
@@ -164,6 +189,7 @@ class PrivilegedAccessOptionsRead(BaseModel):
 
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
+    username: str | None = Field(default=None, min_length=3, max_length=80)
     email: str | None = Field(default=None, min_length=5, max_length=220)
     user_type: str | None = Field(default=None, min_length=2, max_length=60)
     mobile: str | None = Field(default=None, max_length=20)
@@ -177,6 +203,11 @@ class UserUpdate(BaseModel):
     def validate_email(cls, value: str | None) -> str | None:
         return _validate_email(value)
 
+    @field_validator("username", mode="before")
+    @classmethod
+    def validate_username(cls, value: str | None) -> str | None:
+        return _validate_username(value)
+
 
 class UserRead(BaseModel):
     id: str
@@ -186,6 +217,7 @@ class UserRead(BaseModel):
     user_number: str | None = None
     user_type: str = "staff"
     name: str
+    username: str | None = None
     email: str
     mobile: str | None
     is_super_admin: bool

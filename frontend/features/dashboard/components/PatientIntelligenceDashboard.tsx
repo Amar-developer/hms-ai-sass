@@ -222,16 +222,40 @@ export function PatientIntelligenceDashboard({
     ["Risk Score", data?.summary?.risk_score_total || 0, Flag],
     ["Loyalty Score", data?.summary?.loyalty_score_total || 0, Users],
   ];
+  const cardTones = [
+    "bg-sky-50 text-sky-600 ring-sky-100",
+    "bg-amber-50 text-amber-600 ring-amber-100",
+    "bg-violet-50 text-violet-600 ring-violet-100",
+    "bg-emerald-50 text-emerald-600 ring-emerald-100",
+  ];
 
   return (
     <div className="space-y-5">
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map(([label, value, Icon]: any) => (
-          <Card key={label}>
-            <div className="flex items-center gap-2 text-slate-500"><Icon size={17} /><b className="text-xs">{label}</b></div>
-            {loading && !data ? <Skeleton className="mt-3 h-7 w-16" /> : <p className="mt-3 text-2xl font-black">{value}</p>}
-          </Card>
+        {cards.map(([label, value, Icon]: any, index) => (
+          <div
+            key={label}
+            className="flex min-h-[82px] items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:border-slate-300"
+          >
+            <span
+              className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ring-1 ${cardTones[index % cardTones.length]}`}
+            >
+              <Icon className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase leading-tight tracking-wide text-slate-500">
+                {label}
+              </p>
+              {loading && !data ? (
+                <Skeleton className="mt-1.5 h-5 w-16" />
+              ) : (
+                <p className="mt-1 text-xl font-black leading-none text-slate-950">
+                  {value}
+                </p>
+              )}
+            </div>
+          </div>
         ))}
       </div>
 

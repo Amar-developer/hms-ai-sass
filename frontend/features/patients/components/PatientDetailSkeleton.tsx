@@ -9,9 +9,15 @@ function InfoGridSkeleton({ count = 8 }: { count?: number }) {
   return (
     <div className="mt-4 grid gap-3 md:grid-cols-3">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-slate-200 p-3">
-          <Bar className="h-3 w-20" />
-          <Bar className="mt-2 h-4 w-32" />
+        <div
+          key={i}
+          className="flex min-h-[82px] items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
+        >
+          <Bar className="h-9 w-9 shrink-0 rounded-lg" />
+          <div className="min-w-0 flex-1">
+            <Bar className="h-3 w-20" />
+            <Bar className="mt-2 h-4 w-28" />
+          </div>
         </div>
       ))}
     </div>

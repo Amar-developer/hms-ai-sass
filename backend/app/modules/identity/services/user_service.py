@@ -91,6 +91,12 @@ class UserService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail="User already exists"
             )
+        username = user_payload.get("username")
+        if username and self.users.get_by_username_for_tenant(tenant_id, username):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username already exists",
+            )
         user = User(
             tenant_id=tenant_id,
             branch_id=user_payload["branch_id"],
@@ -102,6 +108,7 @@ class UserService:
             ),
             user_type=user_payload["user_type"],
             name=user_payload["name"],
+            username=username,
             email=normalize_email(user_payload["email"]),
             mobile=user_payload["mobile"],
             password_hash=hash_password(user_payload["password"]),
@@ -193,6 +200,20 @@ class UserService:
                     detail="User email already exists",
                 )
             user.email = email
+        if "username" in updates:
+            username = updates["username"]
+            if username:
+                duplicate = self.users.duplicate_username_for_tenant(
+                    tenant_id=tenant_id,
+                    username=username,
+                    exclude_user_id=user_id,
+                )
+                if duplicate:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Username already exists",
+                    )
+            user.username = username
         for key in (
             "name",
             "user_type",

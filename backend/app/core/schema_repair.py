@@ -193,6 +193,7 @@ def ensure_upload_schema(session: Session) -> None:
     _add_column(session, "patient", "photo_url", "VARCHAR(500)")
     _add_column(session, "patient", "photo_file_name", "VARCHAR(220)")
     _add_column(session, "branch", "area", "VARCHAR(120)")
+    _add_column(session, "user", "username", "VARCHAR(80)")
     _add_column(
         session,
         "doctorfeerule",

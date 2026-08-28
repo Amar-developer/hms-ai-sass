@@ -45,6 +45,7 @@ export function UserForm({
 
     defaultValues: {
       name: user?.name || "",
+      username: user?.username || "",
       email: user?.email || "",
       userType: user?.user_type || defaultUserType || "staff",
       mobile: user?.mobile || "",
@@ -68,6 +69,7 @@ export function UserForm({
     if (!user?.id) return;
     reset({
       name: user?.name || "",
+      username: user?.username || "",
       email: user?.email || "",
       userType: user?.user_type || defaultUserType || "staff",
       mobile: user?.mobile || "",
@@ -208,6 +210,20 @@ export function UserForm({
 
           {errors.name && (
             <p className="text-xs text-red-500">{errors.name.message}</p>
+          )}
+        </FormField>
+
+        <FormField label="Username" required>
+          <Input
+            {...register("username")}
+            autoComplete="off"
+            placeholder="e.g. grace.reception"
+          />
+          <p className="text-[11px] text-slate-500">
+            Used for sign-in; letters, numbers, dots, hyphens, and underscores only.
+          </p>
+          {errors.username && (
+            <p className="text-xs text-red-500">{errors.username.message}</p>
           )}
         </FormField>
 
