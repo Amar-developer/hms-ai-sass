@@ -29,7 +29,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-lg text-sm bg-white   ${className}`}
+      className={`rounded-lg text-sm ${className}`}
     >
       {children}
     </div>
@@ -619,7 +619,7 @@ export const Input = forwardRef<HTMLInputElement, any>(
 
             props.onChange?.(e);
           }}
-          className={`w-full rounded-lg border border-slate-200 outline-none focus:border-slate-500 ${className}`}
+          className={`w-full rounded-lg border bg-slate-50 border-slate-200 outline-none focus:border-slate-500 ${className}`}
         />
       </>
     );

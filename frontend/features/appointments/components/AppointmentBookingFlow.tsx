@@ -119,7 +119,7 @@ export function AppointmentBookingFlow(props: any) {
   return (
     <div className="space-y-4">
       {bookingStep !== "success" && (
-        <Card className="p-4">
+        <Card className="p-3 bg-white">
           <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center">
             <div>
               <h3 className="card-title font-bold">New OP Appointment</h3>
@@ -665,7 +665,7 @@ export function AppointmentBookingFlow(props: any) {
         <Card>
           <h4 className="font-bold">Appointment Booked</h4>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <div className="mt-4 grid gap-3 md:grid-cols-4 bg-white p-2 rounded-lg">
             <Info
               label="Patient"
               value={
@@ -753,11 +753,11 @@ export function AppointmentBookingFlow(props: any) {
             />
           )}
 
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-5  flex flex-wrap gap-2">
             <button
               type="button"
               onClick={printTokenSlip}
-              className="close-button font-bold"
+              className="close-button bg-white font-bold"
             >
               Print Token
             </button>

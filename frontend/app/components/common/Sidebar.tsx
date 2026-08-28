@@ -578,7 +578,7 @@ export function Sidebar(props: SidebarProps) {
     ${
       isActive
         ? "w-full rounded-full bg-brand px-3 py-2 text-left font-bold text-brand-fg"
-        : "py-3 text-slate-900 hover:bg-slate-50"
+        : "py-2 text-slate-900 hover:bg-slate-50"
     }
     ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}
   `}

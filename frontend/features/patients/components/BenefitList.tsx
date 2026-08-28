@@ -7,7 +7,7 @@ export function BenefitList({ title, ids, rows, priceKey, quantities }: any) {
       rows.find((row: any) => row.id === id) || { id, name: "Selected item" },
   );
   return (
-    <Card>
+    <Card className="bg-white p-3">
       <div className="flex items-center justify-between gap-3">
         <h4 className="card-title font-bold">{title}</h4>
         <Badge tone="blue" className="normal-badge">

@@ -130,6 +130,7 @@ export function ConsultationWorkspace(props: any) {
     addendums,
     saveAddendum,
     busy,
+    pendingAction,
     apiSession,
     saveBackendDraft,
     markDone,
@@ -143,6 +144,7 @@ export function ConsultationWorkspace(props: any) {
     callNextInWorkspace,
     nextPatient,
     onOpenConsultationInvoices,
+    showPatientWorkList
   } = props;
   const [medicineDraftName, setMedicineDraftName] = useState("");
   const [labDraftName, setLabDraftName] = useState("");
@@ -399,8 +401,8 @@ export function ConsultationWorkspace(props: any) {
     return !templateDoctorId || String(templateDoctorId) === String(doctor?.id);
   });
   return (
-    <>
-      <Card className="p-4">
+    <div className={`${showPatientWorkList? 'w-full':''}`}>
+      <Card className="bg-white p-3">
         <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-3 md:flex-row md:items-center">
           <div className="min-w-0">
             <h3 className="card-title font-bold">Consultation Workspace</h3>
@@ -490,7 +492,7 @@ export function ConsultationWorkspace(props: any) {
                       );
                       if (template) applyClinicalTemplate(template);
                     }}
-                    className="h-10 whitespace-nowrap rounded-lg bg-brand px-4 text-xs font-bold text-brand-fg hover:bg-brand-hover disabled:bg-slate-300"
+                    className="h-9 whitespace-nowrap rounded-lg bg-brand px-4 text-xs font-bold text-brand-fg hover:bg-brand-hover disabled:bg-slate-300"
                   >
                     Apply Template
                   </button>
@@ -519,6 +521,7 @@ export function ConsultationWorkspace(props: any) {
                     value={remarks}
                     onChange={(e: any) => setRemarks(e.target.value)}
                     placeholder="Review after 3 days"
+                    className='search-input'
                   />
                 </FormField>
               </div>
@@ -673,6 +676,7 @@ export function ConsultationWorkspace(props: any) {
                       value={medicineDosage}
                       onChange={(e: any) => setMedicineDosage(e.target.value)}
                       placeholder="500mg"
+                      className='search-input'
                     />
                   </FormField>
                   <FormField
@@ -708,10 +712,11 @@ export function ConsultationWorkspace(props: any) {
                       value={medicineDuration}
                       onChange={(e: any) => setMedicineDuration(e.target.value)}
                       placeholder="3 days"
+                      className='search-input'
                     />
                     <datalist id="medicine-duration-options">
                       {medicineDurationOptions.map((value: string) => (
-                        <option key={value} value={value} />
+                        <option key={value} value={value} title={value} />
                       ))}
                     </datalist>
                   </FormField>
@@ -733,13 +738,13 @@ export function ConsultationWorkspace(props: any) {
                           label: value,
                         }))}
                       placeholder="Select instruction"
-                      searchable
+                      searchable={false}
                       className="text-xs"
                     />
                   </FormField>
                   <Button
                     type="button"
-                    className="inline-flex h-10 items-center justify-center self-end whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover sm:w-fit xl:mt-[16px] xl:w-full xl:self-start"
+                    className="inline-flex h-9 items-center justify-center self-end whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover sm:w-fit xl:mt-[18px] xl:w-full xl:self-start"
                     onClick={addDraftMedicine}
                   >
                     Add
@@ -890,10 +895,10 @@ export function ConsultationWorkspace(props: any) {
                         required
                       />
                     </FormField>
-                    <div className="pt-4 flex items-end">
+                    <div className="pt-5 flex items-end">
                       <Button
                         type="button"
-                        className="inline-flex h-10 items-center justify-center self-end whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover sm:w-fit"
+                        className="inline-flex h-9 items-center justify-center self-end whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover sm:w-fit"
                         onClick={addDraftLabTest}
                       >
                         Add Lab Test
@@ -1055,16 +1060,16 @@ export function ConsultationWorkspace(props: any) {
                 ) : null}
               </div>
             )}
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
               <Button
                 type="button"
                 onClick={apiSession ? saveBackendDraft : markDone}
                 disabled={busy || selected?.consultationStatus === "signed"}
                 className="inline-flex h-10 items-center justify-center whitespace-nowrap border border-emerald-200 !bg-white px-4 py-0 text-xs !text-emerald-800 hover:!bg-emerald-50 disabled:!bg-slate-300 disabled:!text-white"
               >
-                <ButtonLoader loading={busy}>
+                <ButtonLoader loading={pendingAction === "draft"}>
                   {apiSession
-                    ? busy
+                    ? pendingAction === "draft"
                       ? "Saving..."
                       : "Save Draft"
                     : "Mark Consultation Done"}
@@ -1077,8 +1082,8 @@ export function ConsultationWorkspace(props: any) {
                   disabled={busy || selected?.consultationStatus === "signed"}
                   className="inline-flex h-10 items-center justify-center whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover"
                 >
-                  <ButtonLoader loading={busy}>
-                    {busy ? "Signing..." : "Complete"}
+                  <ButtonLoader loading={pendingAction === "sign"}>
+                    {pendingAction === "sign" ? "Signing..." : "Complete"}
                   </ButtonLoader>
                 </Button>
               )}
@@ -1090,14 +1095,14 @@ export function ConsultationWorkspace(props: any) {
               >
                 {isExportingPrescription ? "Generating…" : "Print Prescription"}
               </Button>
-              <button
+              <Button
                 onClick={() => requeuePatient("end")}
                 disabled={queueActionDisabled}
                 className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-4 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-60"
               >
                 Requeue to End
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={callNextInWorkspace}
                 disabled={busy || !nextPatient}
                 className="inline-flex h-10 min-w-0 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-4 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-60"
@@ -1105,7 +1110,7 @@ export function ConsultationWorkspace(props: any) {
                 {nextPatient
                   ? `Call Next: ${nextPatient.token || ""} ${nextPatient.patient || nextPatient.patient_name || "Patient"}`.trim()
                   : "No Waiting Patient"}
-              </button>
+              </Button>
             </div>
             {selected?.consultationId && (
               <ActivityLog
@@ -1143,6 +1148,6 @@ export function ConsultationWorkspace(props: any) {
           />,
           document.getElementById("prescription-print-root") as HTMLElement,
         )}
-    </>
+    </div>
   );
 }

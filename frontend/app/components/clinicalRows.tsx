@@ -132,9 +132,10 @@ export function SearchPicker({
         }}
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         placeholder={placeholder}
+        className='search-input'
       />
       {loading && (
-        <span className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
+        <span className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
       )}
       {open && !disabled && (
         <div className="absolute z-40 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-xl">

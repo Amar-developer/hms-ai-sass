@@ -33,7 +33,7 @@ export function AppointmentList(props: any) {
     setPage,
   } = props;
   return (
-    <Card className="pt-2">
+    <Card className="">
       {rescheduleAppointment && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
           <Card className="w-full max-w-md">
@@ -113,10 +113,10 @@ export function AppointmentList(props: any) {
           </Button>
         )}
       </div>
-      <div className="mt-2 ">
+      <div className="w-full overflow-x-auto">
         <DataTable
           columns={columns}
-          className="overflow-x-auto max-w-[1000px] scrollbar-thin"
+          className="w-full min-w-[700px] scrollbar-hidden"
           data={rows}
           loading={rowsLoading}
           emptyMessage="No appointments found."

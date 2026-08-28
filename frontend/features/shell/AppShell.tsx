@@ -35,6 +35,7 @@ import {
   opdSectionFromSegment,
 } from "@/features/opd/routing";
 import { isNewSegment, isEditSegment } from "@/lib/routeSlugs";
+import { Button } from "@/app/components/common/ui";
 
 type ShellChromeValue = {
   navigatePage: (target: AppNavigationTarget) => void;
@@ -212,11 +213,11 @@ export function AppShell({
     path: string;
   } | null>(null);
   const [clinicOpen, setClinicOpen] = useState(false);
-  // Doctors/Scheduling/Items are full standalone modules with their own
-  // routes, now rooted at /clinic/{id} — nested visually under the Clinic
-  // dropdown rather than moved into it, so they keep their existing
+  // Doctors/Scheduling/Items/Expense are full standalone modules with their
+  // own routes, now rooted at /clinic/{id} — nested visually under the
+  // Clinic dropdown rather than moved into it, so they keep their existing
   // permission gating (enabled("practitioners")/etc.).
-  const clinicModuleIds = ["practitioners", "scheduling", "items"];
+  const clinicModuleIds = ["practitioners", "scheduling", "items", "expense"];
   const clinicModulePath = (id: string) => `/clinic/${id}`;
 
   const routeSegment =
@@ -922,7 +923,7 @@ export function AppShell({
 
         <main
           className={`
-    scrollbar-hidden h-screen min-w-0 flex-1 overflow-y-auto bg-white
+    scrollbar-hidden h-screen min-w-0 flex-1 overflow-y-auto global-bg
     md:ml-14
     lg:ml-0
   `}
@@ -971,7 +972,7 @@ export function AppShell({
           {showNavigationSkeleton ? (
             <BreadcrumbBarSkeleton />
           ) : (
-            <div className=" border-slate-100 bg-white px-4 py-2 lg:px-5 ">
+            <div className=" border-slate-100  px-4 py-2 lg:px-5 bg-[#f4f6f5d9]">
               <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-2">
                   {/* Back / Forward group */}
@@ -997,8 +998,8 @@ export function AppShell({
                   {/* Divider */}
 
                   {/* Breadcrumb */}
-                  <div className="flex min-w-0 items-center gap-2">
-                    <button
+                  <div className="flex min-w-0 items-center gap-2 p-2 rounded-lg">
+                    <Button
                       type="button"
                       onClick={() => navigatePage("dashboard")}
                       disabled={
@@ -1007,7 +1008,7 @@ export function AppShell({
                       className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold text-brand hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
                     >
                       <Home size={14} /> Dashboard
-                    </button>
+                    </Button>
 
                     {activePage !== "dashboard" && (
                       <>
@@ -1120,7 +1121,7 @@ export function AppShell({
           )}
 
           <section
-            className=" py-2 px-6"
+            className=" py-2 px-6 bg-[#f4f6f5d9]"
             aria-busy={showNavigationSkeleton}
             aria-live="polite"
           >

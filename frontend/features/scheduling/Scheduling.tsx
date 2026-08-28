@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, CalendarClock, PlusCircle } from "lucide-react";
+import { Plus, CalendarClock, PlusCircle, ClipboardList } from "lucide-react";
 import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { selectedSchedulePayloadsFromRHF } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
@@ -415,15 +415,20 @@ export function Scheduling({
           />
         </div>
       </BreadcrumbSlot>
-      <div className="pb-3 rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div>
-          <h3 className="card-title font-bold">
-            Doctor Scheduling & Availability
-          </h3>
-          <p className="card-desc text-slate-500">
-            Tenant-scoped weekly consultation timings mapped to doctor, branch,
-            medical department, room, and slot duration.
-          </p>
+      <div className="p-2 bg-white rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+        <div className="flex">
+          <div className="p-2 rounded-lg mr-2 text-emarald-900 bg-emerald-50">
+            <ClipboardList className="text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="card-title font-bold">
+              Doctor Scheduling & Availability
+            </h3>
+            <p className="card-desc text-slate-500">
+              Tenant-scoped weekly consultation timings mapped to doctor,
+              branch, medical department, room, and slot duration.
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -431,7 +436,7 @@ export function Scheduling({
             onClick={() => open("create")}
             className="primary-action gap-2 px-4 py-3 text-xs"
           >
-           <PlusCircle size={16} />
+            <PlusCircle size={16} />
             Create Schedule
           </button>
         </div>
@@ -446,7 +451,7 @@ export function Scheduling({
           emptyMessage="No schedules available"
           emptyDescription="Doctor weekly consultation timings created for branches and departments will show up here."
           emptyIcon={CalendarClock}
-          minBodyHeight={`${pageRows.length > 0 ?'':'220px'}`}
+          minBodyHeight={`${pageRows.length > 0 ? "" : "220px"}`}
           className=" rounded-lg border border-slate-200 overflow-auto"
           onRowClick={(row) => open("view", row.id)}
           sort={sort ?? undefined}

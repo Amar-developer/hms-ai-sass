@@ -61,7 +61,7 @@ export function BranchForm({
     Number.isFinite(Number(branchLimit)) &&
     activeBranchCount >= Number(branchLimit);
   return (
-    <Card>
+    <Card className="bg-white p-3">
       <Header
         title={title}
         subtitle={

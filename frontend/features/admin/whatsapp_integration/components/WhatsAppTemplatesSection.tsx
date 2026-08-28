@@ -79,7 +79,7 @@ export function WhatsAppTemplatesSection({
   visibleCustomTemplatesByStatus: WhatsAppCustomTemplate[];
 }) {
   return (
-    <div className="rounded-lg  bg-white pt-2 shadow-sm">
+    <div className="rounded-lg  bg-white p-3 shadow-sm">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
         <div>
           <h4 className="card-title font-bold text-slate-800">

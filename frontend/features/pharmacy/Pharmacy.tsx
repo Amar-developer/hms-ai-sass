@@ -807,11 +807,11 @@ export function Pharmacy({
         <button
           type="button"
           onClick={() => router.push("/pharmacy")}
-          className="close-button font-bold"
+          className="close-button font-bold bg-white"
         >
           Back to Worklist
         </button>
-        <Card className="p-0">
+        <Card className="p-3 bg-white">
           <h3 className="card-title font-bold">
             Create Direct Prescription Order
           </h3>

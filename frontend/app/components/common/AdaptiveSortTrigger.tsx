@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { SearchableSelect } from "./ui";
 import type { SortFieldSchema } from "./AdaptiveFilterBar";
 import type { SortState } from "@/utils/types";
@@ -69,7 +65,7 @@ export function AdaptiveSortTrigger({
       <div
         className={`inline-flex items-stretch overflow-hidden rounded-md border text-[12px] font-bold transition ${
           sort
-            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            ? "border-emerald-200 bg-emerald-700 text-white"
             : "border-slate-200 bg-white text-slate-600"
         }`}
       >
@@ -81,7 +77,7 @@ export function AdaptiveSortTrigger({
             sort?.dir === "desc" ? "Sorted descending" : "Sorted ascending"
           }
           className={`flex shrink-0 items-center justify-center px-2.5 py-2 disabled:cursor-not-allowed disabled:opacity-40 ${
-            sort ? "hover:bg-emerald-100" : "hover:bg-slate-50"
+            sort ? "hover:bg-white hover:text-emerald-600" : "hover:bg-slate-50"
           }`}
         >
           {sort?.dir === "desc" ? (
@@ -128,7 +124,7 @@ export function AdaptiveSortTrigger({
           onClick={() => setOpen((v) => !v)}
           className={`flex items-center gap-1.5 border-l px-2.5 py-2 ${
             sort
-              ? "border-emerald-200 hover:bg-emerald-100"
+              ? "border-emerald-200 hover:bg-emerald-100 hover:bg-white hover:text-emerald-600"
               : "border-slate-200 hover:bg-slate-50"
           }`}
         >

@@ -167,21 +167,21 @@ describe("WhatsApp integration settings design", () => {
     expect(screen.queryByText("IP discharge summary")).toBeNull();
     expect(screen.queryByText("Physiotherapy case created")).toBeNull();
     expect(screen.queryByText("Physiotherapy session update")).toBeNull();
-    expect(screen.getByRole("button", { name: "Send Test Message" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Test Message" })).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Save WhatsApp Settings" }),
+      screen.getByRole("button", { name: "Save Settings" }),
     ).toBeTruthy();
   });
 
   it("keeps connection actions disabled without a saved tenant session", () => {
     render(<WhatsAppIntegrationSettings />);
 
-    expect(screen.getByRole("button", { name: "Send Test Message" })).toHaveProperty(
+    expect(screen.getByRole("button", { name: "Test Message" })).toHaveProperty(
       "disabled",
       true,
     );
     expect(
-      screen.getByRole("button", { name: "Save WhatsApp Settings" }),
+      screen.getByRole("button", { name: "Save Settings" }),
     ).toHaveProperty("disabled", true);
   });
 
@@ -270,7 +270,7 @@ describe("WhatsApp integration settings design", () => {
       flows: { ...savedSettings.flows, admin_daily_report: true },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Save WhatsApp Settings" }),
+      screen.getByRole("button", { name: "Save Settings" }),
     );
 
     await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
@@ -437,7 +437,7 @@ describe("WhatsApp integration settings design", () => {
       ],
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Save WhatsApp Settings" }),
+      screen.getByRole("button", { name: "Save Settings" }),
     );
 
     await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
@@ -562,7 +562,7 @@ describe("WhatsApp integration settings design", () => {
       />,
     );
 
-    const openButton = await screen.findByRole("button", { name: "Send Test Message" });
+    const openButton = await screen.findByRole("button", { name: "Test Message" });
     await waitFor(() => expect(openButton).toHaveProperty("disabled", false));
     fireEvent.click(openButton);
 
@@ -622,7 +622,7 @@ describe("WhatsApp integration settings design", () => {
       api_key_masked: "••••••••5678",
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Save WhatsApp Settings" }),
+      screen.getByRole("button", { name: "Save Settings" }),
     );
 
     await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));

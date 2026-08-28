@@ -29,7 +29,7 @@ export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any
     : parsedMedicines;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="relative w-full max-w-3xl p-3">
+      <Card className="relative w-full max-w-3xl p-3 bg-white">
         {loading && <OverlayLoader />}
         <div className="flex items-start justify-between gap-3 ">
           <div>

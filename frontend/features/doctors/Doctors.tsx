@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, PlusCircle, Stethoscope } from "lucide-react";
+import { Plus, PlusCircle, Stethoscope, UserCog } from "lucide-react";
 import { newSegment, editSegment, viewSegment } from "@/lib/routeSlugs";
 import {
   Card,
@@ -389,22 +389,27 @@ export function Doctors({
           />
         </div>
       </BreadcrumbSlot>
-      <div className="pb-3 rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+      <div className="bg-white p-2 rounded-lg flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+        <div className="flex">
+          <div className="p-2 rounded-lg mr-2 text-emarald-900 bg-emerald-50">
+          <UserCog className="text-emerald-600"/>
+        </div>
         <div>
           <h3 className="card-title font-bold">Doctor Management</h3>
-          <p className="card-desc text-slate-500">
+          <p className="card-desc te  xt-slate-500">
             Create, update, deactivate, and map doctors to tenants, branches,
             and medical departments.
           </p>
+        </div>
         </div>
         <div className="flex justify-start items-center gap-2">
           {canCreateDoctor && (
             <button
               type="button"
               onClick={() => open("create")}
-              className="primary-action gap-2 px-4 py-3 text-xs lg:w-full"
+              className="primary-action gap-2 px-4 py-2 text-xs lg:w-full"
             >
-               <PlusCircle size={16} />
+              <PlusCircle size={16} />
               Create Doctor
             </button>
           )}
@@ -420,7 +425,7 @@ export function Doctors({
             emptyMessage="No doctors match your search."
             emptyDescription="Doctors added to this clinic will show up here."
             emptyIcon={Stethoscope}
-            minBodyHeight={`${pageRows.length >0 ?"":"220px"}`}
+            minBodyHeight={`${pageRows.length > 0 ? "" : "220px"}`}
             onRowClick={(row: any) => open("view", row.id)}
             sort={sort ?? undefined}
             onSortChange={setSort}

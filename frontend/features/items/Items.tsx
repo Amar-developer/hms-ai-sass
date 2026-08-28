@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Package, Plus, PlusCircle } from "lucide-react";
+import { Package, PackageOpen, Plus, PlusCircle } from "lucide-react";
 import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { homeServiceTypes, serviceItemTypes } from "@/features/items/constants";
 import { ItemForm } from "@/features/items/forms/ItemForms";
@@ -261,7 +261,8 @@ export function Items({
   // locally before edit became route-driven, which left them permanently
   // uninitialized and caused edits to be submitted as the wrong item type.
   const editingRow = useMemo(
-    () => (view === "edit" ? rows.find((row: any) => row.id === selectedId) : null),
+    () =>
+      view === "edit" ? rows.find((row: any) => row.id === selectedId) : null,
     [view, selectedId, rows],
   );
   const filteredRows = useMemo(
@@ -390,7 +391,8 @@ export function Items({
     setType(nextType);
     setPackageTestIds([]);
     resetItemForm(nextType);
-    if (view === "create") router.replace(`/clinic/items/${nextType}/${newSegment("item")}`);
+    if (view === "create")
+      router.replace(`/clinic/items/${nextType}/${newSegment("item")}`);
   }
 
   function resetItemForm(nextType = type) {
@@ -472,13 +474,15 @@ export function Items({
     return (
       <div className="space-y-4">
         <StatusToast message={message} onClose={() => setMessage("")} />
-        <button
-          type="button"
-          onClick={() => open("list")}
-          className="close-button font-bold"
-        >
-          Back to Items
-        </button>
+        {view !== "view" && (
+          <button
+            type="button"
+            onClick={() => open("list")}
+            className="close-button font-bold "
+          >
+            Back to Items
+          </button>
+        )}
         <ItemDetail
           item={viewedRow}
           canEdit
@@ -502,11 +506,11 @@ export function Items({
         <button
           type="button"
           onClick={() => open("list")}
-          className="close-button font-bold"
+          className="close-button font-bold bg-white"
         >
           Back to Items
         </button>
-        <Card className="p-0">
+        <Card className="p-3 bg-white">
           <div>
             <h3 className="card-title font-bold">
               {view === "edit" ? "Edit Item" : "Create Item"}
@@ -578,13 +582,18 @@ export function Items({
       </BreadcrumbSlot>
 
       {/* Item List */}
-      <Card className="p-0 shadow-none">
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-          <div>
-            <h3 className="card-title font-bold">Item List</h3>
-            <p className="card-desc text-slate-500">
-              Configure items used across healthcare services
-            </p>
+      <Card className="p-3 bg-white">
+        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center p-2 bg-white rounded-lg">
+          <div className="flex">
+            <div className="p-2 rounded-lg mr-2 text-emarald-900 bg-emerald-50">
+              <PackageOpen className="text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="card-title font-bold">Item List</h3>
+              <p className="card-desc text-slate-500">
+                Configure items used across healthcare services
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -604,7 +613,7 @@ export function Items({
             emptyMessage="No items match your filter."
             emptyDescription="Medicines, tests, services, and equipment added here will show up in this list."
             emptyIcon={Package}
-            minBodyHeight={`${pagedRows.length > 0 ?'':'220px'}`}
+            minBodyHeight={`${pagedRows.length > 0 ? "" : "220px"}`}
             sort={sort ?? undefined}
             onSortChange={setSort}
             onRowClick={openView}

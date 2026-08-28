@@ -47,7 +47,7 @@ export function WhatsAppRecipientControls({
   }
 
   return (
-    <div className="rounded-lg  bg-white pt-2 shadow-sm">
+    <div className="rounded-lg  bg-white p-3 shadow-sm">
       <h4 className="card-title font-bold text-slate-800">
         Recipient controls
       </h4>

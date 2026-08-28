@@ -68,7 +68,7 @@ export function getAppointmentColumns({
       key: "status",
       header: "Status",
       className: "text-center",
-      width: "110px",
+      width: "130px",
       cellClassName: "text-center",
       render: (appointment: any) => (
         <Badge

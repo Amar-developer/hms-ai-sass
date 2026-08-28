@@ -445,7 +445,7 @@ export function FilesPanel({
 
   return (
     <div className="">
-      <Card>
+      <Card className="p-3 bg-white">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Files</h3>
@@ -631,44 +631,46 @@ export function FilesPanel({
           </div>
         </form>
       </Card>
-      <Card className="mt-3">
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-          <div>
-            <h4 className="card-title font-bold">File Registry</h4>
-            <p className="card-desc text-slate-500">
-              Uploaded files appear automatically. Sync existing server files
-              when needed.
-            </p>
+      <Card className="mt-3 ">
+        <div className="rounded-lg bg-white p-2">
+          <div className="flex flex-col p-3 justify-between gap-3 lg:flex-row lg:items-center">
+            <div>
+              <h4 className="card-title font-bold">File Registry</h4>
+              <p className="card-desc text-slate-500">
+                Uploaded files appear automatically. Sync existing server files
+                when needed.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <FilterSection
-          title="Files"
-          query={query}
-          setQuery={setQuery}
-          filters={filters}
-          filterValues={filterValues}
-          onFilterChange={onFilterChange}
-          onReset={() => {
-            setDateFrom("");
-            setDateTo("");
-          }}
-        >
-          <FormField label="From">
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e: any) => setDateFrom(e.target.value)}
-            />
-          </FormField>
-          <FormField label="To">
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e: any) => setDateTo(e.target.value)}
-            />
-          </FormField>
-        </FilterSection>
+          <FilterSection
+            title="Files"
+            query={query}
+            setQuery={setQuery}
+            filters={filters}
+            filterValues={filterValues}
+            onFilterChange={onFilterChange}
+            onReset={() => {
+              setDateFrom("");
+              setDateTo("");
+            }}
+          >
+            <FormField label="From">
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e: any) => setDateFrom(e.target.value)}
+              />
+            </FormField>
+            <FormField label="To">
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e: any) => setDateTo(e.target.value)}
+              />
+            </FormField>
+          </FilterSection>
+        </div>
 
         <div className="mt-4">
           <DataTable
@@ -677,7 +679,7 @@ export function FilesPanel({
             emptyMessage="No files found."
             emptyDescription="Files uploaded or synced for this tenant will show up here."
             emptyIcon={FileText}
-            minBodyHeight={`${pagedFiles.length > 0 ?'':'220px'}`}
+            minBodyHeight={`${pagedFiles.length > 0 ? "" : "220px"}`}
             paginate={false}
           />
         </div>

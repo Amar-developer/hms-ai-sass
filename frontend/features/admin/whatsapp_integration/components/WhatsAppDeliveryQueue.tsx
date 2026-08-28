@@ -327,9 +327,9 @@ export function WhatsAppDeliveryQueue({
   ];
 
   return (
-    <Card className="pt-2">
+    <Card className="p-3 bg-white">
       <div className="flex w-full items-center justify-between gap-3 text-left">
-        <div>
+        <div className="">
           <h3 className="card-title font-bold text-slate-900">
             Delivery queue
           </h3>

@@ -141,14 +141,14 @@ export function AdaptiveFilterTrigger({
         onClick={() => setOpen((v) => !v)}
         className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-[12px] font-bold transition ${
           activeCount > 0
-            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            ? "border-emerald-200 bg-emerald-700 text-white hover:text-emerald-600 hover:bg-white"
             : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
         }`}
       >
         <SlidersHorizontal size={13} />
         Filters
         {activeCount > 0 && (
-          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full  px-1 text-[10px] font-bold hover:text-white hover:bg-emerald-600 bg-white text-emerald-600">
             {activeCount}
           </span>
         )}

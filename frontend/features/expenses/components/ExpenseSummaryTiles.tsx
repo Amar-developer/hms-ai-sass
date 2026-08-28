@@ -25,9 +25,9 @@ export function ExpenseSummaryTiles({ expenses }: { expenses: Expense[] }) {
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-3 bg-white rounded-lg p-2">
       {tiles.map((tile) => (
-        <Card key={tile.label} className="px-4 py-4">
+        <Card key={tile.label} className="px-4 py-4 bg-slate-100">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
             {tile.label}
           </p>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CalendarDays, Search, Stethoscope } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { CalendarDays, Search, Stethoscope, ListCollapse } from "lucide-react";
 
 import { Badge, SearchableSelect } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
@@ -28,6 +28,8 @@ type OPDPatientWorklistProps = {
   doctors: any[];
   doctorLocked?: boolean;
   onSelect: (id: string) => void;
+  setShowPatientWorkList: React.Dispatch<React.SetStateAction<boolean>>;
+  showPatientWorkList: boolean;
 };
 
 function visitStatus(row: any) {
@@ -63,8 +65,7 @@ export function filterOPDWorklistRows(
       (filter === "active" &&
         status !== "completed" &&
         status !== "cancelled") ||
-      (filter === "called" &&
-        ["called", "in_consultation"].includes(status)) ||
+      (filter === "called" && ["called", "in_consultation"].includes(status)) ||
       status === filter;
     if (!matchesFilter) return false;
     if (!search) return true;
@@ -99,14 +100,14 @@ export function OPDPatientWorklist({
   doctors,
   doctorLocked = false,
   onSelect,
+  setShowPatientWorkList,
+  showPatientWorkList,
 }: OPDPatientWorklistProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<WorklistFilter>("active");
   const patientById = useMemo(
     () =>
-      new Map(
-        patients.map((patient: any) => [String(patient.id), patient]),
-      ),
+      new Map(patients.map((patient: any) => [String(patient.id), patient])),
     [patients],
   );
   const counts = useMemo(
@@ -129,7 +130,7 @@ export function OPDPatientWorklist({
 
   return (
     <aside className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)]">
-      <div className="border-b border-slate-200 p-4">
+      <div className="border-b border-slate-200 p-3">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-black text-slate-950">
@@ -139,9 +140,12 @@ export function OPDPatientWorklist({
               {displayDate(selectedDate)} · {counts.active} active visits
             </p>
           </div>
-          <Badge tone="blue" className="rounded-full px-2 py-1 text-[10px]">
+          <Badge tone="blue" className="normal-label">
             {visibleRows.length} shown
           </Badge>
+          <div className="flex justify-end cursor-pointer">
+            <ListCollapse size={18} onClick={() => setShowPatientWorkList(false)} className="rotate-180 hover:scale-105" />
+          </div>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
@@ -252,13 +256,18 @@ export function OPDPatientWorklist({
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-xs font-black text-slate-950">
-                    {row.patient || row.patient_name || patient?.full_name || "Patient"}
+                    {row.patient ||
+                      row.patient_name ||
+                      patient?.full_name ||
+                      "Patient"}
                   </span>
                   <span className="mt-0.5 flex min-w-0 items-center justify-between gap-2">
                     <span className="truncate text-[10px] font-medium text-slate-500">
                       {row.appointmentNumber ||
                         humanizeOptionLabel(
-                          row.visitType || row.appointmentType || "OP consultation",
+                          row.visitType ||
+                            row.appointmentType ||
+                            "OP consultation",
                         )}
                     </span>
                     <Badge

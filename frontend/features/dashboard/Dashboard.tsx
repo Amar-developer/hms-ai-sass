@@ -346,7 +346,7 @@ export function Dashboard({
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 global-bg p-2">
       {intelligenceEnabled && (
         <div className="flex w-fit gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
           <button

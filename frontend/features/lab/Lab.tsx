@@ -871,7 +871,7 @@ export function Lab({
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-200 bg-white">
                 {visibleReferrals.length === 0 ? (
                   <tr>
                     <td
@@ -959,11 +959,11 @@ export function Lab({
         <button
           type="button"
           onClick={() => router.push("/lab")}
-          className="close-button font-bold"
+          className="close-button font-bold bg-white"
         >
           Back to Worklist
         </button>
-        <Card className="p-0">
+        <Card className="p-3 bg-white">
           <h3 className="card-title font-bold">
             Create Direct Lab &amp; Service Order
           </h3>

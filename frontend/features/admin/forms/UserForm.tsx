@@ -178,7 +178,7 @@ export function UserForm({
       : canResetTenantUserPassword(apiSession, user);
 
   return (
-    <Card className="mt-3">
+    <Card className="bg-white p-3">
       <Header
         title={title}
         subtitle={user?.email || "Create tenant-scoped users only."}
@@ -345,7 +345,7 @@ export function UserForm({
             <button
               type="button"
               onClick={() => onResetPassword?.(user)}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold shadow-sm transition hover:bg-slate-100"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border bg-white px-4 py-3 text-xs cursor-pointer font-bold shadow-sm transition hover:bg-slate-100"
             >
               <KeyRound size={16} />
               <span>Reset Password</span>

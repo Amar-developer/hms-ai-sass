@@ -536,16 +536,16 @@ export function WhatsAppIntegrationSettings({
               className="close-button inline-flex h-9 items-center gap-2 px-2 text-xs font-bold disabled:cursor-not-allowed disabled:text-slate-400"
             >
               <Send className="h-4 w-4" />
-              Send Test Message
+              Test Message
             </button>
             <Button
               type="button"
               onClick={saveSettings}
               disabled={busy || initialLoading || !apiSession || !effectiveTenantId}
-              className="save-button h-9 px-4 text-xs"
+              className="save-button w-44 h-9 px-4 text-xs"
             >
               <ButtonLoader loading={busy}>
-                {busy ? "Saving WhatsApp Settings..." : "Save WhatsApp Settings"}
+                {busy ? "Saving Settings..." : "Save Settings"}
               </ButtonLoader>
             </Button>
           </div>

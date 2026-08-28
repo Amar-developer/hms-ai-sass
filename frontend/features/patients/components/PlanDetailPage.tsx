@@ -36,7 +36,7 @@ export function PlanDetailPage({
 
   return (
     <div className="space-y-5">
-      <Card>
+      <Card className="bg-white p-3">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <button

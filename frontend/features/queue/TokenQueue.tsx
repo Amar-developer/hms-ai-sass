@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ClipboardList,
+  Clock,
   Clock3,
   Ticket,
 } from "lucide-react";
@@ -461,7 +462,7 @@ export function TokenQueue({
                   key={item.id}
                   type="button"
                   onClick={() => openConsultation(appointment)}
-                  className="rounded-xl bg-brand p-4 text-left text-brand-fg shadow-sm transition hover:bg-brand-hover"
+                  className="rounded-lg bg-brand p-4 mt-3  text-left text-brand-fg shadow-sm transition hover:bg-brand-hover"
                 >
                   <p className="flex items-center gap-2 text-lg font-black">
                     <span className="shrink-0">
