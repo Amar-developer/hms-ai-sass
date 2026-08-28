@@ -70,5 +70,25 @@ describe("AppHeader settings navigation", () => {
       id: "admin",
       section: "preferences",
     });
+
+    fireEvent.click(screen.getByRole("button", { name: /^help/i }));
+    expect(screen.getByText("Help & information")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: /about medizinhub hms/i }),
+    );
+    const aboutDialog = screen.getByRole("dialog", {
+      name: "About MedizinHub HMS",
+    });
+    expect(aboutDialog).toBeTruthy();
+    expect(screen.getByText("MedizinHub Healthcare Management System")).toBeTruthy();
+    expect(screen.getByText("MedizinHub Healthcare Service")).toBeTruthy();
+    expect(screen.getByText("Patient care")).toBeTruthy();
+    expect(screen.queryByText(/React|FastAPI|PostgreSQL/i)).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close About MedizinHub HMS" }),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

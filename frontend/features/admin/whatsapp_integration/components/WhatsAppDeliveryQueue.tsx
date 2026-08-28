@@ -363,10 +363,12 @@ export function WhatsAppDeliveryQueue({
                   setStatusFilter(statusFilter === status ? "" : status);
                   setOffset(0);
                 }}
-                className={`rounded-lg border p-3 text-left ${statusFilter === status ? "border-slate-500 bg-slate-50" : "border-slate-200"}`}
+                className={`min-h-[74px] rounded-lg border bg-white px-3 py-2.5 text-left shadow-sm transition ${statusFilter === status ? "border-emerald-500 ring-1 ring-emerald-100" : "border-slate-200 hover:border-slate-300"}`}
               >
-                <p className="text-xs capitalize text-slate-500">{status}</p>
-                <p className="mt-1 text-xl font-black text-slate-900">
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  {status}
+                </p>
+                <p className="mt-1 text-xl font-black leading-none text-slate-950">
                   {data.counts[status]}
                 </p>
               </button>
@@ -384,10 +386,12 @@ export function WhatsAppDeliveryQueue({
             ].map(([label, value]) => (
               <div
                 key={String(label)}
-                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                className="min-h-[74px] rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
               >
-                <p className="text-xs text-slate-500">{label}</p>
-                <p className="mt-1 text-xl font-black text-slate-900">
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  {label}
+                </p>
+                <p className="mt-1 text-xl font-black leading-none text-slate-950">
                   {value}
                 </p>
               </div>

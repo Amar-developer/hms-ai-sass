@@ -260,7 +260,7 @@ export function BookingDetail({
           id="homecare-overview"
           className={activeSection === "overview" ? "block" : "hidden"}
         >
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 bg-white p-2 rounded-lg">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           <Info
             title="Patient"
             value={booking.patient_name || patientName(patient)}

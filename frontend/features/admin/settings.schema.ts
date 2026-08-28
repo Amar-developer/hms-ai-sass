@@ -7,6 +7,15 @@ import {
 
 export const userSchema = z.object({
   name: requiredString("Name is required"),
+  username: z
+    .string()
+    .trim()
+    .min(3, "Username must be at least 3 characters")
+    .max(80, "Username must be 80 characters or fewer")
+    .regex(
+      /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/,
+      "Use letters, numbers, dots, hyphens, or underscores",
+    ),
   email: emailSchema,
   userType: z.enum([
     "tenant_admin",

@@ -305,20 +305,44 @@ export function ErrorLogs({ apiSession, selectedId = "" }: any) {
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl bg-rose-50 p-3">
-            <CircleAlert className="text-rose-600" size={18} />
-            <p className="mt-2 text-2xl font-bold">{summary.errors}</p>
-            <p className="text-xs text-slate-500">Open errors</p>
+          <div className="flex min-h-[82px] items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-rose-50 text-rose-600 ring-1 ring-rose-100">
+              <CircleAlert size={17} />
+            </span>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                Open errors
+              </p>
+              <p className="mt-1 text-xl font-black leading-none text-slate-950">
+                {summary.errors}
+              </p>
+            </div>
           </div>
-          <div className="rounded-xl bg-amber-50 p-3">
-            <AlertTriangle className="text-amber-600" size={18} />
-            <p className="mt-2 text-2xl font-bold">{summary.warnings}</p>
-            <p className="text-xs text-slate-500">Open warnings</p>
+          <div className="flex min-h-[82px] items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600 ring-1 ring-amber-100">
+              <AlertTriangle size={17} />
+            </span>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                Open warnings
+              </p>
+              <p className="mt-1 text-xl font-black leading-none text-slate-950">
+                {summary.warnings}
+              </p>
+            </div>
           </div>
-          <div className="rounded-xl bg-blue-50 p-3">
-            <CheckCircle2 className="text-blue-600" size={18} />
-            <p className="mt-2 text-2xl font-bold">{summary.permission}</p>
-            <p className="text-xs text-slate-500">Open permission issues</p>
+          <div className="flex min-h-[82px] items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600 ring-1 ring-blue-100">
+              <CheckCircle2 size={17} />
+            </span>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                Permission issues
+              </p>
+              <p className="mt-1 text-xl font-black leading-none text-slate-950">
+                {summary.permission}
+              </p>
+            </div>
           </div>
         </div>
 

@@ -882,7 +882,7 @@ export function useAppController() {
     // }, [apiSession?.tenantId]);
   }, [apiSession, apiSession?.tenantId]);
 
-  async function handleLogin(input: { email: string; password: string }) {
+  async function handleLogin(input: { identifier: string; password: string }) {
     setLiveStatus("Signing in...");
     let res: Response;
     try {
@@ -890,7 +890,10 @@ export function useAppController() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: input.email, password: input.password }),
+        body: JSON.stringify({
+          identifier: input.identifier,
+          password: input.password,
+        }),
       });
     } catch (error) {
       if (error instanceof RequestTimeoutError) {
@@ -951,7 +954,7 @@ export function useAppController() {
 
     const session: ApiSession = {
       tenantId,
-      email: input.email,
+      email: body.user?.email || input.identifier,
       accessToken: body.access_token,
       basePermissions: body.user?.permissions || [],
       user: body.user,
