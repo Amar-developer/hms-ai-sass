@@ -324,7 +324,6 @@ body {
   100% {
     transform: translateX(100%);
   }
-<<<<<<< Updated upstream
 }
 
 .brand-loader-logo {
@@ -427,14 +426,3 @@ body {
     transform: none;
   }
 }
-=======
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-pulse,
-  .skeleton-shimmer::after {
-    animation: none;
-  }
-}
-
->>>>>>> Stashed changes

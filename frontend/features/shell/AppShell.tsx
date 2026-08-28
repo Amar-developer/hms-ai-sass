@@ -911,11 +911,7 @@ export function AppShell({
         <main
           ref={mainScrollRef}
           className={`
-<<<<<<< Updated upstream
     scrollbar-hidden relative h-full min-w-0 flex-1 overflow-y-auto bg-white [scrollbar-gutter:stable]
-=======
-    scrollbar-hidden h-full min-w-0 flex-1 overflow-y-auto global-bg
->>>>>>> Stashed changes
     md:ml-16
     lg:ml-0
   `}
@@ -936,14 +932,7 @@ export function AppShell({
             />
           )}
 
-<<<<<<< Updated upstream
           <div className=" border-slate-100  px-4 py-2 lg:px-5 bg-[#f4f6f5d9]">
-=======
-          {showNavigationSkeleton ? (
-            <BreadcrumbBarSkeleton />
-          ) : (
-            <div className=" border-slate-100  px-4 py-2 lg:px-5 ">
->>>>>>> Stashed changes
               <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-2">
                   {/* Back / Forward group */}
@@ -1091,13 +1080,7 @@ export function AppShell({
             </div>
 
           <section
-<<<<<<< Updated upstream
             className=" py-2 px-6 bg-[#f4f6f5d9]"
-=======
-            className=" py-2 px-6 bg-[#f4f6f5d9] "
-            aria-busy={showNavigationSkeleton}
-            aria-live="polite"
->>>>>>> Stashed changes
           >
             <ShellChromeContext.Provider value={shellChromeValue}>
               {children}

@@ -348,15 +348,9 @@ export function HomeCare({
     });
   }
 
-<<<<<<< Updated upstream
   function openCreate() {
     resetForm(bookingTypeTab);
     navigateHomeCare(`/home_care/${newSegment("visit")}`);
-=======
-  function openCreate() {
-    resetForm(bookingTypeTab);
-    router.push(`/home_care/${newSegment("visit")}`);
->>>>>>> Stashed changes
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
