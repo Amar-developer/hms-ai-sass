@@ -50,7 +50,6 @@ def _internal_segments(session: Session, tenant_id: str, start: date, end: date)
     # one segment once it does send, the same floor sms_usage.read_sms_usage
     # applies.
     return int(row[1] or 0) or messages
-    return int(row or 0)
 
 
 def _read(row: SmsProviderReconciliation) -> SmsReconciliationRead:

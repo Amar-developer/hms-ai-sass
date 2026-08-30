@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiFetch } from "@/lib/api";
 import {
   fetchSmsReadiness,
+  fetchSmsHealth,
+  fetchSmsQueue,
   fetchSmsSettings,
+  fetchSmsUsage,
+  sendSmsTest,
+  updateSmsQueueItem,
   updateSmsReadiness,
   updateSmsSettings,
 } from "./sms.api";
@@ -27,6 +32,53 @@ describe("SMS API", () => {
     expect(apiFetchMock).toHaveBeenCalledWith(
       "/communications/sms/readiness",
       session,
+    );
+  });
+
+  it("supports SMS operations and encoded queue actions", async () => {
+    await fetchSmsUsage(session);
+    expect(apiFetchMock).toHaveBeenLastCalledWith(
+      "/communications/sms/usage",
+      session,
+    );
+
+    await fetchSmsHealth(session);
+    expect(apiFetchMock).toHaveBeenLastCalledWith(
+      "/communications/sms/health",
+      session,
+    );
+
+    await fetchSmsQueue(session, {
+      status: "failed",
+      flowKey: "appointment_booked_patient",
+      query: "Anita",
+      limit: 10,
+      offset: 20,
+    });
+    expect(apiFetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("/communications/sms/queue?"),
+      session,
+    );
+    const queuePath = String(apiFetchMock.mock.calls.at(-1)?.[0]);
+    expect(queuePath).toContain("status_filter=failed");
+    expect(queuePath).toContain("flow_key=appointment_booked_patient");
+    expect(queuePath).toContain("q=Anita");
+
+    await updateSmsQueueItem(session, "event/1", "retry");
+    expect(apiFetchMock).toHaveBeenLastCalledWith(
+      "/communications/sms/queue/event%2F1/retry",
+      session,
+      { method: "POST" },
+    );
+
+    await sendSmsTest(session, { mobile: "+919876543210" });
+    expect(apiFetchMock).toHaveBeenLastCalledWith(
+      "/communications/sms/test",
+      session,
+      {
+        method: "POST",
+        body: JSON.stringify({ mobile: "+919876543210" }),
+      },
     );
   });
 

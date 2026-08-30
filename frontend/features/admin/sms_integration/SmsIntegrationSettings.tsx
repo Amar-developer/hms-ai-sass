@@ -1,11 +1,24 @@
-import { useEffect, useState } from "react";
-import { MessageSquare } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Activity,
+  FileCheck2,
+  KeyRound,
+  ListChecks,
+  MessageSquare,
+  MessagesSquare,
+  Send,
+} from "lucide-react";
 
-import { Badge, Button, Card, StatusToast } from "@/app/components/common/ui";
-import { fetchSmsSettings, updateSmsSettings } from "@/features/admin/api/sms.api";
-import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
+import { Badge, Button, StatusToast } from "@/app/components/common/ui";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
-
+import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
+import {
+  fetchSmsHealth,
+  fetchSmsSettings,
+  fetchSmsUsage,
+  sendSmsTest,
+  updateSmsSettings,
+} from "@/features/admin/api/sms.api";
 import { initialDraft } from "./constants";
 import {
   addTemplateToDraft,
@@ -17,12 +30,35 @@ import {
   setVariableKeysInDraft,
   validateDraft,
 } from "./helpers";
-import { SmsFlowKey, SmsReadiness, SmsSettingsDraft, SmsTemplateDraft } from "./types";
-import { SmsReadinessPanel } from "./components/SmsReadinessPanel";
-import { SmsProviderSection } from "./components/SmsProviderSection";
+import {
+  SmsFlowKey,
+  SmsHealth,
+  SmsReadiness,
+  SmsSettingsDraft,
+  SmsTemplateDraft,
+  SmsTestDraft,
+  SmsUsage,
+} from "./types";
 import { SmsComplianceSection } from "./components/SmsComplianceSection";
 import { SmsDeliveryControls } from "./components/SmsDeliveryControls";
+import { SmsDeliveryQueue } from "./components/SmsDeliveryQueue";
 import { SmsFlowsSection } from "./components/SmsFlowsSection";
+import { SmsProviderSection } from "./components/SmsProviderSection";
+import { SmsReconciliationPanel } from "./components/SmsReconciliationPanel";
+import { SmsSwitch } from "./components/SmsSwitch";
+import {
+  SmsHealthPanel,
+  SmsReadinessSummary,
+  SmsUsagePanel,
+} from "./components/SmsStatusPanels";
+import { SmsTestMessageModal } from "./components/SmsTestMessageModal";
+
+type WorkspaceTab =
+  | "overview"
+  | "connection"
+  | "compliance"
+  | "templates"
+  | "delivery";
 
 function readReadiness(value: any): SmsReadiness | null {
   if (!value || !Array.isArray(value.checks)) return null;
@@ -36,6 +72,20 @@ function readReadiness(value: any): SmsReadiness | null {
   };
 }
 
+function firstTestDraft(draft: SmsSettingsDraft): SmsTestDraft | null {
+  const template = draft.flows.find(
+    (item) => item.enabled && item.approvedByProvider,
+  );
+  if (!template) return null;
+  return {
+    mobile: "",
+    flowKey: template.flowKey,
+    variables: Object.fromEntries(
+      template.variableKeys.map((key) => [key, ""]),
+    ),
+  };
+}
+
 export function SmsIntegrationSettings({
   apiSession,
   tenantId,
@@ -44,16 +94,46 @@ export function SmsIntegrationSettings({
   tenantId?: string;
 } = {}) {
   const [draft, setDraft] = useState<SmsSettingsDraft>(initialDraft);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
   const [showSecrets, setShowSecrets] = useState(false);
   const [hasCredentials, setHasCredentials] = useState(false);
   const [credentialLastFour, setCredentialLastFour] = useState("");
   const [hasWebhookSecret, setHasWebhookSecret] = useState(false);
   const [readiness, setReadiness] = useState<SmsReadiness | null>(null);
+  const [usage, setUsage] = useState<SmsUsage | null>(null);
+  const [health, setHealth] = useState<SmsHealth | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [testOpen, setTestOpen] = useState(false);
+  const [testBusy, setTestBusy] = useState(false);
+  const [testMessage, setTestMessage] = useState("");
+  const [testDraft, setTestDraft] = useState<SmsTestDraft>({
+    mobile: "",
+    flowKey: "appointment_booked_patient",
+    variables: {},
+  });
   const effectiveTenantId = tenantId || apiSession?.tenantId || "";
+
+  const loadOperationalData = useCallback(async (scopedSession: any) => {
+    const [usageResult, healthResult] = await Promise.allSettled([
+      fetchSmsUsage(scopedSession),
+      fetchSmsHealth(scopedSession),
+    ]);
+    if (
+      usageResult.status === "fulfilled" &&
+      typeof usageResult.value?.segments_used === "number"
+    ) {
+      setUsage(usageResult.value as SmsUsage);
+    }
+    if (
+      healthResult.status === "fulfilled" &&
+      Array.isArray(healthResult.value?.alerts)
+    ) {
+      setHealth(healthResult.value as SmsHealth);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -63,54 +143,51 @@ export function SmsIntegrationSettings({
       setCredentialLastFour("");
       setHasWebhookSecret(false);
       setReadiness(null);
+      setUsage(null);
+      setHealth(null);
       setInitialLoading(false);
       return () => {
         active = false;
       };
     }
     const scopedSession = { ...apiSession, tenantId: effectiveTenantId };
-    setBusy(true);
+    setInitialLoading(true);
     setMessage("");
     void fetchSmsSettings(scopedSession)
-      .then((value: any) => {
+      .then(async (value: any) => {
         if (!active) return;
         setDraft(readDraft(value));
         setHasCredentials(Boolean(value?.has_credentials));
         setCredentialLastFour(String(value?.credential_last_four || ""));
         setHasWebhookSecret(Boolean(value?.has_webhook_secret));
         setReadiness(readReadiness(value));
+        await loadOperationalData(scopedSession);
       })
       .catch((error: any) => {
         if (active) setMessage(error.message || "Could not load SMS settings.");
       })
       .finally(() => {
-        if (active) {
-          setBusy(false);
-          setInitialLoading(false);
-        }
+        if (active) setInitialLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [apiSession, effectiveTenantId]);
+  }, [apiSession, effectiveTenantId, loadOperationalData]);
 
   const update = <K extends keyof SmsSettingsDraft>(
     key: K,
     value: SmsSettingsDraft[K],
   ) => setDraft((current) => ({ ...current, [key]: value }));
-
   const setTemplate = (templateId: string, updates: Partial<SmsTemplateDraft>) =>
     setDraft((current) => setTemplateInDraft(current, templateId, updates));
-
   const setVariableKeys = (templateId: string, rawValue: string) =>
-    setDraft((current) => setVariableKeysInDraft(current, templateId, rawValue));
-
+    setDraft((current) =>
+      setVariableKeysInDraft(current, templateId, rawValue),
+    );
   const enableTemplate = (templateId: string) =>
     setDraft((current) => enableTemplateExclusively(current, templateId));
-
   const addTemplate = (flowKey: SmsFlowKey) =>
     setDraft((current) => addTemplateToDraft(current, flowKey, ""));
-
   const removeTemplate = (templateId: string) =>
     setDraft((current) => removeTemplateFromDraft(current, templateId));
 
@@ -136,6 +213,7 @@ export function SmsIntegrationSettings({
       setHasWebhookSecret(Boolean(saved?.has_webhook_secret));
       setReadiness(readReadiness(saved));
       setShowSecrets(false);
+      await loadOperationalData(scopedSession);
       setMessage("SMS settings saved securely.");
     } catch (error: any) {
       setMessage(error.message || "Could not save SMS settings.");
@@ -144,109 +222,225 @@ export function SmsIntegrationSettings({
     }
   }
 
+  function openTestMessage() {
+    const next = firstTestDraft(draft);
+    if (!next) {
+      setMessage("Enable and save an approved SMS template before testing.");
+      return;
+    }
+    setTestDraft(next);
+    setTestMessage("");
+    setTestOpen(true);
+  }
+
+  async function submitTest(event: React.FormEvent) {
+    event.preventDefault();
+    if (!apiSession || !effectiveTenantId) return;
+    setTestBusy(true);
+    setTestMessage("");
+    try {
+      const scopedSession = { ...apiSession, tenantId: effectiveTenantId };
+      const result = await sendSmsTest(scopedSession, {
+        mobile: testDraft.mobile.trim(),
+        flow_key: testDraft.flowKey,
+        variables: testDraft.variables,
+      });
+      if (!result?.success) {
+        setTestMessage(result?.message || "The SMS provider rejected the test.");
+        return;
+      }
+      setTestOpen(false);
+      setMessage(
+        `${result.message || "Test SMS accepted."}${
+          result.segment_count ? ` ${result.segment_count} segment(s).` : ""
+        }`,
+      );
+      await loadOperationalData(scopedSession);
+    } catch (error: any) {
+      setTestMessage(error.message || "Could not send the test SMS.");
+    } finally {
+      setTestBusy(false);
+    }
+  }
+
+  const enabledTemplateCount = draft.flows.filter((flow) => flow.enabled).length;
+  const tabs = [
+    {
+      id: "overview" as const,
+      label: "Overview",
+      icon: Activity,
+      count: Number(readiness?.blockers || readiness?.warnings || 0),
+    },
+    { id: "connection" as const, label: "API Connection", icon: KeyRound },
+    { id: "compliance" as const, label: "Compliance", icon: FileCheck2 },
+    {
+      id: "templates" as const,
+      label: "Templates",
+      icon: MessagesSquare,
+      count: enabledTemplateCount,
+    },
+    {
+      id: "delivery" as const,
+      label: "Delivery Queue",
+      icon: ListChecks,
+      count: Number(health?.queued || 0),
+    },
+  ];
+
   return (
-    <Card className="relative px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
-      {initialLoading && <OverlayLoader />}
-      <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
-        <div className="flex gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-sky-50 text-sky-700">
-            <MessageSquare className="h-5 w-5" />
-          </span>
-          <div>
-            <h3 className="card-title font-bold">SMS Integration</h3>
-            <p className="card-desc max-w-3xl text-slate-500">
-              Configure the SMSCountry connection, DLT registration details, and
-              the approved templates each SMS workflow is allowed to send.
-            </p>
+    <div className="space-y-3">
+      <section className="relative overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        {initialLoading && <OverlayLoader />}
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        <div className="flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-700">
+              <MessageSquare className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="text-base font-black tracking-tight text-slate-950">
+                SMS Workspace
+              </h2>
+              <p className="text-xs font-medium text-slate-500">
+                Connection, DLT templates, compliance, usage, and delivery operations.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={draft.enabled ? "green" : "slate"} className="normal-label">
+              {draft.enabled ? "Enabled" : "Disabled"}
+            </Badge>
+            <SmsSwitch
+              label="Enable SMS integration"
+              checked={draft.enabled}
+              onChange={(checked) => update("enabled", checked)}
+            />
+            <span className="hidden h-6 w-px bg-slate-200 sm:block" />
+            <Button
+              type="button"
+              onClick={openTestMessage}
+              disabled={!apiSession || !effectiveTenantId || !draft.enabled}
+              className="flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50"
+            >
+              <Send size={14} /> Test SMS
+            </Button>
+            <Button
+              type="button"
+              onClick={saveSettings}
+              disabled={busy || !apiSession || !effectiveTenantId}
+              className="save-button"
+            >
+              <ButtonLoader loading={busy}>
+                {busy ? "Saving..." : "Save Settings"}
+              </ButtonLoader>
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge
-            tone={draft.enabled ? "green" : "slate"}
-            className="normal-badge"
-          >
-            {draft.enabled ? "Enabled" : "Disabled"}
-          </Badge>
-          <label className="sr-only" htmlFor="sms-enabled-toggle">
-            Enable SMS integration
-          </label>
-          <button
-            id="sms-enabled-toggle"
-            type="button"
-            role="switch"
-            aria-checked={draft.enabled}
-            aria-label="Enable SMS integration"
-            onClick={() => update("enabled", !draft.enabled)}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-              draft.enabled ? "bg-emerald-600" : "bg-slate-300"
-            }`}
-          >
-            <span
-              className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-                draft.enabled ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
-          </button>
+        <div
+          role="tablist"
+          aria-label="SMS workspace sections"
+          className="flex overflow-x-auto border-t border-slate-200 bg-slate-50 px-2"
+        >
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex min-w-max items-center gap-2 border-b-2 px-3 py-2.5 text-xs font-bold transition ${
+                  activeTab === tab.id
+                    ? "border-sky-600 bg-white text-sky-700"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <Icon size={14} /> {tab.label}
+                {Boolean(tab.count) && (
+                  <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-700">
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-      </div>
+      </section>
 
       {draft.enabled && !hasCredentials && (
-        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           SMSCountry credentials for the selected API mode are required before
           the integration can be saved as enabled.
         </p>
       )}
-
       {errors.length > 0 && (
-        <ul className="mt-3 space-y-1 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+        <ul className="space-y-1 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
           {errors.map((error) => (
             <li key={error}>{error}</li>
           ))}
         </ul>
       )}
 
-      <SmsReadinessPanel readiness={readiness} />
+      {activeTab === "overview" && (
+        <div className="space-y-3">
+          <SmsReadinessSummary readiness={readiness} />
+          <div className="grid gap-3 xl:grid-cols-2">
+            <SmsUsagePanel usage={usage} />
+            <SmsHealthPanel health={health} />
+          </div>
+          <SmsReconciliationPanel
+            apiSession={apiSession}
+            tenantId={effectiveTenantId}
+            onMessage={setMessage}
+          />
+        </div>
+      )}
+      {activeTab === "connection" && (
+        <div className="space-y-3">
+          <SmsProviderSection
+            draft={draft}
+            update={update}
+            showSecrets={showSecrets}
+            setShowSecrets={setShowSecrets}
+            hasCredentials={hasCredentials}
+            credentialLastFour={credentialLastFour}
+            hasWebhookSecret={hasWebhookSecret}
+          />
+          <SmsDeliveryControls draft={draft} update={update} />
+        </div>
+      )}
+      {activeTab === "compliance" && (
+        <SmsComplianceSection draft={draft} update={update} />
+      )}
+      {activeTab === "templates" && (
+        <SmsFlowsSection
+          draft={draft}
+          setTemplate={setTemplate}
+          setVariableKeys={setVariableKeys}
+          enableTemplate={enableTemplate}
+          addTemplate={addTemplate}
+          removeTemplate={removeTemplate}
+        />
+      )}
+      {activeTab === "delivery" && (
+        <SmsDeliveryQueue
+          apiSession={apiSession}
+          tenantId={effectiveTenantId}
+          onMessage={setMessage}
+        />
+      )}
 
-      <SmsProviderSection
+      <SmsTestMessageModal
+        open={testOpen}
+        onClose={() => setTestOpen(false)}
+        busy={testBusy}
+        message={testMessage}
         draft={draft}
-        update={update}
-        showSecrets={showSecrets}
-        setShowSecrets={setShowSecrets}
-        hasCredentials={hasCredentials}
-        credentialLastFour={credentialLastFour}
-        hasWebhookSecret={hasWebhookSecret}
+        testDraft={testDraft}
+        setTestDraft={setTestDraft}
+        onSubmit={submitTest}
       />
-
-      <SmsComplianceSection draft={draft} update={update} />
-
-      <SmsDeliveryControls draft={draft} update={update} />
-
-      <SmsFlowsSection
-        draft={draft}
-        setTemplate={setTemplate}
-        setVariableKeys={setVariableKeys}
-        enableTemplate={enableTemplate}
-        addTemplate={addTemplate}
-        removeTemplate={removeTemplate}
-      />
-
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-slate-500">
-          Saving records the readiness checklist and re-evaluates the rollout
-          status. Sending is not enabled until the SMS worker is live.
-        </p>
-        <Button
-          type="button"
-          onClick={saveSettings}
-          disabled={busy || !apiSession || !effectiveTenantId}
-          className="save-button"
-        >
-          <ButtonLoader loading={busy}>
-            {busy ? "Saving..." : "Save SMS Settings"}
-          </ButtonLoader>
-        </Button>
-      </div>
-    </Card>
+    </div>
   );
 }

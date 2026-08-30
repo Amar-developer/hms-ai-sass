@@ -7,7 +7,11 @@ from app.modules.identity.models import User
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.integrations import sms_service
 from app.modules.integrations.sms_readiness import P0_SMS_FLOWS, evaluate_sms_readiness
-from app.modules.integrations.sms_schemas import SmsFlowReadiness, SmsReadinessUpdate
+from app.modules.integrations.sms_schemas import (
+    SmsFlowReadiness,
+    SmsReadinessUpdate,
+    SmsSettingsUpdate,
+)
 
 
 def ready_payload() -> dict:
@@ -118,3 +122,59 @@ def test_sms_readiness_blocks_when_p0_templates_are_missing():
 
     assert result.status == "not_ready"
     assert any(check.key == "p0_templates" for check in result.checks)
+
+
+def test_sms_readiness_update_preserves_operational_settings(test_engine, monkeypatch):
+    monkeypatch.setattr(sms_service, "_enforce_entitlement", lambda *_args: None)
+
+    with Session(test_engine) as session:
+        actor = User(
+            name="SMS Admin",
+            email="sms.preserve@medizinhub.local",
+            password_hash="test",
+            is_super_admin=True,
+        )
+        session.add(actor)
+        session.commit()
+        session.refresh(actor)
+
+        sms_service.update_sms_settings(
+            session,
+            tenant_id="tenant_sms_preserve",
+            payload=SmsSettingsUpdate(
+                api_url="https://sms.example.com/send",
+                default_country_code="+44",
+                timeout_seconds=27,
+                max_attempts=7,
+                max_segments_per_message=4,
+                daily_message_limit=321,
+                monthly_segment_limit=6543,
+                patient_notifications_enabled=False,
+                staff_notifications_enabled=True,
+                default_language="hi",
+                cost_per_segment_paise=19,
+            ),
+            actor=actor,
+        )
+
+        sms_service.update_sms_readiness(
+            session,
+            tenant_id="tenant_sms_preserve",
+            payload=SmsReadinessUpdate.model_validate(ready_payload()),
+            actor=actor,
+        )
+        saved = sms_service.get_sms_settings_model(
+            session, tenant_id="tenant_sms_preserve"
+        )
+
+        assert str(saved.api_url) == "https://sms.example.com/send"
+        assert saved.default_country_code == "+44"
+        assert saved.timeout_seconds == 27
+        assert saved.max_attempts == 7
+        assert saved.max_segments_per_message == 4
+        assert saved.daily_message_limit == 321
+        assert saved.monthly_segment_limit == 6543
+        assert saved.patient_notifications_enabled is False
+        assert saved.staff_notifications_enabled is True
+        assert saved.default_language == "hi"
+        assert saved.cost_per_segment_paise == 19

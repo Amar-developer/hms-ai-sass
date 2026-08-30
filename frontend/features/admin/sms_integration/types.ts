@@ -86,3 +86,87 @@ export type SmsSettingsDraft = {
   staticIpAllowlistingConfirmed: boolean;
   flows: SmsTemplateDraft[];
 };
+
+export type SmsUsage = {
+  plan_name: string;
+  monthly_segment_limit: number | null;
+  daily_message_limit: number | null;
+  plan_segment_limit: number;
+  plan_segment_credits: number;
+  messages_used: number;
+  segments_used: number;
+  messages_used_today: number;
+  segments_remaining: number;
+  limit_reached: boolean;
+  cost_per_segment_paise: number;
+  estimated_cost_paise: number | null;
+  period_start: string;
+  period_end: string;
+};
+
+export type SmsHealth = {
+  status: "healthy" | "warning" | "critical";
+  sent_24h: number;
+  delivered_24h: number;
+  failed_24h: number;
+  failure_rate_24h: number;
+  delivery_rate_24h: number;
+  queued: number;
+  retry_pending: number;
+  stuck_processing: number;
+  awaiting_receipt: number;
+  oldest_queued_age_minutes: number | null;
+  last_sent_at: string | null;
+  alerts: string[];
+};
+
+export type SmsQueueItem = {
+  id: string;
+  flow_key: string;
+  recipient_name: string;
+  recipient_masked: string;
+  status: "queued" | "processing" | "sent" | "failed" | "cancelled";
+  delivery_status?: string | null;
+  provider_status?: string | null;
+  resource_type?: string | null;
+  resource_reference?: string | null;
+  sender_id?: string | null;
+  segment_count?: number | null;
+  attempt_count: number;
+  max_attempts: number;
+  next_attempt_at?: string | null;
+  failure_reason?: string | null;
+  created_at: string;
+  sent_at?: string | null;
+  delivered_at?: string | null;
+};
+
+export type SmsQueueResponse = {
+  items: SmsQueueItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  counts: Record<
+    "queued" | "processing" | "sent" | "failed" | "cancelled",
+    number
+  >;
+};
+
+export type SmsTestDraft = {
+  mobile: string;
+  flowKey: SmsFlowKey;
+  variables: Record<string, string>;
+};
+
+export type SmsReconciliation = {
+  id: string;
+  period_start: string;
+  period_end: string;
+  provider_billed_segments: number;
+  provider_amount_paise: number;
+  internal_segments: number;
+  variance_segments: number;
+  notes: string;
+  recorded_by_user_id: string | null;
+  created_at: string;
+};

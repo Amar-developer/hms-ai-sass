@@ -70,7 +70,59 @@ const apiSession = { tenantId: "tenant-1", token: "t" } as any;
 describe("SmsIntegrationSettings", () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
-    apiFetchMock.mockResolvedValue(savedSettings);
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === "/communications/sms/usage") {
+        return {
+          plan_name: "Growth",
+          monthly_segment_limit: null,
+          daily_message_limit: null,
+          plan_segment_limit: 1000,
+          plan_segment_credits: 0,
+          messages_used: 12,
+          segments_used: 14,
+          messages_used_today: 2,
+          segments_remaining: 986,
+          limit_reached: false,
+          cost_per_segment_paise: 15,
+          estimated_cost_paise: 210,
+          period_start: "2026-08-01T00:00:00+00:00",
+          period_end: "2026-09-01T00:00:00+00:00",
+        };
+      }
+      if (path === "/communications/sms/health") {
+        return {
+          status: "healthy",
+          sent_24h: 4,
+          delivered_24h: 3,
+          failed_24h: 0,
+          failure_rate_24h: 0,
+          delivery_rate_24h: 75,
+          queued: 1,
+          retry_pending: 0,
+          stuck_processing: 0,
+          awaiting_receipt: 1,
+          oldest_queued_age_minutes: 2,
+          last_sent_at: "2026-08-17T09:00:00+00:00",
+          alerts: [],
+        };
+      }
+      if (path.startsWith("/communications/sms/queue?")) {
+        return {
+          items: [],
+          total: 0,
+          limit: 20,
+          offset: 0,
+          counts: {
+            queued: 0,
+            processing: 0,
+            sent: 0,
+            failed: 0,
+            cancelled: 0,
+          },
+        };
+      }
+      return savedSettings;
+    });
   });
 
   afterEach(cleanup);
@@ -95,7 +147,7 @@ describe("SmsIntegrationSettings", () => {
 
   it("renders every P0 workflow even when the tenant has saved none", async () => {
     render(<SmsIntegrationSettings apiSession={apiSession} />);
-
+    fireEvent.click(await screen.findByRole("tab", { name: /^Templates/ }));
     expect(await screen.findByText("Appointment booked")).toBeTruthy();
     expect(screen.getByText("Lab report ready")).toBeTruthy();
     expect(screen.getByText("Queue token alert")).toBeTruthy();
@@ -104,28 +156,35 @@ describe("SmsIntegrationSettings", () => {
 
   it("blocks saving an enabled workflow that has no approved template", async () => {
     render(<SmsIntegrationSettings apiSession={apiSession} />);
-
+    fireEvent.click(await screen.findByRole("tab", { name: /^Templates/ }));
     const toggle = await screen.findByLabelText(
       "Enable Appointment booked template",
     );
     fireEvent.click(toggle);
-    fireEvent.click(screen.getByRole("button", { name: /Save SMS Settings/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Settings/i }));
 
     expect(
       await screen.findByText("DLT template ID is required for Appointment booked."),
     ).toBeTruthy();
     // Only the initial GET ran - no PUT was attempted.
-    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      apiFetchMock.mock.calls.filter((call) => call[2]?.method === "PUT"),
+    ).toHaveLength(0);
   });
 
   it("saves the settings without resending unchanged credentials, dropping untouched blank templates", async () => {
     render(<SmsIntegrationSettings apiSession={apiSession} />);
+    fireEvent.click(await screen.findByRole("tab", { name: /^Templates/ }));
     await screen.findByText("Appointment booked");
 
-    fireEvent.click(screen.getByRole("button", { name: /Save SMS Settings/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Settings/i }));
 
-    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
-    const [path, , options] = apiFetchMock.mock.calls[1];
+    await waitFor(() =>
+      expect(apiFetchMock.mock.calls.some((call) => call[2]?.method === "PUT")).toBe(true),
+    );
+    const [path, , options] = apiFetchMock.mock.calls.find(
+      (call) => call[2]?.method === "PUT",
+    )!;
     expect(path).toBe("/communications/sms/settings");
     expect(options?.method).toBe("PUT");
 
@@ -139,6 +198,7 @@ describe("SmsIntegrationSettings", () => {
 
   it("adds a new template for a workflow and includes it in the save payload", async () => {
     render(<SmsIntegrationSettings apiSession={apiSession} />);
+    fireEvent.click(await screen.findByRole("tab", { name: /^Templates/ }));
     await screen.findByText("Appointment booked");
 
     const addButtons = screen.getAllByRole("button", { name: /Add Template/i });
@@ -150,10 +210,14 @@ describe("SmsIntegrationSettings", () => {
     expect(nameInputs).toHaveLength(2);
     fireEvent.change(nameInputs[1], { target: { value: "Festive wording" } });
 
-    fireEvent.click(screen.getByRole("button", { name: /Save SMS Settings/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Settings/i }));
 
-    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
-    const [, , options] = apiFetchMock.mock.calls[1];
+    await waitFor(() =>
+      expect(apiFetchMock.mock.calls.some((call) => call[2]?.method === "PUT")).toBe(true),
+    );
+    const [, , options] = apiFetchMock.mock.calls.find(
+      (call) => call[2]?.method === "PUT",
+    )!;
     const body = JSON.parse(String(options?.body));
     const added = (body.flows as any[]).find(
       (flow) => flow.name === "Festive wording",
@@ -182,6 +246,7 @@ describe("SmsIntegrationSettings", () => {
     });
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<SmsIntegrationSettings apiSession={apiSession} />);
+    fireEvent.click(await screen.findByRole("tab", { name: /^Templates/ }));
     await screen.findByDisplayValue("Existing template");
 
     const deleteButton = await screen.findByLabelText(
@@ -191,9 +256,13 @@ describe("SmsIntegrationSettings", () => {
     expect(confirmSpy).toHaveBeenCalled();
     expect(screen.queryByDisplayValue("Existing template")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /Save SMS Settings/i }));
-    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
-    const [, , options] = apiFetchMock.mock.calls[1];
+    fireEvent.click(screen.getByRole("button", { name: /Save Settings/i }));
+    await waitFor(() =>
+      expect(apiFetchMock.mock.calls.some((call) => call[2]?.method === "PUT")).toBe(true),
+    );
+    const [, , options] = apiFetchMock.mock.calls.find(
+      (call) => call[2]?.method === "PUT",
+    )!;
     const body = JSON.parse(String(options?.body));
     expect(
       (body.flows as any[]).find((flow) => flow.id === "sms_tpl_existing"),
@@ -205,7 +274,7 @@ describe("SmsIntegrationSettings", () => {
   it("warns when the integration is enabled before credentials are saved", async () => {
     apiFetchMock.mockResolvedValue({ ...savedSettings, has_credentials: false });
     render(<SmsIntegrationSettings apiSession={apiSession} />);
-    await screen.findByText("Appointment booked");
+    await screen.findByText("SMSCountry account");
 
     fireEvent.click(
       screen.getByRole("switch", { name: "Enable SMS integration" }),
@@ -214,5 +283,35 @@ describe("SmsIntegrationSettings", () => {
     expect(
       await screen.findByText(/credentials for the selected API mode are required/i),
     ).toBeTruthy();
+  });
+
+  it("organizes current SMS operations into workspace tabs", async () => {
+    render(<SmsIntegrationSettings apiSession={apiSession} />);
+
+    expect(
+      await screen.findByRole("tablist", { name: "SMS workspace sections" }),
+    ).toBeTruthy();
+    for (const label of [
+      "Overview",
+      "API Connection",
+      "Compliance",
+      "Templates",
+      "Delivery Queue",
+    ]) {
+      expect(screen.getByRole("tab", { name: new RegExp(`^${label}`) })).toBeTruthy();
+    }
+    expect(screen.getByText("SMS usage")).toBeTruthy();
+    expect(screen.getByText("Delivery health")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Test SMS" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Delivery Queue/ }));
+    await waitFor(() =>
+      expect(
+        apiFetchMock.mock.calls.some((call) =>
+          String(call[0]).startsWith("/communications/sms/queue?"),
+        ),
+      ).toBe(true),
+    );
+    expect(screen.getByText("SMS delivery queue")).toBeTruthy();
   });
 });

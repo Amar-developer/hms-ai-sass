@@ -130,10 +130,16 @@ def update_sms_readiness(
     payload: SmsReadinessUpdate,
     actor: User,
 ) -> SmsReadinessRead:
+    row = get_tenant_plugin(session, tenant_id, PLUGIN_KEY)
+    current = _settings_from_row(row).model_dump(mode="json")
+    # Readiness is a focused update surface. Merge its fields into the saved
+    # integration document so changing a compliance check cannot reset API,
+    # delivery, recipient, language, or usage-limit settings to model defaults.
+    current.update(payload.model_dump(mode="json"))
     result = update_sms_settings(
         session,
         tenant_id=tenant_id,
-        payload=SmsSettingsUpdate.model_validate(payload.model_dump()),
+        payload=SmsSettingsUpdate.model_validate(current),
         actor=actor,
         audit_action="communication.sms_readiness_updated",
         audit_purpose="sms_readiness",
