@@ -15,11 +15,11 @@ export function SubscriptionAssignPlan({
   back,
 }: any) {
   return (
-    <Card className="mt-3">
+    <Card className="mt-3 p-3 bg-white">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">Assign / Upgrade Tenant Plan</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h3 className="card-title font-bold">Assign / Upgrade Tenant Plan</h3>
+          <p className="card-desc text-slate-500">
             Assign immediately, schedule renewal, or upgrade a tenant when
             limits are reached.
           </p>

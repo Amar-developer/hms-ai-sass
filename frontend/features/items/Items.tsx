@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Package, PackageOpen, Plus, PlusCircle } from "lucide-react";
-import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
+import {
+  Card,
+  RefreshButton,
+  SearchableSelect,
+  StatusToast,
+} from "@/app/components/common/ui";
+import { FormField } from "@/app/components/FormElements";
 import { homeServiceTypes, serviceItemTypes } from "@/features/items/constants";
 import { ItemForm } from "@/features/items/forms/ItemForms";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
@@ -92,10 +98,15 @@ export function Items({
   itemType = "medicine",
 }: any) {
   const router = useRouter();
+  const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const [type, setType] = useState(itemType);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
+  const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
+  const scopedSession =
+    apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
   const {
+    tenants,
     medicines,
     tests,
     packages,
@@ -110,7 +121,7 @@ export function Items({
     loading,
     loadError,
     load,
-  } = useItemsData({ apiSession, branchId });
+  } = useItemsData({ apiSession: scopedSession, branchId });
   const [packageTestIds, setPackageTestIds] = useState<string[]>([]);
   const [confirmAction, setConfirmAction] = useState<any>(null);
   const [filters, setFilters] = useState({
@@ -402,7 +413,7 @@ export function Items({
   }
 
   const { handleItemSubmit, confirmDelete } = useItemsActions({
-    apiSession,
+    apiSession: scopedSession,
     type,
     editing: editingRow,
     rows,
@@ -573,7 +584,21 @@ export function Items({
             queryFields={itemsQueryFields}
             queryFilters={queryFilters}
             onQueryFiltersChange={setQueryFilters}
-          />
+          >
+            {isSuperAdmin && (
+              <FormField label="Tenant">
+                <SearchableSelect
+                  searchable={false}
+                  value={tenantId}
+                  onChange={setTenantId}
+                  options={tenants.map((t: any) => ({
+                    value: t.id,
+                    label: t.name,
+                  }))}
+                />
+              </FormField>
+            )}
+          </AdaptiveFilterTrigger>
           <AdaptiveSortTrigger
             fields={itemsSchema.sortFields}
             sort={sort}
@@ -589,6 +614,7 @@ export function Items({
           cardIcon={PackageOpen}
           buttonText="Create Item"
           open={open}
+          count={String(rows.length)}
         />
         <StatusToast message={message} onClose={() => setMessage("")} />
         <div className="table-wrapper-width">

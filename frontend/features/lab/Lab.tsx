@@ -950,6 +950,7 @@ export function Lab({
             <DataTable
               columns={consultationReferralColumns}
               data={visibleReferrals}
+              loading={!ordersLoaded}
               onRowClick={(a: any) => loadConsultDetail(a)}
               emptyMessage="No consultation lab or service referrals are waiting."
             />
@@ -1173,6 +1174,7 @@ export function Lab({
             canCreate={canCreateLabOrder}
             buttonText="Create Lab Order"
             open={() => router.push(`/lab/${newSegment("lab-order")}`)}
+            count={String(labPageRows.length)}
           />
           <StatusTabsNav
             ariaLabel="Lab and service worklist sections"

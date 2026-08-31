@@ -1214,13 +1214,13 @@ export function InvoiceDetailPage({
 
           <section
             id="invoice-settlements"
-            className={`rounded-lg border border-slate-200 ${
+            className={`rounded-lg  ${
               activeWorkspaceSection === "invoice-settlements"
                 ? "block"
                 : "hidden"
             }`}
           >
-            <div className=" rounded-lg border-slate-200 bg-slate-50 px-4 py-3">
+            <div className=" rounded-lg border-slate-200 bg-white px-4 py-3 mb-2">
               <h4 className="card-title font-bold">Settlement History</h4>
             </div>
             <div className="overflow-auto">
@@ -1237,13 +1237,13 @@ export function InvoiceDetailPage({
 
           <section
             id="invoice-adjustments"
-            className={`rounded-lg border border-slate-200 ${
+            className={`rounded-lg  ${
               activeWorkspaceSection === "invoice-adjustments"
                 ? "block"
                 : "hidden"
             }`}
           >
-            <div className="rounded-lg flex flex-col gap-3 border-slate-200 bg-slate-50 px-4 py-3 lg:flex-row lg:items-center sm:justify-between">
+            <div className="rounded-lg flex flex-col gap-3 border-slate-200 bg-white px-4 py-3 lg:flex-row lg:items-center sm:justify-between mb-2">
               <div>
                 <h4 className="card-title font-bold">
                   Discount, Refund & Cancellation Requests
@@ -1303,11 +1303,11 @@ export function InvoiceDetailPage({
           {canReviewAnyAdjustment && (
             <section
               id="invoice-ledger"
-              className={`rounded-lg border border-slate-200 ${
+              className={`rounded-lg  ${
                 activeWorkspaceSection === "invoice-ledger" ? "block" : "hidden"
               }`}
             >
-              <div className="rounded-lg border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="rounded-lg border-slate-200 bg-white px-4 py-3 mb-2 ">
                 <h4 className="card-title font-bold">
                   Hospital Accounting Ledger
                 </h4>
@@ -1316,7 +1316,7 @@ export function InvoiceDetailPage({
                   and credits show the hospital accounts affected by each event.
                 </p>
               </div>
-              <div className="overflow-auto">
+              <div className="table-wrapper-width">
                 <DataTable
                   columns={getHospitalLedgerColumns({
                     ledgerRunningById,
@@ -1327,7 +1327,7 @@ export function InvoiceDetailPage({
                   emptyDescription="Debit and credit journal entries generated for this invoice will show up here."
                   emptyIcon={BookOpen}
                   minBodyHeight={`${financialLedgerEntries.length > 0 ?'':'220px'}`}
-                  className="rounded-none"
+                  className="table-width"
                   tableClassName="min-w-[1480px]"
                   rowClassName="odd:bg-white even:bg-slate-50/40 hover:bg-emerald-50/30"
                 />

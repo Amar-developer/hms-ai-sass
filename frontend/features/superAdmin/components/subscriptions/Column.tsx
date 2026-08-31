@@ -93,7 +93,7 @@ export function getSubscriptionColumns({
                   ? "slate"
                   : "red"
           }
-          className="rounded-full px-1 py-1 text-xs lg:text-sm"
+          className="normal-label"
         >
           {subscription.status}
         </Badge>

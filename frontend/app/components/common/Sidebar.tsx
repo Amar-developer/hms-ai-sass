@@ -110,6 +110,8 @@ export function Sidebar(props: SidebarProps) {
     setPopupMenu(menu);
   };
 
+  console.log(props.visibleClinicSections,'visibleClinicsections')
+  console.log(props.clinicModuleSections,'clinicmoduleSection')
   return (
     <aside
       className={`
@@ -493,7 +495,7 @@ export function Sidebar(props: SidebarProps) {
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                             props.activePage === "clinic" &&
                             props.clinicSection === sectionId
-                              ? "bg-brand text-brand-fg"
+                              ? "bg-emerald-50 text-brand"
                               : "text-slate-500 hover:bg-slate-50"
                           }`}
                         >
@@ -629,7 +631,7 @@ export function Sidebar(props: SidebarProps) {
                           }}
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                             props.reportsSection == sectionId
-                              ? "bg-brand text-brand-fg"
+                              ? "bg-emerald-50 text-brand"
                               : "text-slate-500 hover:bg-slate-50"
                           }`}
                         >

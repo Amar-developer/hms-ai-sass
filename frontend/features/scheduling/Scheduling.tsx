@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, CalendarClock, PlusCircle, ClipboardList } from "lucide-react";
-import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
+import {
+  Card,
+  RefreshButton,
+  SearchableSelect,
+  StatusToast,
+} from "@/app/components/common/ui";
+import { FormField } from "@/app/components/FormElements";
 import { selectedSchedulePayloadsFromRHF } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
 import { pageSize } from "./constants";
@@ -408,7 +414,21 @@ export function Scheduling({
             queryFields={scheduleQueryFields}
             queryFilters={queryFilters}
             onQueryFiltersChange={setQueryFilters}
-          />
+          >
+            {isSuperAdmin && (
+              <FormField label="Tenant">
+                <SearchableSelect
+                  searchable={false}
+                  value={tenantId}
+                  onChange={setTenantId}
+                  options={tenants.map((t: any) => ({
+                    value: t.id,
+                    label: t.name,
+                  }))}
+                />
+              </FormField>
+            )}
+          </AdaptiveFilterTrigger>
           <AdaptiveSortTrigger
             fields={scheduleSchema.sortFields}
             sort={sort}
@@ -423,6 +443,7 @@ export function Scheduling({
         buttonText="Create Schedule"
         cardIcon={ClipboardList}
         open={open}
+        count={String(rows.length)}
       />
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="table-wrapper-width">

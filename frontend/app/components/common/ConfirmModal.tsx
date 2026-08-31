@@ -98,7 +98,7 @@ export function ConfirmModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 ">
-      <Card className="w-full max-w-sm p-4">
+      <Card className="w-full max-w-sm p-4 bg-white">
          <div className="flex justify-end cursor-pointer font-bold" onClick={onCancel}> <X size={16} /></div>
         <h3 className="text-lg font-bold">{title}</h3>
 

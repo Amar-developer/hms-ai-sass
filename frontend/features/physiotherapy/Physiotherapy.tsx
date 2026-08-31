@@ -180,7 +180,7 @@ export function Physiotherapy({
       )}
       {(view === "list" || view === "detail") && (
         <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-          <Card>
+          <Card className="bg-white p-3">
             <div className="flex items-center justify-between gap-3">
               <h4 className="card-title font-bold">Physiotherapy Cases</h4>
               <div className="flex items-center gap-2">
@@ -253,8 +253,8 @@ export function Physiotherapy({
               })}
             </div>
           </Card>
-          <Card>
-            <h4 className="text-lg font-bold">Case Summary</h4>
+          <Card className="bg-white p-3">
+            <h4 className="card-title font-bold">Case Summary</h4>
             {selected ? (
               <>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">

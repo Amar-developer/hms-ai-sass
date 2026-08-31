@@ -22,7 +22,9 @@ export function mapExpense(
       currentUserId && raw.submitted_by === currentUserId
         ? "You"
         : raw.submitted_by,
+    submittedByName: raw.submitted_by_name ?? null,
     approvedBy: raw.approved_by ?? undefined,
+    approvedByName: raw.approved_by_name ?? null,
     quantity: raw.quantity != null ? Number(raw.quantity) : null,
     rejectionReason: raw.rejection_reason ?? undefined,
     receiptName: raw.receipt_file_id ?? undefined,

@@ -19,6 +19,7 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { FormField } from "@/app/components/FormElements";
 import {
   deleteIntelligenceContent,
@@ -211,6 +212,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
   const [message, setMessage] = useState("");
   const [showAdvancedRules, setShowAdvancedRules] = useState(false);
   const [activeTab, setActiveTab] = useState<"content" | "rules">("content");
+  const [confirmDeleteRule, setConfirmDeleteRule] = useState<any>(null);
 
   async function load() {
     if (!apiSession) return;
@@ -288,12 +290,14 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
     }
   }
 
-  async function deleteRule(rule: any) {
+  function deleteRule(rule: any) {
     if (!apiSession || !rule?.id) return;
-    const confirmed = window.confirm(
-      `Delete "${rule.name}"?\n\nThis removes the rule configuration, resolves its active flags, and cancels unsent engagement actions from this rule.`,
-    );
-    if (!confirmed) return;
+    setConfirmDeleteRule(rule);
+  }
+
+  async function confirmDeleteRuleNow() {
+    const rule = confirmDeleteRule;
+    if (!apiSession || !rule?.id) return;
     setBusy(true);
     setMessage("");
     try {
@@ -308,6 +312,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
       setMessage(error.message || "Could not delete the rule.");
     } finally {
       setBusy(false);
+      setConfirmDeleteRule(null);
     }
   }
 
@@ -358,7 +363,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="">
       <StatusToast message={message} onClose={() => setMessage("")} />
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
@@ -385,12 +390,12 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
                   setShowAdvancedRules(true);
                 }}
               >
-                <PlusCircle className="h-4 w-4" />
+                <PlusCircle className="h-4 w-4 mx-2" />
                 Add Rule
               </ActionButton>
             )}
             <ActionButton onClick={adaptExistingData} disabled={busy}>
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-4 w-4 mx-2" />
               Recalculate Patients
             </ActionButton>
           </div>
@@ -417,7 +422,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
       </section>
 
       {activeTab === "content" && (
-        <Card className="p-3 bg-white">
+        <Card className="p-3 bg-white mt-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h4 className="card-title font-bold">Content Library</h4>
@@ -553,7 +558,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
               </p>
             </FormField>
             <div className="flex gap-2 md:col-span-2 xl:col-span-4">
-              <Button disabled={busy}>
+              <Button disabled={busy} className='save-button'>
                 {busy
                   ? "Saving..."
                   : contentEditingId
@@ -632,7 +637,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
       {activeTab === "rules" && (
         <>
           {showAdvancedRules && (
-            <Card className="p-3 bg-white">
+            <Card className="p-3 bg-white mt-3">
               <div className="font-bold card-title">
                 {editingId ? "Edit Rule" : "Create Rule"}
               </div>
@@ -991,7 +996,7 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
             </Card>
           )}
 
-          <Card className="p-3 bg-white">
+          <Card className="p-3 bg-white mt-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h4 className="font-bold">Configured Rules</h4>
             </div>
@@ -1064,6 +1069,16 @@ export function PatientIntelligenceSettings({ apiSession }: any) {
             </div>
           </Card>
         </>
+      )}
+      {confirmDeleteRule && (
+        <ConfirmModal
+          busy={busy}
+          title={`Delete "${confirmDeleteRule.name}"?`}
+          message="This removes the rule configuration, resolves its active flags, and cancels unsent engagement actions from this rule."
+          confirmLabel="Delete Rule"
+          onCancel={() => setConfirmDeleteRule(null)}
+          onConfirm={confirmDeleteRuleNow}
+        />
       )}
     </div>
   );

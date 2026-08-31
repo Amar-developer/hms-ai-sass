@@ -69,7 +69,7 @@ export function TenantManagement({
           />
         }
       />
-      <Card className="pt-2">
+      <Card className="p-3 bg-white">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
             <h3 className="card-title font-bold">
@@ -82,8 +82,7 @@ export function TenantManagement({
             </p>
           </div>
         </div>
-        <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-lg border border-slate-200">
-          <div className="min-w-[980px]">
+          <div className="table-wrapper-width">
             <DataTable
               columns={tenantColumns}
               data={tabRows}
@@ -94,9 +93,9 @@ export function TenantManagement({
               emptyDescription="Tenants onboarded to this workspace will show up here."
               emptyIcon={Landmark}
               minBodyHeight={`${tabRows.length > 0 ? "" : "220px"}`}
+              className="table-width"
             />
           </div>
-        </div>
       </Card>
     </div>
   );

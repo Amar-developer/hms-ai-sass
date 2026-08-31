@@ -21,8 +21,22 @@ from app.modules.subscriptions.service import enforce_module_enabled
 EXPENSE_MODULE_KEY = "expense"
 
 
-def _read(expense: Expense) -> ExpenseRead:
-    return ExpenseRead.model_validate(expense, from_attributes=True)
+def _read(expense: Expense, *, user_names: dict[str, str] | None = None) -> ExpenseRead:
+    read = ExpenseRead.model_validate(expense, from_attributes=True)
+    if user_names:
+        read.submitted_by_name = user_names.get(expense.submitted_by)
+        if expense.approved_by:
+            read.approved_by_name = user_names.get(expense.approved_by)
+    return read
+
+
+def _user_names_for(
+    repo: ExpenseRepository, *, tenant_id: str, expenses: list[Expense]
+) -> dict[str, str]:
+    user_ids = {expense.submitted_by for expense in expenses} | {
+        expense.approved_by for expense in expenses if expense.approved_by
+    }
+    return repo.user_names(tenant_id=tenant_id, user_ids=user_ids)
 
 
 def _not_found() -> HTTPException:
@@ -72,7 +86,8 @@ def list_expenses(
         offset=offset,
     )
 
-    return [_read(row) for row in rows], total
+    user_names = _user_names_for(repo, tenant_id=tenant_id, expenses=rows)
+    return [_read(row, user_names=user_names) for row in rows], total
 
 
 def list_expense_filter_options(
@@ -93,7 +108,9 @@ def list_expense_filter_options(
 def get_expense(session: Session, *, tenant_id: str, expense_id: str, actor: User):
     enforce_module_enabled(session, tenant_id, EXPENSE_MODULE_KEY, current_user=actor)
     repo = ExpenseRepository(session=session)
-    return _read(_get_or_404(repo=repo, tenant_id=tenant_id, expense_id=expense_id))
+    expense = _get_or_404(repo=repo, tenant_id=tenant_id, expense_id=expense_id)
+    user_names = _user_names_for(repo, tenant_id=tenant_id, expenses=[expense])
+    return _read(expense, user_names=user_names)
 
 
 def get_recent_subcategories(
@@ -142,7 +159,8 @@ def create_expense(
         ),
     )
 
-    return _read(expense=expense)
+    user_names = _user_names_for(repo, tenant_id=tenant_id, expenses=[expense])
+    return _read(expense=expense, user_names=user_names)
 
 
 def update_expense(
@@ -174,7 +192,8 @@ def update_expense(
     session.add(expense)
     session.commit()
     session.refresh(expense)
-    return _read(expense)
+    user_names = _user_names_for(repo, tenant_id=tenant_id, expenses=[expense])
+    return _read(expense, user_names=user_names)
 
 
 def attach_receipt(
@@ -200,7 +219,8 @@ def attach_receipt(
     session.commit()
     session.refresh(expense)
 
-    return _read(expense=expense)
+    user_names = _user_names_for(repo, tenant_id=tenant_id, expenses=[expense])
+    return _read(expense=expense, user_names=user_names)
 
 
 def approve_expense(
@@ -231,7 +251,8 @@ def approve_expense(
         resource_id=expense.id,
         purpose="expense_claim",
     )
-    return _read(expense)
+    user_names = _user_names_for(repo, tenant_id=tenant_id, expenses=[expense])
+    return _read(expense, user_names=user_names)
 
 
 def reject_expense(
@@ -268,7 +289,8 @@ def reject_expense(
         purpose="expense_claim",
         metadata_json=json.dumps({"reason": payload.reason}),
     )
-    return _read(expense)
+    user_names = _user_names_for(repo, tenant_id=tenant_id, expenses=[expense])
+    return _read(expense, user_names=user_names)
 
 
 def reimburse_expense(
@@ -298,4 +320,5 @@ def reimburse_expense(
         resource_id=expense.id,
         purpose="expense_claim",
     )
-    return _read(expense)
+    user_names = _user_names_for(repo, tenant_id=tenant_id, expenses=[expense])
+    return _read(expense, user_names=user_names)

@@ -76,6 +76,13 @@ export function GlobalSearch({ items }: GlobalSearchProps) {
         <Search size={16} className="shrink-0 text-slate-400" />
         <input
           ref={inputRef}
+          type="search"
+          name="global-search"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          data-1p-ignore
+          data-lpignore="true"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);

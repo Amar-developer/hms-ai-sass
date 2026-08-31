@@ -323,7 +323,7 @@ export function SubscriptionManagement({
   });
 
   return (
-    <div className="space-y-3">
+    <div className="">
       <SettingsWorkspaceHeader<"subscriptions" | "plans">
         icon={CreditCard}
         title="Subscription Workspace"
@@ -394,7 +394,7 @@ export function SubscriptionManagement({
         />
       </div>}
       {activeTab === "subscriptions" && <div>
-        <Card className="pt-2">
+        <Card className="p-3 bg-white mt-3">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
             <div>
               <h4 className="card-title font-bold">Subscriptions</h4>
@@ -433,10 +433,11 @@ export function SubscriptionManagement({
               />
             </FormField>
           </FilterSection>
-          <div className="mt-4 rounded-lg border border-slate-200">
+          <div className="table-wrapper-width">
             <DataTable
               columns={subscriptionColumns}
               data={rows}
+              className="table-width"
               emptyMessage={
                 loading
                   ? "Loading subscriptions..."
@@ -457,7 +458,7 @@ export function SubscriptionManagement({
         </Card>
       </div>}
       {activeTab === "plans" && <div>
-        <Card className="pt-2">
+        <Card className="bg-white p-3 mt-3">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
             <div>
               <h4 className="card-title font-bold">Plan Catalog</h4>

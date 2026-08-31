@@ -456,7 +456,7 @@ const AppHeader = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="about-medizinhub-title"
-            className="max-h-[calc(100vh-3rem)] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            className="max-h-[calc(100vh-3rem)] w-full max-w-xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-2xl scrollbar-hidden"
           >
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div className="flex items-center gap-3">

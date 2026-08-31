@@ -25,7 +25,7 @@ export function SubscriptionCreditsPage({
 }: any) {
   return (
     <div className="space-y-5">
-      <Card className="mt-3">
+      <Card className="mt-3 p-3 bg-white">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
             <h3 className="card-title font-bold">Additional Credits</h3>
@@ -92,17 +92,17 @@ export function SubscriptionCreditsPage({
             <Button disabled={loading || !selectedId} className='save-button'>
               {loading ? "Adding..." : "Add Credits"}
             </Button>
-            <Button
+            <button
               type="button"
               onClick={back}
-              className="close-button bg-slate-100 text-slate-900"
+              className="close-button hover:bg-slate-400 hover:text-slate-100"
             >
               Cancel
-            </Button>
+            </button>
           </div>
         </form>
       </Card>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 p-3 bg-white rounded-lg">
         <Card>
           <h4 className="font-bold">Current Usage</h4>
           {usage ? (

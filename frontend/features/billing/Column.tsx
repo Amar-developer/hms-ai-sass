@@ -485,7 +485,7 @@ export function getSettlementHistoryColumns(): Column<any>[] {
     {
       key: "date",
       header: "Date & Time",
-      width: "180px",
+      width: "200px",
       cellClassName: "font-semibold text-slate-700",
       render: (row: any) => displayDateTime(row.date),
     },
@@ -750,13 +750,13 @@ export function getHospitalLedgerColumns({
       render: (entry: any) => {
         const line = hospitalLedgerLine(entry);
         return (
-          <span
-            className={`font-black tabular-nums ${
+         <div className="max-w-[90px]">
+          <p className={`font-black tabular-nums truncate ${
               line.creditAmount > 0 ? "text-emerald-700" : "text-slate-500"
-            }`}
-          >
+            }`}>
             {money(line.creditAmount)}
-          </span>
+          </p>
+         </div>
         );
       },
     },

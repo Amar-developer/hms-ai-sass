@@ -5,10 +5,12 @@ import { CheckCircle2, FileText, ReceiptText } from "lucide-react";
 
 import { Button, Card, StatusToast } from "@/app/components/common/ui";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { DataTable } from "@/app/components/common/DataTable";
 import { createInvoiceFromConsultation } from "@/features/billing/api/billing.api";
 import { createInvoiceFromLabOrder } from "@/features/lab/api/lab.api";
 import { createInvoiceFromPharmacyIssue } from "@/features/pharmacy/api/pharmacy.api";
 import { displayDateTime } from "@/utils/helper";
+import type { Column } from "@/utils/types";
 import {
   fetchOPDBillingQueueRows,
   type OPDBillingQueueRow,
@@ -116,17 +118,98 @@ export function OPDInvoiceQueue({
     }
   }
 
+  function queueRowKey(row: OPDBillingQueueRow) {
+    return `${row.queueType}-${
+      row.queueType === "consultation" ? row.consultation_id : row.id
+    }`;
+  }
+
+  const columns: Column<OPDBillingQueueRow>[] = [
+    {
+      key: "patient_name",
+      header: "Patient",
+      width: "180px",
+      cellClassName: "font-black text-slate-950 truncate",
+      render: (row) => row.patient_name || "Patient",
+    },
+    {
+      key: "id",
+      header: "ID",
+      width: "130px",
+      cellClassName: "text-xs font-medium text-slate-500",
+      render: (row) =>
+        row.queueType === "lab"
+          ? row.lab_order_number || "Lab order"
+          : row.queueType === "pharmacy"
+            ? row.issue_number || "Prescription issue"
+            : `Token ${row.token_number || "-"}`,
+    },
+    {
+      key: "type",
+      header: "Type",
+      width: "130px",
+      render: (row) => (
+        <span className="w-fit rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+          {row.queueType === "lab"
+            ? "Lab"
+            : row.queueType === "pharmacy"
+              ? "Prescription"
+              : "Consultation"}
+        </span>
+      ),
+    },
+    {
+      key: "practitioner_name",
+      header: "Doctor",
+      width: "150px",
+      cellClassName: "truncate text-xs font-semibold text-slate-700",
+      render: (row) => row.practitioner_name || "Unassigned",
+    },
+    {
+      key: "date",
+      header: "Date",
+      width: "160px",
+      cellClassName: "text-xs text-slate-600",
+      render: (row) =>
+        displayDateTime(
+          row.consultation_signed_at ||
+            row.consultation_created_at ||
+            row.order_date ||
+            row.created_at,
+        ),
+    },
+    {
+      key: "action",
+      header: "Action",
+      width: "180px",
+      className: "text-right",
+      disableRowClick: true,
+      render: (row) => {
+        const rowBusy = busyId === queueRowKey(row);
+        return (
+          <Button
+            type="button"
+            onClick={() => generateInvoice(row)}
+            disabled={rowBusy}
+            className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap bg-brand px-3 py-0 text-xs hover:bg-brand-hover"
+          >
+            <ButtonLoader loading={rowBusy}>
+              <span className="inline-flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                {rowBusy ? "Generating…" : "Generate Invoice"}
+              </span>
+            </ButtonLoader>
+          </Button>
+        );
+      },
+    },
+  ];
+
   return (
     <Card className="pt-2">
-
-
       <StatusToast message={message} onClose={() => setMessage("")} />
 
-      {loading ? (
-        <div className="grid min-h-44 place-items-center text-sm text-slate-500">
-          Loading OPD billing queue…
-        </div>
-      ) : rows.length === 0 ? (
+      {rows.length === 0 && !loading ? (
         <div className="grid min-h-44 place-items-center px-6 text-center">
           <div>
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
@@ -143,74 +226,12 @@ export function OPDInvoiceQueue({
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="hidden grid-cols-[180px_100px_130px_130px_160px_180px] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
-            <span>Patient</span>
-            <span>Token</span>
-            <span>Type</span>
-            <span>Doctor</span>
-            <span>Date</span>
-            <span className="text-right">Action</span>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {rows.map((row) => {
-              const rowKey = `${row.queueType}-${
-                row.queueType === "consultation" ? row.consultation_id : row.id
-              }`;
-              const rowBusy = busyId === rowKey;
-              return (
-                <div
-                  key={rowKey}
-                  className="grid gap-3 px-4 py-2 md:grid-cols-[180px_100px_130px_130px_160px_180px] md:items-center"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-950">
-                      {row.patient_name || "Patient"}
-                    </p>
-                  </div>
-                  <div className="">
-                    <p className="mt-0.5 text-xs font-medium text-slate-500">
-                      {row.queueType === "lab"
-                        ? row.lab_order_number || "Lab order"
-                        : row.queueType === "pharmacy"
-                          ? row.issue_number || "Prescription issue"
-                          : `Token ${row.token_number || "-"}`}
-                    </p>
-                  </div>
-                  <span className="w-fit rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
-                    {row.queueType === "lab"
-                      ? "Lab"
-                      : row.queueType === "pharmacy"
-                        ? "Prescription"
-                        : "Consultation"}
-                  </span>
-                  <p className="truncate text-xs font-semibold text-slate-700">
-                    {row.practitioner_name || "Unassigned"}
-                  </p>
-                  <p className="text-xs text-slate-600">
-                    {displayDateTime(
-                      row.consultation_signed_at ||
-                        row.consultation_created_at ||
-                        row.order_date ||
-                        row.created_at,
-                    )}
-                  </p>
-                  <Button
-                    type="button"
-                    onClick={() => generateInvoice(row)}
-                    disabled={rowBusy}
-                    className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap bg-brand px-3 py-0 text-xs hover:bg-brand-hover"
-                  >
-                    <ButtonLoader loading={rowBusy}>
-                      <span className="inline-flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        {rowBusy ? "Generating…" : "Generate Invoice"}
-                      </span>
-                    </ButtonLoader>
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
+          <DataTable
+            columns={columns}
+            data={rows}
+            loading={loading}
+            emptyMessage="No invoices waiting"
+          />
         </div>
       )}
     </Card>

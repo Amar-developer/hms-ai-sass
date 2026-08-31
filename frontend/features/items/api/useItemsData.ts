@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ApiSession } from "@/lib/api";
 import type { QueryFieldOption } from "@/utils/queryFilter";
+import { activeTenantOptions } from "@/utils/helper";
 import * as itemsApi from "./items.api";
 
 type UseItemsDataParams = {
@@ -18,6 +19,7 @@ type UseItemsDataParams = {
  * doesn't block the others from loading.
  */
 export function useItemsData({ apiSession, branchId }: UseItemsDataParams) {
+  const [tenants, setTenants] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
   const [tests, setTests] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
@@ -43,6 +45,12 @@ export function useItemsData({ apiSession, branchId }: UseItemsDataParams) {
   // fresh navigation straight back to the list before the fetch completes.
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+
+  async function loadTenants() {
+    if (!apiSession?.user?.is_super_admin) return;
+    const result = await itemsApi.listTenants(apiSession).catch(() => []);
+    setTenants(activeTenantOptions(result as any[]));
+  }
 
   async function load() {
     if (!apiSession) {
@@ -99,10 +107,15 @@ export function useItemsData({ apiSession, branchId }: UseItemsDataParams) {
   }
 
   useEffect(() => {
+    if (apiSession) loadTenants();
+  }, [apiSession?.tenantId]);
+
+  useEffect(() => {
     load();
   }, [apiSession?.tenantId, branchId]);
 
   return {
+    tenants,
     medicines,
     tests,
     packages,

@@ -5,6 +5,7 @@ import { CreateActionButton } from "../shared/CreateActionButton";
 import { DataTable } from "@/app/components/common/DataTable";
 import { getUserColumns } from "./Column";
 import { Users } from "lucide-react";
+import DataHeader from "@/app/components/common/DataHeader";
 
 // Search, sort, reset, the "+ Add a Filter" custom builder, and the Tenant
 // picker now live in the breadcrumb row (AdaptiveFilterTrigger/
@@ -25,31 +26,17 @@ export function TenantUsers({
     setSection,
     setConfirmAction,
   });
-
   return (
-    <div className="mt-3">
-      <Card className="pt-2">
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-          <div>
-            <div className="flex ">
-              <h3 className="card-title font-bold mr-3">Users</h3>
-              <Badge tone="blue" className="normal-label">
-                {rows.length} users
-              </Badge>
-            </div>
-            <p className="card-desc text-slate-500">
-              Create, edit, activate/deactivate, and search tenant users.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <CreateActionButton
-              label="Create User"
-              onClick={() => setSection("userCreate")}
-            />
-          </div>
-        </div>
-        <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-lg border border-slate-200 ">
-          <div className="min-w-[1000px]">
+      <Card className="">
+        <DataHeader
+          title="Users"
+          description="Create, edit, activate/deactivate, and search tenant users."
+          buttonText="Create User"
+          cardIcon={Users}
+          open={()=>setSection('userCreate')}
+          count={rows.length}
+        />
+          <div className="table-wrapper-width">
             <DataTable
               columns={userColumns}
               data={rows}
@@ -64,10 +51,9 @@ export function TenantUsers({
                 setSelectedUserId(user.id);
                 setSection("userEdit");
               }}
+              className="table-width"
             />
           </div>
-        </div>
       </Card>
-    </div>
   );
 }

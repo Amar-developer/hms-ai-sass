@@ -64,7 +64,7 @@ export function AdaptiveFilterBar({
       </div>
       <div
         key={schema.id}
-        className={`grid gap-3 md:grid-cols-[3fr_.6fr] ${className}`}
+        className={`grid gap-3 ${children ? 'grid-cols-[1fr_0.6fr_0.3fr]':'grid-cols-[3fr_.6fr]'} ${className}`}
       >
         {showSearch && (
           <FormField label={schema.searchLabel ?? "Search"}>
@@ -84,7 +84,7 @@ export function AdaptiveFilterBar({
           <Button
             type="button"
             onClick={handleReset}
-            className="px-4 py-2 mt-4 text-xs"
+            className="px-2 py-2 mt-4 text-xs"
           >
             Reset
           </Button>

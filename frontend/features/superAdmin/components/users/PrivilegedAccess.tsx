@@ -287,9 +287,9 @@ export function PrivilegedAccess({
       )}
 
       {activeTab === "accounts" && <Card className="pt-2">
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3 bg-white p-3 rounded-lg">
           <UserRoundCog className="mt-0.5" size={20} />
-          <div>
+          <div className="">
             <h3 className="card-title font-bold">
               Platform And Support Accounts
             </h3>
@@ -300,7 +300,7 @@ export function PrivilegedAccess({
           </div>
         </div>
         <form
-          className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+          className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 p-3 bg-white rounded-lg"
           onSubmit={createAccount}
         >
           <FormField label="Account type">
@@ -410,7 +410,7 @@ export function PrivilegedAccess({
       </Card>}
 
       {activeTab === "grants" && <Card className="pt-2">
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3 bg-white p-3 rounded-lg">
           <Clock3 className="mt-0.5" size={20} />
           <div>
             <h3 className="card-title font-bold">
@@ -423,7 +423,7 @@ export function PrivilegedAccess({
           </div>
         </div>
         <form
-          className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+          className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 bg-white p-3 rounded-lg"
           onSubmit={createGrant}
         >
           <FormField label="Support Admin">

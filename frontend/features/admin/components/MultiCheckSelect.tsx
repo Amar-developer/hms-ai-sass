@@ -33,7 +33,7 @@ export function MultiCheckSelect({
             type="checkbox"
             checked={allSelected}
             onChange={(event: any) => toggle("__all", event.target.checked)}
-            className="h-4 w-4"
+            className="h-4 w-4 accent-brand"
           />
           {allLabel}
         </label>
@@ -44,7 +44,7 @@ export function MultiCheckSelect({
             key={option.value}
             className={`flex min-h-[48px] cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm font-semibold transition ${
               selectedSet.has(option.value)
-                ? "border-blue-200 bg-blue-50 text-slate-900"
+                ? "border-emerald-200  bg-emerald-50 text-brand"
                 : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
             }`}
           >
@@ -54,7 +54,7 @@ export function MultiCheckSelect({
               onChange={(event: any) =>
                 toggle(option.value, event.target.checked)
               }
-              className="h-4 w-4"
+              className="h-4 w-4 accent-brand"
             />
             {option.label}
           </label>

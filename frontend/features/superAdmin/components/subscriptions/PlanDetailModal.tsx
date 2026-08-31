@@ -7,17 +7,17 @@ import { Info } from "@/app/components/common/Info";
 export function PlanDetailModal({ plan, onClose, onEdit }: any) {
   const modules = (plan.enabled_modules || []).filter(Boolean);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4 ">
-      <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 ">
+      <Card className="w-full max-w-3xl max-h-[90vh] bg-white p-3 overflow-y-auto scrollbar-hidden">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
           <div>
-            <h3 className="text-xs lg:text-lg font-bold">Plan Details</h3>
-            <p className="text-xs lg:text-sm text-slate-500">{plan.key}</p>
+            <h3 className="card-title font-bold">Plan Details</h3>
+            <p className="card-desc text-slate-500">{plan.key}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+            className="close-button"
           >
             Close
           </button>
@@ -52,7 +52,7 @@ export function PlanDetailModal({ plan, onClose, onEdit }: any) {
         <div className="mt-4 rounded-2xl bg-slate-50 p-4">
           <div className="flex items-center justify-between gap-3">
             <b className="text-sm">Enabled Modules</b>
-            <Badge tone="blue">{modules.length}</Badge>
+            <Badge tone="blue" className="normal-label">{modules.length}</Badge>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {modules.length === 0 && (
@@ -75,7 +75,7 @@ export function PlanDetailModal({ plan, onClose, onEdit }: any) {
           <Info label="Created" value={formatDate(plan.created_at)} />
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button type="button" onClick={onEdit}>
+          <Button type="button" onClick={onEdit} className='save-button'>
             Edit Plan
           </Button>
         </div>

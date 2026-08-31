@@ -351,7 +351,7 @@ export function UserForm({
         </div>
 
         {canResetPassword && (
-          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-bold">Password reset</p>
               <p className="mt-1 text-xs text-slate-500">

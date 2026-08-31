@@ -47,7 +47,9 @@ class ExpenseRead(BaseModel):
     description: str
     status: ExpenseStatus
     submitted_by: str
+    submitted_by_name: str | None = None
     approved_by: str | None
+    approved_by_name: str | None = None
     quantity: Decimal | None
     created_by_user_id: str | None
     updated_by_user_id: str | None

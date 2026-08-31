@@ -1098,7 +1098,7 @@ export function ConsultationWorkspace(props: any) {
               <Button
                 onClick={() => requeuePatient("end")}
                 disabled={queueActionDisabled}
-                className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-4 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-60"
+                className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-slate-500 px-4 text-xs font-bold text-emerald-800 transition hover:bg-slate-300 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-60"
               >
                 Requeue to End
               </Button>

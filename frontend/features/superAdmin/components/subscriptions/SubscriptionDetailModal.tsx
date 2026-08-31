@@ -14,7 +14,7 @@ export function SubscriptionDetailModal({
   const tenant = subscription.tenant || {};
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-3xl p-3">
+      <Card className="w-full max-w-3xl p-3 bg-white overflow-y-auto scrollbar-hidden max-h-[90vh]">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
           <div>
             <h3 className="card-title font-bold">Subscription Details</h3>
