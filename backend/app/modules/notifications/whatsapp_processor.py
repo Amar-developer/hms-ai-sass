@@ -21,7 +21,7 @@ from app.modules.integrations.invoice_receipts import (
 )
 from app.modules.integrations.document_links import create_signed_document_url
 from app.modules.integrations.service import decode_config, get_tenant_plugin
-from app.infrastructure.integrations.adapters.messaging.http_template import (
+from app.infrastructure.integrations.ports.messaging import (
     normalize_mobile_number,
 )
 from app.infrastructure.integrations.factories import get_template_message_gateway
@@ -29,22 +29,22 @@ from app.infrastructure.integrations.ports.messaging import (
     TemplateMessageGateway,
     TemplateMessageResult,
 )
-from app.modules.integrations.whatsapp_entity_fields import build_entity_context
-from app.modules.integrations.whatsapp_field_catalog import (
+from app.modules.integrations.whatsapp.entity_fields import build_entity_context
+from app.modules.integrations.whatsapp.field_catalog import (
     default_field_order,
     normalize_saved_field_order,
 )
-from app.modules.integrations.whatsapp_schemas import (
+from app.modules.integrations.whatsapp.schemas import (
     WhatsAppCustomTemplateSettings,
     WhatsAppFlowSettings,
     audience_notifications_enabled,
     flow_audience,
 )
-from app.modules.integrations.whatsapp_templates import (
+from app.modules.integrations.whatsapp.templates import (
     DEFAULT_WHATSAPP_LANGUAGE,
     resolve_template_identifier,
 )
-from app.modules.integrations.whatsapp_consent import (
+from app.modules.integrations.whatsapp.consent import (
     patient_allows_whatsapp,
     patient_for_notification_resource,
     patient_notification_destination,
@@ -72,7 +72,7 @@ from app.modules.patient_subscriptions.models import (
 from app.modules.patient_subscriptions.services.reminder_summary import (
     available_membership_benefits_summary,
 )
-from app.modules.integrations.whatsapp_consent import patient_allows_engagement_whatsapp
+from app.modules.integrations.whatsapp.consent import patient_allows_engagement_whatsapp
 from app.modules.practitioners.models import Practitioner
 from app.modules.pharmacy.models import PharmacyIssue
 from app.modules.queue.models import QueueEvent

@@ -6,9 +6,9 @@ from sqlmodel import Session, select
 from app.core.credentials import decrypt_credential
 from app.modules.audit.models import AuditEvent
 from app.modules.integrations.models import TenantIntegrationPlugin
-from app.modules.integrations import whatsapp_service
-from app.modules.integrations.whatsapp_gateway import WhatsAppGatewayResult
-from app.modules.integrations.whatsapp_schemas import (
+from app.modules.integrations.whatsapp import service as whatsapp_service
+from app.modules.integrations.whatsapp.gateway import WhatsAppGatewayResult
+from app.modules.integrations.whatsapp.schemas import (
     WhatsAppFlowSettings,
     WhatsAppHealthRead,
     WhatsAppIntegrationRead,
@@ -17,7 +17,7 @@ from app.modules.integrations.whatsapp_schemas import (
     WhatsAppTestRequest,
     WhatsAppUsageRead,
 )
-from app.modules.integrations.whatsapp_readiness import evaluate_whatsapp_readiness
+from app.modules.integrations.whatsapp.readiness import evaluate_whatsapp_readiness
 from app.modules.identity.models import User
 from app.modules.subscriptions.services.serialization import (
     modules_from_json,

@@ -634,4 +634,36 @@ describe("WhatsApp integration settings design", () => {
       await screen.findByPlaceholderText("••••••••5678 (leave blank to keep)"),
     ).toHaveProperty("value", "");
   });
+
+  it("preserves an unsaved API key across tabs and parent rerenders", async () => {
+    apiFetchMock.mockResolvedValue(savedSettings);
+    const session = {
+      tenantId: "tenant-1",
+      token: "token",
+      user: { id: "admin-1" },
+    };
+    const { rerender } = render(
+      <WhatsAppIntegrationSettings apiSession={session} />,
+    );
+
+    fireEvent.click(await screen.findByRole("tab", { name: /^API Connection/ }));
+    const apiKey = await screen.findByPlaceholderText(
+      "••••••••1234 (leave blank to keep)",
+    );
+    fireEvent.change(apiKey, { target: { value: "unsaved-api-key" } });
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Templates/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^API Connection/ }));
+    expect(
+      screen.getByPlaceholderText("••••••••1234 (leave blank to keep)"),
+    ).toHaveProperty("value", "unsaved-api-key");
+
+    rerender(
+      <WhatsAppIntegrationSettings apiSession={{ ...session }} />,
+    );
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(1));
+    expect(
+      screen.getByPlaceholderText("••••••••1234 (leave blank to keep)"),
+    ).toHaveProperty("value", "unsaved-api-key");
+  });
 });

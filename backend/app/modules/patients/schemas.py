@@ -11,6 +11,7 @@ from app.modules.patients.models import (
     AlertType,
     Gender,
     PatientStatus,
+    SmsConsentStatus,
     WhatsAppConsentStatus,
 )
 
@@ -49,6 +50,9 @@ class PatientCreate(BaseModel):
     whatsapp_consent_status: WhatsAppConsentStatus = WhatsAppConsentStatus.NOT_RECORDED
     whatsapp_consent_source: str | None = Field(default=None, max_length=80)
     whatsapp_preferred_language: WhatsAppPatientLanguage = "en"
+    sms_consent_status: SmsConsentStatus = SmsConsentStatus.NOT_RECORDED
+    sms_consent_source: str | None = Field(default=None, max_length=80)
+    sms_preferred_language: WhatsAppPatientLanguage = "en"
     monthly_tracking_enabled: bool = False
     monthly_refill_on: date | None = None
     monthly_refill_notes: str | None = Field(default=None, max_length=1000)
@@ -82,6 +86,9 @@ class PatientUpdate(BaseModel):
     whatsapp_consent_status: WhatsAppConsentStatus | None = None
     whatsapp_consent_source: str | None = Field(default=None, max_length=80)
     whatsapp_preferred_language: WhatsAppPatientLanguage | None = None
+    sms_consent_status: SmsConsentStatus | None = None
+    sms_consent_source: str | None = Field(default=None, max_length=80)
+    sms_preferred_language: WhatsAppPatientLanguage | None = None
     monthly_tracking_enabled: bool | None = None
     monthly_refill_on: date | None = None
     monthly_refill_notes: str | None = Field(default=None, max_length=1000)
@@ -121,6 +128,10 @@ class PatientRead(BaseModel):
     whatsapp_consent_source: str | None
     whatsapp_consent_updated_at: datetime | None
     whatsapp_preferred_language: WhatsAppPatientLanguage
+    sms_consent_status: SmsConsentStatus
+    sms_consent_source: str | None
+    sms_consent_updated_at: datetime | None
+    sms_preferred_language: WhatsAppPatientLanguage
     monthly_tracking_enabled: bool = False
     monthly_refill_on: date | None = None
     monthly_refill_notes: str | None = None

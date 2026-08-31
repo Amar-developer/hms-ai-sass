@@ -26,6 +26,7 @@ from app.modules.notifications.models import (
     NotificationEvent,
     NotificationProvider,
 )
+from app.modules.notifications.service import queue_sms_template_if_allowed
 from app.modules.patient_intelligence.models import PatientEngagementAction
 from app.modules.patients.models import (
     AlertSeverity,
@@ -106,19 +107,23 @@ class PatientService:
             )
         if not normalized_mobile:
             return
+        active_duplicate = None
         for existing in self.patients.patients_with_primary_mobile(tenant_id=tenant_id):
             if existing.id == exclude_patient_id:
                 continue
             if normalize_mobile(existing.mobile) == normalized_mobile:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=(
-                        "Mobile number is already used as the primary mobile "
-                        "number for another patient. Use Secondary Mobile "
-                        "Number only when this is the patient's own secondary "
-                        "contact number."
-                    ),
-                )
+                active_duplicate = existing
+                break
+        if active_duplicate:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Mobile number is already used as the primary mobile "
+                    "number for another active patient. Use Secondary Mobile "
+                    "Number only when this is the patient's own secondary "
+                    "contact number."
+                ),
+            )
 
     @staticmethod
     def _clear_monthly_tracking_if_disabled(values: dict) -> dict:
@@ -193,6 +198,11 @@ class PatientService:
                     if payload.whatsapp_consent_status.value != "not_recorded"
                     else None
                 ),
+                "sms_consent_updated_at": (
+                    now_utc()
+                    if payload.sms_consent_status.value != "not_recorded"
+                    else None
+                ),
             },
         )
         if (
@@ -202,6 +212,14 @@ class PatientService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Consent source is required when WhatsApp consent is recorded",
+            )
+        if (
+            patient.sms_consent_status.value != "not_recorded"
+            and not patient.sms_consent_source
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Consent source is required when SMS consent is recorded",
             )
         self.patients.add(patient)
         self.session.commit()
@@ -215,6 +233,21 @@ class PatientService:
             resource_type="patient",
             resource_id=patient.id,
             purpose="registration",
+        )
+        queue_sms_template_if_allowed(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=patient.branch_id,
+            flow_key="patient_registered_patient",
+            patient=patient,
+            resource_type="patient",
+            resource_id=patient.id,
+            dedupe_key=f"sms:patient:{patient.id}:registered",
+            variables={
+                **patient.model_dump(mode="json"),
+                "patient_name": patient.full_name,
+            },
+            queued_by_user_id=actor.id,
         )
         return patient
 
@@ -496,16 +529,34 @@ class PatientService:
                 updates["whatsapp_consent_updated_at"] = now_utc()
         elif "whatsapp_consent_source" in updates:
             updates["whatsapp_consent_updated_at"] = now_utc()
+        if "sms_consent_status" in updates:
+            consent_status = updates["sms_consent_status"]
+            if consent_status.value == "not_recorded":
+                updates["sms_consent_source"] = None
+                updates["sms_consent_updated_at"] = None
+            else:
+                if not updates.get("sms_consent_source"):
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail="Consent source is required when SMS consent is recorded",
+                    )
+                updates["sms_consent_updated_at"] = now_utc()
+        elif "sms_consent_source" in updates:
+            updates["sms_consent_updated_at"] = now_utc()
         updates = self._clear_monthly_tracking_if_disabled(updates)
         if "branch_id" in updates:
             require_branch_in_tenant(self.session, tenant_id, updates["branch_id"])
-        self._validate_mobile_numbers(
-            tenant_id=tenant_id,
-            mobile=updates.get("mobile", patient.mobile),
-            alternate_mobile=updates.get("alternate_mobile", patient.alternate_mobile),
-            guardian_mobile=updates.get("guardian_mobile", patient.guardian_mobile),
-            exclude_patient_id=patient.id,
-        )
+        next_status = updates.get("status", patient.status)
+        if next_status == PatientStatus.ACTIVE:
+            self._validate_mobile_numbers(
+                tenant_id=tenant_id,
+                mobile=updates.get("mobile", patient.mobile),
+                alternate_mobile=updates.get(
+                    "alternate_mobile", patient.alternate_mobile
+                ),
+                guardian_mobile=updates.get("guardian_mobile", patient.guardian_mobile),
+                exclude_patient_id=patient.id,
+            )
         before = {key: getattr(patient, key) for key in updates}
         for key, value in updates.items():
             setattr(patient, key, value)

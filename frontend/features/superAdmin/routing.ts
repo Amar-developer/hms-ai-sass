@@ -20,6 +20,7 @@ export const PLAIN_SUPER_ADMIN_SECTIONS = [
   "subscriptions",
   "settings",
   "whatsappSettings",
+  "smsSettings",
 ];
 
 export type SuperAdminRouteIds = {

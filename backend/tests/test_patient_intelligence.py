@@ -26,7 +26,7 @@ from app.modules.patient_intelligence.models import (
     PatientMetricSnapshot,
 )
 from app.modules.patient_intelligence.schemas import IntelligenceRuleUpdate
-from app.modules.integrations.whatsapp_consent import (
+from app.modules.integrations.whatsapp.consent import (
     patient_allows_engagement_whatsapp,
 )
 from app.modules.identity.models import User

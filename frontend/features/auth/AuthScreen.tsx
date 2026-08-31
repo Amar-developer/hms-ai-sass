@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 import { Button, Field, Input } from "@/app/components/common/ui";
-import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { Spinner } from "@/app/components/common/loader/Spinner";
 import { authSchema, type AuthFormValues } from "@/features/auth/auth.schema";
 
 const loginHighlights = [
@@ -297,12 +297,19 @@ export function AuthScreen({
 
               <Button
                 disabled={loading}
-                className="mt-1 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm shadow-md shadow-emerald-900/10"
+                className="mt-1 inline-flex h-11 w-full flex-row items-center justify-center gap-2 rounded-xl text-sm leading-none shadow-md shadow-emerald-900/10"
               >
-                <ButtonLoader loading={loading}>
-                  <span>{loading ? "Signing in..." : "Sign in"}</span>
-                  {!loading && <ArrowRight size={17} />}
-                </ButtonLoader>
+                {loading ? (
+                  <>
+                    <Spinner size="sm" className="shrink-0 border-t-white" />
+                    <span className="leading-none">Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="leading-none">Sign in</span>
+                    <ArrowRight aria-hidden="true" size={17} className="shrink-0" />
+                  </>
+                )}
               </Button>
             </form>
 

@@ -22,8 +22,7 @@ import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
 import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
 import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
-import { RefreshButton, Input, SearchableSelect } from "@/app/components/common/ui";
-import { FormField } from "@/app/components/FormElements";
+import { RefreshButton, SearchableSelect } from "@/app/components/common/ui";
 import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { BookingStep, type Props } from "./types";
 import {
@@ -790,7 +789,6 @@ export function AppointmentCalendarBooking(props: Props) {
   };
 
   function resetAppointmentFilters() {
-    setPlatformTenantId("");
     setQuery("");
     setFilterDate("");
     setFilterDepartment("all");
@@ -827,7 +825,30 @@ export function AppointmentCalendarBooking(props: Props) {
   return (
     <>
       <BreadcrumbSlot>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {isSuperAdmin && (
+            <div className="flex min-w-[230px] items-center gap-2">
+              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Tenant
+              </span>
+              <SearchableSelect
+                value={platformTenantId}
+                onChange={(value: string) => {
+                  setMessage("");
+                  setPage(1);
+                  setPlatformTenantId(value);
+                }}
+                options={platformTenants.map((tenant: any) => ({
+                  value: tenant.id,
+                  label: tenant.name,
+                }))}
+                placeholder="Select clinic / tenant"
+                searchPlaceholder="Search tenants..."
+                emptyText="No active tenants found."
+                className="min-w-0 flex-1"
+              />
+            </div>
+          )}
           <AdaptiveResultCount
             shown={rows.length}
             total={totalRecords}
@@ -860,38 +881,7 @@ export function AppointmentCalendarBooking(props: Props) {
               setPage(1);
               setQueryFilters(nextFilters);
             }}
-          >
-            {isSuperAdmin && (
-              <FormField label="Clinic / Tenant">
-                <SearchableSelect
-                  value={platformTenantId}
-                  onChange={(value: string) => {
-                    setPage(1);
-                    setPlatformTenantId(value);
-                  }}
-                  options={[
-                    { value: "", label: "All tenants" },
-                    ...platformTenants
-                      .filter((tenant: any) => !tenant.is_primary)
-                      .map((tenant: any) => ({
-                        value: tenant.id,
-                        label: tenant.name,
-                      })),
-                  ]}
-                />
-              </FormField>
-            )}
-            {/* <FormField label="Select Date">
-              <Input
-                type="date"
-                value={filterDate}
-                onChange={(event: any) => {
-                  setPage(1);
-                  setFilterDate(event.target.value);
-                }}
-              />
-            </FormField> */}
-          </AdaptiveFilterTrigger>
+          />
           {!isSuperAdmin && (
             <AdaptiveSortTrigger
               fields={appointmentSchema.sortFields}

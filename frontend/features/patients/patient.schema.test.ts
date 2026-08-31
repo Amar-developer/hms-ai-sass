@@ -20,6 +20,9 @@ const validPatient = {
   whatsappConsentStatus: "not_recorded" as const,
   whatsappConsentSource: "",
   whatsappPreferredLanguage: "en" as const,
+  smsConsentStatus: "not_recorded" as const,
+  smsConsentSource: "",
+  smsPreferredLanguage: "en" as const,
 };
 
 describe("patientSchema mobile validation", () => {
@@ -95,6 +98,35 @@ describe("patientSchema WhatsApp preference", () => {
     const result = patientSchema.safeParse({
       ...validPatient,
       whatsappPreferredLanguage: "ta",
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("patientSchema SMS preference", () => {
+  it("requires a source when SMS consent is recorded", () => {
+    const result = patientSchema.safeParse({
+      ...validPatient,
+      smsConsentStatus: "opted_in",
+      smsConsentSource: "",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toContainEqual(
+      expect.objectContaining({
+        path: ["smsConsentSource"],
+        message: "Preference source is required when SMS consent is recorded",
+      }),
+    );
+  });
+
+  it("accepts recorded SMS consent and a preferred language", () => {
+    const result = patientSchema.safeParse({
+      ...validPatient,
+      smsConsentStatus: "opted_out",
+      smsConsentSource: "patient_verbal",
+      smsPreferredLanguage: "ta",
     });
 
     expect(result.success).toBe(true);

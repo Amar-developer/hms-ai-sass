@@ -26,6 +26,12 @@ class WhatsAppConsentStatus(str, Enum):
     OPTED_OUT = "opted_out"
 
 
+class SmsConsentStatus(str, Enum):
+    NOT_RECORDED = "not_recorded"
+    OPTED_IN = "opted_in"
+    OPTED_OUT = "opted_out"
+
+
 class AlertType(str, Enum):
     ALLERGY = "allergy"
     CHRONIC_CONDITION = "chronic_condition"
@@ -66,6 +72,12 @@ class Patient(SQLModel, table=True):
     whatsapp_consent_source: str | None = Field(default=None, max_length=80)
     whatsapp_consent_updated_at: datetime | None = Field(default=None, index=True)
     whatsapp_preferred_language: str = Field(default="en", max_length=20)
+    sms_consent_status: SmsConsentStatus = Field(
+        default=SmsConsentStatus.NOT_RECORDED, index=True
+    )
+    sms_consent_source: str | None = Field(default=None, max_length=80)
+    sms_consent_updated_at: datetime | None = Field(default=None, index=True)
+    sms_preferred_language: str = Field(default="en", max_length=20)
     monthly_tracking_enabled: bool = Field(default=False, index=True)
     monthly_refill_on: date | None = Field(default=None, index=True)
     monthly_refill_notes: str | None = Field(default=None, max_length=1000)

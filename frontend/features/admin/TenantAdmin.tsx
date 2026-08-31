@@ -51,6 +51,8 @@ import { SupplierForm } from "./forms/SupplierForm";
 import { FilesPanel } from "./components/FilesPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { WhatsAppIntegrationSettings } from "./whatsapp_integration/WhatsAppIntegrationSettings";
+import { SmsIntegrationSettings } from "./sms_integration/SmsIntegrationSettings";
+import { EmailIntegrationSettings } from "./email_integration/EmailIntegrationSettings";
 import { PatientIntelligenceSettings } from "./components/PatientIntelligenceSettings";
 import { useAdminData } from "./AdminDataContext";
 import { useTenantAdminActions } from "./api/useTenantAdminActions";
@@ -69,6 +71,20 @@ export function TenantAdmin({
 }: any) {
   const router = useRouter();
   const { beginNavigation } = useShellChrome();
+  const [visitedWhatsAppSettings, setVisitedWhatsAppSettings] = useState(
+    section === "whatsapp",
+  );
+  const [visitedSmsSettings, setVisitedSmsSettings] = useState(
+    section === "sms",
+  );
+  const [visitedEmailSettings, setVisitedEmailSettings] = useState(
+    section === "email",
+  );
+  useEffect(() => {
+    if (section === "whatsapp") setVisitedWhatsAppSettings(true);
+    if (section === "sms") setVisitedSmsSettings(true);
+    if (section === "email") setVisitedEmailSettings(true);
+  }, [section]);
   const [confirm, setConfirm] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
   const [reportBusy, setReportBusy] = useState("");
@@ -93,6 +109,7 @@ export function TenantAdmin({
 
   const data = useAdminData();
   const whatsappModuleEnabled = Boolean(clinic?.modules?.includes("whatsapp"));
+  const smsModuleEnabled = Boolean(clinic?.modules?.includes("sms"));
   const permissionKeys: string[] = apiSession?.user?.permissions || [];
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
@@ -1072,12 +1089,32 @@ export function TenantAdmin({
             </p>
           </Card>
         )}
-      {section === "whatsapp" && whatsappModuleEnabled && (
-        <WhatsAppIntegrationSettings apiSession={apiSession} />
+      {visitedWhatsAppSettings && whatsappModuleEnabled && (
+        <div className={section === "whatsapp" ? "" : "hidden"}>
+          <WhatsAppIntegrationSettings apiSession={apiSession} />
+        </div>
       )}
       {section === "whatsapp" && !whatsappModuleEnabled && (
         <Card>
           <h3 className="card-title font-bold">WhatsApp Settings</h3>
+          <p className="mt-2 text-sm text-slate-500">
+            This module is not enabled by the tenant&apos;s active subscription.
+          </p>
+        </Card>
+      )}
+      {visitedSmsSettings && smsModuleEnabled && (
+        <div className={section === "sms" ? "" : "hidden"}>
+          <SmsIntegrationSettings apiSession={apiSession} />
+        </div>
+      )}
+      {visitedEmailSettings && (
+        <div className={section === "email" ? "" : "hidden"}>
+          <EmailIntegrationSettings apiSession={apiSession} />
+        </div>
+      )}
+      {section === "sms" && !smsModuleEnabled && (
+        <Card>
+          <h3 className="card-title font-bold">SMS Settings</h3>
           <p className="mt-2 text-sm text-slate-500">
             This module is not enabled by the tenant&apos;s active subscription.
           </p>

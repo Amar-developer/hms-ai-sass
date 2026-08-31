@@ -1,0 +1,446 @@
+import json
+from datetime import timedelta
+
+from fastapi import HTTPException, status
+from sqlmodel import Session, select
+
+from app.core.credentials import decrypt_credential, encrypt_credential
+from app.modules.audit.models import AuditEvent
+from app.modules.audit.service import diff_changes, record_audit_event
+from app.modules.identity.models import User
+from app.modules.integrations.models import TenantIntegrationPlugin
+from app.modules.integrations.service import decode_config, get_tenant_plugin
+from app.modules.integrations.whatsapp.field_catalog import (
+    FLOW_FIELD_CATALOG,
+    default_field_order,
+    flow_fields,
+    normalize_saved_field_order,
+)
+from app.modules.integrations.whatsapp.schemas import (
+    WhatsAppAdminRecipientOption,
+    WhatsAppCustomTemplateSettings,
+    WhatsAppFieldCatalogRead,
+    WhatsAppFieldOption,
+    WhatsAppFlowSettings,
+    WhatsAppIntegrationRead,
+    WhatsAppIntegrationUpdate,
+    WhatsAppTestRead,
+    WhatsAppTestRequest,
+    WhatsAppTemplateSettings,
+    audience_notifications_enabled,
+)
+from app.infrastructure.integrations.ports.messaging import (
+    normalize_mobile_number,
+)
+from app.infrastructure.integrations.factories import get_template_message_gateway
+from app.infrastructure.integrations.ports.messaging import TemplateMessageGateway
+from app.modules.integrations.whatsapp.templates import resolve_template_identifier
+from app.modules.integrations.whatsapp.usage import read_whatsapp_usage
+from app.modules.integrations.whatsapp.health import read_whatsapp_health
+from app.modules.integrations.whatsapp.readiness import read_whatsapp_readiness
+from app.modules.subscriptions.service import enforce_module_enabled
+from app.modules.tenants.models import now_utc
+
+
+PLUGIN_KEY = "whatsapp"
+DEFAULT_CONFIG = {
+    "api_url": "",
+    "public_media_base_url": "",
+    "appointment_view_url": "",
+    "default_country_code": "+91",
+    "timeout_seconds": 15,
+    "max_attempts": 5,
+    "patient_notifications_enabled": True,
+    "doctor_notifications_enabled": True,
+    "admin_recipient_user_ids": [],
+    "appointment_reminder_24h_enabled": False,
+    "appointment_reminder_2h_enabled": False,
+    "default_language": "en",
+    "templates": WhatsAppTemplateSettings().model_dump(),
+    "localized_templates": {},
+    "flows": WhatsAppFlowSettings().model_dump(),
+    "custom_templates": [],
+    "template_field_mappings": {},
+}
+
+TEST_RATE_LIMIT_PER_MINUTE = 5
+
+
+def _enforce_entitlement(session: Session, tenant_id: str) -> None:
+    # Passing no user intentionally enforces the active plan for tenant and
+    # platform administrators too. Configuration cannot bypass subscription.
+    enforce_module_enabled(session, tenant_id, PLUGIN_KEY)
+
+
+def _masked_secret(last_four: str | None) -> str | None:
+    return f"••••••••{last_four}" if last_four else None
+
+
+def _admin_recipient_options(
+    session: Session, tenant_id: str
+) -> list[WhatsAppAdminRecipientOption]:
+    users = session.exec(
+        select(User)
+        .where(
+            User.tenant_id == tenant_id,
+            User.is_active == True,  # noqa: E712
+            User.mobile.is_not(None),
+        )
+        .order_by(User.name, User.id)
+    ).all()
+    return [
+        WhatsAppAdminRecipientOption(
+            user_id=user.id,
+            name=user.name,
+            mobile=str(user.mobile),
+            user_type=user.user_type,
+        )
+        for user in users
+        if str(user.mobile or "").strip()
+    ]
+
+
+def _read(
+    session: Session, tenant_id: str, row: TenantIntegrationPlugin | None
+) -> WhatsAppIntegrationRead:
+    config = {**DEFAULT_CONFIG, **(decode_config(row.config_json) if row else {})}
+    saved_field_mappings = config.get("template_field_mappings") or {}
+    return WhatsAppIntegrationRead(
+        enabled=bool(row and row.enabled),
+        api_url=str(config.get("api_url") or ""),
+        public_media_base_url=str(config.get("public_media_base_url") or ""),
+        appointment_view_url=str(config.get("appointment_view_url") or ""),
+        api_key_masked=_masked_secret(row.secret_last_four if row else None),
+        has_api_key=bool(row and row.secret_ciphertext),
+        default_country_code=str(config.get("default_country_code") or "+91"),
+        timeout_seconds=int(config.get("timeout_seconds") or 15),
+        max_attempts=int(config.get("max_attempts") or 5),
+        patient_notifications_enabled=bool(
+            config.get("patient_notifications_enabled", True)
+        ),
+        doctor_notifications_enabled=bool(
+            config.get("doctor_notifications_enabled", True)
+        ),
+        admin_recipient_user_ids=list(config.get("admin_recipient_user_ids") or []),
+        admin_recipient_options=_admin_recipient_options(session, tenant_id),
+        appointment_reminder_24h_enabled=bool(
+            config.get("appointment_reminder_24h_enabled", False)
+        ),
+        appointment_reminder_2h_enabled=bool(
+            config.get("appointment_reminder_2h_enabled", False)
+        ),
+        default_language=str(config.get("default_language") or "en"),
+        templates=WhatsAppTemplateSettings.model_validate(
+            config.get("templates") or {}
+        ),
+        localized_templates=config.get("localized_templates") or {},
+        flows=WhatsAppFlowSettings.model_validate(config.get("flows") or {}),
+        custom_templates=config.get("custom_templates") or [],
+        template_field_mappings={
+            flow_key: (
+                normalize_saved_field_order(
+                    flow_key, saved_field_mappings.get(flow_key)
+                )
+                if flow_key in saved_field_mappings
+                else default_field_order(flow_key)
+            )
+            for flow_key in FLOW_FIELD_CATALOG
+        },
+        # Serialize the *merged* catalog (curated fields first, then every
+        # field the flow's modules expose), not the curated dict alone —
+        # this list is exactly what the template builder renders as chips, so
+        # anything missing here is unpickable in the UI no matter what the
+        # validator would accept.
+        field_catalog=[
+            WhatsAppFieldCatalogRead(
+                trigger_key=trigger_key,
+                fields=[
+                    WhatsAppFieldOption(key=key, label=label)
+                    for key, label in flow_fields(trigger_key)
+                ],
+            )
+            for trigger_key in FLOW_FIELD_CATALOG
+        ],
+        updated_at=row.updated_at.isoformat() if row else None,
+    )
+
+
+def get_whatsapp_integration(
+    session: Session, *, tenant_id: str
+) -> WhatsAppIntegrationRead:
+    _enforce_entitlement(session, tenant_id)
+    result = _read(
+        session, tenant_id, get_tenant_plugin(session, tenant_id, PLUGIN_KEY)
+    )
+    result.usage = read_whatsapp_usage(session, tenant_id=tenant_id)
+    result.health = read_whatsapp_health(session, tenant_id=tenant_id)
+    result.readiness = read_whatsapp_readiness(
+        session, tenant_id=tenant_id, settings=result
+    )
+    return result
+
+
+def update_whatsapp_integration(
+    session: Session,
+    *,
+    tenant_id: str,
+    payload: WhatsAppIntegrationUpdate,
+    actor: User,
+) -> WhatsAppIntegrationRead:
+    _enforce_entitlement(session, tenant_id)
+    row = get_tenant_plugin(session, tenant_id, PLUGIN_KEY)
+    has_existing_secret = bool(row and row.secret_ciphertext)
+    if payload.enabled and not payload.api_key and not has_existing_secret:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="API key is required when the integration is enabled",
+        )
+
+    eligible_recipient_ids = {
+        option.user_id for option in _admin_recipient_options(session, tenant_id)
+    }
+    invalid_recipient_ids = [
+        user_id
+        for user_id in payload.admin_recipient_user_ids
+        if user_id not in eligible_recipient_ids
+    ]
+    if invalid_recipient_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Selected WhatsApp report recipients must be active users in this"
+                " tenant with a mobile number"
+            ),
+        )
+
+    config = payload.model_dump(mode="json", exclude={"api_key", "enabled"})
+    before = _read(session, tenant_id, row).model_dump()
+    credential_changed = bool(payload.api_key)
+
+    if not row:
+        row = TenantIntegrationPlugin(
+            tenant_id=tenant_id,
+            plugin_key=PLUGIN_KEY,
+            created_by_user_id=actor.id,
+        )
+    row.enabled = payload.enabled
+    row.config_json = json.dumps(config)
+    if payload.api_key:
+        row.secret_ciphertext = encrypt_credential(payload.api_key)
+        row.secret_last_four = payload.api_key[-4:]
+    row.updated_by_user_id = actor.id
+    row.updated_at = now_utc()
+    session.add(row)
+    session.flush()
+
+    after = _read(session, tenant_id, row).model_dump()
+    # Secret fields are represented only by booleans/masks and are never
+    # included in audit diffs or metadata.
+    for values in (before, after):
+        values.pop("api_key_masked", None)
+        values.pop("admin_recipient_options", None)
+        values.pop("updated_at", None)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        actor_user_id=actor.id,
+        action="communication.whatsapp_settings_updated",
+        resource_type="tenant_integration_plugin",
+        resource_id=row.id,
+        purpose="integration_configuration",
+        metadata_json=json.dumps({"credential_changed": credential_changed}),
+        changes=diff_changes(before, after),
+        commit=False,
+    )
+    session.commit()
+    session.refresh(row)
+    result = _read(session, tenant_id, row)
+    result.usage = read_whatsapp_usage(session, tenant_id=tenant_id)
+    result.health = read_whatsapp_health(session, tenant_id=tenant_id)
+    result.readiness = read_whatsapp_readiness(
+        session, tenant_id=tenant_id, settings=result
+    )
+    return result
+
+
+def _audience_enabled(config: dict, flow_key: str) -> bool:
+    return audience_notifications_enabled(config, flow_key)
+
+
+def _custom_template_audience_enabled(config: dict, audience: str) -> bool:
+    if audience == "doctor":
+        return bool(config.get("doctor_notifications_enabled", True))
+    if audience == "patient":
+        return bool(config.get("patient_notifications_enabled", True))
+    return True
+
+
+def _resolve_test_campaign_name(config: dict, payload: WhatsAppTestRequest) -> str:
+    if payload.custom_template_id is not None:
+        custom_templates = [
+            WhatsAppCustomTemplateSettings.model_validate(item)
+            for item in (config.get("custom_templates") or [])
+        ]
+        template = next(
+            (t for t in custom_templates if t.id == payload.custom_template_id), None
+        )
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="The custom template no longer exists.",
+            )
+        if not template.enabled:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Enable the custom template before sending a test message.",
+            )
+        if not _custom_template_audience_enabled(config, template.audience):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Notifications for this recipient type are disabled.",
+            )
+        if len(payload.template_parameters) != len(template.parameters):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"{template.name} requires exactly "
+                    f"{len(template.parameters)} template parameters"
+                ),
+            )
+        default_language = str(config.get("default_language") or "en")
+        requested_language = str(payload.language or default_language)
+        campaign_name = (
+            template.identifiers.get(requested_language)
+            or template.identifiers.get(default_language)
+            or next(iter(template.identifiers.values()), "")
+        )
+        if not campaign_name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="The custom template has no template identifier.",
+            )
+        return campaign_name
+
+    flow_key = payload.flow_key
+    flows = WhatsAppFlowSettings.model_validate(config.get("flows") or {})
+    if not getattr(flows, flow_key) or not _audience_enabled(config, flow_key):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The selected notification flow is disabled.",
+        )
+    configured_fields = normalize_saved_field_order(
+        flow_key,
+        (config.get("template_field_mappings") or {}).get(flow_key),
+    ) or default_field_order(flow_key)
+    if len(payload.template_parameters) != len(configured_fields):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"{flow_key} requires exactly {len(configured_fields)} "
+                "template parameters"
+            ),
+        )
+    campaign_name, _resolved_language = resolve_template_identifier(
+        config,
+        flow_key=flow_key,
+        preferred_language=payload.language,
+    )
+    if not campaign_name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The selected notification flow has no template identifier.",
+        )
+    return campaign_name
+
+
+def _enforce_test_rate_limit(session: Session, tenant_id: str, actor_id: str) -> None:
+    cutoff = now_utc() - timedelta(minutes=1)
+    recent = session.exec(
+        select(AuditEvent).where(
+            AuditEvent.tenant_id == tenant_id,
+            AuditEvent.actor_user_id == actor_id,
+            AuditEvent.action == "communication.whatsapp_test_sent",
+            AuditEvent.created_at >= cutoff,
+        )
+    ).all()
+    if len(recent) >= TEST_RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many test messages. Please wait one minute and try again.",
+        )
+
+
+def test_whatsapp_integration(
+    session: Session,
+    *,
+    tenant_id: str,
+    payload: WhatsAppTestRequest,
+    actor: User,
+    gateway: TemplateMessageGateway | None = None,
+) -> WhatsAppTestRead:
+    _enforce_entitlement(session, tenant_id)
+    row = get_tenant_plugin(session, tenant_id, PLUGIN_KEY)
+    if not row or not row.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Enable and save the integration before sending a test message.",
+        )
+    config = {**DEFAULT_CONFIG, **decode_config(row.config_json)}
+    campaign_name = _resolve_test_campaign_name(config, payload)
+    if not row.secret_ciphertext:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Save an API key before sending a test message.",
+        )
+    _enforce_test_rate_limit(session, tenant_id, actor.id)
+    try:
+        api_key = decrypt_credential(row.secret_ciphertext)
+        destination = normalize_mobile_number(
+            payload.mobile, str(config.get("default_country_code") or "+91")
+        )
+        result = (gateway or get_template_message_gateway()).send_template(
+            api_url=str(config.get("api_url") or ""),
+            api_key=api_key,
+            campaign_name=campaign_name,
+            destination=destination,
+            recipient_name=payload.recipient_name,
+            template_parameters=payload.template_parameters,
+            timeout_seconds=int(config.get("timeout_seconds") or 15),
+            media_url=str(payload.media_url) if payload.media_url else None,
+            media_filename=payload.media_filename,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        actor_user_id=actor.id,
+        action="communication.whatsapp_test_sent",
+        resource_type="tenant_integration_plugin",
+        resource_id=row.id,
+        purpose="integration_testing",
+        metadata_json=json.dumps(
+            {
+                "flow_key": payload.flow_key or payload.custom_template_id,
+                "language": str(
+                    payload.language or config.get("default_language") or "en"
+                ),
+                "destination_masked": f"••••{destination[-4:]}",
+                "success": result.success,
+                "status": result.status,
+                "status_code": result.status_code,
+            }
+        ),
+    )
+    return WhatsAppTestRead(
+        success=result.success,
+        status=result.status,
+        message=result.message,
+        external_message_id=result.external_message_id,
+    )
+
+
+# WhatsApp integration domain package.

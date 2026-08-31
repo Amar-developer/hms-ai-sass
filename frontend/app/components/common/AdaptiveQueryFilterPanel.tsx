@@ -201,7 +201,7 @@ export function AdaptiveQueryFilterPanel({
                     updateRow(row.id, { value2: e.target.value })
                   }
                   placeholder="and"
-                  className="w-24 shrink-0 "
+                  className="rounded-lg px-2 py-2 lg:px-2 lg:py-2 text-xs lg:text-xs placeholder:text-xs w-24 shrink-0"
                 />
               )}
               <button

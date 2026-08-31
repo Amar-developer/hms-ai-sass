@@ -54,6 +54,7 @@ import { SubscriptionManagement } from "./components/subscriptions/SubscriptionM
 import { TenantBranchSettings } from "./components/subscriptions/TenantBranchSettings";
 import { TenantPicker } from "./components/shared/TenantPicker";
 import { WhatsAppIntegrationSettings } from "../admin/whatsapp_integration/WhatsAppIntegrationSettings";
+import { SmsIntegrationSettings } from "../admin/sms_integration/SmsIntegrationSettings";
 import { UserForm } from "@/features/admin/forms/UserForm";
 import { BranchForm } from "@/features/admin/forms/BranchForm";
 import { DepartmentForm } from "@/features/admin/forms/DepartmentForm";
@@ -74,6 +75,18 @@ export function SuperAdminDashboard({
   const router = useRouter();
   const { beginNavigation } = useShellChrome();
   const currentSection = section || "overview";
+  const [visitedWhatsAppSettings, setVisitedWhatsAppSettings] = useState(
+    currentSection === "whatsappSettings",
+  );
+  const [visitedSmsSettings, setVisitedSmsSettings] = useState(
+    currentSection === "smsSettings",
+  );
+  useEffect(() => {
+    if (currentSection === "whatsappSettings") {
+      setVisitedWhatsAppSettings(true);
+    }
+    if (currentSection === "smsSettings") setVisitedSmsSettings(true);
+  }, [currentSection]);
 
   // Tenants/Roles/Users/Departments/Branches share one global search+sort+
   // custom-filter bar (same pattern as TenantAdmin's listQuery/listSort/
@@ -217,10 +230,13 @@ export function SuperAdminDashboard({
   const tenantWhatsAppEnabled = Boolean(
     activeTenantPlan?.enabled_modules?.includes("whatsapp"),
   );
+  const tenantSmsEnabled = Boolean(
+    activeTenantPlan?.enabled_modules?.includes("sms"),
+  );
 
   useEffect(() => {
     if (
-      currentSection === "whatsappSettings" &&
+      ["whatsappSettings", "smsSettings"].includes(currentSection) &&
       customerTenants.length > 0 &&
       !customerTenants.some((tenant: any) => tenant.id === data.selectedId)
     ) {
@@ -887,39 +903,45 @@ export function SuperAdminDashboard({
           reloadPlans={data.reload}
         />
       )}
-      {currentSection === "whatsappSettings" && (
-        <div className="space-y-3">
-          <BreadcrumbSlot>
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="hidden shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:inline">
-                Tenant
-              </span>
-              <SearchableSelect
-                value={data.selectedId}
-                onChange={setSelectedTenantId}
-                options={customerTenants.map((tenant: any) => ({
-                  value: tenant.id,
-                  label: tenant.name,
-                }))}
-                placeholder="Select tenant"
-                searchable={false}
-                className="w-[150px] sm:w-[190px]"
-              />
-              <Badge
-                tone={tenantWhatsAppEnabled ? "green" : "slate"}
-                className="normal-label inline-flex whitespace-nowrap"
-              >
-                <span className="sm:hidden">
-                  {tenantWhatsAppEnabled ? "Included" : "Not included"}
+      {visitedWhatsAppSettings && (
+        <div
+          className={
+            currentSection === "whatsappSettings" ? "space-y-3" : "hidden"
+          }
+        >
+          {currentSection === "whatsappSettings" && (
+            <BreadcrumbSlot>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="hidden shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:inline">
+                  Tenant
                 </span>
-                <span className="hidden sm:inline">
-                  {tenantWhatsAppEnabled
-                    ? "Included in active subscription"
-                    : "Not included in active subscription"}
-                </span>
-              </Badge>
-            </div>
-          </BreadcrumbSlot>
+                <SearchableSelect
+                  value={data.selectedId}
+                  onChange={setSelectedTenantId}
+                  options={customerTenants.map((tenant: any) => ({
+                    value: tenant.id,
+                    label: tenant.name,
+                  }))}
+                  placeholder="Select tenant"
+                  searchable={false}
+                  className="w-[150px] sm:w-[190px]"
+                />
+                <Badge
+                  tone={tenantWhatsAppEnabled ? "green" : "slate"}
+                  className="normal-label inline-flex whitespace-nowrap"
+                >
+                  <span className="sm:hidden">
+                    {tenantWhatsAppEnabled ? "Included" : "Not included"}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {tenantWhatsAppEnabled
+                      ? "Included in active subscription"
+                      : "Not included in active subscription"}
+                  </span>
+                </Badge>
+              </div>
+            </BreadcrumbSlot>
+          )}
           {tenantWhatsAppEnabled ? (
             <WhatsAppIntegrationSettings
               apiSession={apiSession}
@@ -931,6 +953,45 @@ export function SuperAdminDashboard({
               <p className="mt-2 text-sm text-slate-500">
                 Enable the WhatsApp module in the tenant&apos;s subscription
                 before configuring its connection and notification templates.
+              </p>
+            </Card>
+          )}
+        </div>
+      )}
+      {visitedSmsSettings && (
+        <div
+          className={
+            currentSection === "smsSettings" ? "space-y-5" : "hidden"
+          }
+        >
+          <Card className="mt-3">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <TenantPicker
+                tenants={customerTenants}
+                selectedId={data.selectedId}
+                setSelectedId={setSelectedTenantId}
+              />
+              <Badge
+                tone={tenantSmsEnabled ? "green" : "slate"}
+                className="normal-badge"
+              >
+                {tenantSmsEnabled
+                  ? "Included in active subscription"
+                  : "Not included in active subscription"}
+              </Badge>
+            </div>
+          </Card>
+          {tenantSmsEnabled ? (
+            <SmsIntegrationSettings
+              apiSession={apiSession}
+              tenantId={data.selectedId}
+            />
+          ) : (
+            <Card>
+              <h3 className="card-title font-bold">SMS Settings</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Enable the SMS module in the tenant&apos;s subscription before
+                configuring SMSCountry and DLT template details.
               </p>
             </Card>
           )}

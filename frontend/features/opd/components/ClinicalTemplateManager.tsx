@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ClipboardPlus, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { FormField } from "@/app/components/FormElements";
@@ -19,7 +19,6 @@ import {
   medicineFrequencyOptions,
   medicineInstructionOptions,
 } from "@/app/components/clinicalRows";
-import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
 import { useConsultationWorkspaceData } from "@/features/consulation/api";
 import {
   createClinicalTemplate,
@@ -62,7 +61,6 @@ export function ClinicalTemplateManager({
   medicineCatalog = EMPTY_CATALOG,
   labCatalog = EMPTY_CATALOG,
 }: any) {
-  const { livePractitioners } = usePractitionersQuery(apiSession);
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -71,7 +69,6 @@ export function ClinicalTemplateManager({
   const [editingId, setEditingId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [name, setName] = useState("");
-  const [doctorId, setDoctorId] = useState("");
   const [complaints, setComplaints] = useState("");
   const [diagnoses, setDiagnoses] = useState("");
   const [notes, setNotes] = useState("");
@@ -118,14 +115,6 @@ export function ClinicalTemplateManager({
   const department = allowedDepartments.find(
     (row: any) => String(row.id) === String(departmentId),
   );
-  const doctors = useMemo(
-    () =>
-      (livePractitioners || []).filter((doctor: any) => {
-        const departmentIds = doctor.department_ids || [];
-        return !departmentId || departmentIds.includes(departmentId);
-      }),
-    [livePractitioners, departmentId],
-  );
 
   useEffect(() => {
     if (!apiSession || !departmentId) {
@@ -166,7 +155,6 @@ export function ClinicalTemplateManager({
 
   function resetForm() {
     setName("");
-    setDoctorId("");
     setComplaints("");
     setDiagnoses("");
     setNotes("");
@@ -183,7 +171,6 @@ export function ClinicalTemplateManager({
     const content = template.content || {};
     setEditingId(template.id);
     setName(template.name || "");
-    setDoctorId(content.doctor_id || "");
     setComplaints((content.complaints || []).join("\n"));
     setDiagnoses((content.diagnoses || []).join("\n"));
     setNotes(content.doctor_notes || "");
@@ -208,7 +195,6 @@ export function ClinicalTemplateManager({
         name: name.trim(),
         template_type: "consultation",
         content: {
-          doctor_id: doctorId || null,
           complaints: complaints
             .split("\n")
             .map((row) => row.trim())
@@ -305,20 +291,6 @@ export function ClinicalTemplateManager({
                 onChange={(event: any) => setName(event.target.value)}
                 placeholder="Example: Fever care"
                 className='search-input'
-              />
-            </FormField>
-            <FormField label="Doctor">
-              <SearchableSelect
-                value={doctorId}
-                onChange={setDoctorId}
-                options={[
-                  { value: "", label: "All doctors in department" },
-                  ...doctors.map((doctor: any) => ({
-                    value: doctor.id,
-                    label: doctor.full_name || doctor.name,
-                  })),
-                ]}
-                searchable={doctors.length > 8}
               />
             </FormField>
             <FormField label="Complaints">
@@ -635,9 +607,6 @@ export function ClinicalTemplateManager({
         ) : (
           rows.map((template) => {
             const content = template.content || {};
-            const doctor = doctors.find(
-              (row: any) => String(row.id) === String(content.doctor_id),
-            );
             return (
               <article
                 key={template.id}
@@ -667,9 +636,7 @@ export function ClinicalTemplateManager({
                   </div>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  {doctor?.full_name ||
-                    doctor?.name ||
-                    "All department doctors"}
+                  {department?.name || "Selected department"}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600">
                   <span>{content.complaints?.length || 0} complaints</span>

@@ -51,7 +51,7 @@ from app.modules.patient_intelligence.service import (
 )
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
-from app.modules.integrations.whatsapp_consent import (
+from app.modules.integrations.whatsapp.consent import (
     patient_allows_engagement_whatsapp,
 )
 from app.modules.notifications.services.events import queue_whatsapp_template_if_allowed

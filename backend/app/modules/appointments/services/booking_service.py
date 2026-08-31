@@ -43,6 +43,7 @@ from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import (
     queue_notification_if_allowed,
+    queue_sms_template_if_allowed,
     queue_whatsapp_template_if_allowed,
     whatsapp_template_integration_enabled,
 )
@@ -346,17 +347,44 @@ class AppointmentBookingService:
             commit=False,
         )
         queue_entry = create_queue_entry_for_appointment(self.session, appointment)
-        queue_notification_if_allowed(
+        department = (
+            self.references.get_department_for_tenant(
+                tenant_id, appointment.department_id
+            )
+            if appointment.department_id
+            else None
+        )
+        doctor_name = practitioner.full_name if practitioner else "Available Doctor"
+        for prefix in ("Dr. ", "Dr "):
+            if doctor_name.startswith(prefix):
+                doctor_name = doctor_name[len(prefix) :]
+                break
+        queue_sms_template_if_allowed(
             self.session,
             tenant_id=tenant_id,
             branch_id=appointment.branch_id,
-            provider=NotificationProvider.SMS,
-            event_type=NotificationEventType.APPOINTMENT_REMINDER,
-            recipient=patient.mobile,
-            subject="Appointment booked",
-            message=f"Your appointment token is {queue_entry.token_number}.",
+            flow_key="appointment_booked_patient",
+            patient=patient,
             resource_type="appointment",
             resource_id=appointment.id,
+            dedupe_key=f"sms:appointment:{appointment.id}:booked",
+            variables={
+                "patient_name": patient.full_name,
+                "doctor_name": doctor_name,
+                "consultation_type": (
+                    department.name
+                    if department
+                    else appointment.appointment_type.value.replace("_", " ").title()
+                ),
+                "token_number": queue_entry.token_number,
+                "appointment_date": appointment.appointment_date.strftime("%d-%b-%Y"),
+                "appointment_time": (
+                    appointment.appointment_time.strftime("%I:%M %p")
+                    if appointment.appointment_time
+                    else "As scheduled"
+                ),
+                "appointment_id": appointment.appointment_number or appointment.id,
+            },
             queued_by_user_id=actor_user_id,
         )
         patient_template_event = queue_whatsapp_template_if_allowed(

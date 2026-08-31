@@ -146,7 +146,12 @@ export function WhatsAppIntegrationSettings({
     return () => {
       active = false;
     };
-  }, [apiSession, effectiveTenantId]);
+  }, [
+    apiSession?.email,
+    apiSession?.tenantId,
+    apiSession?.token,
+    effectiveTenantId,
+  ]);
 
   const update = <K extends keyof WhatsAppSettingsDraft>(
     key: K,
