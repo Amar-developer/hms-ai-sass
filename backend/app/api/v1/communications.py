@@ -1,6 +1,15 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission
@@ -15,6 +24,45 @@ from app.modules.integrations.whatsapp_schemas import (
     WhatsAppQueueListRead,
     WhatsAppTestRead,
     WhatsAppTestRequest,
+)
+from app.modules.integrations.sms_schemas import (
+    SmsDeliveryReceiptRead,
+    SmsHealthRead,
+    SmsQueueItemRead,
+    SmsQueueListRead,
+    SmsReadinessRead,
+    SmsReadinessUpdate,
+    SmsReconciliationCreate,
+    SmsReconciliationRead,
+    SmsSettingsRead,
+    SmsSettingsUpdate,
+    SmsTestRead,
+    SmsTestRequest,
+    SmsUsageRead,
+)
+from app.modules.integrations.sms_reconciliation import (
+    list_sms_reconciliations,
+    record_sms_reconciliation,
+)
+from app.modules.integrations.sms_delivery_receipts import (
+    parse_receipt_body,
+    record_delivery_receipt,
+    verify_receipt_signature,
+    webhook_secret_for_tenant,
+)
+from app.modules.integrations.sms_health import read_sms_health
+from app.modules.integrations.sms_queue_service import (
+    cancel_sms_notification,
+    list_sms_queue,
+    retry_sms_notification,
+)
+from app.modules.integrations.sms_test_send import send_sms_test
+from app.modules.integrations.sms_usage import read_sms_usage
+from app.modules.integrations.sms_service import (
+    get_sms_readiness,
+    get_sms_settings,
+    update_sms_readiness,
+    update_sms_settings,
 )
 from app.modules.integrations.whatsapp_service import (
     get_whatsapp_integration,
@@ -71,6 +119,11 @@ def public_document_artifact(
 
 WHATSAPP_SETTINGS_PERMISSIONS = (
     permissions.COMMUNICATIONS_WHATSAPP_MANAGE,
+    permissions.COMMUNICATIONS_MANAGE,
+    permissions.SETTINGS_MANAGE,
+)
+SMS_SETTINGS_PERMISSIONS = (
+    permissions.COMMUNICATIONS_SMS_MANAGE,
     permissions.COMMUNICATIONS_MANAGE,
     permissions.SETTINGS_MANAGE,
 )
@@ -139,6 +192,70 @@ def save_whatsapp_settings(
     session: Session = Depends(get_session),
 ) -> WhatsAppIntegrationRead:
     return update_whatsapp_integration(
+        session,
+        tenant_id=tenant_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/sms/settings",
+    response_model=SmsSettingsRead,
+    summary="Get tenant SMS settings",
+)
+def read_sms_settings(
+    tenant_id: str = Depends(require_tenant_id),
+    _current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsSettingsRead:
+    return get_sms_settings(session, tenant_id=tenant_id)
+
+
+@router.put(
+    "/sms/settings",
+    response_model=SmsSettingsRead,
+    summary="Update tenant SMS settings",
+)
+def save_sms_settings(
+    payload: SmsSettingsUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsSettingsRead:
+    return update_sms_settings(
+        session,
+        tenant_id=tenant_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/sms/readiness",
+    response_model=SmsReadinessRead,
+    summary="Get tenant SMSCountry and DLT readiness",
+)
+def read_sms_readiness(
+    tenant_id: str = Depends(require_tenant_id),
+    _current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsReadinessRead:
+    return get_sms_readiness(session, tenant_id=tenant_id)
+
+
+@router.put(
+    "/sms/readiness",
+    response_model=SmsReadinessRead,
+    summary="Update tenant SMSCountry and DLT readiness",
+)
+def save_sms_readiness(
+    payload: SmsReadinessUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsReadinessRead:
+    return update_sms_readiness(
         session,
         tenant_id=tenant_id,
         payload=payload,
@@ -232,4 +349,178 @@ def cancel_whatsapp_queue_item(
 ) -> WhatsAppQueueItemRead:
     return cancel_whatsapp_notification(
         session, tenant_id=tenant_id, event_id=event_id, actor=current_user
+    )
+
+
+@router.post(
+    "/sms/test",
+    response_model=SmsTestRead,
+    summary="Send a tenant SMS template test message",
+)
+def send_sms_test_message(
+    payload: SmsTestRequest,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsTestRead:
+    return send_sms_test(
+        session,
+        tenant_id=tenant_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/sms/queue",
+    response_model=SmsQueueListRead,
+    summary="List the tenant SMS delivery queue",
+)
+def read_sms_queue(
+    status_filter: str | None = None,
+    flow_key: str | None = None,
+    q: str | None = Query(default=None, max_length=160),
+    from_date: date | None = None,
+    to_date: date | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    tenant_id: str = Depends(require_tenant_id),
+    _current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsQueueListRead:
+    return list_sms_queue(
+        session,
+        tenant_id=tenant_id,
+        status_filter=status_filter,
+        flow_key=flow_key,
+        q=q,
+        from_date=from_date,
+        to_date=to_date,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post(
+    "/sms/queue/{event_id}/retry",
+    response_model=SmsQueueItemRead,
+    summary="Retry a failed tenant SMS notification",
+)
+def retry_sms_queue_item(
+    event_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsQueueItemRead:
+    return retry_sms_notification(
+        session, tenant_id=tenant_id, event_id=event_id, actor=current_user
+    )
+
+
+@router.post(
+    "/sms/queue/{event_id}/cancel",
+    response_model=SmsQueueItemRead,
+    summary="Cancel a queued tenant SMS notification",
+)
+def cancel_sms_queue_item(
+    event_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsQueueItemRead:
+    return cancel_sms_notification(
+        session, tenant_id=tenant_id, event_id=event_id, actor=current_user
+    )
+
+
+@router.get(
+    "/sms/usage",
+    response_model=SmsUsageRead,
+    summary="Get tenant SMS message and segment usage",
+)
+def read_sms_usage_summary(
+    tenant_id: str = Depends(require_tenant_id),
+    _current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsUsageRead:
+    return read_sms_usage(session, tenant_id=tenant_id)
+
+
+@router.get(
+    "/sms/health",
+    response_model=SmsHealthRead,
+    summary="Get tenant SMS queue and delivery health",
+)
+def read_sms_health_summary(
+    tenant_id: str = Depends(require_tenant_id),
+    _current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsHealthRead:
+    return read_sms_health(session, tenant_id=tenant_id)
+
+
+@router.post(
+    "/sms/delivery-receipt/{tenant_id}",
+    response_model=SmsDeliveryReceiptRead,
+    summary="Accept an SMSCountry delivery receipt callback",
+)
+async def accept_sms_delivery_receipt(
+    tenant_id: str,
+    request: Request,
+    x_signature: str | None = Header(default=None, alias="X-Signature"),
+    session: Session = Depends(get_session),
+) -> SmsDeliveryReceiptRead:
+    """Unauthenticated by design - the provider cannot hold a session.
+
+    The tenant's stored webhook secret is the only credential; a callback that
+    does not carry a valid HMAC over the exact request body is refused before
+    any lookup happens, so this route cannot be used to probe message ids.
+    """
+    raw_body = await request.body()
+    secret = webhook_secret_for_tenant(session, tenant_id=tenant_id)
+    if not verify_receipt_signature(
+        secret=secret, raw_body=raw_body, signature=x_signature
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid delivery receipt signature",
+        )
+    return record_delivery_receipt(
+        session,
+        tenant_id=tenant_id,
+        payload=parse_receipt_body(raw_body),
+    )
+
+
+@router.post(
+    "/sms/reconciliation",
+    response_model=SmsReconciliationRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record a provider SMS invoice for reconciliation against internal usage",
+)
+def create_sms_reconciliation(
+    payload: SmsReconciliationCreate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> SmsReconciliationRead:
+    return record_sms_reconciliation(
+        session, tenant_id=tenant_id, payload=payload, actor=current_user
+    )
+
+
+@router.get(
+    "/sms/reconciliation",
+    response_model=list[SmsReconciliationRead],
+    summary="List recorded SMS provider-invoice reconciliations",
+)
+def read_sms_reconciliations(
+    limit: int = Query(default=24, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    tenant_id: str = Depends(require_tenant_id),
+    _current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> list[SmsReconciliationRead]:
+    return list_sms_reconciliations(
+        session, tenant_id=tenant_id, limit=limit, offset=offset
     )

@@ -51,6 +51,7 @@ import { SupplierForm } from "./forms/SupplierForm";
 import { FilesPanel } from "./components/FilesPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { WhatsAppIntegrationSettings } from "./whatsapp_integration/WhatsAppIntegrationSettings";
+import { SmsIntegrationSettings } from "./sms_integration/SmsIntegrationSettings";
 import { PatientIntelligenceSettings } from "./components/PatientIntelligenceSettings";
 import { useAdminData } from "./AdminDataContext";
 import { useTenantAdminActions } from "./api/useTenantAdminActions";
@@ -93,6 +94,7 @@ export function TenantAdmin({
 
   const data = useAdminData();
   const whatsappModuleEnabled = Boolean(clinic?.modules?.includes("whatsapp"));
+  const smsModuleEnabled = Boolean(clinic?.modules?.includes("sms"));
   const permissionKeys: string[] = apiSession?.user?.permissions || [];
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
@@ -1078,6 +1080,17 @@ export function TenantAdmin({
       {section === "whatsapp" && !whatsappModuleEnabled && (
         <Card>
           <h3 className="card-title font-bold">WhatsApp Settings</h3>
+          <p className="mt-2 text-sm text-slate-500">
+            This module is not enabled by the tenant&apos;s active subscription.
+          </p>
+        </Card>
+      )}
+      {section === "sms" && smsModuleEnabled && (
+        <SmsIntegrationSettings apiSession={apiSession} />
+      )}
+      {section === "sms" && !smsModuleEnabled && (
+        <Card>
+          <h3 className="card-title font-bold">SMS Settings</h3>
           <p className="mt-2 text-sm text-slate-500">
             This module is not enabled by the tenant&apos;s active subscription.
           </p>

@@ -32,6 +32,9 @@ class SubscriptionPlan(SQLModel, table=True):
     name: str = Field(min_length=2, max_length=160)
     monthly_patient_limit: int = Field(default=300, ge=0)
     monthly_whatsapp_message_limit: int = Field(default=0, ge=0)
+    # SMS bills per segment, not per message, so its plan entitlement is
+    # sized in segments - the unit the provider actually charges for.
+    monthly_sms_segment_limit: int = Field(default=0, ge=0)
     included_branches: int = Field(default=1, ge=0)
     included_doctors: int = Field(default=1, ge=0)
     price_inr_monthly: int = Field(default=0, ge=0)

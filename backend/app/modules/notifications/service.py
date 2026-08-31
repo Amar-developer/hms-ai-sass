@@ -10,3 +10,6 @@ from app.modules.notifications.services.providers import (  # noqa: F401
     enabled_communication_providers,
     enforce_notification_allowed,
 )
+from app.modules.notifications.services.sms_events import (  # noqa: F401
+    queue_sms_template_if_allowed,
+)

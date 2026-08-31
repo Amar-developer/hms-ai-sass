@@ -21,7 +21,7 @@ from app.modules.integrations.invoice_receipts import (
 )
 from app.modules.integrations.document_links import create_signed_document_url
 from app.modules.integrations.service import decode_config, get_tenant_plugin
-from app.infrastructure.integrations.adapters.messaging.http_template import (
+from app.infrastructure.integrations.ports.messaging import (
     normalize_mobile_number,
 )
 from app.infrastructure.integrations.factories import get_template_message_gateway

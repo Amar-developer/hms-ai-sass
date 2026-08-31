@@ -63,6 +63,15 @@ def ensure_default_plans(session: Session) -> None:
             ]
             exists.updated_at = now
             session.add(exists)
+        if (
+            exists
+            and exists.monthly_sms_segment_limit == 0
+            and payload.get("monthly_sms_segment_limit", 0) > 0
+            and "sms" in modules_from_json(payload["enabled_modules_json"])
+        ):
+            exists.monthly_sms_segment_limit = payload["monthly_sms_segment_limit"]
+            exists.updated_at = now
+            session.add(exists)
     _backfill_core_modules(session, now)
     session.commit()
 

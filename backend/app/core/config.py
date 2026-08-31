@@ -126,6 +126,18 @@ class Settings(BaseSettings):
     )
     medicine_graphql_timeout_seconds: int = Field(default=10)
 
+    # Public HTTPS origin this API is reachable at. Used to build the SMS
+    # delivery-receipt callback URL handed to the provider; when it is unset
+    # or not HTTPS no callback is requested and delivery stays "accepted".
+    public_api_base_url: str | None = Field(default=None)
+
+    # How many due SMS rows one report-worker pass claims and sends. Tunable
+    # independently of the WhatsApp/email batch sizes so SMS throughput can
+    # be raised without a redeploy if volume grows; see the "dedicated
+    # worker" guidance in docs/sms-operations-runbook.md for when this
+    # single-process worker stops being enough.
+    sms_worker_batch_limit: int = Field(default=10, ge=1, le=200)
+
     auto_create_tables: bool = Field(default=True)
 
     cors_origins: list[str] = Field(

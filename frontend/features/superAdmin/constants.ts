@@ -4,6 +4,7 @@ import {
   ClipboardList,
   CreditCard,
   MessageCircleMore,
+  MessageSquare,
   Settings,
   ShieldCheck,
   Users,
@@ -213,6 +214,7 @@ export const superAdminSections = [
   ["subscriptions", "Subscription Management", CreditCard],
   ["settings", "Tenant & Branch Settings", Settings],
   ["whatsappSettings", "WhatsApp Settings", MessageCircleMore],
+  ["smsSettings", "SMS Settings", MessageSquare],
 ] as const;
 
 // Display-only split of the list above: "Settings" is its own sidebar

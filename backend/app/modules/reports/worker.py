@@ -30,11 +30,19 @@ from app.modules.notifications.whatsapp_processor import (
     process_due_whatsapp_notifications,
 )
 from app.modules.notifications.email_processor import process_due_email_deliveries
+from app.modules.notifications.sms_processor import process_due_sms_notifications
 from app.modules.integrations.whatsapp_reminders import (
     queue_due_whatsapp_appointment_reminders,
 )
 from app.modules.integrations.whatsapp_daily_report import (
     queue_due_whatsapp_admin_daily_reports,
+)
+from app.modules.integrations.sms_reminders import queue_due_sms_appointment_reminders
+from app.modules.integrations.sms_home_care_reminders import (
+    queue_due_sms_home_care_visit_reminders,
+)
+from app.modules.integrations.sms_membership_reminders import (
+    queue_due_sms_membership_expiry_reminders,
 )
 from app.modules.patient_intelligence.service import (
     refresh_due_patient_intelligence,
@@ -163,6 +171,9 @@ def run_once() -> None:
                     "report_worker.whatsapp_admin_daily_reports_queued",
                     extra={"report_count": daily_reports},
                 )
+            queue_due_sms_appointment_reminders(session)
+            queue_due_sms_home_care_visit_reminders(session)
+            queue_due_sms_membership_expiry_reminders(session)
             # Progressively adapt existing HMS records and refresh stale
             # Patient 360 projections without a separate scheduler service.
             refreshed = refresh_due_patient_intelligence(session, limit=500)
@@ -180,6 +191,9 @@ def run_once() -> None:
                 extra={"recovered_count": recovered},
             )
         process_due_whatsapp_notifications(session)
+        process_due_sms_notifications(
+            session, limit=get_settings().sms_worker_batch_limit
+        )
         process_due_email_deliveries(session)
     try:
         job_id = dequeue_monthly_report_job(timeout=5)

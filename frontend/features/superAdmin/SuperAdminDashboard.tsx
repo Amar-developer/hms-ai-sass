@@ -54,6 +54,7 @@ import { SubscriptionManagement } from "./components/subscriptions/SubscriptionM
 import { TenantBranchSettings } from "./components/subscriptions/TenantBranchSettings";
 import { TenantPicker } from "./components/shared/TenantPicker";
 import { WhatsAppIntegrationSettings } from "../admin/whatsapp_integration/WhatsAppIntegrationSettings";
+import { SmsIntegrationSettings } from "../admin/sms_integration/SmsIntegrationSettings";
 import { UserForm } from "@/features/admin/forms/UserForm";
 import { BranchForm } from "@/features/admin/forms/BranchForm";
 import { DepartmentForm } from "@/features/admin/forms/DepartmentForm";
@@ -217,10 +218,13 @@ export function SuperAdminDashboard({
   const tenantWhatsAppEnabled = Boolean(
     activeTenantPlan?.enabled_modules?.includes("whatsapp"),
   );
+  const tenantSmsEnabled = Boolean(
+    activeTenantPlan?.enabled_modules?.includes("sms"),
+  );
 
   useEffect(() => {
     if (
-      currentSection === "whatsappSettings" &&
+      ["whatsappSettings", "smsSettings"].includes(currentSection) &&
       customerTenants.length > 0 &&
       !customerTenants.some((tenant: any) => tenant.id === data.selectedId)
     ) {
@@ -931,6 +935,41 @@ export function SuperAdminDashboard({
               <p className="mt-2 text-sm text-slate-500">
                 Enable the WhatsApp module in the tenant&apos;s subscription
                 before configuring its connection and notification templates.
+              </p>
+            </Card>
+          )}
+        </div>
+      )}
+      {currentSection === "smsSettings" && (
+        <div className="space-y-5">
+          <Card className="mt-3">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <TenantPicker
+                tenants={customerTenants}
+                selectedId={data.selectedId}
+                setSelectedId={setSelectedTenantId}
+              />
+              <Badge
+                tone={tenantSmsEnabled ? "green" : "slate"}
+                className="normal-badge"
+              >
+                {tenantSmsEnabled
+                  ? "Included in active subscription"
+                  : "Not included in active subscription"}
+              </Badge>
+            </div>
+          </Card>
+          {tenantSmsEnabled ? (
+            <SmsIntegrationSettings
+              apiSession={apiSession}
+              tenantId={data.selectedId}
+            />
+          ) : (
+            <Card>
+              <h3 className="card-title font-bold">SMS Settings</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Enable the SMS module in the tenant&apos;s subscription before
+                configuring SMSCountry and DLT template details.
               </p>
             </Card>
           )}

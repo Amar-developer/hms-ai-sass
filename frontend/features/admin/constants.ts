@@ -3,6 +3,7 @@ import {
   ClipboardList,
   FileText,
   MessageCircleMore,
+  MessageSquare,
   BrainCircuit,
   Percent,
   Settings,
@@ -34,6 +35,7 @@ export const sections = [
   ["whatsapp", "WhatsApp Settings", MessageCircleMore],
   ["roles", "Roles", ShieldCheck],
   ["membership", "Patient Membership", ShieldCheck],
+  ["sms", "SMS Settings", MessageSquare],
 ] as const;
 
 export const tenantAdminSections = sections;

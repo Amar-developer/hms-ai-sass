@@ -29,7 +29,7 @@ from app.modules.integrations.whatsapp_schemas import (
     WhatsAppTemplateSettings,
     audience_notifications_enabled,
 )
-from app.infrastructure.integrations.adapters.messaging.http_template import (
+from app.infrastructure.integrations.ports.messaging import (
     normalize_mobile_number,
 )
 from app.infrastructure.integrations.factories import get_template_message_gateway
