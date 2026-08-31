@@ -5,7 +5,6 @@ from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import (
     queue_notification_if_allowed,
-    queue_sms_template_if_allowed,
     queue_whatsapp_template_if_allowed,
 )
 from app.modules.patients.models import Patient
@@ -54,22 +53,6 @@ def call_token(
         message=token_call_message(updated.token_number, language),
         resource_type="queue_entry",
         resource_id=updated.id,
-        queued_by_user_id=actor_user_id,
-    )
-    patient = session.get(Patient, appointment.patient_id)
-    queue_sms_template_if_allowed(
-        session,
-        tenant_id=tenant_id,
-        branch_id=updated.branch_id,
-        flow_key="queue_token_alert_patient",
-        patient=patient,
-        resource_type="queue_entry",
-        resource_id=updated.id,
-        dedupe_key=f"sms:queue_entry:{updated.id}:called",
-        variables={
-            "patient_name": patient.full_name if patient else "",
-            "token_number": updated.token_number,
-        },
         queued_by_user_id=actor_user_id,
     )
     return updated
@@ -178,21 +161,6 @@ def cancel(
         resource_type="appointment",
         resource_id=appointment.id,
         dedupe_key=f"whatsapp:appointment:{appointment.id}:cancelled:patient",
-        queued_by_user_id=actor_user_id,
-    )
-    queue_sms_template_if_allowed(
-        session,
-        tenant_id=tenant_id,
-        branch_id=updated.branch_id,
-        flow_key="appointment_cancelled_patient",
-        patient=patient,
-        resource_type="appointment",
-        resource_id=appointment.id,
-        dedupe_key=f"sms:appointment:{appointment.id}:cancelled",
-        variables={
-            "patient_name": patient.full_name if patient else "",
-            "token_number": updated.token_number,
-        },
         queued_by_user_id=actor_user_id,
     )
     practitioner = (

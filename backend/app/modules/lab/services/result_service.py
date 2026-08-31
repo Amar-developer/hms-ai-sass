@@ -15,7 +15,6 @@ from app.modules.lab.services.validation import _get_order_or_404
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import (
     queue_notification_if_allowed,
-    queue_sms_template_if_allowed,
     queue_whatsapp_template_if_allowed,
     whatsapp_template_integration_enabled,
 )
@@ -84,21 +83,6 @@ def add_lab_result_record(
     session.refresh(order)
     patient = LabReferenceRepository(session).get_patient(order.patient_id)
     if patient:
-        queue_sms_template_if_allowed(
-            session,
-            tenant_id=tenant_id,
-            branch_id=order.branch_id,
-            flow_key="lab_report_ready_patient",
-            patient=patient,
-            resource_type="lab_order",
-            resource_id=order.id,
-            dedupe_key=f"sms:lab:{order.id}:result-ready",
-            variables={
-                "patient_name": patient.full_name,
-                "tests": order.tests,
-            },
-            queued_by_user_id=current_user.id,
-        )
         template_event = queue_whatsapp_template_if_allowed(
             session,
             tenant_id=tenant_id,

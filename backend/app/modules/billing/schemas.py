@@ -73,6 +73,7 @@ class PendingConsultationInvoiceRead(BaseModel):
 
     consultation_id: ConsultationId
     appointment_id: AppointmentId
+    appointment_number: str | None = None
     branch_id: BranchId
     patient_id: str
     patient_name: str

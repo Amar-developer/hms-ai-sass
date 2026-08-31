@@ -32,7 +32,6 @@ from app.modules.lab.models import LabOrderStatus, LabTestPackage
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import (
     queue_notification_if_allowed,
-    queue_sms_template_if_allowed,
     queue_whatsapp_template_if_allowed,
     whatsapp_template_integration_enabled,
 )
@@ -518,22 +517,6 @@ def create_invoice_from_consultation_source(
     )
     patient = source_repo.get_patient(invoice.patient_id)
     if invoice.balance_amount > 0 and patient:
-        queue_sms_template_if_allowed(
-            session,
-            tenant_id=tenant_id,
-            branch_id=invoice.branch_id,
-            flow_key="payment_pending_patient",
-            patient=patient,
-            resource_type="invoice",
-            resource_id=invoice.id,
-            dedupe_key=f"sms:invoice:{invoice.id}:initial-pending",
-            variables={
-                "patient_name": patient.full_name,
-                "invoice_number": invoice.invoice_number,
-                "balance_amount": f"{invoice.balance_amount:.2f}",
-            },
-            queued_by_user_id=payload.created_by_user_id,
-        )
         pending_template_event = queue_whatsapp_template_if_allowed(
             session,
             tenant_id=tenant_id,

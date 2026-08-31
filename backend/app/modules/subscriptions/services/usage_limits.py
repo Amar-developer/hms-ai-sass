@@ -67,7 +67,7 @@ def effective_sms_segment_limit(
     """The hard monthly segment ceiling: plan allowance plus active credits.
 
     A tenant's own SMS settings (daily_message_limit, monthly_segment_limit)
-    can only tighten this, never raise it - see sms_usage.read_sms_usage.
+    can only tighten this, never raise it - see sms.usage.read_sms_usage.
     """
     return plan.monthly_sms_segment_limit + active_sms_segment_credits(
         session, tenant_id

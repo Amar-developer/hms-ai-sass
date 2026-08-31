@@ -1,50 +1,10 @@
-import { Eye, EyeOff, Link2, ShieldCheck } from "lucide-react";
+import { Link2, ShieldCheck } from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
 import { Input, Select } from "@/app/components/common/ui";
 
+import { SecretInput } from "../../components/SecretInput";
 import { apiModeOptions } from "../constants";
 import { SmsSettingsDraft } from "../types";
-
-function SecretInput({
-  value,
-  onChange,
-  placeholder,
-  visible,
-  toggleVisible,
-  label,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  visible: boolean;
-  toggleVisible: () => void;
-  label: string;
-}) {
-  return (
-    <div className="relative">
-      <Input
-        type={visible ? "text" : "password"}
-        value={value}
-        onChange={(event: any) => onChange(event.target.value)}
-        placeholder={placeholder}
-        autoComplete="new-password"
-        className="rounded-lg px-2 py-2 pr-11 text-xs placeholder:text-xs lg:py-2.5 lg:pr-11 lg:text-xs"
-      />
-      <button
-        type="button"
-        onClick={toggleVisible}
-        aria-label={visible ? `Hide ${label}` : `Show ${label}`}
-        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 transition hover:text-slate-700"
-      >
-        {visible ? (
-          <EyeOff className="h-4 w-4" />
-        ) : (
-          <Eye className="h-4 w-4" />
-        )}
-      </button>
-    </div>
-  );
-}
 
 export function SmsProviderSection({
   draft,
@@ -70,7 +30,7 @@ export function SmsProviderSection({
     saved ? "Leave blank to keep the saved value" : "";
 
   return (
-    <div className="mt-5 rounded-xl border border-slate-200 p-4">
+    <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         <Link2 className="h-4 w-4 text-slate-500" />
         <h4 className="card-title font-bold text-slate-800">
@@ -95,12 +55,19 @@ export function SmsProviderSection({
         <div className="md:col-span-2">
           <FormField label="API URL">
             <Input
-              type="url"
+              type="text"
               value={draft.apiUrl}
               onChange={(event: any) => update("apiUrl", event.target.value)}
-              placeholder="https://restapi.smscountry.com/v0.1/Accounts/"
-              autoComplete="url"
+              placeholder="https://restapi.smscountry.com/v0.1/Accounts/{auth_key}/SMSes/"
+              autoComplete="off"
             />
+            {draft.apiMode === "rest" && (
+              <p className="mt-1 text-xs text-slate-500">
+                Keep <code>{"{auth_key}"}</code> in the path — the saved auth key
+                is substituted when each message is sent, so the key is never
+                stored in the URL.
+              </p>
+            )}
           </FormField>
         </div>
 

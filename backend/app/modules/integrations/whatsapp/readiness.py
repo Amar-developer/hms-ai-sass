@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 from app.core.credentials import decrypt_credential
 from app.modules.audit.models import AuditEvent
 from app.modules.integrations.service import get_tenant_plugin
-from app.modules.integrations.whatsapp_schemas import (
+from app.modules.integrations.whatsapp.schemas import (
     WhatsAppIntegrationRead,
     WhatsAppReadinessCheck,
     WhatsAppReadinessRead,
@@ -228,3 +228,6 @@ def _credential_readable(session: Session, tenant_id: str) -> bool | None:
     except ValueError:
         return False
     return True
+
+
+# WhatsApp integration domain package.

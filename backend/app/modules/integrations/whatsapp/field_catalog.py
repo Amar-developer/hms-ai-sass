@@ -2,25 +2,25 @@
 flow (trigger), plus each flow's default parameter order.
 
 This is the single source of truth shared by:
-- `whatsapp_schemas.py` — validates a custom template's chosen field keys
+- `schemas.py` — validates a custom template's chosen field keys
   against the fields its trigger actually makes available.
 - `whatsapp_processor.py` — builds a named context dict per flow using these
   same field keys, and falls back to a flow's default field order when no
   custom template overrides it.
-- `whatsapp_service.py` — serializes this catalog into the settings response
+- `service.py` — serializes this catalog into the settings response
   so the frontend can render field pickers without keeping its own copy.
 
-Deliberately has no dependency on `whatsapp_schemas.py` to avoid a circular
+Deliberately has no dependency on `schemas.py` to avoid a circular
 import (that module imports from here, not the other way around).
 
 The lists below are the *curated* fields — the handful an approved template
 usually needs, kept first in the picker. They are not the whole menu: every
 column each flow's module entities expose is appended automatically by
-`whatsapp_entity_fields.py`, so adding a placeholder such as a patient's date
+`entity_fields.py`, so adding a placeholder such as a patient's date
 of birth to a template is a settings change, not a code change.
 """
 
-from app.modules.integrations.whatsapp_entity_fields import entity_catalog
+from app.modules.integrations.whatsapp.entity_fields import entity_catalog
 
 FLOW_FIELD_CATALOG: dict[str, list[tuple[str, str]]] = {
     "admin_daily_report": [
@@ -393,3 +393,6 @@ def normalize_saved_field_order(
     ):
         return default_field_order(flow_key)
     return list(saved_fields) if saved_fields is not None else None
+
+
+# WhatsApp integration domain package.

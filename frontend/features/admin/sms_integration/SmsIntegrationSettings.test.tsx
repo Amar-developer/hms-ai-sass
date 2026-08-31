@@ -31,7 +31,6 @@ const savedSettings = {
   monthly_segment_limit: null,
   patient_notifications_enabled: true,
   staff_notifications_enabled: false,
-  dlt_entity_id: "110100001234567890",
   default_sender_id: "MEDIZN",
   throughput_limit_per_minute: 600,
   retention_days: 90,
@@ -42,7 +41,43 @@ const savedSettings = {
   delivery_receipts_confirmed: false,
   callback_contract_confirmed: false,
   static_ip_allowlisting_confirmed: false,
-  flows: [],
+  flows: [
+    {
+      id: "sms_tpl_patient_registration",
+      flow_key: "patient_registered_patient",
+      name: "Patient registration",
+      language: "en",
+      enabled: false,
+      classification: "service_implicit",
+      consent_basis: "patient_transaction",
+      dlt_template_id: "",
+      registered_body:
+        "Dear {#var#}, your patient registration at MedizinHub has been successfully completed. Your Patient ID is {#var#}. Thank you.",
+      variable_keys: ["patient_name", "patient_number"],
+      approved_by_provider: false,
+    },
+    {
+      id: "sms_tpl_appointment_booking",
+      flow_key: "appointment_booked_patient",
+      name: "Appointment booking",
+      language: "en",
+      enabled: false,
+      classification: "service_implicit",
+      consent_basis: "patient_transaction",
+      dlt_template_id: "",
+      registered_body:
+        "Dear {#var#}, your appointment with Dr. {#var#} for {#var#} at MedizinHub on {#var#} at {#var#} has been successfully booked. Appointment ID: {#var#}. Thank you.",
+      variable_keys: [
+        "patient_name",
+        "doctor_name",
+        "consultation_type",
+        "appointment_date",
+        "appointment_time",
+        "appointment_id",
+      ],
+      approved_by_provider: false,
+    },
+  ],
   status: "not_ready",
   passed: 5,
   warnings: 1,
@@ -145,26 +180,57 @@ describe("SmsIntegrationSettings", () => {
     ).toBeTruthy();
   });
 
-  it("renders every P0 workflow even when the tenant has saved none", async () => {
+  it("renders only the two starter templates", async () => {
     render(<SmsIntegrationSettings apiSession={apiSession} />);
     fireEvent.click(await screen.findByRole("tab", { name: /^Templates/ }));
-    expect(await screen.findByText("Appointment booked")).toBeTruthy();
-    expect(screen.getByText("Lab report ready")).toBeTruthy();
-    expect(screen.getByText("Queue token alert")).toBeTruthy();
-    expect(screen.getByText("0 / 8 enabled")).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Appointment booked" }),
+    ).toBeTruthy();
+    expect(screen.getAllByText("Patient registration").length).toBeGreaterThan(0);
+    const registrationCard = screen
+      .getByPlaceholderText("Patient registration template name")
+      .closest("article");
+    expect(registrationCard?.className).toContain("bg-white");
+    expect(registrationCard?.className).toContain("shadow-sm");
+    expect(
+      screen.queryByRole("heading", { name: "Lab report ready" }),
+    ).toBeNull();
+    expect(screen.getByText("0 enabled")).toBeTruthy();
+  });
+
+  it("renders connection and compliance tabs as white cards", async () => {
+    render(<SmsIntegrationSettings apiSession={apiSession} />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /^API Connection/ }));
+    const connectionCard = (
+      await screen.findByRole("heading", { name: "SMSCountry connection" })
+    ).parentElement?.parentElement;
+    expect(connectionCard?.className).toContain("bg-white");
+    expect(connectionCard?.className).toContain("shadow-sm");
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Compliance/ }));
+    const complianceCard = (
+      await screen.findByRole("heading", {
+        name: "Sender header and provider confirmations",
+      })
+    ).parentElement?.parentElement;
+    expect(complianceCard?.className).toContain("bg-white");
+    expect(complianceCard?.className).toContain("shadow-sm");
   });
 
   it("blocks saving an enabled workflow that has no approved template", async () => {
     render(<SmsIntegrationSettings apiSession={apiSession} />);
     fireEvent.click(await screen.findByRole("tab", { name: /^Templates/ }));
     const toggle = await screen.findByLabelText(
-      "Enable Appointment booked template",
+      "Enable Appointment booked template: Appointment booking",
     );
     fireEvent.click(toggle);
     fireEvent.click(screen.getByRole("button", { name: /Save Settings/i }));
 
     expect(
-      await screen.findByText("DLT template ID is required for Appointment booked."),
+      await screen.findByText(
+        "DLT template ID is required for Appointment booked — Appointment booking.",
+      ),
     ).toBeTruthy();
     // Only the initial GET ran - no PUT was attempted.
     expect(
@@ -172,10 +238,10 @@ describe("SmsIntegrationSettings", () => {
     ).toHaveLength(0);
   });
 
-  it("saves the settings without resending unchanged credentials, dropping untouched blank templates", async () => {
+  it("saves the two starter templates without resending unchanged credentials", async () => {
     render(<SmsIntegrationSettings apiSession={apiSession} />);
     fireEvent.click(await screen.findByRole("tab", { name: /^Templates/ }));
-    await screen.findByText("Appointment booked");
+    await screen.findByRole("heading", { name: "Appointment booked" });
 
     fireEvent.click(screen.getByRole("button", { name: /Save Settings/i }));
 
@@ -191,18 +257,24 @@ describe("SmsIntegrationSettings", () => {
     const body = JSON.parse(String(options?.body));
     expect(body.api_key).toBeNull();
     expect(body.api_token).toBeNull();
-    expect(body.dlt_entity_id).toBe("110100001234567890");
-    // None of the 8 per-event placeholders were touched, so none are saved.
-    expect(body.flows).toHaveLength(0);
+    expect(body.dlt_entity_id).toBeUndefined();
+    expect(body.flows).toHaveLength(2);
+    expect(body.flows.map((flow: any) => flow.flow_key)).toEqual([
+      "patient_registered_patient",
+      "appointment_booked_patient",
+    ]);
   });
 
   it("adds a new template for a workflow and includes it in the save payload", async () => {
     render(<SmsIntegrationSettings apiSession={apiSession} />);
     fireEvent.click(await screen.findByRole("tab", { name: /^Templates/ }));
-    await screen.findByText("Appointment booked");
+    await screen.findByRole("heading", { name: "Appointment booked" });
 
-    const addButtons = screen.getAllByRole("button", { name: /Add Template/i });
-    fireEvent.click(addButtons[0]);
+    fireEvent.change(
+      screen.getByLabelText("New SMS template workflow"),
+      { target: { value: "appointment_booked_patient" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Add Template/i }));
 
     const nameInputs = screen.getAllByPlaceholderText(
       "Appointment booked template name",
@@ -300,8 +372,8 @@ describe("SmsIntegrationSettings", () => {
     ]) {
       expect(screen.getByRole("tab", { name: new RegExp(`^${label}`) })).toBeTruthy();
     }
-    expect(screen.getByText("SMS usage")).toBeTruthy();
-    expect(screen.getByText("Delivery health")).toBeTruthy();
+    expect(await screen.findByText("SMS usage")).toBeTruthy();
+    expect(await screen.findByText("Delivery health")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Test SMS" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: /^Delivery Queue/ }));
@@ -313,5 +385,36 @@ describe("SmsIntegrationSettings", () => {
       ).toBe(true),
     );
     expect(screen.getByText("SMS delivery queue")).toBeTruthy();
+  });
+
+  it("preserves an unsaved connection draft across tabs and parent rerenders", async () => {
+    const { rerender } = render(
+      <SmsIntegrationSettings apiSession={apiSession} />,
+    );
+    fireEvent.click(await screen.findByRole("tab", { name: /^API Connection/ }));
+    const authKey = await screen.findByPlaceholderText(
+      "••••9821 (leave blank to keep)",
+    );
+    fireEvent.change(authKey, { target: { value: "unsaved-auth-key" } });
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Templates/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^API Connection/ }));
+    expect(
+      screen.getByPlaceholderText("••••9821 (leave blank to keep)"),
+    ).toHaveProperty("value", "unsaved-auth-key");
+
+    rerender(
+      <SmsIntegrationSettings apiSession={{ ...apiSession }} />,
+    );
+    await waitFor(() =>
+      expect(
+        apiFetchMock.mock.calls.filter(
+          ([path]) => path === "/communications/sms/settings",
+        ),
+      ).toHaveLength(1),
+    );
+    expect(
+      screen.getByPlaceholderText("••••9821 (leave blank to keep)"),
+    ).toHaveProperty("value", "unsaved-auth-key");
   });
 });

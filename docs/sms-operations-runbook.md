@@ -37,6 +37,10 @@ provider-side problem, surfaced as `awaiting_receipt` in the health endpoint.
 | Individual rows, filterable by status and flow | `GET /api/v1/communications/sms/queue` |
 | Provider and DLT configuration completeness | `GET /api/v1/communications/sms/readiness` |
 
+Usage and reconciliation count only messages SMSCountry accepted, using the
+acceptance timestamp. Queued messages and gateway-rejected requests are not
+billable; successful integration test sends are billable and are included.
+
 Logs are on the `medizinhub.sms` logger:
 
 - `sms.send_attempted` — one line per attempt, carries `gateway_status`, `attempt`, `segments`

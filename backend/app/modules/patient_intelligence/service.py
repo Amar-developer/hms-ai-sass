@@ -12,8 +12,8 @@ from sqlmodel import Session, select
 from app.modules.appointments.models import Appointment, AppointmentStatus
 from app.modules.billing.models import Invoice, InvoiceStatus, Payment
 from app.modules.home_care.models import HomeCareBooking, HomeCareVisitLog
-from app.modules.integrations.whatsapp_entity_fields import build_entity_context
-from app.modules.integrations.whatsapp_consent import patient_allows_engagement_whatsapp
+from app.modules.integrations.whatsapp.entity_fields import build_entity_context
+from app.modules.integrations.whatsapp.consent import patient_allows_engagement_whatsapp
 from app.modules.lab.models import LabOrder, LabOrderItem
 from app.modules.patient_intelligence.models import (
     EngagementActionStatus,

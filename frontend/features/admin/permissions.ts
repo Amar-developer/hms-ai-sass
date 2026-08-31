@@ -12,6 +12,7 @@ const SECTION_PERMISSION_PREFIXES: Record<string, string[]> = {
   "patient-intelligence": ["patient_intelligence"],
   whatsapp: ["communications.whatsapp"],
   sms: ["communications.sms"],
+  email: ["communications"],
 };
 
 export function canUseTenantAdminSection(section: string, user: any) {
@@ -29,6 +30,12 @@ export function canUseTenantAdminSection(section: string, user: any) {
       permissions.includes("communications.read") &&
       (permissions.includes("communications.manage") ||
         permissions.includes("communications.whatsapp.manage"))
+    );
+  }
+  if (section === "email") {
+    return (
+      permissions.includes("communications.read") &&
+      permissions.includes("communications.manage")
     );
   }
   if (section === "sms") {

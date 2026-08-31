@@ -183,7 +183,7 @@ export function SmsDeliveryQueue({
       render: (item) => (
         <>
           {(item.status === "failed" || item.status === "cancelled") && (
-            <button type="button" className="font-bold text-blue-700 disabled:opacity-50" disabled={actionId === item.id} onClick={() => void runAction(item, "retry")}>Retry</button>
+            <button type="button" className="font-bold text-emerald-700 disabled:opacity-50" disabled={actionId === item.id} onClick={() => void runAction(item, "retry")}>Retry</button>
           )}
           {item.status === "queued" && (
             <button type="button" className="font-bold text-red-700 disabled:opacity-50" disabled={actionId === item.id} onClick={() => void runAction(item, "cancel")}>Cancel</button>
@@ -212,7 +212,7 @@ export function SmsDeliveryQueue({
             key={status}
             type="button"
             onClick={() => { setStatusFilter(statusFilter === status ? "" : status); setOffset(0); }}
-            className={`min-h-[74px] rounded-lg border bg-white px-3 py-2.5 text-left shadow-sm transition ${statusFilter === status ? "border-sky-500 ring-1 ring-sky-100" : "border-slate-200 hover:border-slate-300"}`}
+            className={`min-h-[74px] rounded-lg border bg-white px-3 py-2.5 text-left shadow-sm transition ${statusFilter === status ? "border-emerald-500 ring-1 ring-emerald-100" : "border-slate-200 hover:border-slate-300"}`}
           >
             <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">{status}</p>
             <p className="mt-1 text-xl font-black text-slate-950">{data.counts[status]}</p>

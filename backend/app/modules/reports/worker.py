@@ -26,23 +26,17 @@ from app.modules.reports.service import (
 )
 from app.modules.reports.snapshots import archive_due_months
 from app.modules.tenants.models import Tenant, TenantStatus, now_utc
+from app.modules.identity.models import User
 from app.modules.notifications.whatsapp_processor import (
     process_due_whatsapp_notifications,
 )
 from app.modules.notifications.email_processor import process_due_email_deliveries
 from app.modules.notifications.sms_processor import process_due_sms_notifications
-from app.modules.integrations.whatsapp_reminders import (
+from app.modules.integrations.whatsapp.reminders import (
     queue_due_whatsapp_appointment_reminders,
 )
-from app.modules.integrations.whatsapp_daily_report import (
+from app.modules.integrations.whatsapp.daily_report import (
     queue_due_whatsapp_admin_daily_reports,
-)
-from app.modules.integrations.sms_reminders import queue_due_sms_appointment_reminders
-from app.modules.integrations.sms_home_care_reminders import (
-    queue_due_sms_home_care_visit_reminders,
-)
-from app.modules.integrations.sms_membership_reminders import (
-    queue_due_sms_membership_expiry_reminders,
 )
 from app.modules.patient_intelligence.service import (
     refresh_due_patient_intelligence,
@@ -61,6 +55,19 @@ def _heartbeat_loop() -> None:
         except Exception:
             logger.exception("report_worker.heartbeat_failed")
         _shutdown.wait(interval)
+
+
+def _tenant_admin_user_id(session: Session, tenant_id: str) -> str | None:
+    tenant_admin = session.exec(
+        select(User)
+        .where(
+            User.tenant_id == tenant_id,
+            User.user_type == "tenant_admin",
+            User.is_active == True,  # noqa: E712
+        )
+        .order_by(User.created_at)
+    ).first()
+    return tenant_admin.id if tenant_admin else None
 
 
 def enqueue_due_monthly_reports(session: Session) -> None:
@@ -94,6 +101,7 @@ def enqueue_due_monthly_reports(session: Session) -> None:
             recipients_json=json.dumps(config["recipients"]),
             cc_json=json.dumps(config["cc"]),
             filters_json=json.dumps(config["filters"]),
+            queued_by_user_id=_tenant_admin_user_id(session, tenant.id),
         )
         session.add(job)
         session.commit()
@@ -171,9 +179,6 @@ def run_once() -> None:
                     "report_worker.whatsapp_admin_daily_reports_queued",
                     extra={"report_count": daily_reports},
                 )
-            queue_due_sms_appointment_reminders(session)
-            queue_due_sms_home_care_visit_reminders(session)
-            queue_due_sms_membership_expiry_reminders(session)
             # Progressively adapt existing HMS records and refresh stale
             # Patient 360 projections without a separate scheduler service.
             refreshed = refresh_due_patient_intelligence(session, limit=500)

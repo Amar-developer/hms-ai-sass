@@ -83,23 +83,3 @@ export function fetchSmsUsage(session: ApiSession) {
 export function fetchSmsHealth(session: ApiSession) {
   return apiFetch("/communications/sms/health", session);
 }
-
-export function fetchSmsReconciliations(
-  session: ApiSession,
-  { limit = 24, offset = 0 }: { limit?: number; offset?: number } = {},
-) {
-  return apiFetch(
-    `/communications/sms/reconciliation?limit=${limit}&offset=${offset}`,
-    session,
-  );
-}
-
-export function createSmsReconciliation(
-  session: ApiSession,
-  payload: Record<string, unknown>,
-) {
-  return apiFetch("/communications/sms/reconciliation", session, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}

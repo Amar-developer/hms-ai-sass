@@ -153,9 +153,10 @@ class SmsCountryGateway:
             "Tool": "API",
             "NameOfCampaign": request.campaign_name or request.template.flow_key,
             "ClientReference": request.client_reference,
-            "DltEntityId": request.template.dlt_entity_id,
             "DltTemplateId": request.template.dlt_template_id,
         }
+        if request.template.dlt_entity_id:
+            payload["DltEntityId"] = request.template.dlt_entity_id
         if request.callback_url:
             payload["DRNotifyUrl"] = request.callback_url
             payload["DRNotifyHttpMethod"] = "POST"

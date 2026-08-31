@@ -169,6 +169,8 @@ def queue_monthly_report(
         [str(email) for email in payload.cc] if payload.cc is not None else config["cc"]
     )
     if not recipients:
+        recipients = [actor.email] if actor.email else []
+    if not recipients:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one recipient email is required.",

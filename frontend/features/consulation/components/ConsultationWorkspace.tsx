@@ -274,14 +274,17 @@ export function ConsultationWorkspace(props: any) {
     "billed",
   ];
   const cancelledStatuses = ["cancelled", "canceled", "no_show"];
+  const lockedByAppointmentStatus =
+    cancelledStatuses.includes(selectedStatus) ||
+    cancelledStatuses.includes(selectedQueueStatus);
   const queueActionsLocked =
     !selected ||
     signed ||
     completeStatuses.includes(selectedStatus) ||
     completeStatuses.includes(selectedQueueStatus) ||
-    cancelledStatuses.includes(selectedStatus) ||
-    cancelledStatuses.includes(selectedQueueStatus);
+    lockedByAppointmentStatus;
   const queueActionDisabled = Boolean(busy || queueActionsLocked);
+  const consultationLocked = signed || lockedByAppointmentStatus;
   const activeMedicineCatalog = availableMedicineCatalog;
   const medicineOptions =
     medicineDraftName.trim().length >= 2
@@ -396,10 +399,7 @@ export function ConsultationWorkspace(props: any) {
     validationAttempted && referDoctor && !referDoctorId
       ? "Recommended doctor is required."
       : undefined;
-  const availableTemplates = templates.filter((template: any) => {
-    const templateDoctorId = template?.content?.doctor_id;
-    return !templateDoctorId || String(templateDoctorId) === String(doctor?.id);
-  });
+  const availableTemplates = templates;
   return (
     <div className={`${showPatientWorkList? 'w-full':''}`}>
       <Card className="bg-white p-3">
@@ -462,9 +462,15 @@ export function ConsultationWorkspace(props: any) {
           </div>
         ) : (
           <div className="mt-4 space-y-4">
+            {lockedByAppointmentStatus && (
+              <div className="rounded-lg border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">
+                This appointment is cancelled/no-show. Consultation changes and
+                completion are disabled for this appointment.
+              </div>
+            )}
             <fieldset
-              disabled={signed}
-              className={`m-0 min-w-0 space-y-4 border-0 p-0 ${signed ? "opacity-75" : ""}`}
+              disabled={consultationLocked}
+              className={`m-0 min-w-0 space-y-4 border-0 p-0 ${consultationLocked ? "opacity-75" : ""}`}
             >
               {availableTemplates.length > 0 && (
                 <div className="flex flex-col gap-2 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 sm:flex-row sm:items-end">
@@ -998,7 +1004,7 @@ export function ConsultationWorkspace(props: any) {
                 </div>
               </div>
             </fieldset>
-            {selected?.consultationStatus === "signed" && (
+            {selected?.consultationStatus === "signed" && !lockedByAppointmentStatus && (
               <div className="rounded-lg bg-emerald-50 p-4">
                 <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                   <div>
@@ -1060,58 +1066,62 @@ export function ConsultationWorkspace(props: any) {
                 ) : null}
               </div>
             )}
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
-              <Button
-                type="button"
-                onClick={apiSession ? saveBackendDraft : markDone}
-                disabled={busy || selected?.consultationStatus === "signed"}
-                className="inline-flex h-10 items-center justify-center whitespace-nowrap border border-emerald-200 !bg-white px-4 py-0 text-xs !text-emerald-800 hover:!bg-emerald-50 disabled:!bg-slate-300 disabled:!text-white"
-              >
-                <ButtonLoader loading={pendingAction === "draft"}>
-                  {apiSession
-                    ? pendingAction === "draft"
-                      ? "Saving..."
-                      : "Save Draft"
-                    : "Mark Consultation Done"}
-                </ButtonLoader>
-              </Button>
-              {apiSession && (
+            {!lockedByAppointmentStatus && (
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
                 <Button
                   type="button"
-                  onClick={signBackendConsultation}
-                  disabled={busy || selected?.consultationStatus === "signed"}
-                  className="inline-flex h-10 items-center justify-center whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover"
+                  onClick={apiSession ? saveBackendDraft : markDone}
+                  disabled={busy || consultationLocked}
+                  className="inline-flex h-10 items-center justify-center whitespace-nowrap border border-emerald-200 !bg-white px-4 py-0 text-xs !text-emerald-800 hover:!bg-emerald-50 disabled:!bg-slate-300 disabled:!text-white"
                 >
-                  <ButtonLoader loading={pendingAction === "sign"}>
-                    {pendingAction === "sign" ? "Signing..." : "Complete"}
+                  <ButtonLoader loading={pendingAction === "draft"}>
+                    {apiSession
+                      ? pendingAction === "draft"
+                        ? "Saving..."
+                        : "Save Draft"
+                      : "Mark Consultation Done"}
                   </ButtonLoader>
                 </Button>
-              )}
-              <Button
-                type="button"
-                onClick={handlePrintPrescription}
-                disabled={isExportingPrescription}
-                className="inline-flex h-10 items-center justify-center whitespace-nowrap border border-emerald-200 !bg-white px-4 py-0 text-xs !text-emerald-800 hover:!bg-emerald-50 disabled:!bg-slate-300 disabled:!text-white"
-              >
-                {isExportingPrescription ? "Generating…" : "Print Prescription"}
-              </Button>
-              <Button
-                onClick={() => requeuePatient("end")}
-                disabled={queueActionDisabled}
-                className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-slate-500 px-4 text-xs font-bold text-emerald-800 transition hover:bg-slate-300 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-60"
-              >
-                Requeue to End
-              </Button>
-              <Button
-                onClick={callNextInWorkspace}
-                disabled={busy || !nextPatient}
-                className="inline-flex h-10 min-w-0 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-4 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-60"
-              >
-                {nextPatient
-                  ? `Call Next: ${nextPatient.token || ""} ${nextPatient.patient || nextPatient.patient_name || "Patient"}`.trim()
-                  : "No Waiting Patient"}
-              </Button>
-            </div>
+                {apiSession && (
+                  <Button
+                    type="button"
+                    onClick={signBackendConsultation}
+                    disabled={busy || consultationLocked}
+                    className="inline-flex h-10 items-center justify-center whitespace-nowrap bg-brand px-5 py-0 text-xs hover:bg-brand-hover"
+                  >
+                    <ButtonLoader loading={pendingAction === "sign"}>
+                      {pendingAction === "sign" ? "Signing..." : "Complete"}
+                    </ButtonLoader>
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  onClick={handlePrintPrescription}
+                  disabled={isExportingPrescription || consultationLocked}
+                  className="inline-flex h-10 items-center justify-center whitespace-nowrap border border-emerald-200 !bg-white px-4 py-0 text-xs !text-emerald-800 hover:!bg-emerald-50 disabled:!bg-slate-300 disabled:!text-white"
+                >
+                  {isExportingPrescription
+                    ? "Generating…"
+                    : "Print Prescription"}
+                </Button>
+                <Button
+                  onClick={() => requeuePatient("end")}
+                  disabled={queueActionDisabled}
+                  className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-4 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-60"
+                >
+                  Requeue to End
+                </Button>
+                <Button
+                  onClick={callNextInWorkspace}
+                  disabled={busy || !nextPatient}
+                  className="inline-flex h-10 min-w-0 items-center justify-center whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-4 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-60"
+                >
+                  {nextPatient
+                    ? `Call Next: ${nextPatient.token || ""} ${nextPatient.patient || nextPatient.patient_name || "Patient"}`.trim()
+                    : "No Waiting Patient"}
+                </Button>
+              </div>
+            )}
             {selected?.consultationId && (
               <ActivityLog
                 resourceType="consultation"

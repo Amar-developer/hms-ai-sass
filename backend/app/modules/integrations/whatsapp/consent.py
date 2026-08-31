@@ -5,8 +5,10 @@ from app.modules.billing.models import CreditNote, Invoice
 from app.modules.consultations.models import Consultation
 from app.modules.home_care.models import HomeCareBooking
 from app.modules.lab.models import LabOrder
+from app.modules.patient_subscriptions.models import PatientSubscriptionEnrollment
 from app.modules.patients.contact import patient_whatsapp_numbers
 from app.modules.patients.models import Patient, WhatsAppConsentStatus
+from app.modules.queue.models import QueueEntry
 from app.infrastructure.integrations.ports.messaging import normalize_mobile_number
 
 
@@ -44,6 +46,12 @@ def patient_for_notification_resource(
         patient_id = row.patient_id if row and row.tenant_id == tenant_id else None
     elif resource_type == "home_care_booking":
         row = session.get(HomeCareBooking, resource_id)
+        patient_id = row.patient_id if row and row.tenant_id == tenant_id else None
+    elif resource_type == "queue_entry":
+        row = session.get(QueueEntry, resource_id)
+        patient_id = row.patient_id if row and row.tenant_id == tenant_id else None
+    elif resource_type == "patient_subscription_enrollment":
+        row = session.get(PatientSubscriptionEnrollment, resource_id)
         patient_id = row.patient_id if row and row.tenant_id == tenant_id else None
     elif resource_type == "patient_engagement_action":
         # Local import avoids making the general integration policy module own
@@ -96,3 +104,6 @@ def patient_notification_language(patient: Patient | None) -> str:
     """Treat legacy tenant-default preferences as English for patient messages."""
     preferred = str(patient.whatsapp_preferred_language if patient else "").strip()
     return preferred if preferred and preferred != "tenant_default" else "en"
+
+
+# WhatsApp integration domain package.

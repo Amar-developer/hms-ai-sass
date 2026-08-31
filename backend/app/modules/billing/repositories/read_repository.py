@@ -87,6 +87,7 @@ class BillingReadRepository:
             select(
                 Consultation.id,
                 Appointment.id,
+                Appointment.appointment_number,
                 Consultation.branch_id,
                 Patient.id,
                 Patient.full_name,

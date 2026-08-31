@@ -48,16 +48,17 @@ def list_pending_consultation_invoice_page(
         PendingConsultationInvoiceRead(
             consultation_id=row[0],
             appointment_id=row[1],
-            branch_id=row[2],
-            patient_id=row[3],
-            patient_name=row[4],
-            practitioner_id=row[5],
-            practitioner_name=row[6],
-            token_number=row[7],
-            appointment_date=row[8],
-            appointment_time=row[9],
-            consultation_signed_at=row[10],
-            consultation_created_at=row[11],
+            appointment_number=row[2],
+            branch_id=row[3],
+            patient_id=row[4],
+            patient_name=row[5],
+            practitioner_id=row[6],
+            practitioner_name=row[7],
+            token_number=row[8],
+            appointment_date=row[9],
+            appointment_time=row[10],
+            consultation_signed_at=row[11],
+            consultation_created_at=row[12],
         )
         for row in rows
     ]

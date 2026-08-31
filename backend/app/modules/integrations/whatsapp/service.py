@@ -10,13 +10,13 @@ from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.identity.models import User
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.integrations.service import decode_config, get_tenant_plugin
-from app.modules.integrations.whatsapp_field_catalog import (
+from app.modules.integrations.whatsapp.field_catalog import (
     FLOW_FIELD_CATALOG,
     default_field_order,
     flow_fields,
     normalize_saved_field_order,
 )
-from app.modules.integrations.whatsapp_schemas import (
+from app.modules.integrations.whatsapp.schemas import (
     WhatsAppAdminRecipientOption,
     WhatsAppCustomTemplateSettings,
     WhatsAppFieldCatalogRead,
@@ -34,10 +34,10 @@ from app.infrastructure.integrations.ports.messaging import (
 )
 from app.infrastructure.integrations.factories import get_template_message_gateway
 from app.infrastructure.integrations.ports.messaging import TemplateMessageGateway
-from app.modules.integrations.whatsapp_templates import resolve_template_identifier
-from app.modules.integrations.whatsapp_usage import read_whatsapp_usage
-from app.modules.integrations.whatsapp_health import read_whatsapp_health
-from app.modules.integrations.whatsapp_readiness import read_whatsapp_readiness
+from app.modules.integrations.whatsapp.templates import resolve_template_identifier
+from app.modules.integrations.whatsapp.usage import read_whatsapp_usage
+from app.modules.integrations.whatsapp.health import read_whatsapp_health
+from app.modules.integrations.whatsapp.readiness import read_whatsapp_readiness
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
 
@@ -441,3 +441,6 @@ def test_whatsapp_integration(
         message=result.message,
         external_message_id=result.external_message_id,
     )
+
+
+# WhatsApp integration domain package.

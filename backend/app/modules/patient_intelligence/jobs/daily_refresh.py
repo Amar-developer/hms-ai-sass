@@ -8,7 +8,7 @@ from sqlmodel import Session
 
 from app.core.database import engine
 from app.core.logging import configure_logging
-from app.modules.integrations.whatsapp_daily_report import (
+from app.modules.integrations.whatsapp.daily_report import (
     queue_due_whatsapp_admin_daily_reports,
 )
 from app.modules.notifications.whatsapp_processor import (

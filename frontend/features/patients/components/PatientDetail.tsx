@@ -633,6 +633,38 @@ export function PatientDetail({
                 String(patient.whatsapp_preferred_language)
               }
             />
+            <Info
+              title="SMS Preference"
+              value={String(patient.sms_consent_status || "not_recorded")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+            />
+            <Info
+              title="SMS Preference Source"
+              value={String(patient.sms_consent_source || "-")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+            />
+            <Info
+              title="SMS Language"
+              value={
+                {
+                  tenant_default: "English",
+                  en: "English",
+                  hi: "Hindi",
+                  mr: "Marathi",
+                  gu: "Gujarati",
+                  ta: "Tamil",
+                  te: "Telugu",
+                  kn: "Kannada",
+                  ml: "Malayalam",
+                  bn: "Bengali",
+                  pa: "Punjabi",
+                  ur: "Urdu",
+                }[String(patient.sms_preferred_language || "en")] ||
+                String(patient.sms_preferred_language)
+              }
+            />
           </div>
         )}
         {activeSection === "membership" && canReadMembership && (

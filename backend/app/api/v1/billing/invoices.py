@@ -72,7 +72,7 @@ from app.modules.notifications.services.document_delivery import (
 )
 from app.modules.patients.models import Patient
 from app.modules.integrations.service import decode_config, get_tenant_plugin
-from app.modules.integrations.whatsapp_consent import patient_notification_destination
+from app.modules.integrations.whatsapp.consent import patient_notification_destination
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import new_id, now_utc
 

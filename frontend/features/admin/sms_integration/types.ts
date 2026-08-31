@@ -1,14 +1,22 @@
 export type SmsCountryApiMode = "unknown" | "rest" | "http_legacy";
 
+/** Must stay in step with SmsFlowKey in the backend's sms/schemas.py. */
 export type SmsFlowKey =
-  | "appointment_booked_patient"
-  | "appointment_reminder_patient"
-  | "appointment_rescheduled_patient"
-  | "appointment_cancelled_patient"
-  | "queue_token_alert_patient"
-  | "payment_pending_patient"
-  | "lab_report_ready_patient"
-  | "follow_up_reminder_patient";
+  | "patient_registered_patient"
+  | "appointment_booked_patient";
+
+export type SmsLanguage =
+  | "en"
+  | "hi"
+  | "mr"
+  | "gu"
+  | "ta"
+  | "te"
+  | "kn"
+  | "ml"
+  | "bn"
+  | "pa"
+  | "ur";
 
 export type SmsMessageClassification =
   | "transactional"
@@ -47,6 +55,7 @@ export type SmsTemplateDraft = {
   id: string;
   flowKey: SmsFlowKey;
   name: string;
+  language: SmsLanguage;
   enabled: boolean;
   classification: SmsMessageClassification;
   consentBasis: SmsConsentBasis;
@@ -73,7 +82,6 @@ export type SmsSettingsDraft = {
   monthlySegmentLimit: string;
   patientNotificationsEnabled: boolean;
   staffNotificationsEnabled: boolean;
-  dltEntityId: string;
   defaultSenderId: string;
   throughputLimitPerMinute: string;
   retentionDays: string;
@@ -154,19 +162,8 @@ export type SmsQueueResponse = {
 
 export type SmsTestDraft = {
   mobile: string;
+  templateId: string;
   flowKey: SmsFlowKey;
+  language: SmsLanguage;
   variables: Record<string, string>;
-};
-
-export type SmsReconciliation = {
-  id: string;
-  period_start: string;
-  period_end: string;
-  provider_billed_segments: number;
-  provider_amount_paise: number;
-  internal_segments: number;
-  variance_segments: number;
-  notes: string;
-  recorded_by_user_id: string | null;
-  created_at: string;
 };

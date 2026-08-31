@@ -3,7 +3,7 @@ import { Modal } from "@/app/components/common/Modal";
 import { Button, Input, Select } from "@/app/components/common/ui";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { flowOptions } from "../constants";
-import { SmsFlowKey, SmsSettingsDraft, SmsTestDraft } from "../types";
+import { SmsSettingsDraft, SmsTestDraft } from "../types";
 
 export function SmsTestMessageModal({
   open,
@@ -24,16 +24,11 @@ export function SmsTestMessageModal({
   setTestDraft: (updater: (current: SmsTestDraft) => SmsTestDraft) => void;
   onSubmit: (event: React.FormEvent) => void;
 }) {
-  const enabledFlows = flowOptions.filter((flow) =>
-    draft.flows.some(
-      (template) =>
-        template.flowKey === flow.key &&
-        template.enabled &&
-        template.approvedByProvider,
-    ),
+  const enabledTemplates = draft.flows.filter(
+    (template) => template.enabled && template.approvedByProvider,
   );
   const selectedTemplate = draft.flows.find(
-    (template) => template.flowKey === testDraft.flowKey && template.enabled,
+    (template) => template.id === testDraft.templateId && template.enabled,
   );
   return (
     <Modal
@@ -60,17 +55,29 @@ export function SmsTestMessageModal({
           </FormField>
           <FormField label="Notification flow">
             <Select
-              value={testDraft.flowKey}
-              onChange={(event: any) =>
+              value={testDraft.templateId}
+              onChange={(event: any) => {
+                const template = enabledTemplates.find(
+                  (item) => item.id === event.target.value,
+                );
+                if (!template) return;
                 setTestDraft((current) => ({
                   ...current,
-                  flowKey: event.target.value as SmsFlowKey,
-                  variables: {},
-                }))
-              }
+                  templateId: template.id,
+                  flowKey: template.flowKey,
+                  language: template.language,
+                  variables: Object.fromEntries(
+                    template.variableKeys.map((key) => [key, ""]),
+                  ),
+                }));
+              }}
             >
-              {enabledFlows.map((flow) => (
-                <option key={flow.key} value={flow.key}>{flow.label}</option>
+              {enabledTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {flowOptions.find((flow) => flow.key === template.flowKey)?.label ||
+                    template.flowKey} · {template.language.toUpperCase()}
+                  {template.name ? ` · ${template.name}` : ""}
+                </option>
               ))}
             </Select>
           </FormField>
@@ -97,7 +104,7 @@ export function SmsTestMessageModal({
         {message && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">{message}</div>}
         <div className="flex justify-end gap-2">
           <button type="button" className="close-button" onClick={onClose} disabled={busy}>Cancel</button>
-          <Button type="submit" disabled={busy || enabledFlows.length === 0}>
+          <Button type="submit" disabled={busy || enabledTemplates.length === 0}>
             <ButtonLoader loading={busy}>{busy ? "Sending..." : "Send test SMS"}</ButtonLoader>
           </Button>
         </div>

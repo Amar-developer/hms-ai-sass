@@ -1,4 +1,4 @@
-from app.modules.integrations.whatsapp_schemas import (
+from app.modules.integrations.whatsapp.schemas import (
     WhatsAppLanguage,
     WhatsAppTemplateSettings,
 )
@@ -31,3 +31,6 @@ def resolve_template_identifier(
             return localized_identifier, requested_language
 
     return default_identifier, default_language
+
+
+# WhatsApp integration domain package.

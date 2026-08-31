@@ -8,7 +8,7 @@ sends that a tenant already had approved by Meta, and those sends start
 failing. These tests pin both halves of that contract.
 """
 
-from app.modules.integrations.whatsapp_field_catalog import (
+from app.modules.integrations.whatsapp.field_catalog import (
     FLOW_FIELD_CATALOG,
     default_field_order,
     flow_field_keys,
@@ -191,7 +191,7 @@ def test_module_fields_are_selectable_without_code_changes():
 def test_entity_context_renders_values_for_a_loaded_row():
     from datetime import date
 
-    from app.modules.integrations.whatsapp_entity_fields import build_entity_context
+    from app.modules.integrations.whatsapp.entity_fields import build_entity_context
     from app.modules.patients.models import Patient
 
     patient = Patient(
@@ -213,7 +213,7 @@ def test_entity_context_renders_values_for_a_loaded_row():
 
 
 def test_membership_assistance_phone_comes_from_tenant_phone():
-    from app.modules.integrations.whatsapp_entity_fields import build_entity_context
+    from app.modules.integrations.whatsapp.entity_fields import build_entity_context
     from app.modules.tenants.models import Tenant
 
     tenant = Tenant(name="Sri Maha Clinic", phone="9047660909")
@@ -226,7 +226,7 @@ def test_membership_assistance_phone_comes_from_tenant_phone():
 def test_membership_and_lab_entity_contexts_render_values():
     from datetime import date
 
-    from app.modules.integrations.whatsapp_entity_fields import build_entity_context
+    from app.modules.integrations.whatsapp.entity_fields import build_entity_context
     from app.modules.lab.models import LabOrder
     from app.modules.patient_subscriptions.models import (
         PatientSubscriptionEnrollment,
@@ -279,7 +279,7 @@ def test_membership_and_lab_entity_contexts_render_values():
 
 
 def test_unset_values_never_render_as_none():
-    from app.modules.integrations.whatsapp_entity_fields import render_value
+    from app.modules.integrations.whatsapp.entity_fields import render_value
 
     assert render_value(None, "text") == ""
     assert render_value(None, "date") == ""
@@ -293,7 +293,7 @@ def test_flow_audience_is_one_answer_for_every_caller():
     hardcoded pair of appointment keys. A third doctor flow would then be
     queued as a doctor message but sent as a patient one.
     """
-    from app.modules.integrations.whatsapp_schemas import (
+    from app.modules.integrations.whatsapp.schemas import (
         WhatsAppFlowKey,
         audience_enabled_for,
         flow_audience,

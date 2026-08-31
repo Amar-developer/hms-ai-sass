@@ -551,7 +551,7 @@ export function SettingsPanel(props: any) {
             <Input
               value={reportRecipients}
               onChange={(e: any) => setReportRecipients(e.target.value)}
-              placeholder="owner@clinic.com, accounts@clinic.com"
+              placeholder="Blank sends manual report to your email"
               className="search-filter"
             />
           </FormField>

@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
-from app.modules.integrations.whatsapp_field_catalog import (
+from app.modules.integrations.whatsapp.field_catalog import (
     default_field_order,
     flow_field_keys,
     normalize_saved_field_order,
@@ -586,3 +586,6 @@ class WhatsAppQueueListRead(BaseModel):
     offset: int
     counts: WhatsAppQueueCounts
     today: WhatsAppQueueTodaySummary = Field(default_factory=WhatsAppQueueTodaySummary)
+
+
+# WhatsApp integration domain package.

@@ -1,5 +1,6 @@
 import json
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 
 from sqlmodel import Session, select
@@ -12,6 +13,11 @@ from app.infrastructure.integrations.ports.email import (
 from app.modules.audit.service import record_audit_event
 from app.modules.files.models import FileDocument
 from app.modules.files.services.artifact_service import ArtifactService
+from app.modules.identity.models import User
+from app.modules.integrations.email.service import (
+    EmailRuntimeSettings,
+    get_email_runtime_settings,
+)
 from app.modules.notifications.models import (
     DocumentDelivery,
     DocumentDeliveryChannel,
@@ -35,10 +41,24 @@ class SmtpEmailSender:
         subject: str,
         body: str,
         attachments: list[tuple[str, str, bytes]],
+        cc: list[str] | None = None,
+        reply_to: str | None = None,
+        from_email: str | None = None,
+        from_name: str | None = None,
+        smtp: EmailRuntimeSettings | None = None,
     ) -> str:
         return get_email_sender().send_message(
             EmailMessageRequest(
-                recipients=[recipient],
+                recipients=_email_list(recipient),
+                cc=cc or [],
+                reply_to=reply_to,
+                from_email=from_email,
+                from_name=from_name,
+                smtp_host=None if not smtp or smtp.uses_platform_smtp else smtp.host,
+                smtp_port=None if not smtp or smtp.uses_platform_smtp else smtp.port,
+                smtp_username=None if not smtp else smtp.username,
+                smtp_password=None if not smtp else smtp.password,
+                smtp_use_tls=True if not smtp else smtp.use_tls,
                 subject=subject,
                 body=body,
                 attachments=[
@@ -51,6 +71,68 @@ class SmtpEmailSender:
                 ],
             )
         )
+
+
+def _email_list(value: str | list[str] | None) -> list[str]:
+    if isinstance(value, list):
+        values = value
+    else:
+        values = str(value or "").split(",")
+    return [email.strip() for email in values if email and email.strip()]
+
+
+@dataclass(frozen=True)
+class DeliveryEmailFields:
+    recipients: list[str]
+    cc: list[str]
+    reply_to: str | None
+    from_email: str | None
+    from_name: str | None
+    smtp: EmailRuntimeSettings
+
+
+def _tenant_admin_email(session: Session, tenant_id: str) -> str | None:
+    admin = session.exec(
+        select(User)
+        .where(
+            User.tenant_id == tenant_id,
+            User.user_type == "tenant_admin",
+            User.is_active == True,  # noqa: E712
+        )
+        .order_by(User.created_at)
+    ).first()
+    return admin.email if admin and admin.email else None
+
+
+def _delivery_email_fields(
+    session: Session, delivery: DocumentDelivery
+) -> DeliveryEmailFields:
+    recipients = _email_list(delivery.recipient)
+    cc: list[str] = []
+    reply_to: str | None = None
+    if delivery.resource_type == "report_job":
+        job = session.get(ReportJob, delivery.resource_id)
+        if job and job.tenant_id == delivery.tenant_id:
+            recipients = _email_list(json.loads(job.recipients_json or "[]"))
+            cc = _email_list(json.loads(job.cc_json or "[]"))
+    if delivery.queued_by_user_id:
+        actor = session.get(User, delivery.queued_by_user_id)
+        if actor and actor.is_active and actor.email:
+            reply_to = actor.email
+    # Sender identity and SMTP server both come from the tenant's email
+    # integration, which falls back to the deployment settings when the tenant
+    # has not configured its own.
+    smtp = get_email_runtime_settings(session, tenant_id=delivery.tenant_id)
+    return DeliveryEmailFields(
+        recipients=recipients,
+        cc=cc,
+        reply_to=reply_to
+        or smtp.reply_to
+        or _tenant_admin_email(session, delivery.tenant_id),
+        from_email=smtp.from_email,
+        from_name=smtp.from_name,
+        smtp=smtp,
+    )
 
 
 def _claim_next(session: Session) -> DocumentDelivery | None:
@@ -142,8 +224,14 @@ def process_due_email_deliveries(
         if not delivery:
             break
         try:
+            fields = _delivery_email_fields(session, delivery)
             provider_id = email_sender.send(
-                recipient=delivery.recipient,
+                recipient=", ".join(fields.recipients),
+                cc=fields.cc,
+                reply_to=fields.reply_to,
+                from_email=fields.from_email,
+                from_name=fields.from_name,
+                smtp=fields.smtp,
                 subject=delivery.subject or "Your MedizinHub document",
                 body=delivery.message or "Please find your document attached.",
                 attachments=_attachments(session, delivery),

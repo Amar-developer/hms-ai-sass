@@ -17,7 +17,7 @@ from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
-from app.modules.integrations.whatsapp_schemas import (
+from app.modules.integrations.whatsapp.schemas import (
     WhatsAppIntegrationRead,
     WhatsAppIntegrationUpdate,
     WhatsAppQueueItemRead,
@@ -25,46 +25,51 @@ from app.modules.integrations.whatsapp_schemas import (
     WhatsAppTestRead,
     WhatsAppTestRequest,
 )
-from app.modules.integrations.sms_schemas import (
+from app.modules.integrations.sms.schemas import (
     SmsDeliveryReceiptRead,
     SmsHealthRead,
     SmsQueueItemRead,
     SmsQueueListRead,
     SmsReadinessRead,
     SmsReadinessUpdate,
-    SmsReconciliationCreate,
-    SmsReconciliationRead,
     SmsSettingsRead,
     SmsSettingsUpdate,
     SmsTestRead,
     SmsTestRequest,
     SmsUsageRead,
 )
-from app.modules.integrations.sms_reconciliation import (
-    list_sms_reconciliations,
-    record_sms_reconciliation,
+from app.modules.integrations.email.schemas import (
+    EmailSettingsRead,
+    EmailSettingsUpdate,
+    EmailTestRead,
+    EmailTestRequest,
 )
-from app.modules.integrations.sms_delivery_receipts import (
+from app.modules.integrations.email.service import (
+    get_email_settings,
+    update_email_settings,
+)
+from app.modules.integrations.email.test_send import send_email_test
+from app.modules.integrations.sms.delivery_receipts import (
     parse_receipt_body,
     record_delivery_receipt,
     verify_receipt_signature,
     webhook_secret_for_tenant,
 )
-from app.modules.integrations.sms_health import read_sms_health
-from app.modules.integrations.sms_queue_service import (
+from app.modules.integrations.sms.health import read_sms_health
+from app.modules.integrations.sms.queue_service import (
     cancel_sms_notification,
     list_sms_queue,
     retry_sms_notification,
 )
-from app.modules.integrations.sms_test_send import send_sms_test
-from app.modules.integrations.sms_usage import read_sms_usage
-from app.modules.integrations.sms_service import (
+from app.modules.integrations.sms.test_send import send_sms_test
+from app.modules.integrations.sms.usage import read_sms_usage
+from app.modules.integrations.sms.service import (
     get_sms_readiness,
     get_sms_settings,
     update_sms_readiness,
     update_sms_settings,
 )
-from app.modules.integrations.whatsapp_service import (
+from app.modules.integrations.whatsapp.service import (
     get_whatsapp_integration,
     test_whatsapp_integration,
     update_whatsapp_integration,
@@ -76,7 +81,7 @@ from app.modules.integrations.invoice_receipts import (
 from app.modules.integrations.document_links import verify_document_signature
 from app.modules.files.models import FileDocument
 from app.modules.files.services.artifact_service import ArtifactService
-from app.modules.integrations.whatsapp_queue_service import (
+from app.modules.integrations.whatsapp.queue_service import (
     cancel_whatsapp_notification,
     list_whatsapp_queue,
     retry_whatsapp_notification,
@@ -492,35 +497,62 @@ async def accept_sms_delivery_receipt(
     )
 
 
-@router.post(
-    "/sms/reconciliation",
-    response_model=SmsReconciliationRead,
-    status_code=status.HTTP_201_CREATED,
-    summary="Record a provider SMS invoice for reconciliation against internal usage",
+# --------------------------------------------------------------------------
+# Email (SMTP) settings - per tenant, falling back to the deployment mailbox
+# --------------------------------------------------------------------------
+
+EMAIL_SETTINGS_PERMISSIONS = (
+    permissions.COMMUNICATIONS_MANAGE,
+    permissions.SETTINGS_MANAGE,
 )
-def create_sms_reconciliation(
-    payload: SmsReconciliationCreate,
-    tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
-    session: Session = Depends(get_session),
-) -> SmsReconciliationRead:
-    return record_sms_reconciliation(
-        session, tenant_id=tenant_id, payload=payload, actor=current_user
-    )
 
 
 @router.get(
-    "/sms/reconciliation",
-    response_model=list[SmsReconciliationRead],
-    summary="List recorded SMS provider-invoice reconciliations",
+    "/email/settings",
+    response_model=EmailSettingsRead,
+    summary="Get tenant email (SMTP) settings",
 )
-def read_sms_reconciliations(
-    limit: int = Query(default=24, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+def read_email_settings(
     tenant_id: str = Depends(require_tenant_id),
-    _current_user: User = Depends(require_any_permission(*SMS_SETTINGS_PERMISSIONS)),
+    _current_user: User = Depends(require_any_permission(*EMAIL_SETTINGS_PERMISSIONS)),
     session: Session = Depends(get_session),
-) -> list[SmsReconciliationRead]:
-    return list_sms_reconciliations(
-        session, tenant_id=tenant_id, limit=limit, offset=offset
+) -> EmailSettingsRead:
+    return get_email_settings(session, tenant_id=tenant_id)
+
+
+@router.put(
+    "/email/settings",
+    response_model=EmailSettingsRead,
+    summary="Update tenant email (SMTP) settings",
+)
+def save_email_settings(
+    payload: EmailSettingsUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_any_permission(*EMAIL_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> EmailSettingsRead:
+    return update_email_settings(
+        session,
+        tenant_id=tenant_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.post(
+    "/email/test",
+    response_model=EmailTestRead,
+    summary="Send a test email using the tenant email settings",
+)
+def send_email_test_message(
+    payload: EmailTestRequest,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_any_permission(*EMAIL_SETTINGS_PERMISSIONS)),
+    session: Session = Depends(get_session),
+) -> EmailTestRead:
+    return send_email_test(
+        session,
+        tenant_id=tenant_id,
+        payload=payload,
+        actor=current_user,
     )

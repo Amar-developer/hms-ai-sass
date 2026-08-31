@@ -75,6 +75,18 @@ export function SuperAdminDashboard({
   const router = useRouter();
   const { beginNavigation } = useShellChrome();
   const currentSection = section || "overview";
+  const [visitedWhatsAppSettings, setVisitedWhatsAppSettings] = useState(
+    currentSection === "whatsappSettings",
+  );
+  const [visitedSmsSettings, setVisitedSmsSettings] = useState(
+    currentSection === "smsSettings",
+  );
+  useEffect(() => {
+    if (currentSection === "whatsappSettings") {
+      setVisitedWhatsAppSettings(true);
+    }
+    if (currentSection === "smsSettings") setVisitedSmsSettings(true);
+  }, [currentSection]);
 
   // Tenants/Roles/Users/Departments/Branches share one global search+sort+
   // custom-filter bar (same pattern as TenantAdmin's listQuery/listSort/
@@ -891,39 +903,45 @@ export function SuperAdminDashboard({
           reloadPlans={data.reload}
         />
       )}
-      {currentSection === "whatsappSettings" && (
-        <div className="space-y-3">
-          <BreadcrumbSlot>
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="hidden shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:inline">
-                Tenant
-              </span>
-              <SearchableSelect
-                value={data.selectedId}
-                onChange={setSelectedTenantId}
-                options={customerTenants.map((tenant: any) => ({
-                  value: tenant.id,
-                  label: tenant.name,
-                }))}
-                placeholder="Select tenant"
-                searchable={false}
-                className="w-[150px] sm:w-[190px]"
-              />
-              <Badge
-                tone={tenantWhatsAppEnabled ? "green" : "slate"}
-                className="normal-label inline-flex whitespace-nowrap"
-              >
-                <span className="sm:hidden">
-                  {tenantWhatsAppEnabled ? "Included" : "Not included"}
+      {visitedWhatsAppSettings && (
+        <div
+          className={
+            currentSection === "whatsappSettings" ? "space-y-3" : "hidden"
+          }
+        >
+          {currentSection === "whatsappSettings" && (
+            <BreadcrumbSlot>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="hidden shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:inline">
+                  Tenant
                 </span>
-                <span className="hidden sm:inline">
-                  {tenantWhatsAppEnabled
-                    ? "Included in active subscription"
-                    : "Not included in active subscription"}
-                </span>
-              </Badge>
-            </div>
-          </BreadcrumbSlot>
+                <SearchableSelect
+                  value={data.selectedId}
+                  onChange={setSelectedTenantId}
+                  options={customerTenants.map((tenant: any) => ({
+                    value: tenant.id,
+                    label: tenant.name,
+                  }))}
+                  placeholder="Select tenant"
+                  searchable={false}
+                  className="w-[150px] sm:w-[190px]"
+                />
+                <Badge
+                  tone={tenantWhatsAppEnabled ? "green" : "slate"}
+                  className="normal-label inline-flex whitespace-nowrap"
+                >
+                  <span className="sm:hidden">
+                    {tenantWhatsAppEnabled ? "Included" : "Not included"}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {tenantWhatsAppEnabled
+                      ? "Included in active subscription"
+                      : "Not included in active subscription"}
+                  </span>
+                </Badge>
+              </div>
+            </BreadcrumbSlot>
+          )}
           {tenantWhatsAppEnabled ? (
             <WhatsAppIntegrationSettings
               apiSession={apiSession}
@@ -940,8 +958,12 @@ export function SuperAdminDashboard({
           )}
         </div>
       )}
-      {currentSection === "smsSettings" && (
-        <div className="space-y-5">
+      {visitedSmsSettings && (
+        <div
+          className={
+            currentSection === "smsSettings" ? "space-y-5" : "hidden"
+          }
+        >
           <Card className="mt-3">
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
               <TenantPicker

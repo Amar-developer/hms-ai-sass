@@ -105,6 +105,23 @@ export function PatientForm({
               "whatsapp_preferred_language",
               "whatsappPreferredLanguage",
             ) || "en",
+      smsConsentStatus:
+        patientField(patient, "sms_consent_status", "smsConsentStatus") ||
+        "not_recorded",
+      smsConsentSource:
+        patientField(patient, "sms_consent_source", "smsConsentSource") || "",
+      smsPreferredLanguage:
+        (patientField(
+          patient,
+          "sms_preferred_language",
+          "smsPreferredLanguage",
+        ) || "en") === "tenant_default"
+          ? "en"
+          : patientField(
+              patient,
+              "sms_preferred_language",
+              "smsPreferredLanguage",
+            ) || "en",
       monthlyTrackingEnabled: Boolean(
         patientField(
           patient,
@@ -220,6 +237,23 @@ export function PatientForm({
               "whatsapp_preferred_language",
               "whatsappPreferredLanguage",
             ) || "en",
+      smsConsentStatus:
+        patientField(patient, "sms_consent_status", "smsConsentStatus") ||
+        "not_recorded",
+      smsConsentSource:
+        patientField(patient, "sms_consent_source", "smsConsentSource") || "",
+      smsPreferredLanguage:
+        (patientField(
+          patient,
+          "sms_preferred_language",
+          "smsPreferredLanguage",
+        ) || "en") === "tenant_default"
+          ? "en"
+          : patientField(
+              patient,
+              "sms_preferred_language",
+              "smsPreferredLanguage",
+            ) || "en",
       monthlyTrackingEnabled: Boolean(
         patientField(
           patient,
@@ -310,6 +344,7 @@ export function PatientForm({
 
   const dateOfBirth = watch("dateOfBirth");
   const whatsappConsentStatus = watch("whatsappConsentStatus");
+  const smsConsentStatus = watch("smsConsentStatus");
   const dateOfBirthRegistration = register("dateOfBirth");
 
   // Skip the initial mount: defaultValues/reset already computed the
@@ -485,20 +520,6 @@ export function PatientForm({
                 onChange={(value) => setValue("bloodGroup", value)}
               />
             </FormField>
-            <FormField label="Mobile Number">
-              <Input
-                type="text"
-                inputMode="numeric"
-                maxLength={10}
-                placeholder="Enter patient mobile number"
-                {...register("mobile", {
-                  onChange: (e) => {
-                    e.target.value = e.target.value.replace(/\D/g, "");
-                  },
-                })}
-              />
-              <FormError error={errors.mobile?.message} />
-            </FormField>
             <FormField label="Secondary Mobile Number">
               <Input
                 type="text"
@@ -608,6 +629,64 @@ export function PatientForm({
                 options={language_options}
                 onChange={(value) =>
                   setValue("whatsappPreferredLanguage", value as any, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+              />
+            </FormField>
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-3">
+          <div>
+            <h4 className="text-sm font-black text-slate-900">
+              SMS Preference
+            </h4>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <FormField label="SMS preference">
+              <SearchableSelect
+                value={smsConsentStatus}
+                searchable={false}
+                options={whatsup_options}
+                onChange={(value) => {
+                  setValue("smsConsentStatus", value as any, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                  if (value === "not_recorded") {
+                    setValue("smsConsentSource", "", {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                  }
+                }}
+              />
+            </FormField>
+            {smsConsentStatus !== "not_recorded" && (
+              <FormField label="Preference source" required>
+                <SearchableSelect
+                  value={watch("smsConsentSource") || ""}
+                  searchable={false}
+                  options={source_options}
+                  onChange={(value) =>
+                    setValue("smsConsentSource", value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                />
+                <FormError error={errors.smsConsentSource?.message} />
+              </FormField>
+            )}
+            <FormField label="SMS language">
+              <SearchableSelect
+                value={watch("smsPreferredLanguage")}
+                searchable={false}
+                options={language_options}
+                onChange={(value) =>
+                  setValue("smsPreferredLanguage", value as any, {
                     shouldDirty: true,
                     shouldValidate: true,
                   })

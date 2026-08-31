@@ -32,7 +32,7 @@ export function SmsUsagePanel({ usage }: { usage: SmsUsage | null }) {
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
         <div
-          className={`h-full rounded-full ${usage.limit_reached ? "bg-red-500" : "bg-sky-500"}`}
+          className={`h-full rounded-full ${usage.limit_reached ? "bg-red-500" : "bg-emerald-500"}`}
           style={{ width: `${percentage}%` }}
         />
       </div>

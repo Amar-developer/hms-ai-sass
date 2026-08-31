@@ -183,3 +183,6 @@ def queue_due_whatsapp_admin_daily_reports(
             if event is not None and not existed:
                 queued += 1
     return queued
+
+
+# WhatsApp integration domain package.

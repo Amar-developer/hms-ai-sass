@@ -13,12 +13,14 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.modules.audit.service import record_audit_event
-from app.modules.integrations.sms_consent import (
+from app.modules.integrations.sms.consent import (
     patient_allows_sms,
     patient_sms_destination,
+    patient_sms_language,
 )
-from app.modules.integrations.sms_service import PLUGIN_KEY, get_sms_settings_model
-from app.modules.integrations.sms_usage import enforce_sms_limits
+from app.modules.integrations.sms.service import PLUGIN_KEY, get_sms_settings_model
+from app.modules.integrations.sms.usage import enforce_sms_limits
+from app.modules.integrations.sms.templates import select_sms_flow
 from app.modules.integrations.service import get_tenant_plugin
 from app.modules.notifications.models import (
     NotificationEvent,
@@ -30,17 +32,11 @@ from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
 
 
-# Every P0 SMS flow reports under one of these event types for the admin
-# queue and health dashboards; anything not named here is a configuration bug.
+# How each SMS flow reports in the admin queue and health dashboards. A flow
+# missing from here falls back to PATIENT_MESSAGE, so keep it in step with
+# SmsFlowKey when a flow is added.
 _EVENT_TYPE_BY_FLOW = {
     "appointment_booked_patient": NotificationEventType.APPOINTMENT_REMINDER,
-    "appointment_reminder_patient": NotificationEventType.APPOINTMENT_REMINDER,
-    "appointment_rescheduled_patient": NotificationEventType.APPOINTMENT_REMINDER,
-    "appointment_cancelled_patient": NotificationEventType.APPOINTMENT_REMINDER,
-    "queue_token_alert_patient": NotificationEventType.QUEUE_TOKEN_CALL,
-    "payment_pending_patient": NotificationEventType.PAYMENT_REMINDER,
-    "lab_report_ready_patient": NotificationEventType.LAB_REPORT_READY,
-    "follow_up_reminder_patient": NotificationEventType.FOLLOW_UP_REMINDER,
 }
 
 
@@ -82,15 +78,13 @@ def queue_sms_template_if_allowed(
     # A tenant may keep several templates registered for one flow_key across
     # languages; this only confirms the workflow is live at all. The worker
     # picks the language-specific template at send time via resolve_sms_template.
-    flow = next(
-        (item for item in settings.flows if item.flow_key == flow_key and item.enabled),
-        None,
-    )
+    try:
+        flow = select_sms_flow(settings, flow_key, patient_sms_language(patient))
+    except ValueError:
+        return None
     if (
-        not flow
-        or not flow.approved_by_provider
+        not flow.approved_by_provider
         or not flow.dlt_template_id
-        or not settings.dlt_entity_id
         or not settings.default_sender_id
     ):
         return None

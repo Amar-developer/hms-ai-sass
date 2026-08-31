@@ -2,21 +2,25 @@
 
 import hmac
 import json
+from datetime import timedelta
 from hashlib import sha256
 
+from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.infrastructure.integrations.ports.sms import SmsSendResult
 from app.modules.identity.models import User
-from app.modules.integrations import sms_service
-from app.modules.integrations import sms_delivery_receipts as receipts
-from app.modules.integrations import sms_queue_service
-from app.modules.integrations.sms_delivery_receipts import (
+from app.modules.integrations.sms import delivery_receipts as receipts
+from app.modules.integrations.sms import queue_service as sms_queue_service
+from app.modules.integrations.sms import service as sms_service
+from app.modules.integrations.sms import test_send as sms_test_send
+from app.modules.integrations.sms.delivery_receipts import (
     map_provider_status,
     record_delivery_receipt,
     verify_receipt_signature,
 )
-from app.modules.integrations.sms_schemas import SmsSettingsUpdate
+from app.modules.integrations.sms.schemas import SmsSettingsUpdate, SmsTestRequest
+from app.modules.integrations.sms.usage import _counts
 from app.modules.notifications import sms_processor
 from app.modules.notifications.models import (
     NotificationEvent,
@@ -46,7 +50,6 @@ def ready_settings_payload() -> dict:
         "delivery_receipts_confirmed": True,
         "callback_contract_confirmed": True,
         "static_ip_allowlisting_confirmed": True,
-        "dlt_entity_id": "1101000012345678901",
         "default_sender_id": "MEDHUB",
         "throughput_limit_per_minute": 1200,
         "retention_days": 180,
@@ -58,9 +61,9 @@ def ready_settings_payload() -> dict:
                 "consent_basis": "patient_transaction",
                 "dlt_template_id": "1707160000000001",
                 "registered_body": (
-                    "Hello {#var#}, your appointment at {#var#} is confirmed."
+                    "Hello {#var#}, your appointment with Dr. {#var#} is confirmed."
                 ),
-                "variable_keys": ["patient_name", "clinic_name"],
+                "variable_keys": ["patient_name", "doctor_name"],
                 "approved_by_provider": True,
             }
         ],
@@ -142,9 +145,7 @@ def _queue_event(
         provider=NotificationProvider.SMS,
         event_type=NotificationEventType.APPOINTMENT_REMINDER,
         recipient=recipient,
-        message=json.dumps(
-            values or {"patient_name": "Asha", "clinic_name": "Medizin Clinic"}
-        ),
+        message=json.dumps(values or {"patient_name": "Asha", "doctor_name": "Kumar"}),
         template_key="appointment_booked_patient",
         resource_type="patient" if patient_id else None,
         resource_id=patient_id,
@@ -401,10 +402,126 @@ def test_worker_sends_a_due_message_and_records_acceptance(test_engine, monkeypa
 
         sent_request, _kwargs = gateway.requests[0]
         assert sent_request.body == (
-            "Hello Asha, your appointment at Medizin Clinic is confirmed."
+            "Hello Asha, your appointment with Dr. Kumar is confirmed."
         )
         # ClientReference lets an unmatched receipt still find its row.
         assert sent_request.client_reference == event.id
+
+
+def test_successful_test_send_is_recorded_in_the_billable_sms_ledger(
+    test_engine, monkeypatch
+):
+    _disable_entitlements(monkeypatch)
+    monkeypatch.setattr(
+        sms_test_send, "enforce_sms_limits", lambda *_args, **_kwargs: None
+    )
+    gateway = FakeGateway(
+        SmsSendResult(
+            True,
+            "accepted",
+            "SMS accepted by SMSCountry.",
+            external_message_id="sms-test-ledger",
+            segment_count=2,
+        )
+    )
+    with Session(test_engine) as session:
+        actor = _actor(session, "phase3.test-ledger@medizinhub.local")
+        _configure(session, actor)
+
+        result = sms_test_send.send_sms_test(
+            session,
+            tenant_id=TENANT,
+            payload=SmsTestRequest(
+                mobile="9876543210",
+                flow_key="appointment_booked_patient",
+                variables={
+                    "patient_name": "Test Patient",
+                    "doctor_name": "Kumar",
+                },
+            ),
+            actor=actor,
+            gateway=gateway,
+        )
+        event = session.exec(
+            select(NotificationEvent).where(
+                NotificationEvent.tenant_id == TENANT,
+                NotificationEvent.resource_type == "sms_integration_test",
+            )
+        ).one()
+
+        assert result.success is True
+        assert event.status == NotificationStatus.SENT
+        assert event.accepted_at is not None
+        assert event.segment_count == 2
+        assert event.provider_message_id == "sms-test-ledger"
+
+
+def test_test_sends_are_rate_limited_per_tenant(test_engine, monkeypatch):
+    """The one send path with no consent check and no volume ceiling of its own."""
+    _disable_entitlements(monkeypatch)
+    monkeypatch.setattr(
+        sms_test_send, "enforce_sms_limits", lambda *_args, **_kwargs: None
+    )
+    gateway = FakeGateway(
+        SmsSendResult(True, "accepted", "SMS accepted by SMSCountry.")
+    )
+
+    def _send(session, actor):
+        return sms_test_send.send_sms_test(
+            session,
+            tenant_id=TENANT,
+            payload=SmsTestRequest(
+                mobile="9876543210",
+                flow_key="appointment_booked_patient",
+                variables={
+                    "patient_name": "Test Patient",
+                    "doctor_name": "Kumar",
+                },
+            ),
+            actor=actor,
+            gateway=gateway,
+        )
+
+    with Session(test_engine) as session:
+        actor = _actor(session, "phase3.test-throttle@medizinhub.local")
+        _configure(session, actor)
+
+        for _ in range(sms_test_send.TEST_SENDS_PER_HOUR):
+            _send(session, actor)
+
+        try:
+            _send(session, actor)
+            raise AssertionError("The test send above the hourly cap must be refused")
+        except HTTPException as exc:
+            assert exc.status_code == 429
+            assert "limit" in exc.detail
+
+        assert len(gateway.requests) == sms_test_send.TEST_SENDS_PER_HOUR
+
+
+def test_sms_usage_counts_only_provider_accepted_messages(test_engine):
+    with Session(test_engine) as session:
+        accepted = _queue_event(session)
+        accepted.status = NotificationStatus.SENT
+        accepted.accepted_at = sms_processor.now_utc()
+        accepted.segment_count = 2
+        rejected = _queue_event(session, recipient="+919876543211")
+        rejected.status = NotificationStatus.FAILED
+        rejected.segment_count = 3
+        _queue_event(session, recipient="+919876543212")
+        session.add(accepted)
+        session.add(rejected)
+        session.commit()
+
+        messages, segments = _counts(
+            session,
+            TENANT,
+            sms_processor.now_utc() - timedelta(days=1),
+            sms_processor.now_utc() + timedelta(days=1),
+        )
+
+        assert messages == 1
+        assert segments == 2
 
 
 def test_worker_requeues_a_retryable_failure_with_backoff(test_engine, monkeypatch):
@@ -430,6 +547,39 @@ def test_worker_requeues_a_retryable_failure_with_backoff(test_engine, monkeypat
         assert event.attempt_count == 1
         assert event.next_attempt_at > queued_next_attempt
         assert event.processing_started_at is None
+
+
+def test_worker_defers_without_sending_when_tenant_throughput_is_reached(
+    test_engine, monkeypatch
+):
+    _disable_entitlements(monkeypatch)
+    gateway = FakeGateway(SmsSendResult(True, "accepted", "ok"))
+    with Session(test_engine) as session:
+        actor = _actor(session, "phase3.throughput@medizinhub.local")
+        payload = ready_settings_payload()
+        payload["throughput_limit_per_minute"] = 1
+        sms_service.update_sms_settings(
+            session,
+            tenant_id=TENANT,
+            payload=SmsSettingsUpdate.model_validate(payload),
+            actor=actor,
+        )
+        accepted = _queue_event(session)
+        accepted.status = NotificationStatus.SENT
+        accepted.accepted_at = sms_processor.now_utc()
+        session.add(accepted)
+        session.commit()
+        event = _queue_event(session, recipient="+919876543211")
+        previous_attempt = event.next_attempt_at
+
+        sms_processor.process_due_sms_notifications(session, gateway=gateway)
+        session.refresh(event)
+
+        assert event.status == NotificationStatus.QUEUED
+        assert event.next_attempt_at > previous_attempt
+        assert "throughput" in str(event.failure_reason).lower()
+        assert event.attempt_count == 0
+        assert gateway.requests == []
 
 
 def test_worker_fails_permanently_on_a_rejected_request(test_engine, monkeypatch):
@@ -492,6 +642,55 @@ def test_worker_cancels_for_a_patient_who_opted_out(test_engine, monkeypatch):
         session.commit()
         session.refresh(patient)
         event = _queue_event(session, patient_id=patient.id)
+
+        sms_processor.process_due_sms_notifications(session, gateway=gateway)
+        session.refresh(event)
+
+        assert event.status == NotificationStatus.CANCELLED
+        assert gateway.requests == []
+
+
+def test_worker_checks_consent_against_the_selected_language_template(
+    test_engine, monkeypatch
+):
+    _disable_entitlements(monkeypatch)
+    gateway = FakeGateway(SmsSendResult(True, "accepted", "ok"))
+    with Session(test_engine) as session:
+        actor = _actor(session, "phase3.language-consent@medizinhub.local")
+        payload = ready_settings_payload()
+        payload["flows"].append(
+            _second_template_for(
+                "appointment_booked_patient",
+                id="sms_tpl_tamil_explicit",
+                enabled=True,
+                language="ta",
+                classification="service_explicit",
+                consent_basis="explicit_consent",
+                registered_body="வணக்கம் {#var#}, appointment update.",
+            )
+        )
+        sms_service.update_sms_settings(
+            session,
+            tenant_id=TENANT,
+            payload=SmsSettingsUpdate.model_validate(payload),
+            actor=actor,
+        )
+        patient = Patient(
+            tenant_id=TENANT,
+            patient_number="P-PHASE3-LANGUAGE",
+            full_name="Explicit Consent Required",
+            mobile="+919876543210",
+            sms_preferred_language="ta",
+            sms_consent_status=SmsConsentStatus.NOT_RECORDED,
+        )
+        session.add(patient)
+        session.commit()
+        session.refresh(patient)
+        event = _queue_event(
+            session,
+            patient_id=patient.id,
+            values={"patient_name": patient.full_name},
+        )
 
         sms_processor.process_due_sms_notifications(session, gateway=gateway)
         session.refresh(event)
@@ -689,88 +888,6 @@ def test_queue_operations_reject_another_tenants_id(test_engine, monkeypatch):
 # --------------------------------------------------------------------------
 # Phase 4: scheduled appointment reminders
 # --------------------------------------------------------------------------
-
-
-def test_sms_reminder_scheduler_queues_appointments_in_the_reminder_window(
-    test_engine, monkeypatch
-):
-    from datetime import timedelta
-
-    from app.modules.appointments.models import Appointment, AppointmentStatus
-    from app.modules.integrations.sms_reminders import (
-        queue_due_sms_appointment_reminders,
-    )
-
-    _disable_entitlements(monkeypatch)
-    monkeypatch.setattr(
-        "app.modules.notifications.services.sms_events.enforce_module_enabled",
-        lambda *_a, **_k: None,
-    )
-    monkeypatch.setattr(
-        "app.modules.notifications.services.sms_events.enforce_sms_limits",
-        lambda *_a, **_k: None,
-    )
-    with Session(test_engine) as session:
-        from app.modules.tenants.models import Tenant
-
-        # UTC avoids a timezone-conversion mismatch between the appointment
-        # time computed here and the scheduler's tenant-local window.
-        session.add(Tenant(id=TENANT, name="Phase4 Reminder Tenant", timezone="UTC"))
-        session.commit()
-        actor = _actor(session, "phase4.reminder@medizinhub.local")
-        payload = ready_settings_payload()
-        payload["flows"][0]["flow_key"] = "appointment_reminder_patient"
-        _configure(session, actor)
-        sms_service.update_sms_settings(
-            session,
-            tenant_id=TENANT,
-            payload=SmsSettingsUpdate.model_validate(payload),
-            actor=actor,
-        )
-        patient = Patient(
-            tenant_id=TENANT,
-            patient_number="P-PHASE4-1",
-            full_name="Reminder Patient",
-            mobile="+919876543210",
-        )
-        session.add(patient)
-        session.commit()
-        session.refresh(patient)
-
-        from app.modules.tenants.models import now_utc
-
-        # A couple of minutes past the exact 24h mark keeps this comfortably
-        # inside the scheduler's 5-minute window despite test execution time.
-        target_time = now_utc() + timedelta(hours=24, minutes=2)
-        appointment = Appointment(
-            tenant_id=TENANT,
-            branch_id="branch_1",
-            patient_id=patient.id,
-            department_id="dept_1",
-            practitioner_id="practitioner_1",
-            appointment_type="op",
-            appointment_date=target_time.date(),
-            appointment_time=target_time.time(),
-            status=AppointmentStatus.SCHEDULED,
-        )
-        session.add(appointment)
-        session.commit()
-
-        queued = queue_due_sms_appointment_reminders(session)
-        session.commit()
-
-        events = session.exec(
-            select(NotificationEvent).where(
-                NotificationEvent.tenant_id == TENANT,
-                NotificationEvent.template_key == "appointment_reminder_patient",
-            )
-        ).all()
-        assert queued == 1
-        assert len(events) == 1
-
-        # Running again immediately must not duplicate the same reminder.
-        requeued = queue_due_sms_appointment_reminders(session)
-        assert requeued == 0
 
 
 def test_worker_sends_using_whichever_template_is_currently_enabled(

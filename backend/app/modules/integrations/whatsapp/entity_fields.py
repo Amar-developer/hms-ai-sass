@@ -1,6 +1,6 @@
 """Module-derived placeholder fields for WhatsApp templates.
 
-`whatsapp_field_catalog.py` used to list, by hand, the two or three values each
+`field_catalog.py` used to list, by hand, the two or three values each
 notification flow could put into a template. That meant a tenant who later had
 an approved template mentioning a patient's date of birth needed a code change
 before they could pick it — even though the processor was already holding the
@@ -509,3 +509,6 @@ def build_entity_context(flow_key: str, entities: dict[str, object]) -> dict[str
                 getattr(instance, field.attribute, None), field.kind
             )
     return context
+
+
+# WhatsApp integration domain package.

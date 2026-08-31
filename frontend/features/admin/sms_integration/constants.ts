@@ -2,6 +2,7 @@ import {
   SmsConsentBasis,
   SmsCountryApiMode,
   SmsFlowKey,
+  SmsLanguage,
   SmsMessageClassification,
   SmsSettingsDraft,
   SmsTemplateDraft,
@@ -30,47 +31,31 @@ export const consentBasisOptions: [SmsConsentBasis, string][] = [
   ["not_applicable", "Not applicable"],
 ];
 
-/** The P0 flows the backend readiness evaluator requires before rollout. */
+export const languageOptions: [SmsLanguage, string][] = [
+  ["en", "English"],
+  ["hi", "Hindi"],
+  ["mr", "Marathi"],
+  ["gu", "Gujarati"],
+  ["ta", "Tamil"],
+  ["te", "Telugu"],
+  ["kn", "Kannada"],
+  ["ml", "Malayalam"],
+  ["bn", "Bengali"],
+  ["pa", "Punjabi"],
+  ["ur", "Urdu"],
+];
+
+/** Supported trigger events. Only configured templates are rendered as cards. */
 export const flowOptions: { key: SmsFlowKey; label: string; hint: string }[] = [
+  {
+    key: "patient_registered_patient",
+    label: "Patient registration",
+    hint: "Sent after a patient registration is successfully completed.",
+  },
   {
     key: "appointment_booked_patient",
     label: "Appointment booked",
     hint: "Sent to the patient when an appointment is confirmed.",
-  },
-  {
-    key: "appointment_reminder_patient",
-    label: "Appointment reminder",
-    hint: "Sent ahead of the scheduled appointment slot.",
-  },
-  {
-    key: "appointment_rescheduled_patient",
-    label: "Appointment rescheduled",
-    hint: "Sent when the appointment date or time changes.",
-  },
-  {
-    key: "appointment_cancelled_patient",
-    label: "Appointment cancelled",
-    hint: "Sent when an appointment is cancelled.",
-  },
-  {
-    key: "queue_token_alert_patient",
-    label: "Queue token alert",
-    hint: "Sent when the patient token is called or is next in line.",
-  },
-  {
-    key: "payment_pending_patient",
-    label: "Payment pending",
-    hint: "Sent when an invoice is awaiting payment.",
-  },
-  {
-    key: "lab_report_ready_patient",
-    label: "Lab report ready",
-    hint: "Sent when a lab report is released to the patient.",
-  },
-  {
-    key: "follow_up_reminder_patient",
-    label: "Follow-up reminder",
-    hint: "Sent when a follow-up visit is due.",
   },
 ];
 
@@ -87,6 +72,7 @@ export function newTemplateDraft(
     id: generateTemplateId(),
     flowKey,
     name,
+    language: "en",
     enabled: false,
     classification: "service_implicit",
     consentBasis: "patient_transaction",
@@ -109,6 +95,32 @@ export function defaultTemplateDraft(flowKey: SmsFlowKey): SmsTemplateDraft {
   return { ...newTemplateDraft(flowKey), id: `sms_tpl_default_${flowKey}` };
 }
 
+export const starterTemplateDrafts: SmsTemplateDraft[] = [
+  {
+    ...defaultTemplateDraft("patient_registered_patient"),
+    id: "sms_tpl_patient_registration",
+    name: "Patient registration",
+    registeredBody:
+      "Dear {#var#}, your patient registration at MedizinHub has been successfully completed. Your Patient ID is {#var#}. Thank you.",
+    variableKeys: ["patient_name", "patient_number"],
+  },
+  {
+    ...defaultTemplateDraft("appointment_booked_patient"),
+    id: "sms_tpl_appointment_booking",
+    name: "Appointment booking",
+    registeredBody:
+      "Dear {#var#}, your appointment with Dr. {#var#} for {#var#} at MedizinHub on {#var#} at {#var#} has been successfully booked. Appointment ID: {#var#}. Thank you.",
+    variableKeys: [
+      "patient_name",
+      "doctor_name",
+      "consultation_type",
+      "appointment_date",
+      "appointment_time",
+      "appointment_id",
+    ],
+  },
+];
+
 export const initialDraft: SmsSettingsDraft = {
   enabled: false,
   apiMode: "unknown",
@@ -126,7 +138,6 @@ export const initialDraft: SmsSettingsDraft = {
   monthlySegmentLimit: "",
   patientNotificationsEnabled: true,
   staffNotificationsEnabled: false,
-  dltEntityId: "",
   defaultSenderId: "",
   throughputLimitPerMinute: "",
   retentionDays: "",
@@ -137,8 +148,5 @@ export const initialDraft: SmsSettingsDraft = {
   deliveryReceiptsConfirmed: false,
   callbackContractConfirmed: false,
   staticIpAllowlistingConfirmed: false,
-  // One blank, unsaved template per P0 event so every workflow has a visible
-  // card to fill in before the tenant has saved anything. Each is a normal
-  // template row from here on - deletable, and more can be added per event.
-  flows: flowOptions.map((flow) => defaultTemplateDraft(flow.key)),
+  flows: starterTemplateDrafts,
 };

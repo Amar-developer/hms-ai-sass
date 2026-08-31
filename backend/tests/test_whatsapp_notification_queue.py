@@ -16,14 +16,14 @@ from app.modules.integrations import invoice_receipts
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.files.models import FileDocument
 from app.modules.home_care.models import HomeCareBooking, HomeCareBookingItem
-from app.modules.integrations.whatsapp_field_catalog import default_field_order
-from app.modules.integrations.whatsapp_gateway import WhatsAppGatewayResult
-from app.modules.integrations.whatsapp_consent import patient_notification_language
-from app.modules.integrations.whatsapp_templates import resolve_template_identifier
-from app.modules.integrations.whatsapp_usage import read_whatsapp_usage
-from app.modules.integrations.whatsapp_health import read_whatsapp_health
-from app.modules.integrations import whatsapp_reminders
-from app.modules.integrations import whatsapp_queue_service
+from app.modules.integrations.whatsapp.field_catalog import default_field_order
+from app.modules.integrations.whatsapp.gateway import WhatsAppGatewayResult
+from app.modules.integrations.whatsapp.consent import patient_notification_language
+from app.modules.integrations.whatsapp.templates import resolve_template_identifier
+from app.modules.integrations.whatsapp.usage import read_whatsapp_usage
+from app.modules.integrations.whatsapp.health import read_whatsapp_health
+from app.modules.integrations.whatsapp import queue_service as whatsapp_queue_service
+from app.modules.integrations.whatsapp import reminders as whatsapp_reminders
 from app.modules.identity.models import User
 from app.modules.notifications.models import (
     NotificationEvent,

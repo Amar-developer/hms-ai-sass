@@ -85,6 +85,7 @@ class PatientRepository:
             self.session.exec(
                 select(Patient).where(
                     Patient.tenant_id == tenant_id,
+                    Patient.status != PatientStatus.INACTIVE,
                     Patient.mobile.is_not(None),
                 )
             ).all()
@@ -99,7 +100,10 @@ class PatientRepository:
         guardian_mobile: str | None,
         limit: int = 10,
     ) -> list[Patient]:
-        statement = select(Patient).where(Patient.tenant_id == tenant_id)
+        statement = select(Patient).where(
+            Patient.tenant_id == tenant_id,
+            Patient.status != PatientStatus.INACTIVE,
+        )
         conditions = [func.lower(Patient.full_name) == normalized_name]
         if mobile:
             conditions.extend(

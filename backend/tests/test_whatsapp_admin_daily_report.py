@@ -12,13 +12,13 @@ from app.modules.billing.models import Invoice, InvoiceStatus
 from app.modules.home_care.models import HomeCareBooking, HomeCareVisitLog
 from app.modules.identity.models import User
 from app.modules.integrations.models import TenantIntegrationPlugin
-from app.modules.integrations.whatsapp_daily_report import (
+from app.modules.integrations.whatsapp.daily_report import (
     queue_due_whatsapp_admin_daily_reports,
 )
-from app.modules.integrations.whatsapp_gateway import WhatsAppGatewayResult
-from app.modules.integrations import whatsapp_queue_service
-from app.modules.integrations import whatsapp_service
-from app.modules.integrations.whatsapp_schemas import WhatsAppIntegrationUpdate
+from app.modules.integrations.whatsapp.gateway import WhatsAppGatewayResult
+from app.modules.integrations.whatsapp import queue_service as whatsapp_queue_service
+from app.modules.integrations.whatsapp import service as whatsapp_service
+from app.modules.integrations.whatsapp.schemas import WhatsAppIntegrationUpdate
 from app.modules.lab.models import LabOrder, LabOrderStatus
 from app.modules.notifications import whatsapp_processor
 from app.modules.notifications.models import NotificationEvent

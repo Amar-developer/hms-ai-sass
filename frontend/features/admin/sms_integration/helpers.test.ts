@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { flowOptions, initialDraft } from "./constants";
+import { initialDraft } from "./constants";
 import {
   addTemplateToDraft,
   buildSmsSettingsPayload,
@@ -27,7 +27,6 @@ const savedSettings = {
   monthly_segment_limit: null,
   patient_notifications_enabled: true,
   staff_notifications_enabled: false,
-  dlt_entity_id: "110100001234567890",
   default_sender_id: "MEDIZN",
   throughput_limit_per_minute: 600,
   retention_days: 90,
@@ -59,9 +58,9 @@ function findTemplateByFlow(draft: ReturnType<typeof readDraft>, flowKey: string
 }
 
 describe("SMS settings helpers", () => {
-  it("merges saved templates over the full P0 flow list, one blank default per uncovered event", () => {
+  it("reads only the templates returned by the backend", () => {
     const draft = readDraft(savedSettings);
-    expect(draft.flows).toHaveLength(flowOptions.length);
+    expect(draft.flows).toHaveLength(1);
 
     const booked = findTemplateByFlow(draft, "appointment_booked_patient");
     expect(booked?.id).toBe("sms_tpl_booked_default");
@@ -70,10 +69,7 @@ describe("SMS settings helpers", () => {
     expect(booked?.dltTemplateId).toBe("1707160000000000001");
     expect(booked?.variableKeys).toEqual(["patient_name", "token_number"]);
 
-    const reminder = findTemplateByFlow(draft, "appointment_reminder_patient");
-    expect(reminder?.enabled).toBe(false);
-    expect(reminder?.dltTemplateId).toBe("");
-    expect(reminder?.id).toBeTruthy();
+    expect(findTemplateByFlow(draft, "patient_registered_patient")).toBeUndefined();
   });
 
   it("never reads credentials back into the draft", () => {
@@ -102,7 +98,7 @@ describe("SMS settings helpers", () => {
     expect(payload.api_url).toBeNull();
   });
 
-  it("drops untouched blank per-event placeholders from the save payload", () => {
+  it("round-trips only returned templates", () => {
     const draft = readDraft(savedSettings);
     const payload = buildSmsSettingsPayload(draft);
     const flows = payload.flows as any[];
@@ -127,12 +123,13 @@ describe("SMS settings helpers", () => {
   it("adds a new template for an event and gives it a unique id", () => {
     const draft = addTemplateToDraft(
       initialDraft,
-      "payment_pending_patient",
+      "patient_registered_patient",
       "Festive wording",
     );
     const templatesForEvent = draft.flows.filter(
-      (flow) => flow.flowKey === "payment_pending_patient",
+      (flow) => flow.flowKey === "patient_registered_patient",
     );
+    // The event already has its default template; adding one leaves both.
     expect(templatesForEvent).toHaveLength(2);
     const added = templatesForEvent.find((item) => item.name === "Festive wording");
     expect(added).toBeTruthy();
@@ -144,7 +141,7 @@ describe("SMS settings helpers", () => {
   it("removes a template by id without touching others", () => {
     const withExtra = addTemplateToDraft(
       initialDraft,
-      "payment_pending_patient",
+      "patient_registered_patient",
       "Festive wording",
     );
     const added = withExtra.flows.find((item) => item.name === "Festive wording")!;
@@ -160,7 +157,7 @@ describe("SMS settings helpers", () => {
       "Alternate wording",
     );
     const original = withExtra.flows.find(
-      (item) => item.flowKey === "appointment_booked_patient" && item.name === "",
+      (item) => item.flowKey === "appointment_booked_patient" && item.name === "Appointment booking",
     )!;
     const alternate = withExtra.flows.find(
       (item) => item.name === "Alternate wording",
@@ -174,11 +171,11 @@ describe("SMS settings helpers", () => {
     const alternateAfter = switched.flows.find((item) => item.id === alternate.id);
     expect(originalAfter?.enabled).toBe(false);
     expect(alternateAfter?.enabled).toBe(true);
-    // Templates for other events must be untouched.
-    const reminder = switched.flows.find(
-      (item) => item.flowKey === "appointment_reminder_patient",
+    // The patient-registration starter template must be untouched.
+    const registration = switched.flows.find(
+      (item) => item.flowKey === "patient_registered_patient",
     );
-    expect(reminder?.enabled).toBe(false);
+    expect(registration?.enabled).toBe(false);
   });
 
   it("rejects an enabled template that has no approved DLT template", () => {
@@ -190,14 +187,26 @@ describe("SMS settings helpers", () => {
     });
     const errors = validateDraft(draft);
     expect(errors).toContain(
-      "DLT template ID is required for Appointment booked.",
+      "DLT template ID is required for Appointment booked — Appointment booking.",
     );
     expect(errors).toContain(
-      "Registered template body is required for Appointment booked.",
+      "Provider approval is required for Appointment booked — Appointment booking.",
     );
-    expect(errors).toContain(
-      "Provider approval is required for Appointment booked.",
-    );
+  });
+
+  it("does not reject custom variable names while saving template settings", () => {
+    const template = initialDraft.flows.find(
+      (item) => item.flowKey === "patient_registered_patient",
+    )!;
+    const draft = setTemplateInDraft(initialDraft, template.id, {
+      enabled: true,
+      dltTemplateId: "1707160000000000001",
+      registeredBody: "Dear {#var#}, your Patient ID is {#var#}.",
+      variableKeys: ["patient_name", "patient_num"],
+      approvedByProvider: true,
+    });
+
+    expect(validateDraft(draft)).toEqual([]);
   });
 
   it("rejects promotional classification and half-filled credential pairs", () => {
@@ -222,7 +231,7 @@ describe("SMS settings helpers", () => {
       "Both the REST auth key and token are required.",
     );
     expect(errors).toContain(
-      "Promotional SMS is not supported for Appointment booked in this rollout.",
+      "Promotional SMS is not supported for Appointment booked — Appointment booking in this rollout.",
     );
   });
 
@@ -233,7 +242,7 @@ describe("SMS settings helpers", () => {
       "Alternate wording",
     );
     const original = withExtra.flows.find(
-      (item) => item.flowKey === "appointment_booked_patient" && item.name === "",
+      (item) => item.flowKey === "appointment_booked_patient" && item.name === "Appointment booking",
     )!;
     const alternate = withExtra.flows.find(
       (item) => item.name === "Alternate wording",

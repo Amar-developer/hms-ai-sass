@@ -930,7 +930,7 @@ export function InvoiceDetailPage({
                                 options={invoicePaymentOptions}
                               />
                               <Input
-                                className="text-right tabular-nums"
+                                className="rounded-lg px-2 py-2 lg:px-2 lg:py-2 text-xs lg:text-xs placeholder:text-xs text-right tabular-nums"
                                 type="number"
                                 min="0"
                                 step="0.01"

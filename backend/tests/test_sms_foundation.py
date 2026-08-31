@@ -16,11 +16,12 @@ from app.infrastructure.integrations.ports.sms import (
 )
 from app.modules.audit.models import AuditEvent
 from app.modules.identity.models import User
-from app.modules.integrations import sms_service
+from app.modules.integrations.sms import service as sms_service
 from app.modules.integrations.models import TenantIntegrationPlugin
-from app.modules.integrations.sms_schemas import SmsSettingsUpdate
-from app.modules.integrations.sms_templates import (
+from app.modules.integrations.sms.schemas import SmsSettingsUpdate
+from app.modules.integrations.sms.templates import (
     estimate_sms_segments,
+    render_sms_template,
     resolve_sms_template,
 )
 from app.modules.patients.models import Patient, SmsConsentStatus
@@ -32,7 +33,7 @@ def sms_request() -> SmsSendRequest:
         body="Hello Patient, your appointment is confirmed.",
         template=SmsTemplateReference(
             flow_key="appointment_booked_patient",
-            dlt_entity_id="1101000012345678901",
+            dlt_entity_id="",
             dlt_template_id="1707160000000001",
             sender_id="MEDHUB",
             classification="service_implicit",
@@ -58,7 +59,6 @@ def ready_settings_payload() -> dict:
         "delivery_receipts_confirmed": True,
         "callback_contract_confirmed": True,
         "static_ip_allowlisting_confirmed": True,
-        "dlt_entity_id": "1101000012345678901",
         "default_sender_id": "MEDHUB",
         "throughput_limit_per_minute": 1200,
         "retention_days": 180,
@@ -70,9 +70,9 @@ def ready_settings_payload() -> dict:
                 "consent_basis": "patient_transaction",
                 "dlt_template_id": "1707160000000001",
                 "registered_body": (
-                    "Hello {#var#}, your appointment at {#var#} is confirmed."
+                    "Hello {#var#}, your appointment with Dr. {#var#} is confirmed."
                 ),
-                "variable_keys": ["patient_name", "clinic_name"],
+                "variable_keys": ["patient_name", "doctor_name"],
                 "approved_by_provider": True,
             }
         ],
@@ -128,7 +128,6 @@ def test_smscountry_rest_adapter_sends_expected_payload(monkeypatch):
         "Tool": "API",
         "NameOfCampaign": "appointment_booked_patient",
         "ClientReference": "notification_123",
-        "DltEntityId": "1101000012345678901",
         "DltTemplateId": "1707160000000001",
         "DRNotifyUrl": "https://api.example.com/sms/dlr",
         "DRNotifyHttpMethod": "POST",
@@ -233,19 +232,44 @@ def test_sms_settings_encrypt_credentials_and_runtime_decrypts(
         assert json.loads(audit.metadata_json)["credential_changed"] is True
 
 
+def test_new_tenant_starts_with_only_registration_and_booking_templates(
+    test_engine, monkeypatch
+):
+    monkeypatch.setattr(sms_service, "_enforce_entitlement", lambda *_args: None)
+
+    with Session(test_engine) as session:
+        settings = sms_service.get_sms_settings(
+            session, tenant_id="tenant_sms_starter_templates"
+        )
+
+        assert [flow.flow_key for flow in settings.flows] == [
+            "patient_registered_patient",
+            "appointment_booked_patient",
+        ]
+        registration, booking = settings.flows
+        assert registration.variable_keys == ["patient_name", "patient_number"]
+        assert booking.variable_keys == [
+            "patient_name",
+            "doctor_name",
+            "consultation_type",
+            "appointment_date",
+            "appointment_time",
+            "appointment_id",
+        ]
+        assert registration.enabled is False
+        assert booking.enabled is False
+
+
 def test_sms_template_resolution_and_segment_estimate():
     settings = SmsSettingsUpdate.model_validate(ready_settings_payload())
 
     resolved = resolve_sms_template(
         settings,
         flow_key="appointment_booked_patient",
-        values={"patient_name": "Anita", "clinic_name": "MedizinHub Clinic"},
+        values={"patient_name": "Anita", "doctor_name": "Kumar"},
     )
 
-    assert (
-        resolved.body
-        == "Hello Anita, your appointment at MedizinHub Clinic is confirmed."
-    )
+    assert resolved.body == "Hello Anita, your appointment with Dr. Kumar is confirmed."
     assert resolved.template.dlt_template_id == "1707160000000001"
     assert resolved.segment_estimate.encoding == "gsm7"
     assert resolved.segment_estimate.segments == 1
@@ -351,6 +375,150 @@ def test_sms_settings_allow_a_missing_api_url_while_disabled():
     SmsSettingsUpdate.model_validate(payload)
 
 
+def test_sms_settings_keep_the_auth_key_placeholder_unescaped():
+    """A pydantic URL type percent-encodes the braces, which silently breaks the
+    adapter's substitution and surfaces an hour later as an opaque 401."""
+    settings = SmsSettingsUpdate.model_validate(ready_settings_payload())
+
+    assert "{auth_key}" in settings.api_url
+    assert "%7B" not in settings.api_url
+    assert settings.api_url.format(auth_key="KEY").endswith("/Accounts/KEY/SMSes/")
+
+
+def test_sms_settings_reject_a_rest_url_that_names_no_account():
+    payload = ready_settings_payload()
+    payload["api_url"] = "https://restapi.smscountry.com/v0.1/SMSes/"
+    try:
+        SmsSettingsUpdate.model_validate(payload)
+        raise AssertionError("A REST URL without an account segment must fail")
+    except Exception as exc:
+        assert "/Accounts/" in str(exc)
+
+
+def test_sms_settings_reject_a_rest_url_with_an_empty_account_segment():
+    payload = ready_settings_payload()
+    payload["api_url"] = "https://restapi.smscountry.com/v0.1/Accounts//SMSes/"
+    try:
+        SmsSettingsUpdate.model_validate(payload)
+        raise AssertionError("A REST URL with an empty account segment must fail")
+    except Exception as exc:
+        assert "account" in str(exc).lower()
+
+
+def test_registration_template_accepts_legacy_patient_id_alias():
+    """Older saved registration templates used patient_id for Patient Number.
+
+    Normalize it to patient_number so existing tenant settings do not break patient
+    registration when the SMS config is loaded.
+    """
+    from app.modules.integrations.sms.schemas import SmsFlowReadiness
+
+    entry = SmsFlowReadiness(
+        flow_key="patient_registered_patient",
+        enabled=True,
+        dlt_template_id="1707160000000001",
+        approved_by_provider=True,
+        registered_body="Dear {#var#}, your Patient ID is {#var#}.",
+        variable_keys=["patient_name", "patient_id"],
+    )
+
+    assert entry.variable_keys == ["patient_name", "patient_number"]
+
+
+def test_registration_template_legacy_alias_renders_with_patient_number():
+    settings = SmsSettingsUpdate.model_validate(
+        {
+            **ready_settings_payload(),
+            "flows": [
+                {
+                    "flow_key": "patient_registered_patient",
+                    "enabled": True,
+                    "classification": "service_implicit",
+                    "consent_basis": "patient_transaction",
+                    "dlt_template_id": "1707160000000001",
+                    "registered_body": "Dear {#var#}, your Patient ID is {#var#}.",
+                    "variable_keys": ["patient_name", "patient_id"],
+                    "approved_by_provider": True,
+                }
+            ],
+        }
+    )
+
+    resolved = resolve_sms_template(
+        settings,
+        flow_key="patient_registered_patient",
+        values={"patient_name": "Rahul", "patient_number": "SMC-PAT-00125"},
+    )
+
+    assert resolved.body == "Dear Rahul, your Patient ID is SMC-PAT-00125."
+
+
+def test_a_template_may_declare_any_subset_of_the_supplied_variables():
+    from app.modules.integrations.sms.schemas import SmsFlowReadiness
+
+    entry = SmsFlowReadiness(
+        flow_key="appointment_booked_patient",
+        enabled=True,
+        dlt_template_id="1707160000000002",
+        approved_by_provider=True,
+        registered_body="Dear {#var#}, your appointment is on {#var#}.",
+        variable_keys=["patient_name", "appointment_date"],
+    )
+    assert entry.variable_keys == ["patient_name", "appointment_date"]
+
+
+def test_template_settings_do_not_block_custom_variable_names():
+    from app.modules.integrations.sms.schemas import SmsFlowReadiness
+
+    entry = SmsFlowReadiness(
+        flow_key="patient_registered_patient",
+        enabled=True,
+        dlt_template_id="1707160000000003",
+        approved_by_provider=True,
+        registered_body="Dear {#var#}, your Patient ID is {#var#}.",
+        variable_keys=["patient_name", "patient_num"],
+    )
+
+    assert entry.variable_keys == ["patient_name", "patient_num"]
+
+
+def test_template_renders_from_exact_event_field_names():
+    body, values = render_sms_template(
+        "Dear {#var#}, your Patient ID is {#var#}.",
+        ["patient_name", "patient_number"],
+        {"patient_name": "Rahul", "patient_number": "SMC-PAT-00125"},
+    )
+
+    assert body == "Dear Rahul, your Patient ID is SMC-PAT-00125."
+    assert values == ["Rahul", "SMC-PAT-00125"]
+
+
+def test_template_rendering_rejects_a_key_that_event_data_does_not_contain():
+    try:
+        render_sms_template(
+            "Dear {#var#}, your Patient ID is {#var#}.",
+            ["patient_name", "patient_num"],
+            {"patient_name": "Rahul", "patient_number": "SMC-PAT-00125"},
+        )
+        raise AssertionError("Unknown variable keys must not render by position")
+    except ValueError as exc:
+        assert "patient_num" in str(exc)
+
+
+def test_sms_settings_reject_a_literal_auth_key_in_the_api_url():
+    """The auth key is a credential: it belongs in the encrypted secret bundle,
+    not in plaintext config that every settings read returns."""
+    payload = ready_settings_payload()
+    payload["api_url"] = (
+        "https://restapi.smscountry.com/v0.1/Accounts/auth-key-1234/SMSes/"
+    )
+    try:
+        SmsSettingsUpdate.model_validate(payload)
+        raise AssertionError("A literal auth key in the URL must be rejected")
+    except Exception as exc:
+        assert "{auth_key}" in str(exc)
+
+
 # --------------------------------------------------------------------------
 # Multiple named templates per flow, add/delete, mirroring WhatsApp's
 # custom_templates: a tenant can register several DLT templates for the same
@@ -400,7 +568,7 @@ def test_template_ids_must_be_unique_even_across_flows():
     duplicate = dict(payload["flows"][0])
     duplicate["id"] = "sms_tpl_shared_id"
     payload["flows"][0]["id"] = "sms_tpl_shared_id"
-    duplicate["flow_key"] = "lab_report_ready_patient"
+    duplicate["flow_key"] = "patient_registered_patient"
     duplicate["enabled"] = False
     payload["flows"].append(duplicate)
     try:
@@ -411,7 +579,7 @@ def test_template_ids_must_be_unique_even_across_flows():
 
 
 def test_a_new_template_gets_a_generated_id_when_none_is_given():
-    from app.modules.integrations.sms_schemas import SmsFlowReadiness
+    from app.modules.integrations.sms.schemas import SmsFlowReadiness
 
     entry = SmsFlowReadiness(flow_key="appointment_booked_patient")
     assert entry.id.startswith("sms_tpl_")

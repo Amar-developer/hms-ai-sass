@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.modules.integrations.whatsapp_schemas import WhatsAppUsageRead
+from app.modules.integrations.whatsapp.schemas import WhatsAppUsageRead
 from app.modules.notifications.models import (
     NotificationEvent,
     NotificationProvider,
@@ -92,3 +92,6 @@ def enforce_whatsapp_monthly_limit(session: Session, *, tenant_id: str) -> None:
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Monthly WhatsApp notification limit reached",
         )
+
+
+# WhatsApp integration domain package.

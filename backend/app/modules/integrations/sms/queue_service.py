@@ -1,3 +1,9 @@
+"""Administrative operations over the SMS outbox.
+
+Rows are exposed with the recipient masked and no message body: an operator
+needs to see whether a message moved, not what it said.
+"""
+
 import json
 import re
 from datetime import date, datetime, time, timedelta, timezone
@@ -8,28 +14,24 @@ from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment
 from app.modules.audit.service import record_audit_event
-from app.modules.billing.models import CreditNote, Invoice
+from app.modules.billing.models import Invoice
 from app.modules.consultations.models import Consultation
-from app.modules.home_care.models import HomeCareBooking
 from app.modules.identity.models import User
-from app.modules.integrations.service import decode_config, get_tenant_plugin
-from app.modules.integrations.whatsapp_schemas import (
-    WhatsAppQueueCounts,
-    WhatsAppQueueItemRead,
-    WhatsAppQueueListRead,
-    WhatsAppQueueTodaySummary,
-    flow_audience,
+from app.modules.integrations.service import get_tenant_plugin
+from app.modules.integrations.sms.schemas import (
+    SmsQueueCounts,
+    SmsQueueItemRead,
+    SmsQueueListRead,
 )
-from app.modules.integrations.whatsapp_usage import enforce_whatsapp_monthly_limit
+from app.modules.integrations.sms.service import PLUGIN_KEY, get_sms_settings_model
+from app.modules.integrations.sms.usage import enforce_sms_limits
+from app.modules.lab.models import LabOrder
 from app.modules.notifications.models import (
     NotificationEvent,
     NotificationProvider,
     NotificationStatus,
 )
-from app.modules.lab.models import LabOrder
 from app.modules.patients.models import Patient
-from app.modules.patient_intelligence.models import PatientEngagementAction
-from app.modules.practitioners.models import Practitioner
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
 
@@ -38,7 +40,7 @@ ALLOWED_STATUS_FILTERS = {item.value for item in NotificationStatus} | {"process
 
 
 def _enforce_access(session: Session, tenant_id: str) -> None:
-    enforce_module_enabled(session, tenant_id, "whatsapp")
+    enforce_module_enabled(session, tenant_id, PLUGIN_KEY)
 
 
 def _masked_recipient(value: str) -> str:
@@ -70,7 +72,7 @@ def _base_filters(
 ):
     filters = [
         NotificationEvent.tenant_id == tenant_id,
-        NotificationEvent.provider == NotificationProvider.WHATSAPP,
+        NotificationEvent.provider == NotificationProvider.SMS,
         NotificationEvent.template_key.is_not(None),
     ]
     if flow_key:
@@ -84,18 +86,12 @@ def _base_filters(
     if query:
         pattern = f"%{query.lower()}%"
         matching_patients = select(Patient.id).where(
-            Patient.tenant_id == tenant_id, func.lower(Patient.full_name).like(pattern)
-        )
-        matching_practitioners = select(Practitioner.id).where(
-            Practitioner.tenant_id == tenant_id,
-            func.lower(Practitioner.full_name).like(pattern),
+            Patient.tenant_id == tenant_id,
+            func.lower(Patient.full_name).like(pattern),
         )
         matching_appointments = select(Appointment.id).where(
             Appointment.tenant_id == tenant_id,
-            or_(
-                Appointment.patient_id.in_(matching_patients),
-                Appointment.practitioner_id.in_(matching_practitioners),
-            ),
+            Appointment.patient_id.in_(matching_patients),
         )
         matching_invoices = select(Invoice.id).where(
             Invoice.tenant_id == tenant_id,
@@ -103,10 +99,6 @@ def _base_filters(
                 Invoice.patient_id.in_(matching_patients),
                 func.lower(Invoice.invoice_number).like(pattern),
             ),
-        )
-        matching_credit_notes = select(CreditNote.id).where(
-            CreditNote.tenant_id == tenant_id,
-            CreditNote.invoice_id.in_(matching_invoices),
         )
         matching_lab_orders = select(LabOrder.id).where(
             LabOrder.tenant_id == tenant_id,
@@ -116,23 +108,14 @@ def _base_filters(
             Consultation.tenant_id == tenant_id,
             Consultation.patient_id.in_(matching_patients),
         )
-        matching_home_care_bookings = select(HomeCareBooking.id).where(
-            HomeCareBooking.tenant_id == tenant_id,
-            or_(
-                HomeCareBooking.patient_id.in_(matching_patients),
-                func.lower(HomeCareBooking.booking_number).like(pattern),
-            ),
-        )
         filters.append(
             or_(
                 func.lower(NotificationEvent.recipient).like(pattern),
                 func.lower(NotificationEvent.resource_id).like(pattern),
                 NotificationEvent.resource_id.in_(matching_appointments),
                 NotificationEvent.resource_id.in_(matching_invoices),
-                NotificationEvent.resource_id.in_(matching_credit_notes),
                 NotificationEvent.resource_id.in_(matching_lab_orders),
                 NotificationEvent.resource_id.in_(matching_consultations),
-                NotificationEvent.resource_id.in_(matching_home_care_bookings),
             )
         )
     return filters
@@ -141,25 +124,14 @@ def _base_filters(
 def _display_context(
     session: Session, event: NotificationEvent
 ) -> tuple[str, str | None]:
-    if event.template_key == "admin_daily_report":
-        try:
-            snapshot = json.loads(event.message or "{}")
-        except (TypeError, ValueError):
-            snapshot = {}
-        return (
-            str(snapshot.get("recipient_name") or "Tenant Admin"),
-            str(snapshot.get("report_date") or event.resource_id or ""),
-        )
     if event.resource_type == "appointment":
         appointment = session.get(Appointment, event.resource_id or "")
         if appointment and appointment.tenant_id == event.tenant_id:
-            if flow_audience(str(event.template_key or "")) == "doctor":
-                recipient = session.get(Practitioner, appointment.practitioner_id or "")
-            else:
-                recipient = session.get(Patient, appointment.patient_id)
-            name = recipient.full_name if recipient else "Unknown recipient"
-            reference = appointment.appointment_date.strftime("%d %b %Y")
-            return name, reference
+            patient = session.get(Patient, appointment.patient_id)
+            return (
+                patient.full_name if patient else "Unknown patient",
+                appointment.appointment_date.strftime("%d %b %Y"),
+            )
     if event.resource_type == "invoice":
         invoice = session.get(Invoice, event.resource_id or "")
         if invoice and invoice.tenant_id == event.tenant_id:
@@ -167,15 +139,6 @@ def _display_context(
             return (
                 patient.full_name if patient else "Unknown patient",
                 invoice.invoice_number,
-            )
-    if event.resource_type == "credit_note":
-        credit = session.get(CreditNote, event.resource_id or "")
-        if credit and credit.tenant_id == event.tenant_id:
-            invoice = session.get(Invoice, credit.invoice_id)
-            patient = session.get(Patient, invoice.patient_id) if invoice else None
-            return (
-                patient.full_name if patient else "Unknown patient",
-                invoice.invoice_number if invoice else credit.credit_note_number,
             )
     if event.resource_type == "lab_order":
         order = session.get(LabOrder, event.resource_id or "")
@@ -193,40 +156,32 @@ def _display_context(
                 patient.full_name if patient else "Unknown patient",
                 consultation.created_at.strftime("%d %b %Y"),
             )
-    if event.resource_type == "home_care_booking":
-        booking = session.get(HomeCareBooking, event.resource_id or "")
-        if booking and booking.tenant_id == event.tenant_id:
-            patient = session.get(Patient, booking.patient_id)
-            return (
-                patient.full_name if patient else "Unknown patient",
-                booking.booking_number or booking.id,
-            )
-    if event.resource_type == "patient_engagement_action":
-        action = session.get(PatientEngagementAction, event.resource_id or "")
-        if action and action.tenant_id == event.tenant_id:
-            patient = session.get(Patient, action.patient_id)
-            return (
-                patient.full_name if patient else "Unknown patient",
-                action.action_key.replace("_", " ").title(),
-            )
+    if event.resource_type == "patient":
+        patient = session.get(Patient, event.resource_id or "")
+        if patient and patient.tenant_id == event.tenant_id:
+            return patient.full_name, None
     return "Unknown recipient", event.resource_id
 
 
-def _read_item(session: Session, event: NotificationEvent) -> WhatsAppQueueItemRead:
+def _read_item(session: Session, event: NotificationEvent) -> SmsQueueItemRead:
     recipient_name, reference = _display_context(session, event)
     display_status = (
         "processing"
         if event.status == NotificationStatus.QUEUED and event.processing_started_at
         else event.status.value
     )
-    return WhatsAppQueueItemRead(
+    return SmsQueueItemRead(
         id=event.id,
         flow_key=str(event.template_key or ""),
         recipient_name=recipient_name,
         recipient_masked=_masked_recipient(event.recipient),
         status=display_status,
+        delivery_status=event.delivery_status,
+        provider_status=event.provider_status,
         resource_type=event.resource_type,
         resource_reference=reference,
+        sender_id=event.sender_id,
+        segment_count=event.segment_count,
         attempt_count=event.attempt_count,
         max_attempts=event.max_attempts,
         next_attempt_at=(
@@ -235,79 +190,11 @@ def _read_item(session: Session, event: NotificationEvent) -> WhatsAppQueueItemR
         failure_reason=event.failure_reason,
         created_at=event.created_at.isoformat(),
         sent_at=event.sent_at.isoformat() if event.sent_at else None,
+        delivered_at=event.delivered_at.isoformat() if event.delivered_at else None,
     )
 
 
-def _today_summary(
-    session: Session,
-    *,
-    tenant_id: str,
-    flow_key: str | None,
-    q: str | None,
-) -> WhatsAppQueueTodaySummary:
-    today = date.today()
-    start, end = _date_bounds(today, today)
-    filters = _base_filters(
-        tenant_id=tenant_id,
-        flow_key=flow_key,
-        q=q,
-        from_date=None,
-        to_date=None,
-    )
-    sent = int(
-        session.exec(
-            select(func.count())
-            .select_from(NotificationEvent)
-            .where(
-                *filters,
-                NotificationEvent.status == NotificationStatus.SENT,
-                NotificationEvent.sent_at >= start,
-                NotificationEvent.sent_at < end,
-            )
-        ).one()
-    )
-    failed = int(
-        session.exec(
-            select(func.count())
-            .select_from(NotificationEvent)
-            .where(
-                *filters,
-                NotificationEvent.status == NotificationStatus.FAILED,
-                NotificationEvent.updated_at >= start,
-                NotificationEvent.updated_at < end,
-            )
-        ).one()
-    )
-    patient_recipients = int(
-        session.exec(
-            select(func.count(func.distinct(NotificationEvent.recipient)))
-            .select_from(NotificationEvent)
-            .where(
-                *filters,
-                NotificationEvent.status == NotificationStatus.SENT,
-                NotificationEvent.sent_at >= start,
-                NotificationEvent.sent_at < end,
-                NotificationEvent.resource_type.in_(
-                    [
-                        "appointment",
-                        "invoice",
-                        "credit_note",
-                        "lab_order",
-                        "consultation",
-                        "patient_engagement_action",
-                    ]
-                ),
-            )
-        ).one()
-    )
-    return WhatsAppQueueTodaySummary(
-        sent=sent,
-        failed=failed,
-        patient_recipients=patient_recipients,
-    )
-
-
-def list_whatsapp_queue(
+def list_sms_queue(
     session: Session,
     *,
     tenant_id: str,
@@ -318,7 +205,7 @@ def list_whatsapp_queue(
     to_date: date | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> WhatsAppQueueListRead:
+) -> SmsQueueListRead:
     _enforce_access(session, tenant_id)
     if status_filter and status_filter not in ALLOWED_STATUS_FILTERS:
         raise HTTPException(
@@ -389,23 +276,17 @@ def list_whatsapp_queue(
         .offset(offset)
         .limit(limit)
     ).all()
-    return WhatsAppQueueListRead(
+    return SmsQueueListRead(
         items=[_read_item(session, row) for row in rows],
         total=total,
         limit=limit,
         offset=offset,
-        counts=WhatsAppQueueCounts(
+        counts=SmsQueueCounts(
             queued=counts.get("queued", 0),
             processing=processing_count,
             sent=counts.get("sent", 0),
             failed=counts.get("failed", 0),
             cancelled=counts.get("cancelled", 0),
-        ),
-        today=_today_summary(
-            session,
-            tenant_id=tenant_id,
-            flow_key=flow_key,
-            q=q,
         ),
     )
 
@@ -415,48 +296,59 @@ def _get_queue_event(session: Session, tenant_id: str, event_id: str):
     if (
         not event
         or event.tenant_id != tenant_id
-        or event.provider != NotificationProvider.WHATSAPP
+        or event.provider != NotificationProvider.SMS
         or not event.template_key
     ):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="SMS notification not found"
         )
     return event
 
 
-def retry_whatsapp_notification(
+def retry_sms_notification(
     session: Session, *, tenant_id: str, event_id: str, actor: User
-) -> WhatsAppQueueItemRead:
+) -> SmsQueueItemRead:
     _enforce_access(session, tenant_id)
     event = _get_queue_event(session, tenant_id, event_id)
     if event.status not in {NotificationStatus.FAILED, NotificationStatus.CANCELLED}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Only failed or cancelled notifications can be retried",
+            detail="Only failed or cancelled SMS can be retried",
         )
-    integration = get_tenant_plugin(session, tenant_id, "whatsapp")
+    # A message the handset actually rejected will be rejected again; retrying
+    # it only burns segments and, for a DND block, breaches the regulator rule.
+    if event.delivery_status in {"blocked", "rejected"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This SMS was blocked or rejected by the operator and cannot be "
+                "retried to the same number"
+            ),
+        )
+    integration = get_tenant_plugin(session, tenant_id, PLUGIN_KEY)
     if not integration or not integration.enabled:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Enable the tenant integration before retrying",
+            detail="Enable the tenant SMS integration before retrying",
         )
-    config = decode_config(integration.config_json)
-    if event.status == NotificationStatus.CANCELLED:
-        try:
-            enforce_whatsapp_monthly_limit(session, tenant_id=tenant_id)
-        except HTTPException as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Monthly WhatsApp notification limit reached",
-            ) from exc
+    settings = get_sms_settings_model(session, tenant_id=tenant_id)
+    enforce_sms_limits(
+        session, tenant_id=tenant_id, segments=int(event.segment_count or 1)
+    )
     event.status = NotificationStatus.QUEUED
     event.attempt_count = 0
-    event.max_attempts = int(config.get("max_attempts") or 5)
+    event.max_attempts = settings.max_attempts
     event.next_attempt_at = now_utc()
     event.processing_started_at = None
     event.failure_reason = None
     event.provider_message_id = None
+    event.provider_status = None
+    event.provider_error_code = None
+    event.delivery_status = None
     event.sent_at = None
+    event.accepted_at = None
+    event.delivered_at = None
+    event.callback_updated_at = None
     event.updated_at = now_utc()
     session.add(event)
     session.commit()
@@ -470,20 +362,20 @@ def retry_whatsapp_notification(
         resource_type="notification_event",
         resource_id=event.id,
         purpose="communication_operations",
-        metadata_json=json.dumps({"flow_key": event.template_key}),
+        metadata_json=json.dumps({"channel": "sms", "flow_key": event.template_key}),
     )
     return _read_item(session, event)
 
 
-def cancel_whatsapp_notification(
+def cancel_sms_notification(
     session: Session, *, tenant_id: str, event_id: str, actor: User
-) -> WhatsAppQueueItemRead:
+) -> SmsQueueItemRead:
     _enforce_access(session, tenant_id)
     event = _get_queue_event(session, tenant_id, event_id)
     if event.status != NotificationStatus.QUEUED or event.processing_started_at:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Only queued notifications that are not processing can be cancelled",
+            detail="Only queued SMS that are not processing can be cancelled",
         )
     event.status = NotificationStatus.CANCELLED
     event.failure_reason = "Cancelled by an administrator."
@@ -500,6 +392,9 @@ def cancel_whatsapp_notification(
         resource_type="notification_event",
         resource_id=event.id,
         purpose="communication_operations",
-        metadata_json=json.dumps({"flow_key": event.template_key}),
+        metadata_json=json.dumps({"channel": "sms", "flow_key": event.template_key}),
     )
     return _read_item(session, event)
+
+
+# SMS integration domain package.

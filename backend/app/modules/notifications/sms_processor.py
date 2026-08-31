@@ -11,6 +11,7 @@ import json
 import logging
 
 from fastapi import HTTPException
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.infrastructure.integrations.factories import get_sms_gateway
@@ -21,24 +22,25 @@ from app.infrastructure.integrations.ports.sms import (
     SmsSendResult,
 )
 from app.modules.audit.service import record_audit_event
-from app.modules.integrations.sms_consent import (
+from app.modules.integrations.sms.consent import (
     patient_allows_sms,
     patient_for_sms_resource,
     patient_sms_destination,
     patient_sms_language,
 )
-from app.modules.integrations.sms_service import (
+from app.modules.integrations.sms.service import (
     PLUGIN_KEY,
     get_sms_gateway_runtime_settings,
     get_sms_settings_model,
 )
-from app.modules.integrations.sms_templates import resolve_sms_template
-from app.modules.integrations.sms_usage import enforce_sms_limits
+from app.modules.integrations.sms.templates import resolve_sms_template, select_sms_flow
+from app.modules.integrations.sms.usage import enforce_sms_limits
 from app.modules.notifications.models import (
     NotificationEvent,
     NotificationProvider,
     NotificationStatus,
 )
+from app.modules.patients.models import Patient
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
 
@@ -55,6 +57,10 @@ class SmsCancelled(ValueError):
 
 class SmsRetryable(RuntimeError):
     """The send failed for a reason that may clear on its own."""
+
+
+class SmsDeferred(RuntimeError):
+    """The send remains valid but must wait for a tenant throughput window."""
 
 
 def _claim_next(session: Session) -> NotificationEvent | None:
@@ -111,6 +117,38 @@ def _cancel(session: Session, event: NotificationEvent, reason: str) -> None:
     )
 
 
+def _defer(session: Session, event: NotificationEvent, reason: str) -> None:
+    event.status = NotificationStatus.QUEUED
+    event.processing_started_at = None
+    event.next_attempt_at = now_utc() + timedelta(minutes=1)
+    event.failure_reason = reason[:500]
+    event.updated_at = now_utc()
+    session.add(event)
+    session.commit()
+
+
+def _enforce_throughput(session: Session, event: NotificationEvent, settings) -> None:
+    limit = settings.throughput_limit_per_minute
+    if not limit:
+        return
+    accepted_since = now_utc() - timedelta(minutes=1)
+    accepted = int(
+        session.exec(
+            select(func.count())
+            .select_from(NotificationEvent)
+            .where(
+                NotificationEvent.tenant_id == event.tenant_id,
+                NotificationEvent.provider == NotificationProvider.SMS,
+                NotificationEvent.accepted_at >= accepted_since,
+            )
+        ).one()
+    )
+    if accepted >= limit:
+        raise SmsDeferred(
+            "Deferred until the tenant SMS throughput window has capacity."
+        )
+
+
 def _load_runtime(session: Session, event: NotificationEvent):
     """Recheck everything that must still be true at send time."""
     try:
@@ -128,17 +166,11 @@ def _load_runtime(session: Session, event: NotificationEvent):
     # Resolved fresh at send time, not pinned at enqueue time: if the admin
     # swaps which template is enabled for this flow_key after the message was
     # queued, the row sends under whichever template is live now.
-    flow = next(
-        (item for item in settings.flows if item.flow_key == flow_key and item.enabled),
-        None,
-    )
-    if not flow:
+    if not any(item.flow_key == flow_key and item.enabled for item in settings.flows):
         raise SmsCancelled("This SMS workflow is disabled.")
-    if not flow.approved_by_provider or not flow.dlt_template_id:
-        raise SmsCancelled("This SMS workflow has no approved DLT template.")
-    if not settings.dlt_entity_id or not settings.default_sender_id:
-        raise SmsCancelled("The tenant DLT entity ID or sender header is missing.")
-    return runtime, settings, flow
+    if not settings.default_sender_id:
+        raise SmsCancelled("The tenant SMS sender header is missing.")
+    return runtime, settings
 
 
 def _resolve_destination(
@@ -146,8 +178,7 @@ def _resolve_destination(
     event: NotificationEvent,
     *,
     settings,
-    classification: str,
-) -> tuple[str, str]:
+) -> tuple[str, str, Patient | None]:
     """Decide who this message goes to, and whether it may go at all.
 
     Recipient type comes from the flow, not from whether a patient row was
@@ -167,9 +198,8 @@ def _resolve_destination(
         resource_type=str(event.resource_type or ""),
         resource_id=str(event.resource_id or ""),
     )
-    if not patient_allows_sms(patient, classification=classification):
-        raise SmsCancelled("The patient has not consented to SMS for this message.")
-
+    if is_patient_flow and event.resource_type and not patient:
+        raise SmsCancelled("The patient record for this SMS is no longer available.")
     destination = (
         patient_sms_destination(patient, settings.default_country_code)
         if patient
@@ -185,7 +215,7 @@ def _resolve_destination(
                 "The recipient does not have a valid mobile number."
             ) from exc
     language = patient_sms_language(patient) if patient else "en"
-    return destination, language
+    return destination, language, patient
 
 
 def _template_values(event: NotificationEvent) -> dict[str, object]:
@@ -295,13 +325,20 @@ def process_due_sms_notifications(
         if not event:
             break
         try:
-            runtime, settings, flow = _load_runtime(session, event)
-            destination, language = _resolve_destination(
+            runtime, settings = _load_runtime(session, event)
+            _enforce_throughput(session, event, settings)
+            destination, language, patient = _resolve_destination(
                 session,
                 event,
                 settings=settings,
-                classification=flow.classification,
             )
+            flow = select_sms_flow(settings, str(event.template_key or ""), language)
+            if not flow.approved_by_provider or not flow.dlt_template_id:
+                raise SmsCancelled("This SMS workflow has no approved DLT template.")
+            if not patient_allows_sms(patient, classification=flow.classification):
+                raise SmsCancelled(
+                    "The patient has not consented to SMS for this message."
+                )
             resolved = resolve_sms_template(
                 settings,
                 flow_key=str(event.template_key or ""),
@@ -340,6 +377,8 @@ def process_due_sms_notifications(
                 timeout_seconds=runtime.timeout_seconds,
             )
             _save_result(session, event, result)
+        except SmsDeferred as exc:
+            _defer(session, event, str(exc))
         except SmsCancelled as exc:
             _cancel(session, event, str(exc))
         except SmsRetryable as exc:

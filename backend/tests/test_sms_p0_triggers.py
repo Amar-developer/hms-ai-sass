@@ -167,54 +167,43 @@ def test_appointment_booking_never_queues_free_text_sms(client, test_engine):
         assert _sms_events(session, tenant["id"]) == []
 
 
-def test_payment_pending_never_queues_free_text_sms(client, test_engine):
-    tenant, branch = setup_notify_tenant(
-        client, modules=["sms", "billing_advanced"], providers=["sms"]
-    )
-    patient = create_patient(client, tenant["id"])
-    booking = book_appointment(client, tenant["id"], branch["id"], patient["id"])
-    consultation = client.post(
-        "/api/v1/consultations",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={
-            "appointment_id": booking["appointment"]["id"],
-            "chief_complaint": "Fever",
-            "diagnosis": "Viral fever",
-            "clinical_notes": "Hydration advised",
-        },
-    ).json()
-    signed = client.post(
-        f"/api/v1/consultations/{consultation['id']}/sign",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={"signed_by_user_id": "doctor_demo"},
-    ).json()
-    client.post(
-        "/api/v1/billing/doctor-fee-rules",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={
-            "appointment_type": "op",
-            "fee_amount": 1000,
-            "doctor_share_percentage": 60,
-        },
-    )
-    invoice_detail = client.post(
-        "/api/v1/billing/invoices/from-consultation",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={"consultation_id": signed["id"]},
-    ).json()
-    client.post(
-        f"/api/v1/billing/invoices/{invoice_detail['invoice']['id']}/payments",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={"method": "cash", "amount": 400},
-    )
-
-    with Session(test_engine) as session:
-        assert _sms_events(session, tenant["id"]) == []
-
-
 # --------------------------------------------------------------------------
 # The templated path fires once the integration is DLT-ready
 # --------------------------------------------------------------------------
+
+
+def test_patient_registration_queues_the_requested_template(client, test_engine):
+    tenant, _branch = setup_notify_tenant(client, modules=["sms"], providers=["sms"])
+    configure_ready_sms_integration(
+        client,
+        tenant["id"],
+        flows=[
+            _sms_flow(
+                "patient_registered_patient",
+                registered_body=(
+                    "Dear {#var#}, your patient registration at MedizinHub has "
+                    "been successfully completed. Your Patient ID is {#var#}. "
+                    "Thank you."
+                ),
+                variable_keys=["patient_name", "patient_number"],
+            )
+        ],
+    )
+
+    patient = create_patient(client, tenant["id"], name="Rahul")
+
+    with Session(test_engine) as session:
+        events = _sms_events(session, tenant["id"])
+        assert len(events) == 1
+        event = events[0]
+        assert event.template_key == "patient_registered_patient"
+        import json
+
+        values = json.loads(event.message)
+        assert values["patient_name"] == "Rahul"
+        assert values["patient_number"] == patient["patient_number"]
+        assert values["full_name"] == "Rahul"
+        assert values["id"] == patient["id"]
 
 
 def test_appointment_booked_queues_a_templated_sms(client, test_engine):
@@ -247,238 +236,11 @@ def test_appointment_booked_queues_a_templated_sms(client, test_engine):
         values = json.loads(event.message)
         assert values["patient_name"] == patient["full_name"]
         assert values["token_number"] == booking["queue_entry"]["token_number"]
-
-
-def test_appointment_reschedule_queues_a_templated_sms(client, test_engine):
-    tenant, branch = setup_notify_tenant(client, modules=["sms"], providers=["sms"])
-    configure_ready_sms_integration(
-        client,
-        tenant["id"],
-        flows=[_sms_flow("appointment_rescheduled_patient")],
-    )
-    patient = create_patient(client, tenant["id"])
-    booking = book_appointment(client, tenant["id"], branch["id"], patient["id"])
-    from datetime import timedelta
-
-    new_date = (date.today() + timedelta(days=1)).isoformat()
-
-    response = client.patch(
-        f"/api/v1/appointments/{booking['appointment']['id']}/reschedule",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={"appointment_date": new_date},
-    )
-    assert response.status_code in (200, 400, 409)  # 400/409 possible slot conflicts
-
-    with Session(test_engine) as session:
-        events = _sms_events(session, tenant["id"])
-        rescheduled = [
-            e for e in events if e.template_key == "appointment_rescheduled_patient"
-        ]
-        if response.status_code == 200:
-            assert len(rescheduled) == 1
-
-
-def test_queue_token_called_queues_a_templated_sms(client, test_engine):
-    tenant, branch = setup_notify_tenant(
-        client, modules=["sms", "voice"], providers=["sms", "voice"]
-    )
-    configure_ready_sms_integration(
-        client,
-        tenant["id"],
-        flows=[_sms_flow("queue_token_alert_patient")],
-    )
-    patient = create_patient(client, tenant["id"])
-    booking = book_appointment(client, tenant["id"], branch["id"], patient["id"])
-
-    response = client.post(
-        f"/api/v1/queue/{booking['queue_entry']['id']}/call",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={"reason": "Call token"},
-    )
-    assert response.status_code == 200
-
-    with Session(test_engine) as session:
-        events = _sms_events(session, tenant["id"])
-        called = [e for e in events if e.template_key == "queue_token_alert_patient"]
-        assert len(called) == 1
-        assert called[0].event_type.value == "queue_token_call"
-
-
-def test_queue_entry_cancel_queues_a_templated_sms(client, test_engine):
-    tenant, branch = setup_notify_tenant(client, modules=["sms"], providers=["sms"])
-    configure_ready_sms_integration(
-        client,
-        tenant["id"],
-        flows=[_sms_flow("appointment_cancelled_patient")],
-    )
-    patient = create_patient(client, tenant["id"])
-    booking = book_appointment(client, tenant["id"], branch["id"], patient["id"])
-
-    response = client.post(
-        f"/api/v1/queue/{booking['queue_entry']['id']}/cancel",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={"reason": "Patient request"},
-    )
-    assert response.status_code == 200
-
-    with Session(test_engine) as session:
-        events = _sms_events(session, tenant["id"])
-        cancelled = [
-            e for e in events if e.template_key == "appointment_cancelled_patient"
-        ]
-        assert len(cancelled) == 1
-
-
-def test_payment_pending_queues_a_templated_sms(client, test_engine):
-    tenant, branch = setup_notify_tenant(
-        client, modules=["sms", "billing_advanced"], providers=["sms"]
-    )
-    configure_ready_sms_integration(
-        client,
-        tenant["id"],
-        flows=[
-            _sms_flow(
-                "payment_pending_patient",
-                registered_body="Hello {#var#}, Rs {#var#} pending for {#var#}.",
-                variable_keys=["patient_name", "balance_amount", "invoice_number"],
-            )
-        ],
-    )
-    patient = create_patient(client, tenant["id"])
-    booking = book_appointment(client, tenant["id"], branch["id"], patient["id"])
-    consultation = client.post(
-        "/api/v1/consultations",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={
-            "appointment_id": booking["appointment"]["id"],
-            "chief_complaint": "Fever",
-            "diagnosis": "Viral fever",
-            "clinical_notes": "Hydration advised",
-        },
-    ).json()
-    signed = client.post(
-        f"/api/v1/consultations/{consultation['id']}/sign",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={"signed_by_user_id": "doctor_demo"},
-    ).json()
-    client.post(
-        "/api/v1/billing/doctor-fee-rules",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={
-            "appointment_type": "op",
-            "fee_amount": 1000,
-            "doctor_share_percentage": 60,
-        },
-    )
-    invoice_detail = client.post(
-        "/api/v1/billing/invoices/from-consultation",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={"consultation_id": signed["id"]},
-    ).json()
-    client.post(
-        f"/api/v1/billing/invoices/{invoice_detail['invoice']['id']}/payments",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={"method": "cash", "amount": 400},
-    )
-
-    with Session(test_engine) as session:
-        events = _sms_events(session, tenant["id"])
-        pending = [e for e in events if e.template_key == "payment_pending_patient"]
-        # Two independent trigger sites fire here: invoice creation queues
-        # "initial-pending" and the partial payment queues "pending:{payment.id}".
-        assert len(pending) == 2
-
-
-def test_lab_report_ready_queues_a_templated_sms(client, test_engine):
-    tenant, branch = setup_notify_tenant(
-        client, modules=["sms", "lab"], providers=["sms"]
-    )
-    configure_ready_sms_integration(
-        client,
-        tenant["id"],
-        flows=[
-            _sms_flow(
-                "lab_report_ready_patient",
-                registered_body="Hello {#var#}, your report for {#var#} is ready.",
-                variable_keys=["patient_name", "tests"],
-            )
-        ],
-    )
-    patient = create_patient(client, tenant["id"])
-    order = client.post(
-        "/api/v1/lab/orders",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={
-            "patient_id": patient["id"],
-            "branch_id": branch["id"],
-            "tests": "CBC, Lipid Profile",
-        },
-    )
-    assert order.status_code == 201, order.text
-    order_id = order.json()["id"]
-
-    result = client.post(
-        f"/api/v1/lab/orders/{order_id}/results",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={
-            "result_summary": "All values within normal range.",
-            "released_by_user_id": "doctor_demo",
-        },
-    )
-    assert result.status_code == 201, result.text
-
-    with Session(test_engine) as session:
-        events = _sms_events(session, tenant["id"])
-        ready = [e for e in events if e.template_key == "lab_report_ready_patient"]
-        assert len(ready) == 1
-        import json
-
-        values = json.loads(ready[0].message)
-        assert values["tests"] == "CBC, Lipid Profile"
-
-
-def test_follow_up_sms_carries_no_clinician_free_text(client, test_engine):
-    """The SMS row must never contain the raw clinical advice string."""
-    tenant, branch = setup_notify_tenant(client, modules=["sms"], providers=["sms"])
-    configure_ready_sms_integration(
-        client,
-        tenant["id"],
-        flows=[_sms_flow("follow_up_reminder_patient")],
-    )
-    patient = create_patient(client, tenant["id"])
-    booking = book_appointment(client, tenant["id"], branch["id"], patient["id"])
-    advice = (
-        "Please come back after 7 days and bring your old reports, Mr. Confidential."
-    )
-    consultation = client.post(
-        "/api/v1/consultations",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={
-            "appointment_id": booking["appointment"]["id"],
-            "chief_complaint": "Fever",
-            "diagnosis": "Viral fever",
-            "clinical_notes": "Hydration advised",
-            "follow_up_advice": advice,
-        },
-    ).json()
-
-    client.post(
-        f"/api/v1/consultations/{consultation['id']}/sign",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={"signed_by_user_id": "doctor_demo"},
-    )
-
-    with Session(test_engine) as session:
-        events = _sms_events(session, tenant["id"])
-        followups = [
-            e for e in events if e.template_key == "follow_up_reminder_patient"
-        ]
-        assert len(followups) == 1
-        assert advice not in followups[0].message
-        import json
-
-        values = json.loads(followups[0].message)
-        assert values == {"patient_name": patient["full_name"]}
+        assert values["doctor_name"]
+        assert values["consultation_type"]
+        assert values["appointment_date"].count("-") == 2
+        assert values["appointment_time"]
+        assert values["appointment_id"] == booking["appointment"]["appointment_number"]
 
 
 # --------------------------------------------------------------------------

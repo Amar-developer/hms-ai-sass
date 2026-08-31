@@ -21,6 +21,7 @@ def template_read(template: ClinicalTemplate) -> ConsultationTemplateRead:
         content = json.loads(template.content_json or "{}")
     except json.JSONDecodeError:
         content = {}
+    content = normalize_template_content(content)
     return ConsultationTemplateRead(
         id=template.id,
         tenant_id=template.tenant_id,
@@ -33,6 +34,12 @@ def template_read(template: ClinicalTemplate) -> ConsultationTemplateRead:
         created_at=template.created_at,
         updated_at=template.updated_at,
     )
+
+
+def normalize_template_content(content: dict | None) -> dict:
+    normalized = dict(content or {})
+    normalized.pop("doctor_id", None)
+    return normalized
 
 
 class ClinicalTemplateService:
@@ -52,7 +59,7 @@ class ClinicalTemplateService:
             department_id=payload.department_id,
             name=payload.name,
             template_type=payload.template_type,
-            content_json=json.dumps(payload.content),
+            content_json=json.dumps(normalize_template_content(payload.content)),
             created_by_user_id=actor.id,
         )
         self.templates.add(template)
@@ -97,7 +104,9 @@ class ClinicalTemplateService:
             )
         data = payload.model_dump(exclude_unset=True)
         if "content" in data:
-            template.content_json = json.dumps(data.pop("content") or {})
+            template.content_json = json.dumps(
+                normalize_template_content(data.pop("content"))
+            )
         for key, value in data.items():
             setattr(template, key, value)
         template.updated_at = now_utc()

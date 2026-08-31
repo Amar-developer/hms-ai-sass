@@ -8,7 +8,7 @@ shared helper would couple decisions that must be allowed to diverge.
 from sqlmodel import Session
 
 from app.infrastructure.integrations.ports.messaging import normalize_mobile_number
-from app.modules.integrations.whatsapp_consent import (
+from app.modules.integrations.whatsapp.consent import (
     patient_for_notification_resource,
 )
 from app.modules.patients.contact import patient_whatsapp_numbers

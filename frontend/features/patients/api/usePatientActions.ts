@@ -81,6 +81,9 @@ export function usePatientActions({
         whatsapp_consent_status: data.whatsappConsentStatus || "not_recorded",
         whatsapp_consent_source: data.whatsappConsentSource || null,
         whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
+        sms_consent_status: data.smsConsentStatus || "not_recorded",
+        sms_consent_source: data.smsConsentSource || null,
+        sms_preferred_language: data.smsPreferredLanguage || "en",
       });
       if (data.familyRelatedPatientId) {
         await patientsApi.createFamilyRelationship(scopedSession, created.id, {
@@ -135,6 +138,9 @@ export function usePatientActions({
           whatsapp_consent_status: data.whatsappConsentStatus || "not_recorded",
           whatsapp_consent_source: data.whatsappConsentSource || null,
           whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
+          sms_consent_status: data.smsConsentStatus || "not_recorded",
+          sms_consent_source: data.smsConsentSource || null,
+          sms_preferred_language: data.smsPreferredLanguage || "en",
         },
       );
       if (data.familyRelatedPatientId) {

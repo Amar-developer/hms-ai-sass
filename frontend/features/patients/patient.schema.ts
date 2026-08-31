@@ -81,6 +81,25 @@ export const patientSchema = z
       "ur",
     ]),
 
+    smsConsentStatus: z.enum(["not_recorded", "opted_in", "opted_out"]),
+
+    smsConsentSource: z.string().optional(),
+
+    smsPreferredLanguage: z.enum([
+      "tenant_default",
+      "en",
+      "hi",
+      "mr",
+      "gu",
+      "ta",
+      "te",
+      "kn",
+      "ml",
+      "bn",
+      "pa",
+      "ur",
+    ]),
+
     monthlyTrackingEnabled: z.boolean().optional(),
 
     monthlyRefillOn: z.string().optional(),
@@ -120,6 +139,17 @@ export const patientSchema = z
         path: ["alternateMobile"],
         message:
           "Secondary mobile number must be different from the primary mobile number",
+      });
+    }
+
+    if (
+      values.smsConsentStatus !== "not_recorded" &&
+      !values.smsConsentSource?.trim()
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["smsConsentSource"],
+        message: "Preference source is required when SMS consent is recorded",
       });
     }
   });

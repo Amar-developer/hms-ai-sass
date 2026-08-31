@@ -44,7 +44,6 @@ import { SmsDeliveryControls } from "./components/SmsDeliveryControls";
 import { SmsDeliveryQueue } from "./components/SmsDeliveryQueue";
 import { SmsFlowsSection } from "./components/SmsFlowsSection";
 import { SmsProviderSection } from "./components/SmsProviderSection";
-import { SmsReconciliationPanel } from "./components/SmsReconciliationPanel";
 import { SmsSwitch } from "./components/SmsSwitch";
 import {
   SmsHealthPanel,
@@ -79,7 +78,9 @@ function firstTestDraft(draft: SmsSettingsDraft): SmsTestDraft | null {
   if (!template) return null;
   return {
     mobile: "",
+    templateId: template.id,
     flowKey: template.flowKey,
+    language: template.language,
     variables: Object.fromEntries(
       template.variableKeys.map((key) => [key, ""]),
     ),
@@ -111,7 +112,9 @@ export function SmsIntegrationSettings({
   const [testMessage, setTestMessage] = useState("");
   const [testDraft, setTestDraft] = useState<SmsTestDraft>({
     mobile: "",
+    templateId: "",
     flowKey: "appointment_booked_patient",
+    language: "en",
     variables: {},
   });
   const effectiveTenantId = tenantId || apiSession?.tenantId || "";
@@ -172,7 +175,13 @@ export function SmsIntegrationSettings({
     return () => {
       active = false;
     };
-  }, [apiSession, effectiveTenantId, loadOperationalData]);
+  }, [
+    apiSession?.email,
+    apiSession?.tenantId,
+    apiSession?.token,
+    effectiveTenantId,
+    loadOperationalData,
+  ]);
 
   const update = <K extends keyof SmsSettingsDraft>(
     key: K,
@@ -243,6 +252,7 @@ export function SmsIntegrationSettings({
       const result = await sendSmsTest(scopedSession, {
         mobile: testDraft.mobile.trim(),
         flow_key: testDraft.flowKey,
+        language: testDraft.language,
         variables: testDraft.variables,
       });
       if (!result?.success) {
@@ -294,7 +304,7 @@ export function SmsIntegrationSettings({
         <StatusToast message={message} onClose={() => setMessage("")} />
         <div className="flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-2">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-700">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
               <MessageSquare className="h-4 w-4" />
             </span>
             <div>
@@ -352,7 +362,7 @@ export function SmsIntegrationSettings({
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex min-w-max items-center gap-2 border-b-2 px-3 py-2.5 text-xs font-bold transition ${
                   activeTab === tab.id
-                    ? "border-sky-600 bg-white text-sky-700"
+                    ? "border-emerald-600 bg-white text-emerald-700"
                     : "border-transparent text-slate-500 hover:text-slate-800"
                 }`}
               >
@@ -389,11 +399,6 @@ export function SmsIntegrationSettings({
             <SmsUsagePanel usage={usage} />
             <SmsHealthPanel health={health} />
           </div>
-          <SmsReconciliationPanel
-            apiSession={apiSession}
-            tenantId={effectiveTenantId}
-            onMessage={setMessage}
-          />
         </div>
       )}
       {activeTab === "connection" && (

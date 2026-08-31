@@ -19,19 +19,19 @@ from app.modules.notifications.schemas import NotificationEventCreate
 from app.modules.notifications.services.providers import enforce_notification_allowed
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.integrations.service import decode_config, get_tenant_plugin
-from app.modules.integrations.whatsapp_schemas import (
+from app.modules.integrations.whatsapp.schemas import (
     WhatsAppFlowSettings,
     audience_notifications_enabled,
     flow_audience,
 )
-from app.modules.integrations.whatsapp_consent import (
+from app.modules.integrations.whatsapp.consent import (
     patient_allows_whatsapp,
     patient_for_notification_resource,
     patient_notification_destination,
     patient_notification_language,
 )
-from app.modules.integrations.whatsapp_templates import resolve_template_identifier
-from app.modules.integrations.whatsapp_usage import enforce_whatsapp_monthly_limit
+from app.modules.integrations.whatsapp.templates import resolve_template_identifier
+from app.modules.integrations.whatsapp.usage import enforce_whatsapp_monthly_limit
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
 

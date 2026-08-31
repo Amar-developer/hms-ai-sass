@@ -1,9 +1,9 @@
-"""Repair SMS consent status values seeded in enum-value form.
+"""Repair legacy SMS consent values during branch integrations.
 
-Revision 20260830_0130 seeded ``patient.sms_consent_status`` with the enum
-*value* (``not_recorded``), but SQLAlchemy persists ``SmsConsentStatus`` by
-member *name* (``NOT_RECORDED``), the same as the WhatsApp consent column.
-Every read of a patient row therefore failed with a ``LookupError``.
+Revision 20260830_0130 now writes ORM-compatible enum member names directly.
+This compatibility revision stays intentionally idempotent so databases that
+briefly received lowercase values from the original feature branch are repaired
+on upgrade.
 """
 
 from __future__ import annotations

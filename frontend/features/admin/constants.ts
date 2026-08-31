@@ -3,6 +3,7 @@ import {
   ClipboardList,
   FileText,
   MessageCircleMore,
+  Mail,
   MessageSquare,
   BrainCircuit,
   Percent,
@@ -36,6 +37,7 @@ export const sections = [
   ["roles", "Roles", ShieldCheck],
   ["membership", "Patient Membership", ShieldCheck],
   ["sms", "SMS Settings", MessageSquare],
+  ["email", "Email Settings", Mail],
 ] as const;
 
 export const tenantAdminSections = sections;

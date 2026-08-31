@@ -1,5 +1,4 @@
 import {
-  defaultTemplateDraft,
   flowOptions,
   initialDraft,
   newTemplateDraft,
@@ -8,6 +7,7 @@ import {
   SmsConsentBasis,
   SmsCountryApiMode,
   SmsFlowKey,
+  SmsLanguage,
   SmsMessageClassification,
   SmsSettingsDraft,
   SmsTemplateDraft,
@@ -43,6 +43,7 @@ export function readTemplateDraft(raw: any): SmsTemplateDraft {
     id: text(raw.id) || base.id,
     flowKey,
     name: text(raw.name),
+    language: (raw.language || "en") as SmsLanguage,
     enabled: Boolean(raw.enabled),
     classification: (raw.classification ||
       base.classification) as SmsMessageClassification,
@@ -50,7 +51,9 @@ export function readTemplateDraft(raw: any): SmsTemplateDraft {
     dltTemplateId: text(raw.dlt_template_id),
     registeredBody: text(raw.registered_body),
     variableKeys: Array.isArray(raw.variable_keys)
-      ? raw.variable_keys.map(text).filter(Boolean)
+      ? raw.variable_keys
+          .map(text)
+          .filter(Boolean)
       : [],
     approvedByProvider: Boolean(raw.approved_by_provider),
   };
@@ -60,13 +63,6 @@ export function readDraft(value: any): SmsSettingsDraft {
   if (!value) return initialDraft;
   const savedFlows: any[] = Array.isArray(value.flows) ? value.flows : [];
   const savedTemplates = savedFlows.map(readTemplateDraft);
-  // Every P0 event still gets a visible, editable card even if the tenant
-  // has never saved a template for it - a blank unsaved one is added so the
-  // workflow doesn't just disappear from the page.
-  const coveredKeys = new Set(savedTemplates.map((item) => item.flowKey));
-  const blankDefaults = flowOptions
-    .filter((flow) => !coveredKeys.has(flow.key))
-    .map((flow) => defaultTemplateDraft(flow.key));
   return {
     enabled: Boolean(value.enabled),
     apiMode: (value.sms_country_api_mode || "unknown") as SmsCountryApiMode,
@@ -86,7 +82,6 @@ export function readDraft(value: any): SmsSettingsDraft {
     monthlySegmentLimit: numberText(value.monthly_segment_limit),
     patientNotificationsEnabled: value.patient_notifications_enabled !== false,
     staffNotificationsEnabled: Boolean(value.staff_notifications_enabled),
-    dltEntityId: text(value.dlt_entity_id),
     defaultSenderId: text(value.default_sender_id),
     throughputLimitPerMinute: numberText(value.throughput_limit_per_minute),
     retentionDays: numberText(value.retention_days),
@@ -99,7 +94,7 @@ export function readDraft(value: any): SmsSettingsDraft {
     staticIpAllowlistingConfirmed: Boolean(
       value.static_ip_allowlisting_confirmed,
     ),
-    flows: [...savedTemplates, ...blankDefaults],
+    flows: savedTemplates,
   };
 }
 
@@ -161,7 +156,7 @@ export function enableTemplateExclusively(
     flows: draft.flows.map((flow) =>
       flow.id === templateId
         ? { ...flow, enabled: true }
-        : flow.flowKey === target.flowKey
+        : flow.flowKey === target.flowKey && flow.language === target.language
           ? { ...flow, enabled: false }
           : flow,
     ),
@@ -187,6 +182,25 @@ export function validateDraft(draft: SmsSettingsDraft): string[] {
   if (draft.enabled && !draft.apiUrl.trim()) {
     errors.push("SMSCountry API URL is required when SMS is enabled.");
   }
+  if (draft.enabled && draft.apiMode === "rest" && draft.apiUrl.trim()) {
+    const path = draft.apiUrl.trim().split("?")[0];
+    const account = path.includes("/Accounts/")
+      ? path.split("/Accounts/")[1].split("/")[0]
+      : null;
+    if (account === null) {
+      errors.push(
+        "SMSCountry REST API URL must contain an /Accounts/ segment, e.g. " +
+          "https://restapi.smscountry.com/v0.1/Accounts/{auth_key}/SMSes/",
+      );
+    } else if (account !== "{auth_key}") {
+      // The auth key is a credential and is stored encrypted; putting it in
+      // the URL would leave it in plaintext config and in URL logs.
+      errors.push(
+        "Use {auth_key} in the API URL instead of the auth key itself — it is " +
+          "substituted from the saved credential when a message is sent.",
+      );
+    }
+  }
   const restValues = [draft.apiKey.trim(), draft.apiToken.trim()];
   if (restValues.some(Boolean) && !restValues.every(Boolean)) {
     errors.push("Both the REST auth key and token are required.");
@@ -204,15 +218,16 @@ export function validateDraft(draft: SmsSettingsDraft): string[] {
     templateIds.add(template.id);
     if (!template.enabled) continue;
     const label = templateLabel(template);
-    if (enabledFlowKeys.has(template.flowKey)) {
+    const enabledKey = `${template.flowKey}:${template.language}`;
+    if (enabledFlowKeys.has(enabledKey)) {
       errors.push(
         `Only one enabled template is allowed for ${
           flowOptions.find((item) => item.key === template.flowKey)?.label ||
           template.flowKey
-        } — disable the other one first.`,
+        } in ${template.language.toUpperCase()} — disable the other one first.`,
       );
     }
-    enabledFlowKeys.add(template.flowKey);
+    enabledFlowKeys.add(enabledKey);
     if (!template.dltTemplateId.trim()) {
       errors.push(`DLT template ID is required for ${label}.`);
     }
@@ -256,13 +271,11 @@ export function buildSmsSettingsPayload(
     delivery_receipts_confirmed: draft.deliveryReceiptsConfirmed,
     callback_contract_confirmed: draft.callbackContractConfirmed,
     static_ip_allowlisting_confirmed: draft.staticIpAllowlistingConfirmed,
-    dlt_entity_id: draft.dltEntityId.trim(),
     default_sender_id: draft.defaultSenderId.trim(),
     throughput_limit_per_minute: optionalNumber(draft.throughputLimitPerMinute),
     retention_days: optionalNumber(draft.retentionDays),
     notes: draft.notes.trim(),
-    // Templates with nothing filled in yet (the blank per-event defaults
-    // readDraft seeds) are dropped rather than saved as empty rows.
+    // Entirely blank dynamically-added rows are dropped rather than saved.
     flows: draft.flows
       .filter(
         (template) =>
@@ -276,6 +289,7 @@ export function buildSmsSettingsPayload(
         id: template.id,
         flow_key: template.flowKey,
         name: template.name.trim(),
+        language: template.language,
         enabled: template.enabled,
         classification: template.classification,
         consent_basis: template.consentBasis,

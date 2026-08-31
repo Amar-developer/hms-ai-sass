@@ -52,6 +52,7 @@ import { FilesPanel } from "./components/FilesPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { WhatsAppIntegrationSettings } from "./whatsapp_integration/WhatsAppIntegrationSettings";
 import { SmsIntegrationSettings } from "./sms_integration/SmsIntegrationSettings";
+import { EmailIntegrationSettings } from "./email_integration/EmailIntegrationSettings";
 import { PatientIntelligenceSettings } from "./components/PatientIntelligenceSettings";
 import { useAdminData } from "./AdminDataContext";
 import { useTenantAdminActions } from "./api/useTenantAdminActions";
@@ -70,6 +71,20 @@ export function TenantAdmin({
 }: any) {
   const router = useRouter();
   const { beginNavigation } = useShellChrome();
+  const [visitedWhatsAppSettings, setVisitedWhatsAppSettings] = useState(
+    section === "whatsapp",
+  );
+  const [visitedSmsSettings, setVisitedSmsSettings] = useState(
+    section === "sms",
+  );
+  const [visitedEmailSettings, setVisitedEmailSettings] = useState(
+    section === "email",
+  );
+  useEffect(() => {
+    if (section === "whatsapp") setVisitedWhatsAppSettings(true);
+    if (section === "sms") setVisitedSmsSettings(true);
+    if (section === "email") setVisitedEmailSettings(true);
+  }, [section]);
   const [confirm, setConfirm] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
   const [reportBusy, setReportBusy] = useState("");
@@ -1074,8 +1089,10 @@ export function TenantAdmin({
             </p>
           </Card>
         )}
-      {section === "whatsapp" && whatsappModuleEnabled && (
-        <WhatsAppIntegrationSettings apiSession={apiSession} />
+      {visitedWhatsAppSettings && whatsappModuleEnabled && (
+        <div className={section === "whatsapp" ? "" : "hidden"}>
+          <WhatsAppIntegrationSettings apiSession={apiSession} />
+        </div>
       )}
       {section === "whatsapp" && !whatsappModuleEnabled && (
         <Card>
@@ -1085,8 +1102,15 @@ export function TenantAdmin({
           </p>
         </Card>
       )}
-      {section === "sms" && smsModuleEnabled && (
-        <SmsIntegrationSettings apiSession={apiSession} />
+      {visitedSmsSettings && smsModuleEnabled && (
+        <div className={section === "sms" ? "" : "hidden"}>
+          <SmsIntegrationSettings apiSession={apiSession} />
+        </div>
+      )}
+      {visitedEmailSettings && (
+        <div className={section === "email" ? "" : "hidden"}>
+          <EmailIntegrationSettings apiSession={apiSession} />
+        </div>
       )}
       {section === "sms" && !smsModuleEnabled && (
         <Card>

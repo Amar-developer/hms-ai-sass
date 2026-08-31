@@ -347,6 +347,18 @@ class AppointmentBookingService:
             commit=False,
         )
         queue_entry = create_queue_entry_for_appointment(self.session, appointment)
+        department = (
+            self.references.get_department_for_tenant(
+                tenant_id, appointment.department_id
+            )
+            if appointment.department_id
+            else None
+        )
+        doctor_name = practitioner.full_name if practitioner else "Available Doctor"
+        for prefix in ("Dr. ", "Dr "):
+            if doctor_name.startswith(prefix):
+                doctor_name = doctor_name[len(prefix) :]
+                break
         queue_sms_template_if_allowed(
             self.session,
             tenant_id=tenant_id,
@@ -358,8 +370,20 @@ class AppointmentBookingService:
             dedupe_key=f"sms:appointment:{appointment.id}:booked",
             variables={
                 "patient_name": patient.full_name,
+                "doctor_name": doctor_name,
+                "consultation_type": (
+                    department.name
+                    if department
+                    else appointment.appointment_type.value.replace("_", " ").title()
+                ),
                 "token_number": queue_entry.token_number,
-                "appointment_date": appointment.appointment_date.strftime("%d %b %Y"),
+                "appointment_date": appointment.appointment_date.strftime("%d-%b-%Y"),
+                "appointment_time": (
+                    appointment.appointment_time.strftime("%I:%M %p")
+                    if appointment.appointment_time
+                    else "As scheduled"
+                ),
+                "appointment_id": appointment.appointment_number or appointment.id,
             },
             queued_by_user_id=actor_user_id,
         )
@@ -612,28 +636,6 @@ class AppointmentBookingService:
                     "appointment_time": str(appointment.appointment_time or ""),
                 }
             ),
-        )
-        patient = self.references.get_patient_for_tenant(
-            tenant_id, appointment.patient_id
-        )
-        queue_sms_template_if_allowed(
-            self.session,
-            tenant_id=tenant_id,
-            branch_id=appointment.branch_id,
-            flow_key="appointment_rescheduled_patient",
-            patient=patient,
-            resource_type="appointment",
-            resource_id=appointment.id,
-            dedupe_key=(
-                f"sms:appointment:{appointment.id}:rescheduled:"
-                f"{appointment.appointment_date.isoformat()}"
-            ),
-            variables={
-                "patient_name": patient.full_name if patient else "",
-                "token_number": queue_entry.token_number,
-                "appointment_date": appointment.appointment_date.strftime("%d %b %Y"),
-            },
-            queued_by_user_id=actor.id,
         )
         self.session.refresh(appointment)
         self.session.refresh(queue_entry)

@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 from app.modules.appointments.models import Appointment, AppointmentStatus
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.integrations.service import decode_config
-from app.modules.integrations.whatsapp_schemas import WhatsAppFlowSettings
+from app.modules.integrations.whatsapp.schemas import WhatsAppFlowSettings
 from app.modules.notifications.models import NotificationEvent
 from app.modules.notifications.services import events
 from app.modules.patients.models import Patient
@@ -115,3 +115,6 @@ def queue_due_whatsapp_appointment_reminders(
                 if reminder:
                     queued += 1
     return queued
+
+
+# WhatsApp integration domain package.

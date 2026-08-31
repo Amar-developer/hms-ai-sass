@@ -16,25 +16,14 @@ export function SmsComplianceSection({
   ) => void;
 }) {
   return (
-    <div className="mt-5 rounded-xl border border-slate-200 p-4">
+    <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         <ScrollText className="h-4 w-4 text-slate-500" />
         <h4 className="card-title font-bold text-slate-800">
-          DLT identity and provider confirmations
+          Sender header and provider confirmations
         </h4>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="md:col-span-2">
-          <FormField label="DLT Entity ID">
-            <Input
-              value={draft.dltEntityId}
-              onChange={(event: any) =>
-                update("dltEntityId", event.target.value)
-              }
-              placeholder="Principal entity ID registered on the DLT portal"
-            />
-          </FormField>
-        </div>
         <FormField label="Approved Sender ID / Header">
           <Input
             value={draft.defaultSenderId}
