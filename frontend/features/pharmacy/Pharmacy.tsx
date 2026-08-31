@@ -807,6 +807,7 @@ export function Pharmacy({
             <DataTable
               columns={prescriptionColumns}
               data={visiblePrescriptions}
+              loading={!issuesLoaded}
               emptyMessage="No consultation prescriptions are waiting."
               emptyDescription="Prescriptions from signed OPD consultations will show up here."
               emptyIcon={Stethoscope}
@@ -1065,6 +1066,7 @@ export function Pharmacy({
             open={() =>
               router.push(`/pharmacy/${newSegment("pharmacy-order")}`)
             }
+            count={String(pharmacyPageRows.length)}
           />
           <StatusTabsNav
             ariaLabel="Pharmacy worklist sections"

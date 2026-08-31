@@ -1,6 +1,10 @@
 import { apiFetch, type ApiSession } from "@/lib/api";
 import { itemEndpoint } from "../helpers";
 
+export function listTenants(session: ApiSession) {
+  return apiFetch("/tenants", session);
+}
+
 export function listMedicines(session: ApiSession) {
   return apiFetch("/pharmacy/medicines", session);
 }

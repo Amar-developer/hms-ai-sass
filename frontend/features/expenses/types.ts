@@ -20,7 +20,9 @@ export type Expense = {
   description: string;
   status: ExpenseStatus;
   submittedBy: string;
+  submittedByName: string | null;
   approvedBy?: string;
+  approvedByName: string | null;
   quantity?: number | null;
   rejectionReason?: string;
   receiptName?: string;

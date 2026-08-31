@@ -525,6 +525,7 @@ export function HomeCare({
              canCreate={canCreateBooking}
              buttonText="New Booking"
              open={openCreate}
+             count={String(filteredBookings.length)}
             />
             <StatusTabsNav
               ariaLabel="Home care workspace sections"

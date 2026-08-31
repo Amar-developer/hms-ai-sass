@@ -108,6 +108,7 @@ export function SuperAdminDashboard({
 
   const selectedRoleId = selectedDetailId;
   const selectedUserId = selectedDetailId;
+  console.log(selectedUserId)
   const selectedDepartmentId = selectedDetailId;
   const selectedBranchId = selectedDetailId;
   const setSelectedRoleId = (id: string) => {

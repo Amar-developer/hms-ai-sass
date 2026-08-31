@@ -91,11 +91,11 @@ export function AdaptiveQueryFilterPanel({
   }
 
   return (
-    <div className="w-[26rem] max-w-full">
+    <div className="w-[26rem] max-w-full ">
       {draftRows.length === 0 && (
         <p className="mb-2 text-xs text-slate-500">No filters applied.</p>
       )}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 max-h-[30vh] overflow-y-auto">
         {draftRows.map((row) => {
           const field = fieldSchema(row.field);
           const operators = field ? OPERATORS_BY_TYPE[field.type] : [];
@@ -229,7 +229,7 @@ export function AdaptiveQueryFilterPanel({
           <Button
             type="button"
             onClick={clearAll}
-            className="bg-slate-100 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-200"
+            className="bg-slate-500 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-300"
           >
             Clear
           </Button>

@@ -415,8 +415,8 @@ export function OPDWorkspace({
 
   return (
     <div className="space-y-3">
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm max-w-[90vw] lg:max-w-[78vw]">
-        <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm ">
+        <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between ">
           <div className="">
             <div className="flex items-center gap-2">
               <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-50 text-brand">

@@ -304,7 +304,13 @@ export function getLabColumns({
                   danger: true,
                 },
               ]}
-              className="right-7 top-0 w-48"
+              // portal: renders the menu fixed-positioned into document.body
+              // instead of absolutely inside this cell — otherwise the
+              // worklist table's scroll/overflow container clips the menu
+              // (half hidden) for rows near the top or bottom of the table,
+              // e.g. the first row.
+              portal
+              width="w-48"
             />
           </div>
         );

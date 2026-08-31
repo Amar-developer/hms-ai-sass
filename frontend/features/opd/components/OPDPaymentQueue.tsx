@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, CreditCard } from "lucide-react";
 
 import { Button, Card, StatusToast } from "@/app/components/common/ui";
+import { DataTable } from "@/app/components/common/DataTable";
 import { fetchOPDPaymentQueueRows } from "../opdBillingQueue";
 import { displayDateTime, money } from "@/utils/helper";
+import type { Column } from "@/utils/types";
 
 function invoiceType(invoice: any) {
   if (invoice.lab_order_id) return "Lab";
@@ -34,16 +36,69 @@ export function OPDPaymentQueue({ apiSession, branchId, onOpenInvoice }: any) {
     void loadRows();
   }, [loadRows]);
 
+  const columns: Column<any>[] = [
+    {
+      key: "patient_name",
+      header: "Patient",
+      width: "180px",
+      cellClassName: "font-black text-slate-950 truncate",
+      render: (invoice) => invoice.patient_name || "Patient",
+    },
+    {
+      key: "invoice_number",
+      header: "Invoice No",
+      width: "150px",
+      cellClassName: "text-xs font-medium text-slate-500",
+      render: (invoice) => invoice.invoice_number,
+    },
+    {
+      key: "type",
+      header: "Type",
+      width: "130px",
+      render: (invoice) => (
+        <span className="w-fit rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+          {invoiceType(invoice)}
+        </span>
+      ),
+    },
+    {
+      key: "balance_amount",
+      header: "Due",
+      width: "100px",
+      cellClassName: "text-sm font-black text-slate-950",
+      render: (invoice) => money(invoice.balance_amount),
+    },
+    {
+      key: "date",
+      header: "Date",
+      width: "150px",
+      cellClassName: "text-xs text-slate-600",
+      render: (invoice) => displayDateTime(invoice.created_at),
+    },
+    {
+      key: "action",
+      header: "Action",
+      width: "180px",
+      className: "text-right",
+      disableRowClick: true,
+      render: (invoice) => (
+        <Button
+          type="button"
+          onClick={() => onOpenInvoice?.(invoice)}
+          className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap bg-brand px-3 py-0 text-xs hover:bg-brand-hover"
+        >
+          <CreditCard className="mr-2 h-4 w-4" />
+          Collect Payment
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <Card className="pt-2">
-
       <StatusToast message={message} onClose={() => setMessage("")} />
 
-      {loading ? (
-        <div className="grid min-h-44 place-items-center text-sm text-slate-500">
-          Loading OPD payment queue...
-        </div>
-      ) : rows.length === 0 ? (
+      {rows.length === 0 && !loading ? (
         <div className="grid min-h-44 place-items-center px-6 text-center">
           <div>
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
@@ -58,51 +113,14 @@ export function OPDPaymentQueue({ apiSession, branchId, onOpenInvoice }: any) {
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="hidden grid-cols-[180px_120px_130px_100px_150px_180px] gap-4 bg-slate-50 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
-            <span>Patient</span>
-            <span>Invoice No</span>
-            <span>Type</span>
-            <span>Due</span>
-            <span>Date</span>
-            <span className="text-right">Action</span>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {rows.map((invoice) => (
-              <div
-                key={invoice.id}
-                className="grid gap-4 px-4 py-2 md:grid-cols-[180px_120px_130px_100px_150px_180px] md:items-center"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-slate-950">
-                    {invoice.patient_name || "Patient"}
-                  </p>
-                </div>
-                <p className="mt-0.5 text-xs font-medium text-slate-500">
-                  {invoice.invoice_number}
-                </p>
-                <span className="w-fit rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
-                  {invoiceType(invoice)}
-                </span>
-                <p className="text-sm font-black text-slate-950">
-                  {money(invoice.balance_amount)}
-                </p>
-                <p className="text-xs text-slate-600">
-                  {displayDateTime(invoice.created_at)}
-                </p>
-                <div className="flex justify-center border w-full">
-                  <Button
-                    type="button"
-                    onClick={() => onOpenInvoice?.(invoice)}
-                    className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap bg-brand px-3 py-0 text-xs hover:bg-brand-hover"
-                  >
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Collect Payment
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="table-wrapper-width">
+          <DataTable
+            columns={columns}
+            data={rows}
+            loading={loading}
+            emptyMessage="No payments pending"
+            className="table-width"
+          />
         </div>
       )}
     </Card>

@@ -78,7 +78,11 @@ export function ExpenseDetail({
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
               Submitted By
             </p>
-            <p className="mt-1">{expense.submittedBy}</p>
+            <p className="mt-1">
+              {expense.submittedBy === "You"
+                ? "You"
+                : expense.submittedByName || expense.submittedBy}
+            </p>
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">

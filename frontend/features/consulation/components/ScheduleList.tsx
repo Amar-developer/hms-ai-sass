@@ -3,8 +3,9 @@ import { humanizeOptionLabel } from "@/lib/options";
 import { ArrowRight, CalendarClock, UserRound } from "lucide-react";
 import { displayDate } from "@/utils/helper";
 import { displayTime,toneForQueue } from "../helpers";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
-export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
+export function ScheduleList({ rows, loading, selectedId, onSelect, onConsult }: any) {
   return (
     <div>
 
@@ -16,6 +17,10 @@ export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
           <span>Visit Type</span>
           <span className="text-right">Action</span>
         </div>
+        {loading ? (
+          <TableSkeleton rows={6} columns={5} />
+        ) : (
+          <>
         {rows.length === 0 && (
           <div className="grid min-h-44 place-items-center px-5 text-center">
             <div>
@@ -93,6 +98,8 @@ export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
             </div>
           </div>
         ))}
+          </>
+        )}
       </div>
     </div>
   );

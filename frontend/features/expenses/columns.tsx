@@ -61,13 +61,11 @@ export function getExpenseColumns(
       key: "submittedBy",
       header: "Submitted By",
       width: "140px",
-      // render: (row: Expense) => (
-      //   <span className="text-sm">{row.submittedBy}</span>
-      // ),
-      render: (row: Expense) => {
-        console.log(row,'row')
-        return <span className="text-sm">{row.submittedBy}</span>
-      },
+      render: (row: Expense) => (
+        <span className="text-sm">
+          {row.submittedBy === "You" ? "You" : row.submittedByName || row.submittedBy}
+        </span>
+      ),
     },
     {
       key: "amount",

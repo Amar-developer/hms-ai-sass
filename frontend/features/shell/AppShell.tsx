@@ -911,7 +911,7 @@ export function AppShell({
         <main
           ref={mainScrollRef}
           className={`
-    scrollbar-hidden relative h-full min-w-0 flex-1 overflow-y-auto bg-white [scrollbar-gutter:stable]
+    scrollbar-hidden relative h-full min-w-0 flex-1 overflow-y-auto bg-[#f4f6f5d9] [scrollbar-gutter:stable]
     md:ml-16
     lg:ml-0
   `}

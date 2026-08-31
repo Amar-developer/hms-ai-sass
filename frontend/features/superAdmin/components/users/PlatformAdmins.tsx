@@ -104,7 +104,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
 
   return (
     <div className="space-y-5">
-      <Card className="mt-3">
+      <Card className="mt-3 bg-white p-3">
         <h3 className="card-title font-bold">Add Root Super Admin</h3>
         <p className="card-desc mt-1 text-slate-500">
           Creates a root-level platform owner under the primary tenant. The
@@ -157,7 +157,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
         </form>
       </Card>
 
-      <Card className="pt-2">
+      <Card className="bg-white p-3">
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-start">
           <div>
             <h3 className="card-title font-bold">Root Super Administrators</h3>

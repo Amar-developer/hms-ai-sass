@@ -84,6 +84,21 @@ class ExpenseRepository:
 
         return list(rows), total
 
+    def user_names(self, *, tenant_id: str, user_ids: set[str]) -> dict[str, str]:
+        """Batch id -> name lookup for submitted_by/approved_by, which are
+        plain string columns (no FK relationship) so callers must resolve
+        names themselves instead of relying on an ORM join."""
+        user_ids = {uid for uid in user_ids if uid}
+        if not user_ids:
+            return {}
+        rows = self.session.exec(
+            select(User.id, User.name).where(
+                User.tenant_id == tenant_id,
+                User.id.in_(user_ids),
+            )
+        ).all()
+        return {row[0]: row[1] for row in rows}
+
     def filter_options(
         self, *, tenant_id: str, branch_id: str | None = None
     ) -> dict[str, list[ListFilterOption]]:

@@ -53,6 +53,7 @@ export function DoctorConsultation({
   const {
     appointments,
     scopedAppointments,
+    isLoading: appointmentsLoading,
     refetch: refetchAppointments,
     setLocal: setAppointments,
   } = useAppointmentsQuery(apiSession, {
@@ -1150,6 +1151,7 @@ export function DoctorConsultation({
       <div className="mt-4">
         <ScheduleList
           rows={scheduleRows}
+          loading={appointmentsLoading}
           selectedId={selected?.id}
           onSelect={setSelectedAppointmentId}
           onConsult={openConsultation}

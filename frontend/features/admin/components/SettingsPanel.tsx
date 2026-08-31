@@ -137,10 +137,10 @@ export function SettingsPanel(props: any) {
               <Building2 className="h-4 w-4" />
             </span>
             <div>
-              <h2 className="text-base font-black tracking-tight text-slate-950">
+              <h2 className="card-title font-black tracking-tight text-slate-950">
                 Tenant & Branch Workspace
               </h2>
-              <p className="text-xs font-medium text-slate-500">
+              <p className="card-desc font-medium text-slate-500">
                 Branch operations, documents, accounts and scheduled reports in one workspace
               </p>
             </div>
@@ -442,8 +442,8 @@ export function SettingsPanel(props: any) {
               key={setting.id}
               className="rounded-lg bg-slate-50 p-3 text-sm"
             >
-              <b>{settingLabel(setting.key)}</b>
-              <p className="break-words text-slate-500">
+              <div className="card-title font-semibold">{settingLabel(setting.key)}</div>
+              <p className="card-desc text-slate-500">
                 {settingValueLabel(setting.value)}
               </p>
             </div>

@@ -602,6 +602,7 @@ export function Patient({
         cardIcon={Users}
         buttonText="Create Patient"
         open={open}
+        count={String(rows.length)}
       />
       <StatusToast message={message} onClose={() => setMessage("")} />
         <div className="table-wrapper-width">

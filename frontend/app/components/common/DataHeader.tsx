@@ -1,5 +1,5 @@
 import { type LucideIcon, type Icon, PlusCircle } from "lucide-react";
-import { Card } from "./ui";
+import { Badge, Card } from "./ui";
 
 type DataHeaderTypes = {
   title: string;
@@ -8,6 +8,7 @@ type DataHeaderTypes = {
   buttonText: string;
   canCreate?: boolean;
   open: (view: string) => void;
+  count?: string;
 };
 const DataHeader = ({
   title,
@@ -16,6 +17,7 @@ const DataHeader = ({
   buttonText,
   canCreate = true,
   open,
+  count,
 }: DataHeaderTypes) => {
   return (
     <Card className="p-0">
@@ -25,7 +27,20 @@ const DataHeader = ({
             <Icon className="text-emerald-600" />
           </div>
           <div>
-            <h3 className="card-title font-bold">{title}</h3>
+            <div className="flex">
+              <h3 className="card-title font-bold">{title}</h3>
+              <Badge tone="blue" className="normal-label ml-2">
+                {count}{" "}
+                {title == "EMR / Patient Management"
+                  ? "patients"
+                  : title === "Lab / Service Workspace" ||
+                      title === "Pharmacy Workspace"
+                    ? "orders"
+                    : title === "Home Care / Visit Workspace"
+                      ? "bookings"
+                      : title.toLocaleLowerCase()}
+              </Badge>
+            </div>
             <p className="card-desc text-slate-500">{description}</p>
           </div>
         </div>
