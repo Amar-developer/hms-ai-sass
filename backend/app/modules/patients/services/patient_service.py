@@ -83,7 +83,7 @@ class PatientService:
         tenant_id: str,
         mobile: str | None,
         alternate_mobile: str | None,
-        guardian_mobile: str | None,
+        guardian_mobile: str | None = None,
         exclude_patient_id: str | None = None,
     ) -> None:
         normalized_mobile = normalize_mobile(mobile)
@@ -186,6 +186,8 @@ class PatientService:
             entity="patient",
         )
         patient_payload = self._clear_monthly_tracking_if_disabled(payload.model_dump())
+        for field in ("mobile", "alternate_mobile", "guardian_mobile"):
+            patient_payload[field] = normalize_mobile(patient_payload[field]) or None
         patient = Patient.model_validate(
             patient_payload,
             update={
@@ -544,6 +546,9 @@ class PatientService:
         elif "sms_consent_source" in updates:
             updates["sms_consent_updated_at"] = now_utc()
         updates = self._clear_monthly_tracking_if_disabled(updates)
+        for field in ("mobile", "alternate_mobile", "guardian_mobile"):
+            if field in updates:
+                updates[field] = normalize_mobile(updates[field]) or None
         if "branch_id" in updates:
             require_branch_in_tenant(self.session, tenant_id, updates["branch_id"])
         next_status = updates.get("status", patient.status)
