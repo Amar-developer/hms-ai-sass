@@ -1388,10 +1388,7 @@ def test_lab_catalog_package_order_items_sample_template_report_and_consultation
         row["provider"]
         for row in notifications
         if row["event_type"] == "lab_report_ready"
-    } == {
-        "sms",
-        "whatsapp",
-    }
+    } == {"whatsapp"}
     assert any(
         row["id"] == referral_order["id"] for row in consultation_detail["lab_orders"]
     )

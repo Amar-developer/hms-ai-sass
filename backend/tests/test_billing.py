@@ -1292,10 +1292,11 @@ def test_pending_consultation_invoice_page_uses_authoritative_invoice_links(
     assert pending.status_code == 200
     assert pending.json()["total"] == 1
     assert pending.json()["items"][0]["consultation_id"] == consultation_id
-    assert pending.json()["items"][0]["appointment_id"] == data["appointment"]["id"]
+    appointment = data["booking"]["appointment"]
+    assert pending.json()["items"][0]["appointment_id"] == appointment["id"]
     assert (
         pending.json()["items"][0]["appointment_number"]
-        == data["appointment"]["appointment_number"]
+        == appointment["appointment_number"]
     )
 
     create_fee_rule(client, tenant_id, "op", 500, practitioner_id="doctor_demo")

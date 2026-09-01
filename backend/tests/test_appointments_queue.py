@@ -664,7 +664,7 @@ def test_duplicate_patient_detection_blocks_exact_registration(client: TestClien
     assert (
         duplicate_create.json()["detail"]
         == "Mobile number is already used as the primary mobile number for "
-        "another patient. Use Secondary Mobile Number only when this is the "
+        "another active patient. Use Secondary Mobile Number only when this is the "
         "patient's own secondary contact number."
     )
 
