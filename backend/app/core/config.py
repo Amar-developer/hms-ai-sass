@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     slow_request_ms: int = Field(default=1000, ge=1)
     web_concurrency: int = Field(default=2, ge=1, le=64)
     web_limit_concurrency: int = Field(default=80, ge=10, le=10000)
+    # Almost every route handler is a sync `def`, so it runs on AnyIO's thread
+    # pool rather than the event loop. That pool's size is a real concurrency
+    # limit sitting between web_limit_concurrency above and the database pool
+    # below, and AnyIO's default of 40 was never chosen by anyone. Naming it
+    # here keeps the capacity chain complete: admitted requests are bounded by
+    # web_concurrency × web_limit_concurrency, handlers actually executing by
+    # web_concurrency × web_thread_limit, and database work by the pool sizes.
+    # Raising it past the pool only converts running handlers into handlers
+    # blocked on a connection checkout.
+    web_thread_limit: int = Field(default=40, ge=8, le=512)
     web_backlog: int = Field(default=2048, ge=128, le=65535)
     web_timeout_keep_alive: int = Field(default=5, ge=1, le=120)
     web_graceful_shutdown_seconds: int = Field(default=30, ge=5, le=600)
@@ -41,6 +51,9 @@ class Settings(BaseSettings):
     uploads_dir: Path = Field(
         default_factory=lambda: Path(__file__).resolve().parents[2] / "uploads"
     )
+    # This is an intake ceiling, not the desired stored-object size. Eligible
+    # PDFs are optimized after this bounded read and before object storage.
+    max_upload_size_mb: int = Field(default=50, ge=1, le=250)
     file_storage_backend: str = Field(default="local", pattern="^(local|s3)$")
     aws_s3_bucket: str | None = Field(default=None)
     aws_s3_region: str = Field(default="ap-south-1", min_length=1)
@@ -49,6 +62,12 @@ class Settings(BaseSettings):
     aws_s3_kms_key_id: str | None = Field(default=None)
     aws_s3_presigned_url_ttl_seconds: int = Field(default=900, ge=60, le=86400)
     permanent_invoice_delivery_enabled: bool = Field(default=True)
+    # Whether outbound template messages actually reach the provider. Left
+    # unset this follows the environment, so a developer stack restored from a
+    # production dump cannot message real patients: every send is refused at
+    # the adapter before any network call. Set it explicitly to true to send
+    # for real from a non-production environment.
+    whatsapp_live_delivery: bool | None = Field(default=None)
 
     enable_docs: bool = Field(default=True)
 
@@ -109,6 +128,18 @@ class Settings(BaseSettings):
         default="https://www.medizinhub.com/graphql"
     )
     medicine_graphql_timeout_seconds: int = Field(default=10)
+
+    # Public HTTPS origin this API is reachable at. Used to build the SMS
+    # delivery-receipt callback URL handed to the provider; when it is unset
+    # or not HTTPS no callback is requested and delivery stays "accepted".
+    public_api_base_url: str | None = Field(default=None)
+
+    # How many due SMS rows one report-worker pass claims and sends. Tunable
+    # independently of the WhatsApp/email batch sizes so SMS throughput can
+    # be raised without a redeploy if volume grows; see the "dedicated
+    # worker" guidance in docs/sms-operations-runbook.md for when this
+    # single-process worker stops being enough.
+    sms_worker_batch_limit: int = Field(default=10, ge=1, le=200)
 
     auto_create_tables: bool = Field(default=True)
 
@@ -194,6 +225,12 @@ class Settings(BaseSettings):
     def secure_cookie_enabled(self) -> bool:
         if self.secure_cookie is not None:
             return self.secure_cookie
+        return self.environment.strip().lower() in {"production", "prod"}
+
+    @property
+    def whatsapp_live_delivery_enabled(self) -> bool:
+        if self.whatsapp_live_delivery is not None:
+            return self.whatsapp_live_delivery
         return self.environment.strip().lower() in {"production", "prod"}
 
     model_config = SettingsConfigDict(

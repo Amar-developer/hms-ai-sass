@@ -15,14 +15,15 @@ from app.modules.integrations.invoice_receipts import verify_invoice_receipt_sig
 from app.modules.integrations import invoice_receipts
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.files.models import FileDocument
-from app.modules.integrations.whatsapp_field_catalog import default_field_order
-from app.modules.integrations.whatsapp_gateway import WhatsAppGatewayResult
-from app.modules.integrations.whatsapp_consent import patient_notification_language
-from app.modules.integrations.whatsapp_templates import resolve_template_identifier
-from app.modules.integrations.whatsapp_usage import read_whatsapp_usage
-from app.modules.integrations.whatsapp_health import read_whatsapp_health
-from app.modules.integrations import whatsapp_reminders
-from app.modules.integrations import whatsapp_queue_service
+from app.modules.home_care.models import HomeCareBooking, HomeCareBookingItem
+from app.modules.integrations.whatsapp.field_catalog import default_field_order
+from app.modules.integrations.whatsapp.gateway import WhatsAppGatewayResult
+from app.modules.integrations.whatsapp.consent import patient_notification_language
+from app.modules.integrations.whatsapp.templates import resolve_template_identifier
+from app.modules.integrations.whatsapp.usage import read_whatsapp_usage
+from app.modules.integrations.whatsapp.health import read_whatsapp_health
+from app.modules.integrations.whatsapp import queue_service as whatsapp_queue_service
+from app.modules.integrations.whatsapp import reminders as whatsapp_reminders
 from app.modules.identity.models import User
 from app.modules.notifications.models import (
     NotificationEvent,
@@ -33,6 +34,7 @@ from app.modules.notifications.models import (
 from app.modules.notifications.services import events
 from app.modules.notifications import whatsapp_processor
 from app.modules.patients.models import Patient, WhatsAppConsentStatus
+from app.modules.patients.services.patient_service import PatientService
 from app.modules.lab.models import LabOrder
 from app.modules.practitioners.models import Practitioner
 from app.modules.queue.models import QueueEntry, QueueEvent
@@ -182,6 +184,110 @@ def test_doctor_booking_template_uses_six_approved_values(test_engine):
         assert [context[field] for field in approved] == list(approved.values())
         assert media_url is None
         assert media_name is None
+
+
+@pytest.mark.parametrize(
+    ("booking_type", "template_key"),
+    [
+        ("home_care", "home_care_booking_patient"),
+        ("home_visit", "home_care_booking_patient"),
+    ],
+)
+def test_home_booking_confirmation_builds_approved_six_values(
+    test_engine, booking_type, template_key
+):
+    with Session(test_engine) as session:
+        tenant, branch, patient, _appointment = _configured_tenant(session)
+        booking = HomeCareBooking(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            booking_type=booking_type,
+            booking_number="HC-00001",
+            start_date=date(2026, 8, 28),
+            end_date=date(2026, 8, 30),
+        )
+        session.add(booking)
+        session.commit()
+        session.refresh(booking)
+        session.add_all(
+            [
+                HomeCareBookingItem(
+                    tenant_id=tenant.id,
+                    booking_id=booking.id,
+                    description="Complete Bed Bath",
+                ),
+                HomeCareBookingItem(
+                    tenant_id=tenant.id,
+                    booking_id=booking.id,
+                    description="Nursing Visit",
+                ),
+            ]
+        )
+        session.commit()
+        event = NotificationEvent(
+            tenant_id=tenant.id,
+            provider=NotificationProvider.WHATSAPP,
+            event_type=NotificationEventType.PATIENT_MESSAGE,
+            recipient=patient.mobile,
+            message="Template notification",
+            template_key=template_key,
+            resource_type="home_care_booking",
+            resource_id=booking.id,
+        )
+
+        recipient_name, context, media_url, media_name, _language = (
+            whatsapp_processor._message_context(session, event, {})
+        )
+
+        assert recipient_name == "Queue Patient"
+        assert [context[field] for field in default_field_order(template_key)] == [
+            "Queue Patient",
+            "Queue Test Clinic",
+            "Complete Bed Bath, Nursing Visit",
+            "28 August 2026",
+            "30 August 2026",
+            "Queue Test Clinic",
+        ]
+        assert media_url is None
+        assert media_name is None
+
+
+def test_delivery_queue_shows_home_care_patient_not_unknown_recipient(test_engine):
+    """The queue row must name the booked patient and the booking number.
+
+    Without a `home_care_booking` branch the display falls through to
+    "Unknown recipient" and shows the raw `hcbook_...` id as the reference.
+    """
+    with Session(test_engine) as session:
+        tenant, branch, patient, _appointment = _configured_tenant(session)
+        booking = HomeCareBooking(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            booking_type="home_care",
+            booking_number="MHB-HC-00038",
+            start_date=date(2026, 8, 26),
+            end_date=date(2026, 8, 26),
+        )
+        session.add(booking)
+        session.commit()
+        session.refresh(booking)
+        event = NotificationEvent(
+            tenant_id=tenant.id,
+            provider=NotificationProvider.WHATSAPP,
+            event_type=NotificationEventType.PATIENT_MESSAGE,
+            recipient=patient.mobile,
+            message="Template notification",
+            template_key="home_care_booking_patient",
+            resource_type="home_care_booking",
+            resource_id=booking.id,
+        )
+
+        name, reference = whatsapp_queue_service._display_context(session, event)
+
+        assert name == "Queue Patient"
+        assert reference == "MHB-HC-00038"
 
 
 def test_queue_deduplicates_and_processor_sends_template(test_engine, monkeypatch):
@@ -759,6 +865,10 @@ def test_queue_management_masks_recipient_and_supports_cancel_retry(
         "enforce_module_enabled",
         lambda _session, _tenant, _module: None,
     )
+    monkeypatch.setattr(
+        "app.modules.patients.services.patient_service.enforce_entitlement",
+        lambda _session, _tenant, _module: None,
+    )
     with Session(test_engine) as session:
         tenant, branch, patient, appointment = _configured_tenant(session)
         actor = User(
@@ -809,6 +919,197 @@ def test_queue_management_masks_recipient_and_supports_cancel_retry(
         )
         assert retried.status == "queued"
         assert retried.attempt_count == 0
+
+
+def test_delivery_queue_includes_today_message_summary(test_engine, monkeypatch):
+    monkeypatch.setattr(
+        whatsapp_queue_service,
+        "enforce_module_enabled",
+        lambda _session, _tenant, _module: None,
+    )
+    monkeypatch.setattr(
+        "app.modules.patients.services.patient_service.enforce_entitlement",
+        lambda _session, _tenant, _module: None,
+    )
+    with Session(test_engine) as session:
+        tenant, branch, patient, appointment = _configured_tenant(session)
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+        session.add_all(
+            [
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient=patient.mobile,
+                    message="Sent today",
+                    template_key="appointment_booked_patient",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    sent_at=now,
+                    updated_at=now,
+                ),
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient=patient.mobile,
+                    message="Second sent today",
+                    template_key="invoice_paid_patient",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    sent_at=now,
+                    updated_at=now,
+                ),
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.FAILED,
+                    recipient=patient.mobile,
+                    message="Failed today",
+                    template_key="invoice_paid_patient",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    updated_at=now,
+                ),
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient="919999999999",
+                    message="Sent yesterday",
+                    template_key="invoice_paid_patient",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    sent_at=yesterday,
+                    updated_at=yesterday,
+                ),
+            ]
+        )
+        session.commit()
+
+        listed = whatsapp_queue_service.list_whatsapp_queue(
+            session, tenant_id=tenant.id
+        )
+
+        assert listed.today.sent == 2
+        assert listed.today.failed == 1
+        assert listed.today.patient_recipients == 1
+
+
+def test_patient_communications_include_all_patient_whatsapp_templates(
+    test_engine, monkeypatch
+):
+    monkeypatch.setattr(
+        whatsapp_queue_service,
+        "enforce_module_enabled",
+        lambda _session, _tenant, _module: None,
+    )
+    monkeypatch.setattr(
+        "app.modules.patients.services.patient_service.enforce_entitlement",
+        lambda _session, _tenant, _module: None,
+    )
+    with Session(test_engine) as session:
+        tenant, branch, patient, appointment = _configured_tenant(session)
+        now = datetime.now(timezone.utc)
+        invoice = Invoice(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            invoice_number="MHB-INV-001",
+            total_amount=500,
+            payable_amount=500,
+            balance_amount=0,
+            status=InvoiceStatus.PAID,
+        )
+        session.add(invoice)
+        other_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_number="PAT-OTHER",
+            full_name="Other Patient",
+            mobile="919999993456",
+        )
+        session.add(other_patient)
+        session.flush()
+        other_invoice = Invoice(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=other_patient.id,
+            invoice_number="MHB-INV-OTHER",
+            total_amount=700,
+            payable_amount=700,
+            balance_amount=0,
+            status=InvoiceStatus.PAID,
+        )
+        session.add(other_invoice)
+        session.flush()
+        session.add_all(
+            [
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient=patient.mobile,
+                    message="Invoice sent",
+                    template_key="invoice_paid_patient",
+                    resource_type="invoice",
+                    resource_id=invoice.id,
+                    sent_at=now,
+                    updated_at=now,
+                ),
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient=patient.mobile,
+                    message="Appointment sent",
+                    template_key="appointment_booked_patient",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    sent_at=now,
+                    updated_at=now,
+                ),
+                NotificationEvent(
+                    tenant_id=tenant.id,
+                    branch_id=branch.id,
+                    provider=NotificationProvider.WHATSAPP,
+                    event_type=NotificationEventType.PATIENT_MESSAGE,
+                    status=NotificationStatus.SENT,
+                    recipient=other_patient.mobile,
+                    message="Other invoice sent",
+                    template_key="invoice_paid_patient",
+                    resource_type="invoice",
+                    resource_id=other_invoice.id,
+                    sent_at=now,
+                    updated_at=now,
+                ),
+            ]
+        )
+        session.commit()
+
+        rows = PatientService(session).patient_communications(
+            tenant_id=tenant.id, patient_id=patient.id
+        )
+
+        assert {row.template_key for row in rows} >= {
+            "invoice_paid_patient",
+            "appointment_booked_patient",
+        }
+        assert all(row.recipient_masked == "••••3210" for row in rows)
+        assert all(row.resource_id != other_invoice.id for row in rows)
 
 
 def test_phase_seven_flows_resolve_authoritative_template_values(
@@ -1195,3 +1496,125 @@ def test_patient_opt_out_blocks_patient_flows_but_not_doctor_flows(
         session.refresh(queued)
         assert queued.status == NotificationStatus.CANCELLED
         assert "opted out" in str(queued.failure_reason).lower()
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected_reason"),
+    [
+        pytest.param(
+            lambda session, tenant, patient: setattr(
+                patient, "whatsapp_consent_status", WhatsAppConsentStatus.OPTED_OUT
+            ),
+            "opted out",
+            id="opted_out",
+        ),
+        pytest.param(
+            lambda session, tenant, patient: setattr(patient, "mobile", None),
+            "No valid mobile number",
+            id="no_mobile_number",
+        ),
+    ],
+)
+def test_unqueueable_message_is_visible_in_the_delivery_queue(
+    test_engine, monkeypatch, mutate, expected_reason
+):
+    """A message that never reaches the outbox must still be explainable.
+
+    These refusals used to return None with no row, no log and no audit
+    entry, so the delivery queue showed nothing at all and staff read the
+    silence as "the message was sent".
+    """
+    monkeypatch.setattr(
+        events, "enforce_module_enabled", lambda _session, _tenant, _module: None
+    )
+    with Session(test_engine) as session:
+        tenant, branch, patient, appointment = _configured_tenant(session)
+        mutate(session, tenant, patient)
+        session.add(patient)
+        session.commit()
+
+        result = events.queue_whatsapp_template_if_allowed(
+            session,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            flow_key="appointment_booked_patient",
+            recipient=None,
+            resource_type="appointment",
+            resource_id=appointment.id,
+            dedupe_key=f"whatsapp:appointment:{appointment.id}:booked",
+        )
+
+        assert result is None
+        row = session.exec(
+            select(NotificationEvent).where(
+                NotificationEvent.tenant_id == tenant.id,
+                NotificationEvent.dedupe_key
+                == f"blocked:whatsapp:appointment:{appointment.id}:booked",
+            )
+        ).one()
+        assert row.status == NotificationStatus.CANCELLED
+        assert expected_reason in row.failure_reason
+        assert row.template_key == "appointment_booked_patient"
+
+        # The delivery queue names the patient rather than showing a bare id.
+        name, _reference = whatsapp_queue_service._display_context(session, row)
+        assert name == "Queue Patient"
+
+        # Re-triggering does not pile up duplicate rows.
+        events.queue_whatsapp_template_if_allowed(
+            session,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            flow_key="appointment_booked_patient",
+            recipient=None,
+            resource_type="appointment",
+            resource_id=appointment.id,
+            dedupe_key=f"whatsapp:appointment:{appointment.id}:booked",
+        )
+        assert (
+            len(
+                session.exec(
+                    select(NotificationEvent).where(
+                        NotificationEvent.tenant_id == tenant.id,
+                        NotificationEvent.dedupe_key.like("blocked:%"),
+                    )
+                ).all()
+            )
+            == 1
+        )
+
+
+def test_blocked_record_does_not_block_the_real_send_once_fixed(
+    test_engine, monkeypatch
+):
+    """The blocked row uses its own dedupe key, so a fixed cause still sends."""
+    monkeypatch.setattr(
+        events, "enforce_module_enabled", lambda _session, _tenant, _module: None
+    )
+    with Session(test_engine) as session:
+        tenant, branch, patient, appointment = _configured_tenant(session)
+        patient.mobile = None
+        session.add(patient)
+        session.commit()
+        dedupe = f"whatsapp:appointment:{appointment.id}:booked"
+        kwargs = dict(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            flow_key="appointment_booked_patient",
+            recipient=None,
+            resource_type="appointment",
+            resource_id=appointment.id,
+            dedupe_key=dedupe,
+        )
+
+        assert events.queue_whatsapp_template_if_allowed(session, **kwargs) is None
+
+        patient.mobile = "98765 43210"
+        session.add(patient)
+        session.commit()
+
+        event = events.queue_whatsapp_template_if_allowed(session, **kwargs)
+
+        assert event is not None
+        assert event.status == NotificationStatus.QUEUED
+        assert event.dedupe_key == dedupe

@@ -4,6 +4,17 @@ export function listOrders(session: ApiSession) {
   return apiFetch("/lab/orders", session);
 }
 
+export function listOrderPage(session: ApiSession, params: URLSearchParams) {
+  return apiFetch(`/lab/orders/page?${params.toString()}`, session);
+}
+
+export function listOrderFilterOptions(
+  session: ApiSession,
+  params: URLSearchParams,
+) {
+  return apiFetch(`/lab/orders/filter-options?${params.toString()}`, session);
+}
+
 export function getOrderDetail(
   session: ApiSession,
   orderId: string,

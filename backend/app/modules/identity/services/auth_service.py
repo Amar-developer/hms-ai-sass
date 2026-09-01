@@ -180,12 +180,11 @@ class AuthService:
     def login(
         self, payload: LoginRequest, *, client_ip: str = "unknown"
     ) -> LoginResult:
-        email = normalize_email(payload.email)
-        rate_limit_cache = _enforce_login_rate_limit(email, client_ip)
-
+        identifier = normalize_email(payload.identifier)
+        rate_limit_cache = _enforce_login_rate_limit(identifier, client_ip)
         try:
             if payload.tenant_id:
-                user = find_user_by_login(self.session, email, payload.tenant_id)
+                user = find_user_by_login(self.session, identifier, payload.tenant_id)
                 if not user:
                     # Keep unknown-account and wrong-password work comparable
                     # so response timing does not become an email oracle.
@@ -216,7 +215,7 @@ class AuthService:
                         detail="Tenant is suspended",
                     )
             else:
-                candidates = self.users.list_login_candidates(email)
+                candidates = self.users.list_login_candidates(identifier)
                 if not candidates:
                     verify_password(payload.password, _DUMMY_PASSWORD_HASH)
                 user = next(
@@ -239,9 +238,9 @@ class AuthService:
                     )
         except HTTPException as exc:
             if exc.status_code == status.HTTP_401_UNAUTHORIZED:
-                _record_failed_login(rate_limit_cache, email, client_ip)
+                _record_failed_login(rate_limit_cache, identifier, client_ip)
             raise
-        _clear_failed_logins(rate_limit_cache, email, client_ip)
+        _clear_failed_logins(rate_limit_cache, identifier, client_ip)
         token, auth_session = create_access_session(self.session, user)
         expires_at = auth_session.expires_at
         if expires_at.tzinfo is None:

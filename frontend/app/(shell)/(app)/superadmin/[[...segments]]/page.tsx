@@ -1,29 +1,8 @@
-"use client";
-
-import { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { SuperAdminDashboard } from "@/features/superAdmin/SuperAdminDashboard";
-import { useShellChrome } from "@/features/shell/AppShell";
-import { parseSuperAdminSegments } from "@/features/superAdmin/routing";
-
+// SuperAdminDashboard is rendered by ../layout.tsx, not here — see the
+// comment there. Layouts persist across navigations within /superadmin/**
+// (only their params update), while pages are recreated on every
+// navigation, so rendering it from this page caused a full remount (and the
+// tenant-selection reset it caused) on every list-to-edit navigation.
 export default function SuperAdminPage() {
-  const { apiSession, switchTenant, setSuperAdminSection } = useShellChrome();
-  const router = useRouter();
-  const params = useParams();
-  const segments = (params?.segments as string[] | undefined) || [];
-  const { section, id } = parseSuperAdminSegments(segments);
-
-  useEffect(() => {
-    if (segments.length === 0) router.replace("/superadmin/overview");
-  }, [segments.length, router]);
-
-  return (
-    <SuperAdminDashboard
-      apiSession={apiSession}
-      switchTenant={switchTenant}
-      section={section}
-      setSection={setSuperAdminSection}
-      selectedDetailId={id}
-    />
-  );
+  return null;
 }

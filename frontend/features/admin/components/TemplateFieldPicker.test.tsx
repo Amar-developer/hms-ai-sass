@@ -78,11 +78,13 @@ describe("TemplateFieldPicker", () => {
 
   it("stops selection at the provider's parameter limit", () => {
     const onToggle = vi.fn();
+    const onRemove = vi.fn();
     render(
       <TemplateFieldPicker
         fields={fields}
         selected={["recipient_name", "appointment_date"]}
         onToggle={onToggle}
+        onRemove={onRemove}
         max={2}
         defaultOpen
       />,
@@ -96,9 +98,10 @@ describe("TemplateFieldPicker", () => {
     }) as HTMLButtonElement;
     expect(unselected.disabled).toBe(true);
 
-    // An already-selected field stays clickable so it can be removed.
-    fireEvent.click(screen.getByRole("button", { name: "Recipient name" }));
-    expect(onToggle).toHaveBeenCalledWith("recipient_name");
+    // Removal happens from the selected placeholder row, not the field chip,
+    // because the same field can be selected more than once.
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]);
+    expect(onRemove).toHaveBeenCalledWith(0);
   });
 
   it("renumbers placeholders from the selected order", () => {

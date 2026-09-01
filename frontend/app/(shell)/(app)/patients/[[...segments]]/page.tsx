@@ -1,25 +1,8 @@
-"use client";
-
-import { useParams } from "next/navigation";
-import { Patient } from "@/features/patients/Patient";
-import { useWorkspace } from "@/features/shell/WorkspaceContext";
-import { useShellChrome } from "@/features/shell/AppShell";
-
+// The patient workspace itself is rendered by ../layout.tsx, not here — see
+// the comment there. Layouts persist across navigations within /patients/**
+// (only their params update), while pages are recreated on every
+// navigation, so rendering <Patient> from this page caused a full
+// remount — and the resulting data/loading flicker — on every tab switch.
 export default function PatientsPage() {
-  const ctx = useWorkspace();
-  const { navigatePage } = useShellChrome();
-  const params = useParams();
-  const segments = (params?.segments as string[] | undefined) || [];
-  const [first, second] = segments;
-  const view =
-    first === "new" ? "create" : first ? (second === "edit" ? "edit" : "detail") : "list";
-  const selectedId = first && first !== "new" ? first : "";
-  return (
-    <Patient
-      {...ctx}
-      setActive={navigatePage}
-      view={view}
-      selectedId={selectedId}
-    />
-  );
+  return null;
 }

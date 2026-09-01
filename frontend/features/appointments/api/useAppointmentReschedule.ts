@@ -9,12 +9,14 @@ type UseAppointmentRescheduleParams = {
   apiSession: ApiSession | null | undefined;
   refreshAppointmentList: () => Promise<void>;
   setMessage: (message: string) => void;
+  onRescheduled?: (appointmentId: string) => void;
 };
 
 export function useAppointmentReschedule({
   apiSession,
   refreshAppointmentList,
   setMessage,
+  onRescheduled,
 }: UseAppointmentRescheduleParams) {
   const [rescheduleAppointment, setRescheduleAppointment] = useState<any>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
@@ -43,9 +45,11 @@ export function useAppointmentReschedule({
           appointment_time: null,
         },
       );
+      const appointmentId = rescheduleAppointment.id;
       setRescheduleAppointment(null);
       await refreshAppointmentList();
       setMessage(`Appointment rescheduled to ${displayDate(rescheduleDate)}.`);
+      onRescheduled?.(appointmentId);
     } catch (error: any) {
       setMessage(error?.message || "Could not reschedule appointment.");
     } finally {

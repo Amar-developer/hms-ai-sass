@@ -1,5 +1,4 @@
 import { apiFetch, type ApiSession } from "@/lib/api";
-import { QueueAction } from "../types";
 
 export function fetchDisplayMode(session: ApiSession, displayMode: string) {
   return apiFetch(`/queue/display?display_mode=${displayMode}`, session);

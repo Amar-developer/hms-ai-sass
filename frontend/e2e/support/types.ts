@@ -27,6 +27,8 @@ export type FrontendSeed = {
   invoiceId: string;
   invoiceNumber: string;
   membershipPlanId: string;
+  medicineName: string;
+  labTestName: string;
   errorLogId: string;
   errorRoute: string;
   actors: Record<ActorName, SeedActor>;

@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 from app.core.auth import require_any_permission
 from app.core.access_control import require_user_branch_access
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
 from app.core.pagination import Page
 from app.core.config import get_settings
 from app.core.tenant_context import require_tenant_id
@@ -20,6 +21,7 @@ from app.modules.billing.schemas import (
     InvoiceItemSupplierOptionRead,
     InvoiceItemSupplierUpdate,
     InvoiceItemRead,
+    InvoiceListSummary,
     InvoiceOfferApply,
     InvoiceRead,
     PaymentRead,
@@ -35,7 +37,9 @@ from app.modules.billing.services.invoice_items import (
     update_invoice_item_supplier,
 )
 from app.modules.billing.services.invoice_queries import (
+    get_billing_invoice_summary,
     get_billing_invoice_detail,
+    list_billing_invoice_filter_options,
     list_billing_invoices,
     list_billing_invoice_page,
     list_pending_consultation_invoice_page,
@@ -68,7 +72,7 @@ from app.modules.notifications.services.document_delivery import (
 )
 from app.modules.patients.models import Patient
 from app.modules.integrations.service import decode_config, get_tenant_plugin
-from app.modules.integrations.whatsapp_consent import patient_notification_destination
+from app.modules.integrations.whatsapp.consent import patient_notification_destination
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import new_id, now_utc
 
@@ -334,6 +338,8 @@ def list_invoice_page(
     ),
     from_date: date | None = None,
     to_date: date | None = None,
+    filters: str | None = Query(default=None, max_length=8000),
+    sort: str | None = Query(default=None, max_length=1000),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=25, ge=1, le=100),
     session: Session = Depends(get_session),
@@ -358,8 +364,77 @@ def list_invoice_page(
         payment_state=payment_state,
         from_date=from_date,
         to_date=to_date,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
         offset=offset,
         limit=limit,
+        current_user=current_user,
+    )
+
+
+@router.get(
+    "/invoices/summary",
+    response_model=InvoiceListSummary,
+)
+def get_invoice_summary(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    patient_id: str | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    source: str | None = Query(default=None),
+    payment_state: str | None = Query(default=None),
+    from_date: date | None = None,
+    to_date: date | None = None,
+    filters: str | None = Query(default=None, max_length=8000),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
+) -> InvoiceListSummary:
+    return get_billing_invoice_summary(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
+        q=q,
+        source=source,
+        payment_state=payment_state,
+        from_date=from_date,
+        to_date=to_date,
+        list_filters=parse_list_filters(filters),
+        current_user=current_user,
+    )
+
+
+@router.get(
+    "/invoices/filter-options",
+    response_model=dict[str, list[ListFilterOption]],
+)
+def list_invoice_filter_options(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    patient_id: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_CREATE,
+        )
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return list_billing_invoice_filter_options(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
         current_user=current_user,
     )
 

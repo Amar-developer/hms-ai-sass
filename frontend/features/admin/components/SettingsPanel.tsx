@@ -5,22 +5,27 @@ import {
   Select,
   Button,
   Badge,
-  ActionButton,
-  ActionGroup,
 } from "@/app/components/common/ui";
 import { useEffect, useState } from "react";
-import { Camera } from "lucide-react";
+import {
+  Building2,
+  Camera,
+  FileSpreadsheet,
+  Landmark,
+  ReceiptText,
+  SlidersHorizontal,
+} from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
 import { listValue, settingLabel, settingValueLabel } from "../helpers";
 import { MultiCheckSelect } from "./MultiCheckSelect";
 import { humanizeOptionLabel, paymentMethodOptions } from "@/lib/options";
 import { defaultNumberingEntities } from "../constants";
-import { displayDateTime } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
-import { RowActions } from "./RowActions";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { DataTable } from "@/app/components/common/DataTable";
+import { getReportJobsColumns } from "../column";
 
 export function SettingsPanel(props: any) {
   const {
@@ -68,6 +73,9 @@ export function SettingsPanel(props: any) {
     resendMonthlyReport,
     downloadMonthlyReport,
   } = props;
+  const [activeSettingsTab, setActiveSettingsTab] = useState<
+    "operations" | "numbering" | "accounts" | "reports"
+  >("operations");
   const [reportPage, setReportPage] = useState(1);
   const reportTotalPages = Math.max(1, Math.ceil(reportJobs.length / pageSize));
   const safeReportPage = Math.min(reportPage, reportTotalPages);
@@ -121,14 +129,106 @@ export function SettingsPanel(props: any) {
     setBankDetails({ ...bankDetails, [key]: value });
 
   return (
-    <div className="space-y-5">
-      <Card>
-        <h3 className="card-title font-bold">Tenant & Branch Settings</h3>
+    <div className="space-y-3">
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
+              <Building2 className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="card-title font-black tracking-tight text-slate-950">
+                Tenant & Branch Workspace
+              </h2>
+              <p className="card-desc font-medium text-slate-500">
+                Branch operations, documents, accounts and scheduled reports in one workspace
+              </p>
+            </div>
+          </div>
+          <Badge tone="blue" className="normal-badge">
+            Tenant scoped
+          </Badge>
+        </div>
+        <nav
+          className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+          aria-label="Tenant and branch workspace sections"
+          role="tablist"
+        >
+          {[
+            {
+              id: "operations" as const,
+              label: "Branch Operations",
+              icon: SlidersHorizontal,
+            },
+            {
+              id: "numbering" as const,
+              label: "Numbering & Invoice",
+              icon: ReceiptText,
+            },
+            { id: "accounts" as const, label: "Accounts", icon: Landmark },
+            {
+              id: "reports" as const,
+              label: "Monthly Reports",
+              icon: FileSpreadsheet,
+              count: reportJobs.length,
+            },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = activeSettingsTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setActiveSettingsTab(tab.id)}
+                className={`inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-xs font-bold transition-colors ${
+                  active
+                    ? "bg-brand text-brand-fg"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{tab.label}</span>
+                {Boolean("count" in tab && tab.count) && (
+                  <span
+                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                      active
+                        ? "bg-white/20 text-brand-fg"
+                        : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {"count" in tab ? tab.count : 0}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </section>
+
+      <Card
+        className={`border border-slate-200 p-4 bg-white shadow-sm ${
+          activeSettingsTab === "operations" || activeSettingsTab === "numbering"
+            ? "block"
+            : "hidden"
+        }`}
+      >
+        <h3 className="card-title font-bold">
+          {activeSettingsTab === "numbering"
+            ? "Document Numbering & Invoice Identity"
+            : "Branch Operations"}
+        </h3>
         <p className="card-desc text-slate-500">
-          Configuration affects invoice numbering, queue behavior, appointment
-          slots, payments, and communications for this tenant.
+          {activeSettingsTab === "numbering"
+            ? "Configure generated document codes, digit length, and printable invoice branding."
+            : "Configure queue behavior, appointment slots, payments, and communication providers."}
         </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div
+          className={`mt-4 gap-3 md:grid-cols-2 xl:grid-cols-4 ${
+            activeSettingsTab === "numbering" ? "grid" : "hidden"
+          }`}
+        >
           <FormField label="Document Prefix">
             <Input
               value={numberingRules.prefix || invoicePrefix}
@@ -237,6 +337,12 @@ export function SettingsPanel(props: any) {
               </div>
             </Field>
           </div>
+        </div>
+        <div
+          className={`mt-4 gap-3 md:grid-cols-2 xl:grid-cols-4 ${
+            activeSettingsTab === "operations" ? "grid" : "hidden"
+          }`}
+        >
           <Field label="Requeue After">
             <Input
               type="number"
@@ -291,7 +397,11 @@ export function SettingsPanel(props: any) {
             />
           </Field>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div
+          className={`mt-4 gap-3 md:grid-cols-2 xl:grid-cols-5 ${
+            activeSettingsTab === "numbering" ? "grid" : "hidden"
+          }`}
+        >
           {Object.entries(
             numberingRules.entities || defaultNumberingEntities,
           ).map(([key, value]: any) => (
@@ -303,7 +413,11 @@ export function SettingsPanel(props: any) {
             </FormField>
           ))}
         </div>
-        <div className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
+        <div
+          className={`mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 ${
+            activeSettingsTab === "numbering" ? "block" : "hidden"
+          }`}
+        >
           Example:{" "}
           {(numberingRules.prefix || invoicePrefix || "SUN").toUpperCase()}-
           {numberingRules.entities?.patient || "PAT"}-
@@ -318,21 +432,29 @@ export function SettingsPanel(props: any) {
             {busy ? "Saving..." : "Save Settings"}
           </ButtonLoader>
         </Button>
-        <div className="mt-5 grid gap-2 md:grid-cols-2">
+        <div
+          className={`mt-5 gap-2 md:grid-cols-2 ${
+            activeSettingsTab === "operations" ? "grid" : "hidden"
+          }`}
+        >
           {settings.slice(0, 10).map((setting: any) => (
             <div
               key={setting.id}
               className="rounded-lg bg-slate-50 p-3 text-sm"
             >
-              <b>{settingLabel(setting.key)}</b>
-              <p className="break-words text-slate-500">
+              <div className="card-title font-semibold">{settingLabel(setting.key)}</div>
+              <p className="card-desc text-slate-500">
                 {settingValueLabel(setting.value)}
               </p>
             </div>
           ))}
         </div>
       </Card>
-      <Card>
+      <Card
+        className={`border border-slate-200 p-4 bg-white shadow-sm ${
+          activeSettingsTab === "accounts" ? "block" : "hidden"
+        }`}
+      >
         <h3 className="card-title font-bold">Accounts & Bank Details</h3>
         <p className="card-desc text-slate-500">
           Maintain tenant bank account details shown on printable invoices.
@@ -403,14 +525,18 @@ export function SettingsPanel(props: any) {
           </Button>
         </div>
       </Card>
-      <Card>
+      <Card
+        className={`border border-slate-200 p-4 bg-white shadow-sm ${
+          activeSettingsTab === "reports" ? "block" : "hidden"
+        }`}
+      >
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Monthly Email Reports</h3>
             <p className="card-desc text-slate-500">
-              Send last month revenue, doctor settlement, medical department
-              revenue, and paid invoice profit as an Excel-compatible
-              spreadsheet through the Redis report worker.
+              Send one modern Excel workbook with revenue, doctor and vendor
+              settlements, payment collections, invoice profit, totals, and
+              reconciliation checks through the report worker.
             </p>
           </div>
           <Badge
@@ -425,7 +551,7 @@ export function SettingsPanel(props: any) {
             <Input
               value={reportRecipients}
               onChange={(e: any) => setReportRecipients(e.target.value)}
-              placeholder="owner@clinic.com, accounts@clinic.com"
+              placeholder="Blank sends manual report to your email"
               className="search-filter"
             />
           </FormField>
@@ -453,19 +579,21 @@ export function SettingsPanel(props: any) {
               onChange={(e: any) =>
                 setReportEnabled(e.target.value === "enabled")
               }
-              className="select-filter"
             >
               <option value="disabled">Manual only</option>
               <option value="enabled">Every month</option>
             </Select>
           </FormField>
         </div>
-        <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-3">
           {[
             ["overall", "Overall summary"],
-            ["doctor", "Doctor revenue"],
+            ["doctor", "Doctor settlement"],
+            ["vendor", "Vendor settlement"],
             ["department", "Medical department revenue"],
             ["invoice", "Paid invoice details"],
+            ["collections", "Payment collections"],
+            ["include_patient_details", "Include patient names (restricted)"],
           ].map(([key, label]) => (
             <label
               key={key}
@@ -502,95 +630,21 @@ export function SettingsPanel(props: any) {
             </ButtonLoader>
           </button>
         </div>
-        <div className="mt-5 overflow-auto rounded-lg border border-slate-200">
-          <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Job</th>
-                <th className="">Time</th>
-                <th className="w-[100px]">Status</th>
-                <th>Period</th>
-                <th>Recipients</th>
-                <th>Result</th>
-                <th className="pr-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {reportJobs.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-4 text-slate-500">
-                    No monthly report jobs yet.
-                  </td>
-                </tr>
-              )}
-              {pagedReportJobs.map((job: any, index: number) => (
-                <tr key={job.id}>
-                  <td className="px-4 py-4 text-sm">
-                    <b>Report {(safeReportPage - 1) * pageSize + index + 1}</b>
-                  </td>
-                  <td>
-                    <p className="text-xs text-slate-500">
-                      {displayDateTime(job.created_at)}
-                    </p>
-                  </td>
-                  <td>
-                    <Badge
-                      tone={
-                        job.status === "sent"
-                          ? "green"
-                          : job.status === "failed"
-                            ? "red"
-                            : job.status === "running"
-                              ? "blue"
-                              : "amber"
-                      }
-                      className="table-status w-[60%] text-xs"
-                    >
-                      {humanizeOptionLabel(job.status)}
-                    </Badge>
-                  </td>
-                  <td className="text-xs">
-                    {job.period_start} to {job.period_end}
-                  </td>
-                  <td className="text-xs truncate">
-                    {(job.recipients || []).join(", ")}
-                  </td>
-                  <td className="pr-4 text-xs text-slate-500">
-                    <div
-                      className="truncate w-[100px]"
-                      title={job.failure_reason || job.attachment_filename}
-                    >
-                      {job.failure_reason || job.attachment_filename || "-"}
-                    </div>
-                  </td>
-                  <td>
-                    <RowActions
-                      actions={[
-                        {
-                          label:
-                            reportBusy === `resend-${job.id}`
-                              ? "Sending..."
-                              : "Resend",
-                          onClick: () => resendMonthlyReport(job),
-                          disabled: reportBusy === `resend-${job.id}`,
-                        },
-                        {
-                          label:
-                            reportBusy === `download-${job.id}`
-                              ? "Downloading..."
-                              : "Download",
-                          onClick: () => downloadMonthlyReport(job),
-                          disabled: reportBusy === `download-${job.id}`,
-                        },
-                      ]}
-                      className="right-24 -bottom-3"
-                      width="w-24"
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-5">
+          <DataTable
+            columns={getReportJobsColumns({
+              safeReportPage,
+              pageSize,
+              reportBusy,
+              resendMonthlyReport,
+              downloadMonthlyReport,
+            })}
+            data={pagedReportJobs}
+            emptyMessage="No monthly report jobs yet."
+            emptyDescription="Monthly revenue and settlement reports sent from this tenant will show up here."
+            emptyIcon={FileSpreadsheet}
+            minBodyHeight={`${pagedReportJobs.length > 0 ?'':'220px'}`}
+          />
         </div>
         <Pagination
           page={safeReportPage}

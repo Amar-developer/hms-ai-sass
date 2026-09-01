@@ -1,3 +1,4 @@
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.modules.identity.models import (
@@ -60,11 +61,14 @@ class IdentityUserRepository:
     def get_by_email(self, email: str) -> User | None:
         return self.session.exec(select(User).where(User.email == email)).first()
 
-    def list_login_candidates(self, email: str) -> list[User]:
+    def list_login_candidates(self, identifier: str) -> list[User]:
         return list(
             self.session.exec(
                 select(User)
-                .where(User.email == email, User.is_active == True)  # noqa: E712
+                .where(
+                    or_(User.email == identifier, User.username == identifier),
+                    User.is_active == True,  # noqa: E712
+                )
                 .order_by(User.updated_at.desc(), User.created_at.desc())
             ).all()
         )
@@ -80,6 +84,11 @@ class IdentityUserRepository:
             select(User).where(User.tenant_id == tenant_id, User.email == email)
         ).first()
 
+    def get_by_username_for_tenant(self, tenant_id: str, username: str) -> User | None:
+        return self.session.exec(
+            select(User).where(User.tenant_id == tenant_id, User.username == username)
+        ).first()
+
     def duplicate_email_for_tenant(
         self, *, tenant_id: str, email: str, exclude_user_id: str
     ) -> User | None:
@@ -87,6 +96,17 @@ class IdentityUserRepository:
             select(User).where(
                 User.tenant_id == tenant_id,
                 User.email == email,
+                User.id != exclude_user_id,
+            )
+        ).first()
+
+    def duplicate_username_for_tenant(
+        self, *, tenant_id: str, username: str, exclude_user_id: str
+    ) -> User | None:
+        return self.session.exec(
+            select(User).where(
+                User.tenant_id == tenant_id,
+                User.username == username,
                 User.id != exclude_user_id,
             )
         ).first()

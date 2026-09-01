@@ -49,6 +49,8 @@ class PractitionerRead(BaseModel):
     email: str | None
     signature_url: str | None = None
     status: PractitionerStatus
+    created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
     branch_ids: list[str] = []
@@ -121,6 +123,8 @@ class PractitionerScheduleRead(BaseModel):
     end_time: time
     slot_minutes: int
     is_active: bool
+    created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -146,6 +150,8 @@ class PractitionerLeaveRead(BaseModel):
     end_time: time | None
     reason: str | None
     is_active: bool
+    created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -173,6 +179,8 @@ class PractitionerRoomAssignmentRead(BaseModel):
     start_time: time
     end_time: time
     is_active: bool
+    created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

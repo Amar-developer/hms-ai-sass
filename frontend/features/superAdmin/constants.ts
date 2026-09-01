@@ -4,10 +4,12 @@ import {
   ClipboardList,
   CreditCard,
   MessageCircleMore,
+  MessageSquare,
   Settings,
   ShieldCheck,
   Users,
 } from "lucide-react";
+import { CLINIC_SECTION_IDS } from "@/lib/clinicSections";
 
 export const tenantTypes = [
   ["clinic", "Clinic"],
@@ -212,7 +214,19 @@ export const superAdminSections = [
   ["subscriptions", "Subscription Management", CreditCard],
   ["settings", "Tenant & Branch Settings", Settings],
   ["whatsappSettings", "WhatsApp Settings", MessageCircleMore],
+  ["smsSettings", "SMS Settings", MessageSquare],
 ] as const;
+
+// Display-only split of the list above: "Settings" is its own sidebar
+// dropdown (routed under /superadmin/{section}), "Clinic" is a separate one
+// (routed under /clinic/{section} — see superAdminPath in routing.ts). Both
+// are still filtered through platformSectionsForUser() for permissions.
+export const superAdminSettingsSections = superAdminSections.filter(
+  ([id]) => !(CLINIC_SECTION_IDS as readonly string[]).includes(id),
+);
+export const superAdminClinicSections = superAdminSections.filter(([id]) =>
+  (CLINIC_SECTION_IDS as readonly string[]).includes(id),
+);
 
 export function platformSectionsForUser(user: any) {
   if (user?.is_super_admin) return [...superAdminSections];
@@ -250,4 +264,12 @@ export const tenant_status_options = [
 export const dateFieldOptions  = [
   { value: "updated_at", label: "Modified date" },
   { value: "created_at", label: "Created date" },
+];
+
+export const subscriptin_status_options =[
+  { value: "all", label: "All status" },
+  { value: "active", label: "Active" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "expired", label: "Expired" },
+  { value: "cancelled", label: "Cancelled" },
 ];

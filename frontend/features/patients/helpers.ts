@@ -77,18 +77,14 @@ export function patientDisplayNumber(patient: any) {
 }
 
 /**
- * The one number to show for a patient: primary, else alternate, else
- * guardian. `contact_mobile` is the server's already-resolved answer (see
- * backend app/modules/patients/contact.py); the rest is a fallback for
- * payloads that predate it.
+ * The one number to show for a patient: primary, else alternate. Family/
+ * guardian membership sharing is handled through explicit patient family
+ * relationships, not guardian phone fields.
  */
 export function patientDisplayMobile(patient: any) {
   return (
-    patient?.contact_mobile ||
     patient?.mobile ||
     patient?.alternate_mobile ||
-    patient?.guardian_mobile ||
-    patient?.guardianMobile ||
     ""
   );
 }
@@ -111,10 +107,6 @@ export function patientSearchText(patient: any, branch?: any) {
     patient.name,
     patient.mobile,
     patient.alternate_mobile,
-    patient.guardian_name,
-    patient.guardian,
-    patient.guardian_mobile,
-    patient.guardianMobile,
     patient.email,
     patient.area,
     patient.address,
@@ -192,12 +184,12 @@ export type PatientFormPayload = {
   fullName: string;
   mobile: string;
   alternateMobile: string;
+  guardianName: string;
+  guardianMobile: string;
   email: string;
   gender: string;
   dateOfBirth: string;
   ageYears: string;
-  guardianName: string;
-  guardianMobile: string;
   area: string;
   address: string;
   bloodGroup: string;
@@ -214,12 +206,12 @@ export function patientFormPayload(fd: FormData): PatientFormPayload {
     fullName: formValue(fd, "fullName"),
     mobile: formValue(fd, "mobile"),
     alternateMobile: formValue(fd, "alternateMobile"),
+    guardianName: formValue(fd, "guardianName"),
+    guardianMobile: formValue(fd, "guardianMobile"),
     email: formValue(fd, "email"),
     gender: formValue(fd, "gender") || "unknown",
     dateOfBirth: formValue(fd, "dateOfBirth"),
     ageYears: formValue(fd, "ageYears"),
-    guardianName: formValue(fd, "guardianName"),
-    guardianMobile: formValue(fd, "guardianMobile"),
     area: formValue(fd, "area"),
     address: formValue(fd, "address"),
     bloodGroup: formValue(fd, "bloodGroup"),

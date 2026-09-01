@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
@@ -11,8 +12,8 @@ from app.core.access_control import (
 )
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus, Payment
-from app.modules.identity.models import User
 from app.modules.identity import permissions
+from app.modules.identity.models import User
 from app.modules.identity.services.policy import assert_tenant_permission
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
@@ -23,6 +24,7 @@ from app.modules.patient_subscriptions.repositories import (
     PatientSubscriptionSupportRepository,
 )
 from app.modules.patient_subscriptions.schemas import (
+    PatientSubscriptionBenefitUsageUpdate,
     PatientSubscriptionEnrollmentCreate,
     PatientSubscriptionEnrollmentRead,
     PatientSubscriptionEnrollmentUpdate,
@@ -32,11 +34,21 @@ from app.modules.patient_subscriptions.services.eligibility import (
     resolve_current_enrollment,
 )
 from app.modules.patient_subscriptions.services.enrollment_reads import read_enrollment
+from app.modules.patient_subscriptions.services.serialization import (
+    free_items_from_json,
+    usage_from_json,
+    usage_to_json,
+)
+from app.modules.patient_subscriptions.services.usage_sync import (
+    invoice_benefit_usage,
+    sync_free_item_usage_from_invoices,
+)
 from app.modules.patients.services.references import patient_reference_map
 from app.modules.patient_subscriptions.services.validation import (
     _get_enrollment,
     _get_plan,
     _resolve_enrollment_branch,
+    require_tenant_admin,
 )
 
 
@@ -81,6 +93,14 @@ def enroll_patient(
     )
     enrollment_repo = PatientSubscriptionEnrollmentRepository(session)
     if current:
+        if current.plan_id == payload.plan_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Patient is already enrolled in this active membership plan. "
+                    "Select a different renewal plan after the current plan ends."
+                ),
+            )
         already_queued = enrollment_repo.status_rows_for_patient(
             tenant_id=tenant_id,
             patient_id=payload.patient_id,
@@ -256,7 +276,6 @@ def update_enrollment(
         "starts_on",
         "ends_on",
         "status",
-        "used_consultations",
         "paid_amount",
     )
     before = {
@@ -287,6 +306,146 @@ def update_enrollment(
         purpose="patient_subscription_enrollment",
         changes=diff_changes(before, {key: getattr(enrollment, key) for key in before}),
     )
+    return read_enrollment(session, enrollment)
+
+
+def update_benefit_usage(
+    session: Session,
+    *,
+    tenant_id: str,
+    enrollment_id: str,
+    payload: PatientSubscriptionBenefitUsageUpdate,
+    actor: User,
+) -> PatientSubscriptionEnrollmentRead:
+    """Set the total consumed benefits while retaining invoice-backed usage."""
+    enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=actor)
+    require_tenant_admin(session, tenant_id, actor)
+    enrollment = _get_enrollment(session, tenant_id, enrollment_id)
+    plan = _get_plan(session, tenant_id, enrollment.plan_id)
+    require_user_branch_access(actor, enrollment.branch_id)
+
+    reason = payload.reason.strip()
+    if len(reason) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Benefit usage adjustment reason must be at least 2 characters",
+        )
+
+    consultation_limit = int(plan.free_consultations or 0)
+    lab_limits = free_items_from_json(plan.free_lab_test_ids_json)
+    medicine_limits = free_items_from_json(plan.free_medicine_ids_json)
+    requested_lab = {
+        str(key): int(value) for key, value in payload.used_free_lab_quantities.items()
+    }
+    requested_medicine = {
+        str(key): int(value)
+        for key, value in payload.used_free_medicine_quantities.items()
+    }
+
+    def validate_items(
+        *, label: str, requested: dict[str, int], limits: dict[str, int]
+    ) -> None:
+        unknown = sorted(set(requested) - set(limits))
+        if unknown:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{label} benefit is not included in this plan: {unknown[0]}",
+            )
+        for item_id, count in requested.items():
+            if count < 0 or count > int(limits[item_id]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"{label} usage for {item_id} must be between 0 and "
+                        f"{int(limits[item_id])}"
+                    ),
+                )
+
+    if payload.used_consultations > consultation_limit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Consultation usage must be between 0 and {consultation_limit}",
+        )
+    validate_items(label="Lab", requested=requested_lab, limits=lab_limits)
+    validate_items(
+        label="Medicine", requested=requested_medicine, limits=medicine_limits
+    )
+
+    invoice_consultations, invoice_lab, invoice_medicine, _ = invoice_benefit_usage(
+        session, enrollment, plan
+    )
+    if payload.used_consultations < invoice_consultations:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Consultation usage cannot be lower than usage recorded on invoices "
+                f"({invoice_consultations})"
+            ),
+        )
+    for label, requested, recorded in (
+        ("Lab", requested_lab, invoice_lab),
+        ("Medicine", requested_medicine, invoice_medicine),
+    ):
+        for item_id, recorded_count in recorded.items():
+            if int(requested.get(item_id, 0)) < int(recorded_count):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"{label} usage for {item_id} cannot be lower than invoice "
+                        f"usage ({recorded_count})"
+                    ),
+                )
+
+    sync_free_item_usage_from_invoices(session, enrollment, plan)
+    before = {
+        "used_consultations": int(enrollment.used_consultations or 0),
+        "used_free_lab_quantities": usage_from_json(enrollment.used_free_lab_json),
+        "used_free_medicine_quantities": usage_from_json(
+            enrollment.used_free_medicine_json
+        ),
+    }
+    enrollment.manual_used_consultations = (
+        payload.used_consultations - invoice_consultations
+    )
+    enrollment.manual_used_free_lab_json = usage_to_json(
+        {
+            item_id: int(requested_lab.get(item_id, 0))
+            - int(invoice_lab.get(item_id, 0))
+            for item_id in lab_limits
+        }
+    )
+    enrollment.manual_used_free_medicine_json = usage_to_json(
+        {
+            item_id: int(requested_medicine.get(item_id, 0))
+            - int(invoice_medicine.get(item_id, 0))
+            for item_id in medicine_limits
+        }
+    )
+    sync_free_item_usage_from_invoices(session, enrollment, plan)
+    enrollment.updated_at = datetime.now(timezone.utc)
+    after = {
+        "used_consultations": int(enrollment.used_consultations or 0),
+        "used_free_lab_quantities": usage_from_json(enrollment.used_free_lab_json),
+        "used_free_medicine_quantities": usage_from_json(
+            enrollment.used_free_medicine_json
+        ),
+    }
+    session.add(enrollment)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=enrollment.branch_id,
+        actor_user_id=actor.id,
+        action="patient_subscription.benefit_usage_adjusted",
+        resource_type="patient_subscription_enrollment",
+        resource_id=enrollment.id,
+        purpose="patient_subscription_benefit_usage_correction",
+        metadata_json=json.dumps({"reason": reason}),
+        changes=diff_changes(before, after),
+        commit=False,
+    )
+    session.commit()
+    session.refresh(enrollment)
     return read_enrollment(session, enrollment)
 
 

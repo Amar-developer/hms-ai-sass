@@ -51,7 +51,11 @@ export function NotificationWidget({ apiSession, setActive }: any) {
       }
     }
     const destination = notificationDestination(row);
-    if (destination) setActive?.(destination);
+    if (row.resource_type === "appointment" && row.resource_id) {
+      setActive?.({ id: "opd", appointmentId: row.resource_id });
+    } else if (destination) {
+      setActive?.(destination);
+    }
   }
 
   return (

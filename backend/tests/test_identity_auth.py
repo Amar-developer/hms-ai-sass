@@ -15,7 +15,7 @@ from app.modules.identity.models import (
     UserRole,
 )
 from app.modules.identity.repositories import IdentityUserRepository
-from app.modules.identity.schemas import ChangePasswordRequest
+from app.modules.identity.schemas import ChangePasswordRequest, LoginRequest
 from app.modules.identity.security import create_access_session, hash_password
 from app.modules.identity.services import auth_service as auth_service_module
 from app.modules.identity.services.auth_service import AuthService
@@ -152,6 +152,63 @@ def test_bootstrap_login_me_and_change_password(unauthenticated_client):
         json={"email": "admin@medizinhub.test", "password": "NewSecretPass123"},
     )
     assert login.status_code == 200
+
+
+def test_login_does_not_write_debug_output(test_engine, monkeypatch, capsys):
+    monkeypatch.setattr(
+        auth_service_module, "_enforce_login_rate_limit", lambda *_: None
+    )
+    with Session(test_engine) as session:
+        session.add(
+            User(
+                name="Quiet Login User",
+                email="quiet-login@medizinhub.test",
+                password_hash=hash_password("SecretPass123"),
+                is_super_admin=True,
+            )
+        )
+        session.commit()
+        capsys.readouterr()
+
+        result = AuthService(session).login(
+            LoginRequest(
+                email="quiet-login@medizinhub.test",
+                password="SecretPass123",
+            )
+        )
+
+    assert result.response.user.email == "quiet-login@medizinhub.test"
+    assert capsys.readouterr().out == ""
+
+
+def test_login_accepts_username_and_legacy_email_payloads(test_engine, monkeypatch):
+    monkeypatch.setattr(
+        auth_service_module, "_enforce_login_rate_limit", lambda *_: None
+    )
+    with Session(test_engine) as session:
+        session.add(
+            User(
+                name="Username Login User",
+                username="front.desk",
+                email="front.desk@medizinhub.test",
+                password_hash=hash_password("SecretPass123"),
+                is_super_admin=True,
+            )
+        )
+        session.commit()
+
+        username_login = AuthService(session).login(
+            LoginRequest(identifier="FRONT.DESK", password="SecretPass123")
+        )
+        email_login = AuthService(session).login(
+            LoginRequest(
+                email="front.desk@medizinhub.test",
+                password="SecretPass123",
+            )
+        )
+
+    assert username_login.response.user.username == "front.desk"
+    assert email_login.response.user.email == "front.desk@medizinhub.test"
 
 
 def test_login_rate_limit_is_shared_and_returns_retry_after(

@@ -1,15 +1,16 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { Doctors } from "@/features/doctors/Doctors";
-import { useWorkspace } from "@/features/shell/WorkspaceContext";
+import { useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 
-export default function PractitionersPage() {
-  const ctx = useWorkspace();
+// Doctors now lives at /clinic/practitioners — this stub keeps old
+// bookmarks/links working by forwarding straight through.
+export default function PractitionersRedirect() {
+  const router = useRouter();
   const params = useParams();
   const segments = (params?.segments as string[] | undefined) || [];
-  const [first, second] = segments;
-  const view = first === "new" ? "create" : second === "edit" ? "edit" : "list";
-  const selectedId = view === "edit" ? first : "";
-  return <Doctors {...ctx} view={view} selectedId={selectedId} />;
+  useEffect(() => {
+    router.replace(`/clinic/practitioners${segments.length ? `/${segments.join("/")}` : ""}`);
+  }, [router, segments.join("/")]);
+  return null;
 }

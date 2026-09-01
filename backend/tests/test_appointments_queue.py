@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -24,9 +25,11 @@ def create_patient(
     name: str = "Ravi Kumar",
     mobile: str | None = None,
 ) -> dict:
-    payload = {"full_name": name, "age_years": 42}
-    if mobile:
-        payload["mobile"] = mobile
+    payload = {
+        "full_name": name,
+        "age_years": 42,
+        "mobile": mobile or f"9{uuid4().int % 10**9:09d}",
+    }
     response = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant_id},
@@ -661,12 +664,12 @@ def test_duplicate_patient_detection_blocks_exact_registration(client: TestClien
     assert (
         duplicate_create.json()["detail"]
         == "Mobile number is already used as the primary mobile number for "
-        "another patient. Use Alternate Phone Number for a shared family "
-        "contact."
+        "another active patient. Use Secondary Mobile Number only when this is the "
+        "patient's own secondary contact number."
     )
 
 
-def test_patient_registration_requires_shared_family_number_as_alternate(
+def test_patient_registration_allows_secondary_number_without_family_link(
     client: TestClient,
 ):
     tenant = create_tenant(client)

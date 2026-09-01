@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { apiFetch, type ApiSession } from "@/lib/api";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { activeTenantOptions, displayDate } from "@/utils/helper";
@@ -15,7 +15,7 @@ interface UseAppointmentBookingDataArgs {
   query: string;
   filterDate: string;
   platformTenantId: string;
-  setPlatformTenantId: (value: string) => void;
+  setPlatformTenantId: Dispatch<SetStateAction<string>>;
   listRefreshKey: number;
   setMessage: (message: string) => void;
 }
@@ -43,48 +43,82 @@ export function useAppointmentBookingData({
 
   useEffect(() => {
     let alive = true;
-    async function loadPlatformGrid() {
-      if (!apiSession || !isSuperAdmin) return;
-      setPlatformLoading(true);
+    async function loadPlatformTenants() {
+      if (!apiSession || !isSuperAdmin) {
+        setPlatformTenants([]);
+        return;
+      }
       try {
-        const params = new URLSearchParams({ limit: "500" });
-        if (query) params.set("q", query);
-        if (filterDate) params.set("appointment_date", filterDate);
-        if (platformTenantId) params.set("tenant_id", platformTenantId);
-        const [tenantRows, appointmentRows] = await Promise.all([
-          apiFetch("/tenants", apiSession),
-          apiFetch(
-            `/appointments/platform/all?${params.toString()}`,
-            apiSession,
-          ),
-        ]);
+        const tenantRows = await apiFetch("/tenants", apiSession);
         if (!alive) return;
-        const selectableTenants = activeTenantOptions(tenantRows);
-        const selectableTenantIds = new Set(
-          selectableTenants.map((tenant: any) => tenant.id),
+        const selectableTenants = activeTenantOptions(tenantRows).filter(
+          (tenant: any) => !tenant.is_primary,
         );
         setPlatformTenants(selectableTenants);
-        if (
-          platformTenantId &&
-          !selectableTenants.some(
-            (tenant: any) => tenant.id === platformTenantId,
-          )
-        ) {
+        setPlatformTenantId((current) => {
+          if (selectableTenants.some((tenant: any) => tenant.id === current)) {
+            return current;
+          }
+          return (
+            selectableTenants.find(
+              (tenant: any) => tenant.id === apiSession.tenantId,
+            )?.id ||
+            selectableTenants[0]?.id ||
+            ""
+          );
+        });
+      } catch (err: any) {
+        if (alive) {
+          setPlatformTenants([]);
           setPlatformTenantId("");
+          setMessage(err.message || "Could not load tenant options.");
         }
+      }
+    }
+    void loadPlatformTenants();
+    return () => {
+      alive = false;
+    };
+  }, [apiSession?.email, apiSession?.tenantId, isSuperAdmin]);
+
+  useEffect(() => {
+    let alive = true;
+    async function loadPlatformGrid() {
+      if (!apiSession || !isSuperAdmin || !platformTenantId) {
+        setPlatformRows([]);
+        setPlatformLoading(false);
+        return;
+      }
+      setPlatformLoading(true);
+      try {
+        // The platform endpoint intentionally rejects an unscoped scan. A
+        // tenant is therefore always present before this request is started.
+        const params = new URLSearchParams({
+          limit: "500",
+          tenant_id: platformTenantId,
+        });
+        if (query) params.set("q", query);
+        if (filterDate) params.set("appointment_date", filterDate);
+        const appointmentRows = await apiFetch(
+          `/appointments/platform/all?${params.toString()}`,
+          apiSession,
+        );
+        if (!alive) return;
         setPlatformRows(
-          appointmentRows.filter((row: any) =>
-            selectableTenantIds.has(row.tenant_id),
+          appointmentRows.filter(
+            (row: any) => row.tenant_id === platformTenantId,
           ),
         );
       } catch (err: any) {
-        if (alive)
-          setMessage(err.message || "Could not load all-tenant appointments.");
+        if (alive) {
+          setPlatformRows([]);
+          setMessage(err.message || "Could not load tenant appointments.");
+        }
       } finally {
         if (alive) setPlatformLoading(false);
       }
     }
-    loadPlatformGrid();
+    void loadPlatformGrid();
     return () => {
       alive = false;
     };

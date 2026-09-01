@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
+import { FileText } from "lucide-react";
 import {
   fileCategoryOptions,
   doctypeFetchPaths,
   fileCategoryRules,
 } from "../constants";
-import { apiFetch, apiUpload, uploadAssetUrl } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
 import { FormField } from "@/app/components/FormElements";
 import {
   Card,
@@ -15,8 +16,6 @@ import {
   ActionButton,
 } from "@/app/components/common/ui";
 import { asOptionList, patientLabel } from "../helpers";
-import { humanizeOptionLabel } from "@/lib/options";
-import { capitalizeFirst, displayDateTime } from "@/utils/helper";
 import { PatientSearchSelect } from "@/features/patients/components/PatientSearchSelect";
 import { useForm } from "react-hook-form";
 import {
@@ -27,12 +26,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
-import { RowActions } from "./RowActions";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { DataTable } from "@/app/components/common/DataTable";
-import { Column } from "@/utils/types";
 import { getFileColumns } from "../column";
 
 export function FilesPanel({
@@ -448,7 +445,7 @@ export function FilesPanel({
 
   return (
     <div className="">
-      <Card>
+      <Card className="p-3 bg-white">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Files</h3>
@@ -634,50 +631,55 @@ export function FilesPanel({
           </div>
         </form>
       </Card>
-      <Card className="mt-3">
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-          <div>
-            <h4 className="card-title font-bold">File Registry</h4>
-            <p className="card-desc text-slate-500">
-              Uploaded files appear automatically. Sync existing server files
-              when needed.
-            </p>
+      <Card className="mt-3 ">
+        <div className="rounded-lg bg-white p-2">
+          <div className="flex flex-col p-3 justify-between gap-3 lg:flex-row lg:items-center">
+            <div>
+              <h4 className="card-title font-bold">File Registry</h4>
+              <p className="card-desc text-slate-500">
+                Uploaded files appear automatically. Sync existing server files
+                when needed.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <FilterSection
-          title="Files"
-          query={query}
-          setQuery={setQuery}
-          filters={filters}
-          filterValues={filterValues}
-          onFilterChange={onFilterChange}
-          onReset={() => {
-            setDateFrom("");
-            setDateTo("");
-          }}
-        >
-          <FormField label="From">
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e: any) => setDateFrom(e.target.value)}
-            />
-          </FormField>
-          <FormField label="To">
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e: any) => setDateTo(e.target.value)}
-            />
-          </FormField>
-        </FilterSection>
+          <FilterSection
+            title="Files"
+            query={query}
+            setQuery={setQuery}
+            filters={filters}
+            filterValues={filterValues}
+            onFilterChange={onFilterChange}
+            onReset={() => {
+              setDateFrom("");
+              setDateTo("");
+            }}
+          >
+            <FormField label="From">
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e: any) => setDateFrom(e.target.value)}
+              />
+            </FormField>
+            <FormField label="To">
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e: any) => setDateTo(e.target.value)}
+              />
+            </FormField>
+          </FilterSection>
+        </div>
 
         <div className="mt-4">
           <DataTable
             columns={fileColumns}
             data={pagedFiles}
             emptyMessage="No files found."
+            emptyDescription="Files uploaded or synced for this tenant will show up here."
+            emptyIcon={FileText}
+            minBodyHeight={`${pagedFiles.length > 0 ? "" : "220px"}`}
             paginate={false}
           />
         </div>

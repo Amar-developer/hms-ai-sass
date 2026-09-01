@@ -10,12 +10,14 @@ from app.modules.billing.models import (
     InvoiceStatus,
     Payment,
     PaymentMethod,
+    PaymentStatus,
     TaxRule,
 )
 from app.modules.billing.repositories.settlement_report_repository import (
     BillingSettlementReportRepository,
 )
 from app.modules.billing.services.invoice_amounts import apply_generic_invoice_discount
+from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.rules import calculate_offer_discount
 from test_billing import create_fee_rule, setup_signed_consultation
 
@@ -240,6 +242,80 @@ def test_paid_invoice_cannot_be_cancelled_until_refunded(client):
     assert refund.json()["invoice"]["status"] == "refunded"
     assert refund.json()["invoice"]["paid_amount"] == 0
     assert refund.json()["payments"][0]["status"] == "refunded"
+
+
+def test_refunded_invoice_cannot_be_cancelled_for_amendment(client):
+    data, invoice = create_invoice(client, fee=600)
+    tenant_id = data["tenant"]["id"]
+    paid = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/payments",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"method": "cash", "amount": 600},
+    )
+    payment_id = paid.json()["payments"][0]["id"]
+    refund = client.post(
+        f"/api/v1/billing/payments/{payment_id}/refund",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"reason": "Full refund"},
+    )
+
+    cancelled = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/cancel",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"reason": "Trying to amend after refund"},
+    )
+
+    assert refund.status_code == 200
+    assert refund.json()["invoice"]["status"] == "refunded"
+    assert cancelled.status_code == 409
+    assert (
+        cancelled.json()["detail"]
+        == "Refunded invoices are already closed and cannot be cancelled"
+    )
+
+
+def test_repaid_amended_invoice_with_historical_refund_is_paid(test_engine):
+    with Session(test_engine) as session:
+        invoice = Invoice(
+            id="invoice_repaid_after_refund",
+            tenant_id="tenant_repaid_after_refund",
+            branch_id="branch_main",
+            patient_id="patient_repaid_after_refund",
+            invoice_number="MHB-INV-REPAID-REFUND",
+            total_amount=600,
+            paid_amount=600,
+            balance_amount=0,
+            status=InvoiceStatus.PAID,
+        )
+        old_refunded_payment = Payment(
+            id="payment_old_refunded",
+            tenant_id=invoice.tenant_id,
+            branch_id=invoice.branch_id,
+            invoice_id=invoice.id,
+            method=PaymentMethod.CASH,
+            amount=600,
+            refunded_amount=600,
+            status=PaymentStatus.REFUNDED,
+        )
+        new_payment = Payment(
+            id="payment_after_amendment",
+            tenant_id=invoice.tenant_id,
+            branch_id=invoice.branch_id,
+            invoice_id=invoice.id,
+            method=PaymentMethod.CASH,
+            amount=600,
+        )
+        session.add(invoice)
+        session.add(old_refunded_payment)
+        session.add(new_payment)
+        session.commit()
+        session.refresh(invoice)
+
+        updated = update_invoice_payment_status(session, invoice)
+
+        assert updated.status == InvoiceStatus.PAID
+        assert updated.paid_amount == 600
+        assert updated.balance_amount == 0
 
 
 def test_discount_request_reduces_invoice_after_approval_and_execution(client):

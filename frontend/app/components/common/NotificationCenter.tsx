@@ -210,7 +210,11 @@ export function NotificationCenter({ apiSession, navigatePage, onOpen }: any) {
       }
     }
     const destination = notificationDestination(row);
-    if (destination) navigatePage(destination);
+    if (row.resource_type === "appointment" && row.resource_id) {
+      navigatePage({ id: "opd", appointmentId: row.resource_id });
+    } else if (destination) {
+      navigatePage(destination);
+    }
     setOpen(false);
     setExpanded(false);
   }
@@ -280,10 +284,10 @@ export function NotificationCenter({ apiSession, navigatePage, onOpen }: any) {
           if (!open) onOpen?.();
           setOpen((value) => !value);
         }}
-        className={`relative grid h-10 w-10 place-items-center rounded-full border transition-colors ${
+        className={`relative grid h-9 w-8 place-items-center transition-colors ${
           hasUnread
-            ? "border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+            ? "text-red-600 hover:text-red-700"
+            : "text-slate-600 hover:text-slate-950"
         }`}
         title={
           hasUnread ? `${unreadCount} unread notifications` : "Notifications"

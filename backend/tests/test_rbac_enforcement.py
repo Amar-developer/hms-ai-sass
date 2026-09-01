@@ -209,7 +209,11 @@ def test_branch_scoped_user_can_read_tenant_patient_from_other_branch(client):
     patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Other Branch Patient", "branch_id": other["id"]},
+        json={
+            "full_name": "Other Branch Patient",
+            "branch_id": other["id"],
+            "mobile": "9000000601",
+        },
     ).json()
     client.post(
         "/api/v1/identity/roles",

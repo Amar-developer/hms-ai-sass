@@ -7,6 +7,20 @@ export function fetchInvoicePage(
   return apiFetch(`/billing/invoices/page?${params.toString()}`, session);
 }
 
+export function fetchInvoiceSummary(
+  session: ApiSession,
+  params: URLSearchParams,
+) {
+  return apiFetch(`/billing/invoices/summary?${params.toString()}`, session);
+}
+
+export function fetchInvoiceFilterOptions(
+  session: ApiSession,
+  params: URLSearchParams,
+) {
+  return apiFetch(`/billing/invoices/filter-options?${params.toString()}`, session);
+}
+
 export function fetchPendingConsultationInvoicePage(
   session: ApiSession,
   params: URLSearchParams,

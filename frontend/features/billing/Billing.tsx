@@ -2,41 +2,55 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  ActionButton,
-  Badge,
-  Button,
-  Card,
-  Input,
-  RefreshButton,
-  StatusToast,
-} from "@/app/components/common/ui";
-import { FormField } from "@/app/components/FormElements";
-import { FilterSection } from "@/app/components/common/FilterSection";
+  BadgeCheck,
+  CircleDollarSign,
+  Clock3,
+  Landmark,
+  Percent,
+  ReceiptText,
+  RotateCcw,
+} from "lucide-react";
+import { Card, RefreshButton } from "@/app/components/common/ui";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
-import {
-  formatInvoiceDate,
-  invoiceSource,
-  invoiceSourceOptions,
-} from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
-import { capitalizeFirst, displayDateTime, money } from "@/utils/helper";
-import {
-  canCopyDatabaseIds,
-  CopyIdButton,
-} from "@/app/components/common/CopyIdButton";
-import { status_options } from "./contants";
-import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { money } from "@/utils/helper";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
-import { useBillingActions, useBillingReports, usePaymentMethods } from "./api";
 import {
+  useBillingActions,
+  useInvoiceDeliveryStatuses,
+  usePaymentMethods,
+} from "./api";
+import {
+  fetchInvoiceFilterOptions,
   fetchInvoicePage,
-  fetchPendingConsultationInvoicePage,
+  fetchInvoiceSummary,
 } from "./api/billing.api";
-import { Column } from "@/utils/types";
 import { DataTable } from "@/app/components/common/DataTable";
+import { getInvoiceColumns } from "./Column";
+import { getBillingTableSchema, getBillingQueryFields } from "./filterSchema";
+import { type QueryFieldOption, type QueryFilterRow } from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
+import { status_options } from "./contants";
+
+// "Paid Status" filters on computed due/paid/partially_paid/unpaid logic
+// (status combined with balance/paid amounts) that the backend's generic
+// list-filter mechanism can't express — so it's carried as the dedicated
+// `payment_state` query param instead of the generic `filters` JSON blob,
+// and must be pulled out of the Add Filter rows before those are sent.
+function splitPaidStatusFilter(queryFilters: QueryFilterRow[]) {
+  const paidStatusRow = queryFilters.find((row) => row.field === "paidStatus");
+  const restFilters = queryFilters.filter((row) => row.field !== "paidStatus");
+  return { paidStatus: paidStatusRow?.value, restFilters };
+}
 
 export function Billing({
   apiSession,
@@ -64,24 +78,25 @@ export function Billing({
   } | null>(null);
   const [filters, setFilters] = useState({
     query: "",
-    source: "all",
-    paidStatus: "all",
     fromDate: "",
     toDate: "",
   });
+  const [sort, setSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
+  const [filterOptions, setFilterOptions] = useState<
+    Record<string, QueryFieldOption[]>
+  >({});
   const [page, setPage] = useState(1);
   const [invoiceRows, setInvoiceRows] = useState<any[]>([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
+  const [paidStatusCounts, setPaidStatusCounts] = useState<Record<string, number>>({});
+  const [invoiceSummary, setInvoiceSummary] = useState<any>(null);
   const [invoiceListLoading, setInvoiceListLoading] = useState(false);
   const invoiceLoadSequence = useRef(0);
-  const [pendingConsultationRows, setPendingConsultationRows] = useState<any[]>(
-    [],
-  );
-  const [pendingConsultationTotal, setPendingConsultationTotal] = useState(0);
-  const [pendingConsultationPage, setPendingConsultationPage] = useState(1);
-  const [pendingConsultationLoading, setPendingConsultationLoading] =
-    useState(false);
-  const pendingConsultationLoadSequence = useRef(0);
+  const invoiceSummaryLoadSequence = useRef(0);
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
     Boolean(
@@ -89,11 +104,6 @@ export function Billing({
       userPermissions.includes("*") ||
       keys.some((key) => userPermissions.includes(key)),
     );
-  const canCreateInvoices = hasPermission(
-    "billing.manage",
-    "billing.create",
-    "invoices.create",
-  );
   const canViewRevenueSummary = hasPermission(
     "billing.manage",
     "reports.revenue.read",
@@ -102,11 +112,6 @@ export function Billing({
     "billing.manage",
     "settlements.read",
   );
-  const now = new Date();
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const monthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const monthEnd = `${monthEndDate.getFullYear()}-${String(monthEndDate.getMonth() + 1).padStart(2, "0")}-${String(monthEndDate.getDate()).padStart(2, "0")}`;
-
   const { patientMap } = usePatientReferencesQuery(
     apiSession,
     invoiceRows.map((invoice: any) => invoice.patient_id),
@@ -115,6 +120,8 @@ export function Billing({
   async function loadInvoicePage(
     nextPage = page,
     filterOverrides: Partial<typeof filters> = {},
+    nextQueryFilters = queryFilters,
+    nextSort = sort,
   ) {
     if (!apiSession) return;
     const requestSequence = ++invoiceLoadSequence.current;
@@ -126,13 +133,13 @@ export function Billing({
     if (branchId) params.set("branch_id", branchId);
     if (effectiveFilters.query.trim())
       params.set("q", effectiveFilters.query.trim());
-    if (effectiveFilters.source !== "all")
-      params.set("source", effectiveFilters.source);
-    if (effectiveFilters.paidStatus !== "all")
-      params.set("payment_state", effectiveFilters.paidStatus);
+    const { paidStatus, restFilters } = splitPaidStatusFilter(nextQueryFilters);
+    if (paidStatus) params.set("payment_state", paidStatus);
     if (effectiveFilters.fromDate)
       params.set("from_date", effectiveFilters.fromDate);
     if (effectiveFilters.toDate) params.set("to_date", effectiveFilters.toDate);
+    if (restFilters.length) params.set("filters", JSON.stringify(restFilters));
+    if (nextSort) params.set("sort", JSON.stringify(nextSort));
     setInvoiceListLoading(true);
     try {
       const result = await fetchInvoicePage(apiSession, params);
@@ -148,72 +155,78 @@ export function Billing({
     }
   }
 
-  async function loadPendingConsultationPage(
-    nextPage = pendingConsultationPage,
+  async function loadPaidStatusCounts(
+    filterOverrides: Partial<typeof filters> = {},
+    nextQueryFilters = queryFilters,
   ) {
     if (!apiSession) return;
-    const requestSequence = ++pendingConsultationLoadSequence.current;
-    const params = new URLSearchParams({
-      limit: String(pageSize),
-      offset: String((nextPage - 1) * pageSize),
-    });
+    const effectiveFilters = { ...filters, ...filterOverrides };
+    const countStatuses = status_options.map((option) => option.value);
+    const { restFilters } = splitPaidStatusFilter(nextQueryFilters);
+    const entries = await Promise.all(
+      countStatuses.map(async (status) => {
+        const params = new URLSearchParams({ limit: "1", offset: "0" });
+        if (branchId) params.set("branch_id", branchId);
+        if (effectiveFilters.query.trim())
+          params.set("q", effectiveFilters.query.trim());
+        if (status !== "all") params.set("payment_state", status);
+        if (effectiveFilters.fromDate)
+          params.set("from_date", effectiveFilters.fromDate);
+        if (effectiveFilters.toDate)
+          params.set("to_date", effectiveFilters.toDate);
+        if (restFilters.length) params.set("filters", JSON.stringify(restFilters));
+        const result = await fetchInvoicePage(apiSession, params).catch(
+          () => ({ total: 0 }),
+        );
+        return [status, Number(result?.total || 0)] as const;
+      }),
+    );
+    setPaidStatusCounts(Object.fromEntries(entries));
+  }
+
+  async function loadInvoiceSummary(
+    filterOverrides: Partial<typeof filters> = {},
+    nextQueryFilters = queryFilters,
+  ) {
+    if (!apiSession) return;
+    const requestSequence = ++invoiceSummaryLoadSequence.current;
+    const effectiveFilters = { ...filters, ...filterOverrides };
+    const params = new URLSearchParams();
     if (branchId) params.set("branch_id", branchId);
-    setPendingConsultationLoading(true);
-    try {
-      const result = await fetchPendingConsultationInvoicePage(
-        apiSession,
-        params,
-      );
-      if (requestSequence !== pendingConsultationLoadSequence.current) return;
-      const rows = Array.isArray(result?.items) ? result.items : [];
-      setPendingConsultationRows(
-        rows.map((row: any) => ({
-          id: row.appointment_id,
-          consultationId: row.consultation_id,
-          branchId: row.branch_id,
-          patientId: row.patient_id,
-          patient: row.patient_name,
-          doctorId: row.practitioner_id,
-          doctor: row.practitioner_name || "Unassigned",
-          token: row.token_number,
-          appointmentDate: row.appointment_date,
-          appointmentTime: row.appointment_time,
-          consultationSignedAt: row.consultation_signed_at,
-          consultationCreatedAt: row.consultation_created_at,
-        })),
-      );
-      setPendingConsultationTotal(Number(result?.total || 0));
-    } catch (err: any) {
-      if (requestSequence !== pendingConsultationLoadSequence.current) return;
-      setMessage(
-        err.message || "Could not load pending consultation invoices.",
-      );
-    } finally {
-      if (requestSequence === pendingConsultationLoadSequence.current) {
-        setPendingConsultationLoading(false);
-      }
+    if (effectiveFilters.query.trim())
+      params.set("q", effectiveFilters.query.trim());
+    const { paidStatus, restFilters } = splitPaidStatusFilter(nextQueryFilters);
+    if (paidStatus && paidStatus !== "all")
+      params.set("payment_state", paidStatus);
+    if (effectiveFilters.fromDate)
+      params.set("from_date", effectiveFilters.fromDate);
+    if (effectiveFilters.toDate) params.set("to_date", effectiveFilters.toDate);
+    if (restFilters.length) params.set("filters", JSON.stringify(restFilters));
+    const summary = await fetchInvoiceSummary(apiSession, params).catch(
+      () => null,
+    );
+    if (requestSequence === invoiceSummaryLoadSequence.current) {
+      setInvoiceSummary(summary);
     }
+  }
+
+  async function loadInvoiceFilterOptions() {
+    if (!apiSession) return;
+    const params = new URLSearchParams();
+    if (branchId) params.set("branch_id", branchId);
+    const result = await fetchInvoiceFilterOptions(apiSession, params).catch(
+      () => ({}),
+    );
+    setFilterOptions(result || {});
   }
 
   const { invoicePaymentOptions, defaultPaymentMethod } =
     usePaymentMethods(apiSession);
 
-  const {
-    dueReport,
-    currentMonthDueReport,
-    revenueReport,
-    collectionReport,
-    settlement,
-    setSettlement,
-    loadReports,
-  } = useBillingReports(apiSession, {
-    branchId,
-    invoiceCount: (liveInvoices || []).length,
-    monthStart,
-    monthEnd,
-    canViewRevenueSummary,
-    canViewSettlementSummary,
-  });
+  const invoiceDeliveryStatus = useInvoiceDeliveryStatuses(
+    apiSession,
+    invoiceRows,
+  );
 
   const {
     busy,
@@ -223,7 +236,6 @@ export function Billing({
     setDetail,
     supplierOptions,
     detailLoading,
-    generateInvoice,
     sendInvoice,
     regenerateInvoiceDocument: regenerateInvoiceDocumentAction,
     openInvoiceDetail,
@@ -238,80 +250,60 @@ export function Billing({
     submitInvoiceAction: runInvoiceAction,
     submitAdjustmentRequest: runAdjustmentRequest,
     submitRequestAction: runRequestAction,
-    finalizeSettlement,
   } = useBillingActions(apiSession, {
-    loadLiveData,
     refreshInvoices: () => loadInvoicePage(page),
-    refreshPendingConsultations: () =>
-      loadPendingConsultationPage(pendingConsultationPage),
-    loadReports,
-    setSettlement,
+    loadReports: loadInvoiceSummary,
+    setSettlement: () => undefined,
     branchId,
   });
 
   const invoices = invoiceRows;
   const totalPages = Math.max(1, Math.ceil(invoiceTotal / pageSize));
   const safePage = Math.min(page, totalPages);
+  const billingQueryFields = getBillingQueryFields({
+    rows: invoices,
+    filterOptions,
+  });
   const invoicePageRows = invoices;
 
-  const signedReady = pendingConsultationRows;
-  const pendingConsultationTotalPages = Math.max(
-    1,
-    Math.ceil(pendingConsultationTotal / pageSize),
-  );
-  const safePendingConsultationPage = Math.min(
-    pendingConsultationPage,
-    pendingConsultationTotalPages,
-  );
-  const payableSettlement = Number(
-    settlement?.payable_settlement_amount ??
-      settlement?.doctor_share_paid_basis ??
-      settlement?.settlement_amount ??
-      0,
-  );
-  const finalizedSettlement = Number(
-    settlement?.finalized_settlement_amount ?? 0,
-  );
-  const settlementRecovery = Number(
-    settlement?.settlement_recovery_amount ?? 0,
-  );
-  const canFinalizeSettlement =
-    hasPermission("billing.manage") &&
-    Boolean(settlement?.can_finalize ?? payableSettlement > 0);
+  const billingSchema = getBillingTableSchema({ filterOptions });
+
+  const payableSettlement = Number(invoiceSummary?.settlement_amount || 0);
+  const activePaymentState =
+    splitPaidStatusFilter(queryFilters).paidStatus || "all";
+
+  function selectPaymentState(paymentState: string) {
+    const otherFilters = queryFilters.filter(
+      (row) => row.field !== "paidStatus",
+    );
+    handleQueryFiltersChange(
+      paymentState === "all"
+        ? otherFilters
+        : [
+            ...otherFilters,
+            {
+              id: "invoice-payment-state-tab",
+              field: "paidStatus",
+              operator: "equals",
+              value: paymentState,
+            },
+          ],
+    );
+  }
 
   useEffect(() => {
     setPage(1);
-  }, [
-    filters.query,
-    filters.source,
-    filters.paidStatus,
-    filters.fromDate,
-    filters.toDate,
-  ]);
+  }, [filters.query, filters.fromDate, filters.toDate, queryFilters]);
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
   useEffect(() => {
-    setPendingConsultationPage(1);
-  }, [apiSession?.tenantId, branchId]);
-  useEffect(() => {
-    if (pendingConsultationPage !== safePendingConsultationPage) {
-      setPendingConsultationPage(safePendingConsultationPage);
-    }
-  }, [pendingConsultationPage, safePendingConsultationPage]);
-  useEffect(() => {
-    if (!apiSession || !canCreateInvoices) return;
-    void loadPendingConsultationPage(pendingConsultationPage);
-  }, [
-    apiSession?.tenantId,
-    branchId,
-    canCreateInvoices,
-    pendingConsultationPage,
-  ]);
-  useEffect(() => {
     if (!apiSession) return;
     const timer = window.setTimeout(() => {
       void loadInvoicePage(page);
+      void loadPaidStatusCounts();
+      void loadInvoiceSummary();
+      void loadInvoiceFilterOptions();
     }, 250);
     return () => window.clearTimeout(timer);
   }, [
@@ -319,10 +311,10 @@ export function Billing({
     branchId,
     page,
     filters.query,
-    filters.source,
-    filters.paidStatus,
     filters.fromDate,
     filters.toDate,
+    queryFilters,
+    sort,
   ]);
   useEffect(() => {
     if (!apiSession || typeof window === "undefined") return;
@@ -341,11 +333,24 @@ export function Billing({
   function clearFilters() {
     setFilters({
       query: "",
-      source: "all",
-      paidStatus: "all",
       fromDate: "",
       toDate: "",
     });
+    setQueryFilters([]);
+    setSort(null);
+    setPage(1);
+  }
+
+  function handleQueryFiltersChange(nextFilters: QueryFilterRow[]) {
+    setQueryFilters(nextFilters);
+    setPage(1);
+    setMessage("");
+  }
+
+  function handleSortChange(nextSort: SortState | null) {
+    setSort(nextSort);
+    setPage(1);
+    setMessage("");
   }
 
   async function refreshBillingData() {
@@ -355,8 +360,8 @@ export function Billing({
       await Promise.all([
         loadLiveData(apiSession),
         loadInvoicePage(page),
-        loadPendingConsultationPage(pendingConsultationPage),
-        loadReports(true),
+        loadInvoiceSummary(),
+        loadPaidStatusCounts(),
       ]);
       setMessage("Invoices refreshed.");
     } catch (err: any) {
@@ -448,191 +453,14 @@ export function Billing({
   async function collectSplitPayment(invoice: any, rows: any[]) {
     await collectSplitPaymentAction(invoice, rows, defaultPaymentMethod);
   }
-
-  const invoiceColumns: Column<any>[] = [
-    {
-      key: "index",
-      header: "S.No",
-      width: "60px",
-      render: (_, index) => (safePage - 1) * pageSize + index + 1,
-      cellClassName: "font-semibold text-slate-500 text-center",
-    },
-    {
-      key: "invoice_number",
-      header: "Invoice",
-      width: "200px",
-      render: (invoice) => (
-        <>
-          <div className="flex items-center gap-2">
-            <b>{invoice.invoice_number}</b>
-            <CopyIdButton
-              value={invoice.id}
-              label="Invoice ID"
-              allowed={canCopyIds}
-            />
-          </div>
-          <p className="mt-1 text-sm font-semibold text-slate-400">
-            {formatInvoiceDate(invoice)}
-          </p>
-        </>
-      ),
-    },
-    {
-      key: "invoice_date",
-      className: "text-center",
-      header: "Date",
-      width: "100px",
-      render: (invoice) => (
-        <>
-          <p className="text-sm ">{formatInvoiceDate(invoice)}</p>
-        </>
-      ),
-    },
-    {
-      key: "source",
-      header: "Source",
-      width: "160px",
-      className: "text-center",
-      render: (invoice) => {
-        const source = invoiceSource(invoice);
-
-        return (
-          <Badge
-            tone={source.tone as any}
-            className="table-status text-xs text-center "
-          >
-            {source.label}
-          </Badge>
-        );
-      },
-    },
-    {
-      key: "patient",
-      header: "Patient",
-      width: "120px",
-      render: (invoice) => {
-        const p: any = patientMap.get(invoice.patient_id);
-
-        return capitalizeFirst(invoice.patient_name || p?.name || p?.full_name || "Patient")
-      },
-      cellClassName: "font-medium",
-    },
-    {
-      key: "status",
-      header: "Status",
-      className: "text-center",
-      width: "120px",
-      render: (invoice) => (
-        <Badge
-          tone={
-            invoice.status === "paid"
-              ? "green"
-              : invoice.status === "partially_refunded" ||
-                  invoice.status === "refunded"
-                ? "blue"
-                : invoice.status === "partially_paid"
-                  ? "amber"
-                  : invoice.status == "cancelled"
-                    ? "red"
-                    : "slate"
-          }
-          className="table-status text-xs text-center"
-        >
-          {capitalizeFirst(
-            invoice.status === "partially_paid"
-              ? "Partially Paid"
-              : invoice.status === "partially_refunded"
-                ? "Partially Refunded"
-                : invoice.status,
-          )}
-        </Badge>
-      ),
-    },
-    {
-      key: "total_amount",
-      header: "Total",
-      width: "100px",
-      render: (invoice) => money(invoice.total_amount),
-      cellClassName: "font-semibold tabular-nums",
-    },
-    {
-      key: "paid_amount",
-      header: "Paid",
-      width: "100px",
-      render: (invoice) => money(invoice.paid_amount),
-      cellClassName: "tabular-nums",
-    },
-    {
-      key: "due",
-      header: "Due",
-      width: "100px",
-      render: (invoice) => money(invoice.balance_amount),
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      width: "120px",
-      disableRowClick: true,
-      render: (invoice) => (
-        <ActionButton
-          onClick={() => openInvoiceDetail(invoice)}
-          disabled={detailLoading === invoice.id}
-        >
-          <ButtonLoader loading={detailLoading === invoice.id}>
-            {detailLoading === invoice.id ? "Loading..." : "View"}
-          </ButtonLoader>
-        </ActionButton>
-      ),
-    },
-  ];
-
-  const consulationPendingColumns: Column<any>[] = [
-    {
-      key: "consultation",
-      header: "Consultation",
-      render: (a: any) => <span className="font-bold">{a.token || "-"}</span>,
-    },
-    {
-      key: "patient",
-      header: "Patient",
-      render: (a: any) => <span className="font-semibold">{a.patient}</span>,
-    },
-    {
-      key: "doctor",
-      header: "Doctor",
-      cellClassName: "text-slate-600",
-      render: (a: any) =>
-        a.doctor && a.doctor !== "Unassigned" ? a.doctor : "-",
-    },
-    {
-      key: "date",
-      header: "Date & Time",
-      cellClassName: "whitespace-nowrap text-slate-600",
-      render: (a: any) =>
-        displayDateTime(
-          a.consultationSignedAt ||
-            a.consultationCreatedAt ||
-            a.appointmentDate,
-        ),
-    },
-    {
-      key: "action",
-      header: "Action",
-      cellClassName: "text-right",
-      disableRowClick: true,
-      render: (a: any) => (
-        <Button
-          disabled={busy === a.id}
-          onClick={() => generateInvoice(a)}
-          className="save-button"
-        >
-          <ButtonLoader loading={busy === a.id}>
-            {busy === a.id ? "Generating..." : "Generate Invoice"}
-          </ButtonLoader>
-        </Button>
-      ),
-    },
-  ];
+  const invoiceColumns = getInvoiceColumns({
+    safePage,
+    patientMap,
+    canCopyIds,
+    openInvoiceDetail,
+    detailLoading,
+    invoiceDeliveryStatus,
+  });
 
   if (!apiSession) {
     return (
@@ -812,216 +640,154 @@ export function Billing({
 
   return (
     <div className="">
-      {(canViewRevenueSummary || canViewSettlementSummary) && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          {canViewRevenueSummary && (
-            <Card>
-              <p className="text-xs lg:text-sm text-slate-500">
-                Due Collection
-              </p>
-              <p className="mt-1 text-xl lg:text-2xl font-bold">
-                {money(dueReport?.total_due_amount)}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                Current month {money(currentMonthDueReport?.total_due_amount)} ·
-                Carried forward{" "}
-                {money(
-                  Math.max(
-                    Number(dueReport?.total_due_amount || 0) -
-                      Number(currentMonthDueReport?.total_due_amount || 0),
-                    0,
-                  ),
-                )}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                {dueReport?.invoice_count ?? 0} outstanding invoices
-              </p>
-            </Card>
-          )}
-          {canViewRevenueSummary && (
-            <Card>
-              <p className="text-xs lg:text-sm text-slate-500">
-                Billing Discounts
-              </p>
-              <p className="mt-1 text-xl lg:text-2xl font-bold">
-                {money(revenueReport?.total_discount_amount)}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                Approved {money(revenueReport?.total_approved_discount_amount)}{" "}
-                · Offers {money(revenueReport?.total_offer_discount_amount)} ·
-                Membership{" "}
-                {money(revenueReport?.total_membership_discount_amount)}
-              </p>
-            </Card>
-          )}
-          {canViewRevenueSummary && (
-            <Card>
-              <p className="text-xs lg:text-sm text-slate-500">Revenue</p>
-              <p className="mt-1 text-xl lg:text-2xl font-bold">
-                {money(
-                  revenueReport?.total_billed_amount ??
-                    revenueReport?.total_invoice_amount,
-                )}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                Current-month billed value
-              </p>
-            </Card>
-          )}
-          {canViewRevenueSummary && (
-            <Card>
-              <p className="text-xs lg:text-sm text-slate-500">Paid</p>
-              <p className="mt-1 text-xl lg:text-2xl font-bold">
-                {money(collectionReport?.net_collected_amount)}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                Collected {money(collectionReport?.collected_amount)} · Refunds{" "}
-                {money(collectionReport?.refunded_amount)}
-              </p>
-            </Card>
-          )}
-          {canViewSettlementSummary && (
-            <Card>
-              <p className="text-xs lg:text-sm text-slate-500">Settlement</p>
-              <p className="mt-1 text-xl font-bold lg:text-2xl">
-                {money(payableSettlement)}
-              </p>
-              <p className="text-[10px] lg:text-xs text-slate-500">
-                {settlementRecovery > 0
-                  ? `Recover ${money(settlementRecovery)} after refunds`
-                  : finalizedSettlement > 0
-                    ? `Finalized ${money(finalizedSettlement)}`
-                    : "No finalized settlement yet"}
-              </p>
-              {canFinalizeSettlement ? (
-                <button
-                  type="button"
-                  onClick={finalizeSettlement}
-                  className="mt-2 rounded-lg border px-3 py-2 text-xs font-bold"
-                  disabled={busy === "settlement"}
-                >
-                  <ButtonLoader loading={busy === "settlement"}>
-                    {busy === "settlement" ? "Finalizing..." : "Finalize"}
-                  </ButtonLoader>
-                </button>
-              ) : (
-                <Badge
-                  tone={
-                    settlementRecovery > 0
-                      ? "red"
-                      : payableSettlement > 0
-                        ? "amber"
-                        : "green"
-                  }
-                  className="inline w-2/3 rounded-lg text-[11px] table-status lg:text-sm"
-                >
-                  {settlementRecovery > 0
-                    ? "Recovery due"
-                    : payableSettlement > 0
-                      ? "Pending finalization"
-                      : "Finalized"}
-                </Badge>
-              )}
-            </Card>
-          )}
+      <BreadcrumbSlot>
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={invoicePageRows.length}
+            total={invoiceTotal}
+            noun="invoices"
+          />
+          <RefreshButton
+            onRefresh={refreshBillingData}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={billingSchema}
+            query={filters.query}
+            setQuery={(value: string) => updateFilter("query", value)}
+            filterValues={filters}
+            onFilterChange={updateFilter}
+            sort={sort}
+            onSortChange={handleSortChange}
+            showSort={false}
+            onReset={clearFilters}
+            queryFields={billingQueryFields}
+            queryFilters={queryFilters}
+            onQueryFiltersChange={handleQueryFiltersChange}
+          >
+            {/* <FormField label="From">
+              <Input
+                type="date"
+                value={filters.fromDate}
+                onChange={(event: any) =>
+                  updateFilter("fromDate", event.target.value)
+                }
+              />
+            </FormField>
+            <FormField label="To">
+              <Input
+                type="date"
+                value={filters.toDate}
+                onChange={(event: any) =>
+                  updateFilter("toDate", event.target.value)
+                }
+              />
+            </FormField> */}
+          </AdaptiveFilterTrigger>
+          <AdaptiveSortTrigger
+            fields={billingSchema.sortFields}
+            sort={sort}
+            onSortChange={handleSortChange}
+          />
         </div>
-      )}
+      </BreadcrumbSlot>
+      <div className="flex flex-col gap-3">
+        <section className="order-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
+              <ReceiptText className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="text-base font-black tracking-tight text-slate-950">
+                Invoice Workspace
+              </h2>
+              <p className="text-xs font-medium text-slate-500">
+                Invoices, collections and payment status in one workspace
+              </p>
+            </div>
+          </div>
+          <StatusTabsNav
+            ariaLabel="Invoice list sections"
+            activeId={activePaymentState}
+            onSelect={selectPaymentState}
+            tabs={[
+              { id: "all", label: "All Invoices", icon: ReceiptText },
+              { id: "due", label: "Due", icon: Clock3 },
+              { id: "paid", label: "Paid", icon: BadgeCheck },
+              {
+                id: "partially_paid",
+                label: "Partially Paid",
+                icon: CircleDollarSign,
+              },
+              { id: "refunded", label: "Refunded", icon: RotateCcw },
+            ].map((tab) => ({
+              ...tab,
+              count: paidStatusCounts[tab.id] ?? 0,
+            }))}
+          />
+        </section>
 
-      {canCreateInvoices && (
-        <Card className="mt-3">
-          <h3 className="card-title font-bold">
-            Pending Consultation Invoices
-          </h3>
-          <p className="card-desc text-slate-500">
-            Reception can generate the consultation-fee invoice after the doctor
-            signs the consultation. Lab, pharmacy, IP, and physiotherapy each
-            have their own invoices created by those modules.
-          </p>
-          <StatusToast message={message} onClose={() => setMessage("")} />
-          <div className="mt-4">
-            <DataTable
-              columns={consulationPendingColumns}
-              data={signedReady}
-              emptyMessage={
-                pendingConsultationLoading
-                  ? "Loading pending consultation invoices..."
-                  : "All completed consultations already have invoices."
-              }
-            />
-            <Pagination
-              page={safePendingConsultationPage}
-              totalPages={pendingConsultationTotalPages}
-              total={pendingConsultationTotal}
-              onPage={setPendingConsultationPage}
-            />
-          </div>
-        </Card>
-      )}
+        {(canViewRevenueSummary || canViewSettlementSummary) && (
+          <section className="order-1 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {canViewRevenueSummary && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
+                  <Clock3 className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Due Collection</p>
+                  <p className="text-xl font-black text-slate-950">{money(invoiceSummary?.due_amount)}</p>
+                </div>
+              </div>
+            )}
+            {canViewRevenueSummary && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600">
+                  <Percent className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Billing Discounts</p>
+                  <p className="text-xl font-black text-slate-950">{money(invoiceSummary?.discount_amount)}</p>
+                </div>
+              </div>
+            )}
+            {canViewRevenueSummary && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-600">
+                  <CircleDollarSign className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Revenue</p>
+                  <p className="text-xl font-black text-slate-950">{money(invoiceSummary?.revenue_amount)}</p>
+                </div>
+              </div>
+            )}
+            {canViewRevenueSummary && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
+                  <BadgeCheck className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Paid</p>
+                  <p className="text-xl font-black text-slate-950">{money(invoiceSummary?.paid_amount)}</p>
+                </div>
+              </div>
+            )}
+            {canViewSettlementSummary && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-600">
+                  <Landmark className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Settlement</p>
+                  <p className="text-xl font-black text-slate-950">{money(payableSettlement)}</p>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
-      <Card className="mt-3">
-        <div className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
-          <div>
-            <h3 className="card-title font-bold">Invoices & Payments</h3>
-            <p className="card-desc text-slate-500">
-              Track invoice source, patient dues, settlement share, and payment
-              collection in one list.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <RefreshButton onRefresh={refreshBillingData} />
-            <Badge tone="slate" className="normal-badge">
-              Showing {invoicePageRows.length} of {invoiceTotal} invoices
-            </Badge>
-          </div>
-        </div>
-        <FilterSection
-          title="Invoices"
-          query={filters.query}
-          setQuery={(value: string) => updateFilter("query", value)}
-          searchPlaceholder="Invoice, patient, source"
-          className="lg:grid-cols-6 xl:grid-cols-6"
-          filters={[
-            {
-              key: "source",
-              label: "Source",
-              options: [
-                { value: "all", label: "All sources" },
-                ...invoiceSourceOptions.map((s) => ({
-                  value: s.key,
-                  label: s.label,
-                })),
-              ],
-            },
-            {
-              key: "paidStatus",
-              label: "Paid Status",
-              options: status_options,
-            },
-          ]}
-          filterValues={filters}
-          onFilterChange={updateFilter}
-          onReset={clearFilters}
-        >
-          <FormField label="From">
-            <Input
-              type="date"
-              value={filters.fromDate}
-              onChange={(event: any) =>
-                updateFilter("fromDate", event.target.value)
-              }
-            />
-          </FormField>
-          <FormField label="To">
-            <Input
-              type="date"
-              value={filters.toDate}
-              onChange={(event: any) =>
-                updateFilter("toDate", event.target.value)
-              }
-            />
-          </FormField>
-        </FilterSection>
-        <div className="scrollbar-hidden mt-4 overflow-auto rounded-2xl border border-slate-200">
+        <div className="scrollbar-hidden order-3 overflow-auto rounded-lg border border-slate-200 bg-white">
           <DataTable
             columns={invoiceColumns}
             data={invoicePageRows}
@@ -1032,16 +798,23 @@ export function Billing({
                   ? "No invoices yet."
                   : "No invoices match the selected filters."
             }
+            emptyDescription="Invoices raised for consultations, lab, pharmacy, and home care will show up here."
+            emptyIcon={ReceiptText}
+            minBodyHeight={`${invoicePageRows.length > 0 ?'':'220px'}`}
             onRowClick={openInvoiceDetail}
+            sort={sort ?? undefined}
+            onSortChange={handleSortChange}
           />
         </div>
-        <Pagination
-          page={safePage}
-          totalPages={totalPages}
-          total={invoiceTotal}
-          onPage={setPage}
-        />
-      </Card>
+        <div className="order-4">
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            total={invoiceTotal}
+            onPage={setPage}
+          />
+        </div>
+      </div>
     </div>
   );
 }

@@ -17,6 +17,7 @@ import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Skeleton } from "@/app/components/common/loader/Skeleton";
 import { useIpAdmissionsQuery } from "@/features/ip/api";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 import {
   usePhysiotherapyActions,
   usePhysiotherapyCaseDetail,
@@ -179,7 +180,7 @@ export function Physiotherapy({
       )}
       {(view === "list" || view === "detail") && (
         <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-          <Card>
+          <Card className="bg-white p-3">
             <div className="flex items-center justify-between gap-3">
               <h4 className="card-title font-bold">Physiotherapy Cases</h4>
               <div className="flex items-center gap-2">
@@ -191,10 +192,10 @@ export function Physiotherapy({
               <button
                 type="button"
                 onClick={() => navigate("op")}
-                className="rounded-lg bg-slate-900 p-4 text-left text-white"
+                className="rounded-lg bg-brand p-4 text-left text-brand-fg transition hover:bg-brand-hover"
               >
                 <b className="table-data">New OP Physio</b>
-                <p className="mt-1 table-data text-slate-300">
+                <p className="mt-1 table-data text-emerald-100">
                   Pain, sports injury, arthritis, outpatient rehab.
                 </p>
               </button>
@@ -233,6 +234,11 @@ export function Physiotherapy({
                     className={`rounded-lg p-4 text-left ${active ? "bg-slate-900 text-white" : "bg-slate-50"}`}
                   >
                     <b>{row.patient_name || patientName(patient)}</b>
+                    <PatientFlagBadges
+                      patient={patient}
+                      className="mt-1"
+                      inverse={active}
+                    />
                     <p
                       className={`text-sm ${active ? "text-slate-300" : "text-slate-500"}`}
                     >
@@ -247,8 +253,8 @@ export function Physiotherapy({
               })}
             </div>
           </Card>
-          <Card>
-            <h4 className="text-lg font-bold">Case Summary</h4>
+          <Card className="bg-white p-3">
+            <h4 className="card-title font-bold">Case Summary</h4>
             {selected ? (
               <>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">

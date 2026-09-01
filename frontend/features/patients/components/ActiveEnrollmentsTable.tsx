@@ -1,18 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { CheckCircle2 } from "lucide-react";
 import { Card, Badge } from "@/app/components/common/ui";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { displayDate, money } from "@/utils/helper";
 import { enrollmentPageSize } from "../constants";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { DataTable } from "@/app/components/common/DataTable";
+import { PatientFlagBadges } from "./PatientFlagBadges";
+import { MembershipBenefitUsageModal } from "./MembershipBenefitUsageModal";
 
 export function ActiveEnrollmentsTable({
   rows,
   patientMap,
   canManage,
+  canAdjustBenefits,
   busy,
   onUpdate,
+  onUpdateBenefits,
   onCancel,
+  labTests = [],
+  medicines = [],
 }: any) {
   const [query, setQuery] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({
@@ -20,6 +27,7 @@ export function ActiveEnrollmentsTable({
     status: "all",
   });
   const [editing, setEditing] = useState<any | null>(null);
+  const [usageEditing, setUsageEditing] = useState<any | null>(null);
 
   // Derive unique plan & status options from data
   const planOptions = useMemo(() => {
@@ -99,7 +107,6 @@ export function ActiveEnrollmentsTable({
       starts_on: String(row.starts_on || "").slice(0, 10),
       ends_on: String(row.ends_on || "").slice(0, 10),
       paid_amount: String(row.paid_amount ?? 0),
-      used_consultations: String(row.used_consultations ?? 0),
     });
   }
 
@@ -113,15 +120,18 @@ export function ActiveEnrollmentsTable({
       starts_on: editing.starts_on,
       ends_on: editing.ends_on,
       paid_amount: Number(editing.paid_amount || 0),
-      used_consultations: Number(editing.used_consultations || 0),
     });
     setEditing(null);
+  }
+
+  function startUsageEdit(row: any) {
+    setUsageEditing(row);
   }
 
   const columns = [
     {
       key: "index",
-      header: "#",
+      header: "S.No",
       width: "80px",
       render: (_row: any, index: number) => (
         <span className="font-semibold text-slate-500 text-xs lg:text-sm">
@@ -133,14 +143,17 @@ export function ActiveEnrollmentsTable({
       key: "patient",
       header: "Patient",
       width: "140px",
-      render: (row: any) => (
-        <b className="text-xs lg:text-sm">
-          {row.patient_name ||
-            patientMap.get(row.patient_id)?.name ||
-            patientMap.get(row.patient_id)?.full_name ||
-            "Patient"}
-        </b>
-      ),
+      render: (row: any) => {
+        const patient = patientMap.get(row.patient_id);
+        return (
+          <div>
+            <b className="text-xs lg:text-sm">
+              {row.patient_name || patient?.name || patient?.full_name || "Patient"}
+            </b>
+            <PatientFlagBadges patient={patient} className="mt-1" />
+          </div>
+        );
+      },
     },
     {
       key: "patient_number",
@@ -221,7 +234,7 @@ export function ActiveEnrollmentsTable({
       header: "Status",
       width: "120px",
       render: (row: any) => (
-        <Badge tone="green" className="table-status w-[60%]">
+        <Badge tone="green" className="normal-badge w-[60%]">
           {row.status}
         </Badge>
       ),
@@ -232,7 +245,7 @@ export function ActiveEnrollmentsTable({
     columns.push({
       key: "actions",
       header: "Actions",
-      width: "150px",
+      width: "100px",
       cellClassName: "text-center",
       disableRowClick: true,
       render: (row: any) => {
@@ -258,6 +271,14 @@ export function ActiveEnrollmentsTable({
                         label: "Edit",
                         onClick: () => startEdit(row),
                       },
+                      ...(canAdjustBenefits
+                        ? [
+                            {
+                              label: "Update benefit usage",
+                              onClick: () => startUsageEdit(row),
+                            },
+                          ]
+                        : []),
                       {
                         label: "Cancel",
                         onClick: () => onCancel(row),
@@ -266,6 +287,7 @@ export function ActiveEnrollmentsTable({
                       },
                     ]
               }
+              className="right-10 -bottom-5"
             />
           </div>
         );
@@ -274,7 +296,7 @@ export function ActiveEnrollmentsTable({
   }
 
   return (
-    <Card>
+    <Card className="bg-white p-3">
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="text-base lg:text-lg font-bold">Active Enrollments</h3>
@@ -306,10 +328,23 @@ export function ActiveEnrollmentsTable({
           columns={columns}
           data={filteredRows}
           emptyMessage="No active enrollments yet."
+          emptyDescription="Patients with an active membership plan will appear here."
+          emptyIcon={CheckCircle2}
+          minBodyHeight={`${filteredRows.length > 0 ?'':'220px'}`}
           paginate
           pageSize={enrollmentPageSize}
         />
       </div>
+      <MembershipBenefitUsageModal
+        enrollment={usageEditing}
+        onClose={() => setUsageEditing(null)}
+        onSave={onUpdateBenefits}
+        saving={Boolean(
+          usageEditing && busy === `benefit-usage-${usageEditing.id}`,
+        )}
+        labTests={labTests}
+        medicines={medicines}
+      />
     </Card>
   );
 }

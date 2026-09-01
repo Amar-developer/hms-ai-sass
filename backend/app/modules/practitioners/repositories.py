@@ -1,9 +1,25 @@
 from datetime import date, time
 
+from sqlalchemy import exists, func, or_
 from sqlmodel import Session, select
 
+from app.core.list_filters import (
+    ListFilter,
+    ListFilterOption,
+    ListSort,
+    apply_list_filters,
+    apply_list_sort,
+    labeled_filter_options,
+    list_filter_options,
+    tenant_user_filter_options,
+)
+from app.core.pagination import DEFAULT_LIST_LIMIT
 from app.modules.appointments.models import Appointment
 from app.modules.identity.models import User
+from app.modules.practitioners.listing import (
+    PRACTITIONER_LIST_SPEC,
+    PRACTITIONER_SCHEDULE_LIST_SPEC,
+)
 from app.modules.practitioners.models import (
     Practitioner,
     PractitionerBranch,
@@ -51,6 +67,167 @@ class PractitionerRepository:
         if practitioner_id:
             statement = statement.where(Practitioner.id == practitioner_id)
         return list(self.session.exec(statement).all())
+
+    def list_page(
+        self,
+        *,
+        tenant_id: str,
+        practitioner_id: str | None = None,
+        branch_id: str | None = None,
+        department_ids: set[str] | None = None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
+    ) -> list[Practitioner]:
+        statement = self._list_statement(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            branch_id=branch_id,
+            department_ids=department_ids,
+            q=q,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            PRACTITIONER_LIST_SPEC,
+            list_sort,
+            default_order=[Practitioner.updated_at.desc(), Practitioner.full_name],
+        )
+        return list(self.session.exec(statement.offset(offset).limit(limit)).all())
+
+    def count_page(
+        self,
+        *,
+        tenant_id: str,
+        practitioner_id: str | None = None,
+        branch_id: str | None = None,
+        department_ids: set[str] | None = None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._list_statement(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            branch_id=branch_id,
+            department_ids=department_ids,
+            q=q,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def filter_options(self, *, tenant_id: str) -> dict[str, list[ListFilterOption]]:
+        scope = (
+            select(
+                Practitioner.user_id,
+                Practitioner.practitioner_type,
+                Practitioner.primary_specialty,
+                Practitioner.status,
+            )
+            .where(Practitioner.tenant_id == tenant_id)
+            .subquery()
+        )
+        return {
+            "user_id": tenant_user_filter_options(
+                self.session, User, tenant_id=tenant_id
+            ),
+            "practitioner_type": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.practitioner_type)
+                        .distinct()
+                        .order_by(scope.c.practitioner_type)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "primary_specialty": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.primary_specialty)
+                        .distinct()
+                        .order_by(scope.c.primary_specialty)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "status": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.status)
+                        .distinct()
+                        .order_by(scope.c.status)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
+
+    def _list_statement(
+        self,
+        *,
+        tenant_id: str,
+        practitioner_id: str | None,
+        branch_id: str | None,
+        department_ids: set[str] | None,
+        q: str | None,
+        list_filters: list[ListFilter] | None,
+    ):
+        statement = select(Practitioner).where(Practitioner.tenant_id == tenant_id)
+        if practitioner_id:
+            statement = statement.where(Practitioner.id == practitioner_id)
+        if branch_id:
+            statement = statement.where(
+                exists()
+                .where(PractitionerBranch.tenant_id == tenant_id)
+                .where(PractitionerBranch.practitioner_id == Practitioner.id)
+                .where(PractitionerBranch.branch_id == branch_id)
+                .where(PractitionerBranch.is_active == True)  # noqa: E712
+            )
+        if department_ids:
+            statement = statement.where(
+                exists()
+                .where(PractitionerDepartment.tenant_id == tenant_id)
+                .where(PractitionerDepartment.practitioner_id == Practitioner.id)
+                .where(PractitionerDepartment.department_id.in_(department_ids))
+                .where(PractitionerDepartment.is_active == True)  # noqa: E712
+            )
+        if q:
+            term = q.strip().lower()
+            statement = statement.where(
+                or_(
+                    func.lower(Practitioner.practitioner_number).contains(
+                        term, autoescape=True
+                    ),
+                    func.lower(Practitioner.full_name).contains(term, autoescape=True),
+                    func.lower(Practitioner.primary_specialty).contains(
+                        term, autoescape=True
+                    ),
+                    func.lower(Practitioner.registration_number).contains(
+                        term, autoescape=True
+                    ),
+                    func.lower(Practitioner.mobile).contains(term, autoescape=True),
+                    func.lower(Practitioner.email).contains(term, autoescape=True),
+                )
+            )
+        if list_filters:
+            statement = apply_list_filters(
+                statement,
+                PRACTITIONER_LIST_SPEC,
+                list_filters,
+            )
+        return statement
 
 
 class PractitionerLinkRepository:
@@ -237,6 +414,196 @@ class PractitionerScheduleRepository:
                 )
             ).all()
         )
+
+    def list_page(
+        self,
+        *,
+        tenant_id: str,
+        practitioner_id: str | None = None,
+        branch_id: str | None = None,
+        department_ids: set[str] | None = None,
+        is_active: bool | None = None,
+        weekday: int | None = None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        offset: int = 0,
+    ) -> list[PractitionerSchedule]:
+        statement = self._list_statement(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            branch_id=branch_id,
+            department_ids=department_ids,
+            is_active=is_active,
+            weekday=weekday,
+            q=q,
+            list_filters=list_filters,
+        )
+        statement = apply_list_sort(
+            statement,
+            PRACTITIONER_SCHEDULE_LIST_SPEC,
+            list_sort,
+            default_order=[
+                PractitionerSchedule.updated_at.desc(),
+                PractitionerSchedule.created_at.desc(),
+            ],
+        )
+        return list(self.session.exec(statement.offset(offset).limit(limit)).all())
+
+    def count_page(
+        self,
+        *,
+        tenant_id: str,
+        practitioner_id: str | None = None,
+        branch_id: str | None = None,
+        department_ids: set[str] | None = None,
+        is_active: bool | None = None,
+        weekday: int | None = None,
+        q: str | None = None,
+        list_filters: list[ListFilter] | None = None,
+    ) -> int:
+        filtered = self._list_statement(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            branch_id=branch_id,
+            department_ids=department_ids,
+            is_active=is_active,
+            weekday=weekday,
+            q=q,
+            list_filters=list_filters,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def filter_options(self, *, tenant_id: str) -> dict[str, list[ListFilterOption]]:
+        scope = (
+            select(
+                PractitionerSchedule.practitioner_id,
+                Practitioner.full_name.label("practitioner_name"),
+                PractitionerSchedule.branch_id,
+                Branch.name.label("branch_name"),
+                PractitionerSchedule.department_id,
+                Department.name.label("department_name"),
+                PractitionerSchedule.mode,
+                PractitionerSchedule.is_active,
+            )
+            .join(Practitioner, Practitioner.id == PractitionerSchedule.practitioner_id)
+            .join(Branch, Branch.id == PractitionerSchedule.branch_id)
+            .outerjoin(Department, Department.id == PractitionerSchedule.department_id)
+            .where(PractitionerSchedule.tenant_id == tenant_id)
+            .subquery()
+        )
+        return {
+            "practitioner_id": labeled_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.practitioner_id, scope.c.practitioner_name)
+                        .distinct()
+                        .order_by(scope.c.practitioner_name)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "branch_id": labeled_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.branch_id, scope.c.branch_name)
+                        .distinct()
+                        .order_by(scope.c.branch_name)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "department_id": labeled_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.department_id, scope.c.department_name)
+                        .distinct()
+                        .order_by(scope.c.department_name)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "mode": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(scope.c.mode)
+                        .distinct()
+                        .order_by(scope.c.mode)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "is_active": [
+                ListFilterOption(value="true", label="Active"),
+                ListFilterOption(value="false", label="Inactive"),
+            ],
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
+
+    def _list_statement(
+        self,
+        *,
+        tenant_id: str,
+        practitioner_id: str | None,
+        branch_id: str | None,
+        department_ids: set[str] | None,
+        is_active: bool | None,
+        weekday: int | None,
+        q: str | None,
+        list_filters: list[ListFilter] | None,
+    ):
+        statement = (
+            select(PractitionerSchedule)
+            .join(Practitioner, Practitioner.id == PractitionerSchedule.practitioner_id)
+            .join(Branch, Branch.id == PractitionerSchedule.branch_id)
+            .outerjoin(Department, Department.id == PractitionerSchedule.department_id)
+            .where(PractitionerSchedule.tenant_id == tenant_id)
+        )
+        if practitioner_id:
+            statement = statement.where(
+                PractitionerSchedule.practitioner_id == practitioner_id
+            )
+        if branch_id:
+            statement = statement.where(PractitionerSchedule.branch_id == branch_id)
+        if department_ids:
+            statement = statement.where(
+                PractitionerSchedule.department_id.in_(department_ids)
+            )
+        if is_active is not None:
+            statement = statement.where(PractitionerSchedule.is_active == is_active)
+        if weekday is not None:
+            statement = statement.where(
+                PractitionerSchedule.weekdays_json.contains(str(weekday))
+            )
+        if q:
+            term = q.strip().lower()
+            statement = statement.where(
+                or_(
+                    func.lower(Practitioner.full_name).contains(term, autoescape=True),
+                    func.lower(Branch.name).contains(term, autoescape=True),
+                    func.lower(Department.name).contains(term, autoescape=True),
+                    func.lower(PractitionerSchedule.mode).contains(
+                        term, autoescape=True
+                    ),
+                )
+            )
+        if list_filters:
+            statement = apply_list_filters(
+                statement,
+                PRACTITIONER_SCHEDULE_LIST_SPEC,
+                list_filters,
+            )
+        return statement
 
     def active_for_practitioner_department(
         self,

@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime
 from enum import Enum
 
@@ -43,6 +44,20 @@ class PatientSubscriptionPlan(SQLModel, table=True):
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 
+    @property
+    def free_lab_tests(self) -> int:
+        try:
+            return len(json.loads(self.free_lab_test_ids_json or "[]"))
+        except (TypeError, ValueError):
+            return 0
+
+    @property
+    def free_medicines(self) -> int:
+        try:
+            return len(json.loads(self.free_medicine_ids_json or "[]"))
+        except (TypeError, ValueError):
+            return 0
+
 
 class PatientSubscriptionEnrollment(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("ptsub"), primary_key=True)
@@ -63,6 +78,12 @@ class PatientSubscriptionEnrollment(SQLModel, table=True):
     used_consultations: int = Field(default=0, ge=0)
     used_free_lab_json: str = Field(default="{}")
     used_free_medicine_json: str = Field(default="{}")
+    # Tenant-admin corrections for benefits consumed before MedizinHub was
+    # introduced. These stay separate from invoice-derived usage so the next
+    # usage sync cannot erase the handover baseline.
+    manual_used_consultations: int | None = Field(default=None, ge=0)
+    manual_used_free_lab_json: str | None = Field(default=None)
+    manual_used_free_medicine_json: str | None = Field(default=None)
     paid_amount: int = Field(default=0, ge=0)
     purchase_invoice_id: str | None = Field(
         default=None, index=True, foreign_key="invoice.id"

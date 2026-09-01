@@ -14,7 +14,7 @@ export function StatusBadge({ status }: any) {
           ? "amber"
           : "slate";
   return (
-    <Badge tone={tone} className="normal-badge">
+    <Badge tone={tone} className="normal-label">
       {humanizeOptionLabel(status)}
     </Badge>
   );

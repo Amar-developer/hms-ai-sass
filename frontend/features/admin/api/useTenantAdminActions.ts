@@ -274,6 +274,7 @@ export function useTenantAdminActions({
       "users",
       {
         name: data.name,
+        username: data.username.trim().toLowerCase(),
         email: data.email,
         password: data.password,
         mobile: data.mobile || null,
@@ -295,6 +296,7 @@ export function useTenantAdminActions({
       selectedUser.id,
       {
         name: data.name,
+        username: data.username.trim().toLowerCase(),
         email: data.email,
         user_type: data.userType || "staff",
         mobile: data.mobile || null,

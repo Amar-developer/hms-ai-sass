@@ -1,24 +1,19 @@
 import ipaddress
 import json
-import logging
 import re
 import socket
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from app.core.config import get_settings
 from app.infrastructure.integrations.ports.messaging import TemplateMessageResult
 
 
 MAX_RESPONSE_BYTES = 65_536
-MAX_LOGGED_ERROR_BODY = 2_000
-
-logger = logging.getLogger("medizinhub.whatsapp")
-
-
-def _mask_destination(destination: str) -> str:
-    digits = re.sub(r"\D", "", destination or "")
-    return f"***{digits[-4:]}" if len(digits) >= 4 else "***"
+# Not in RETRYABLE_STATUSES, so a blocked send fails terminally instead of
+# retrying against a provider it is never allowed to reach.
+BLOCKED_STATUS = "blocked_non_production"
 
 
 class _NoRedirectHandler(HTTPRedirectHandler):
@@ -125,6 +120,17 @@ class HttpTemplateMessageGateway:
         media_url: str | None = None,
         media_filename: str | None = None,
     ) -> TemplateMessageResult:
+        if not get_settings().whatsapp_live_delivery_enabled:
+            # Refused before the request is built, so a non-production stack
+            # restored from real data cannot message real patients even when
+            # every tenant flow, template, and consent flag says it may.
+            return TemplateMessageResult(
+                False,
+                BLOCKED_STATUS,
+                "Outbound delivery is disabled outside production."
+                " Set MEDIZINHUB_WHATSAPP_LIVE_DELIVERY=true to send for real.",
+                None,
+            )
         validate_public_https_url(api_url)
         payload: dict[str, object] = {
             "apiKey": api_key,
@@ -164,20 +170,12 @@ class HttpTemplateMessageGateway:
                 )
         except HTTPError as exc:
             try:
-                error_body = exc.read(MAX_LOGGED_ERROR_BODY).decode(
-                    "utf-8", errors="replace"
-                )
+                # Drain only a bounded amount so the connection can be reused,
+                # but never log the provider body: gateways can echo template
+                # parameters, destinations, credentials, or patient data.
+                exc.read(MAX_RESPONSE_BYTES + 1)
             except Exception:
-                error_body = ""
-            logger.warning(
-                "WhatsApp template message rejected by provider",
-                extra={
-                    "status_code": exc.code,
-                    "campaign_name": campaign_name,
-                    "destination": _mask_destination(destination),
-                    "provider_response": error_body,
-                },
-            )
+                pass
             return _failure(exc.code, "The messaging service rejected the request.")
         except (TimeoutError, socket.timeout):
             return _failure(None, "The messaging service request timed out.")

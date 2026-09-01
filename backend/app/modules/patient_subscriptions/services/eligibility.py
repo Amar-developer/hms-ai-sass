@@ -13,6 +13,7 @@ from app.modules.patient_subscriptions.repositories import (
     PatientSubscriptionSupportRepository,
 )
 from app.modules.patient_subscriptions.services.serialization import ids_from_json
+from app.modules.patients.repositories import PatientFamilyRelationshipRepository
 
 
 def _department_key(value: str | None) -> str:
@@ -168,43 +169,53 @@ def active_patient_enrollment(
     patient_id: str,
     commit: bool = True,
 ) -> tuple[PatientSubscriptionEnrollment, PatientSubscriptionPlan] | None:
-    """Return the patient's active tenant-wide membership, if benefit-eligible.
+    """Return the patient's/family active tenant-wide membership, if eligible.
 
     Membership benefits and the one-active-plan-at-a-time rule are both
     tenant-wide, not branch-scoped: a patient enrolled from one branch can
-    claim benefits from another branch in the same tenant, and can't hold two
-    simultaneous active plans across branches either.
+    claim benefits from another branch in the same tenant. Direct family
+    relationships can share the enrolled patient's benefit pool; usage stays
+    on the owner enrollment, so one free consultation consumed by any family
+    member consumes it for the whole linked family membership.
     """
-    enrollment = resolve_current_enrollment(
-        session,
-        tenant_id=tenant_id,
-        patient_id=patient_id,
-        commit=commit,
+    candidate_patient_ids = [patient_id]
+    candidate_patient_ids.extend(
+        PatientFamilyRelationshipRepository(session).active_related_patient_ids(
+            tenant_id=tenant_id, patient_id=patient_id
+        )
     )
-    if not enrollment:
-        return None
-    plan = PatientSubscriptionPlanRepository(session).get_for_tenant(
-        tenant_id, enrollment.plan_id
-    )
-    if not plan or plan.tenant_id != tenant_id or not plan.is_active:
-        return None
-    today = date.today()
-    activation_anchor = enrollment.activated_on or enrollment.starts_on
-    activation_date = activation_anchor + timedelta(
-        days=max(plan.activation_after_days, 0)
-    )
-    if today < activation_date:
-        return None
-    if plan.price_amount > 0:
-        if enrollment.purchase_invoice_id:
-            invoice = PatientSubscriptionSupportRepository(
-                session
-            ).get_invoice_for_tenant(tenant_id, enrollment.purchase_invoice_id)
-            if not invoice or invoice.balance_amount > 0:
-                return None
-        elif enrollment.paid_amount < plan.price_amount:
-            return None
-    return enrollment, plan
+    for candidate_patient_id in dict.fromkeys(candidate_patient_ids):
+        enrollment = resolve_current_enrollment(
+            session,
+            tenant_id=tenant_id,
+            patient_id=candidate_patient_id,
+            commit=commit,
+        )
+        if not enrollment:
+            continue
+        plan = PatientSubscriptionPlanRepository(session).get_for_tenant(
+            tenant_id, enrollment.plan_id
+        )
+        if not plan or plan.tenant_id != tenant_id or not plan.is_active:
+            continue
+        today = date.today()
+        activation_anchor = enrollment.activated_on or enrollment.starts_on
+        activation_date = activation_anchor + timedelta(
+            days=max(plan.activation_after_days, 0)
+        )
+        if today < activation_date:
+            continue
+        if plan.price_amount > 0:
+            if enrollment.purchase_invoice_id:
+                invoice = PatientSubscriptionSupportRepository(
+                    session
+                ).get_invoice_for_tenant(tenant_id, enrollment.purchase_invoice_id)
+                if not invoice or invoice.balance_amount > 0:
+                    continue
+            elif enrollment.paid_amount < plan.price_amount:
+                continue
+        return enrollment, plan
+    return None
 
 
 def consultation_department_id(

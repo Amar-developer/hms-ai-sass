@@ -17,17 +17,19 @@ import {
   isoToDisplayDate,
 } from "@/utils/helper";
 import type { NoticeTone, SearchableSelectProps } from "@/features/admin/types";
+import { Children, isValidElement } from "react";
+
 
 export function Card({
   children,
-  className = "px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
+  className = "px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm shadow-sm",
 }: {
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div
-      className={`rounded-lg border border-slate-200 bg-white p-5 shadow-sm ${className}`}
+      className={`rounded-lg text-sm ${className}`}
     >
       {children}
     </div>
@@ -39,7 +41,16 @@ export function Badge({
   className = "px-2 py-2  text-xs lg:text-sm flex justify-center items-center",
 }: {
   children: React.ReactNode;
-  tone?: "slate" | "red" | "green" | "blue" | "amber" | "purple" | "orange" |'skyblue' | string;
+  tone?:
+    | "slate"
+    | "red"
+    | "green"
+    | "blue"
+    | "amber"
+    | "purple"
+    | "orange"
+    | "skyblue"
+    | string;
   className?: string;
 }) {
   const m: any = {
@@ -575,7 +586,7 @@ export function DateInput({
 export const Input = forwardRef<HTMLInputElement, any>(
   (
     {
-      className = "rounded-lg px-2 py-2 lg:px-2 lg:py-2.5 text-xs lg:text-xs placeholder:text-xs",
+      className = "rounded-lg px-2 py-2 lg:px-2 lg:py-2 text-xs lg:text-xs placeholder:text-xs",
       mobileNumber = false,
       ...props
     },
@@ -608,7 +619,7 @@ export const Input = forwardRef<HTMLInputElement, any>(
 
             props.onChange?.(e);
           }}
-          className={`w-full rounded-lg border border-slate-200 outline-none focus:border-slate-500 ${className}`}
+          className={`w-full rounded-lg border bg-slate-50 border-slate-200 outline-none focus:border-slate-500 ${className}`}
         />
       </>
     );
@@ -704,18 +715,43 @@ export function SuggestionInput({
   );
 }
 
+
 export function Select({
-  className = "rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 md:text-base lg:text-sm",
+  className = "",
   children,
+  value,
+  defaultValue,
+  onChange,
+  disabled = false,
+  name,
   ...props
 }: any) {
+  const options = Children.toArray(children)
+    .filter(isValidElement)
+    .map((child: any) => ({
+      value: String(child.props.value ?? ""),
+      label: Children.toArray(child.props.children)
+        .map((node: any) =>
+          typeof node === "string" || typeof node === "number"
+            ? String(node)
+            : "",
+        )
+        .join(""),
+    }));
+
   return (
-    <select
+    <SearchableSelect
+      name={name}
+      value={value ?? defaultValue ?? ""}
+      onChange={(nextValue: string) =>
+        onChange?.({ target: { value: nextValue, name } })
+      }
+      options={options}
+      disabled={disabled}
+      searchable={false}
+      className={className}
       {...props}
-      className={`w-full border border-slate-200 bg-white outline-none focus:border-slate-500 ${className}`}
-    >
-      {children}
-    </select>
+    />
   );
 }
 
@@ -731,13 +767,15 @@ export function SearchableSelect<T = string>({
   emptyText = "No matches.",
   maxOptions = 200,
   className = "",
+  text ='text-sm',
   searchable = true,
   required = false,
   error,
   loading = false,
   onSearchChange,
+  autoOpen = false,
 }: SearchableSelectProps<T>) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [query, setQuery] = useState("");
   const [menuPosition, setMenuPosition] = useState({
     left: 0,
@@ -838,7 +876,6 @@ export function SearchableSelect<T = string>({
       <button
         type="button"
         disabled={disabled}
-        aria-required={required || undefined}
         aria-invalid={Boolean(error) || undefined}
         onClick={() =>
           setOpen((current) => {
@@ -849,14 +886,29 @@ export function SearchableSelect<T = string>({
             return !current;
           })
         }
-        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:text-sm"
+        className={`flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:${text}`}
       >
-        <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
-          {capitalizeFirst(displayLabel) || placeholder}
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span
+            title={displayLabel || undefined}
+            className={displayLabel ? "block truncate" : "block truncate text-slate-400"}
+          >
+            {capitalizeFirst(displayLabel) || placeholder}
+          </span>
+          {selected?.badges?.slice(0, 1).map((badge) => (
+            <span
+              key={badge.label}
+              title={badge.title}
+              style={badge.style}
+              className={`hidden shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-bold leading-none sm:inline-flex ${badge.className || "border-slate-300 bg-slate-100 text-slate-700"}`}
+            >
+              {badge.label}
+            </span>
+          ))}
         </span>
 
         <ChevronDown
-          className={`${open ? "rotate-180" : ""} h-4 w-4 font-bold text-black`}
+          className={`${open ? "rotate-180" : ""} h-4 w-4 shrink-0 font-bold text-black`}
         />
       </button>
 
@@ -865,6 +917,7 @@ export function SearchableSelect<T = string>({
         createPortal(
           <div
             ref={menuRef}
+            data-select-menu=""
             style={menuPosition}
             className="fixed z-[1000] max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg scrollbar-thin"
           >
@@ -922,7 +975,7 @@ export function SearchableSelect<T = string>({
                   key={option.value}
                   type="button"
                   onClick={() => commit(option.value)}
-                  className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
+                  className={`block w-full px-4 py-2 text-left ${text} hover:bg-slate-50 ${
                     option.value === String(value)
                       ? "bg-slate-50 font-bold"
                       : ""
@@ -935,6 +988,25 @@ export function SearchableSelect<T = string>({
                   {option.sublabel && (
                     <span className="block truncate text-xs text-slate-500">
                       {option.sublabel}
+                    </span>
+                  )}
+                  {Boolean(option.badges?.length) && (
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {option.badges?.slice(0, 3).map((badge) => (
+                        <span
+                          key={badge.label}
+                          title={badge.title}
+                          style={badge.style}
+                          className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-bold leading-none ${badge.className || "border-slate-300 bg-slate-100 text-slate-700"}`}
+                        >
+                          {badge.label}
+                        </span>
+                      ))}
+                      {(option.badges?.length || 0) > 3 && (
+                        <span className="inline-flex rounded-full border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-bold leading-none text-slate-600">
+                          +{(option.badges?.length || 0) - 3}
+                        </span>
+                      )}
                     </span>
                   )}
                 </button>
@@ -956,7 +1028,7 @@ export function Button({
   return (
     <button
       {...props}
-      className={`rounded-lg bg-brand ${className} font-bold text-brand-fg disabled:bg-slate-300`}
+      className={`rounded-lg ${className} font-bold  transition hover:bg-brand-hover bg-brand text-white`}
     >
       {children}
     </button>
@@ -1032,9 +1104,9 @@ export function RefreshButton({
       disabled={busy}
       title={title}
       aria-label={title}
-      className={`inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className ? className : "h-8"}`}
+      className={`inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-lg  bg-white px-2.5 lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className ? className : "h-8"}`}
     >
-      <RefreshCw className={`h-3.5 w-3.5  ${busy ? "animate-spin" : ""}`} />
+      <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
       {label ? <span>{label}</span> : null}
     </button>
   );

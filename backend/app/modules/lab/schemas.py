@@ -165,6 +165,7 @@ class LabConsultationReferralRead(BaseModel):
     id: str
     consultation_id: str
     appointment_id: str
+    appointment_number: str | None = None
     patient_id: str
     patient_name: str
     practitioner_name: str | None = None
@@ -269,6 +270,8 @@ class LabOrderRead(BaseModel):
     external_referrer: str | None
     amount: int
     ordered_by_user_id: str | None
+    created_by_user_id: str | None
+    updated_by_user_id: str | None
     sample_collected_at: datetime | None
     result_ready_at: datetime | None
     cancelled_reason: str | None

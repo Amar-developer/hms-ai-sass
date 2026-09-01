@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Building2, CreditCard, Hash, PackageSearch, Plug } from "lucide-react";
 import {
   Badge,
   Button,
@@ -11,21 +12,13 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { apiFetch } from "@/lib/api";
-import {
-  defaultNumberingEntities,
-  numberEntityLabel,
-  parseBankDetails,
-  parseCatalogIntegrations,
-  parseNumberingRules,
-} from "../../constants";
-import {
-  entitlementModules,
-  formatTenantType,
-} from "../../helpers";
+import { defaultNumberingEntities, numberEntityLabel } from "../../constants";
+import { formatTenantType } from "../../helpers";
 import { Empty } from "@/app/components/common/Empty";
 import { Info } from "@/app/components/common/Info";
 import { TenantPicker } from "../shared/TenantPicker";
+import { SettingsWorkspaceHeader } from "../shared/SettingsWorkspaceHeader";
+import { useTenantBranchSettings } from "../../api";
 
 function CatalogPluginControl({
   title,
@@ -102,121 +95,43 @@ export function TenantBranchSettings({
   modules,
   reloadPlans,
 }: any) {
-  const [subscriptions, setSubscriptions] = useState<any[]>([]);
-  const [selectedModules, setSelectedModules] = useState<string[]>([]);
-  const [settings, setSettings] = useState<any[]>([]);
-  const [numberingRules, setNumberingRules] = useState<any>(
-    parseNumberingRules(null, "SUN"),
+  const [activeTab, setActiveTab] = useState<
+    "profile" | "banking" | "numbering" | "catalogs" | "modules"
+  >("profile");
+  const {
+    visibleSelected,
+    activePlan,
+    editableModules,
+    selectedModules,
+    numberingRules,
+    catalogIntegrations,
+    bankDetails,
+    settingsMessage,
+    setSettingsMessage,
+    accountsMessage,
+    setAccountsMessage,
+    pluginMessage,
+    setPluginMessage,
+    message,
+    setMessage,
+    loading,
+    settingsLoading,
+    pluginLoading,
+    setNumberRule,
+    setEntityCode,
+    setBankDetail,
+    saveNumberingSettings,
+    setCatalogPlugin,
+    saveCatalogIntegrations,
+    saveBankDetails,
+  } = useTenantBranchSettings(
+    apiSession,
+    selectedId,
+    tenants,
+    selected,
+    plans,
+    modules,
   );
-  const [catalogIntegrations, setCatalogIntegrations] = useState<any>(
-    parseCatalogIntegrations(null),
-  );
-  const [bankDetails, setBankDetails] = useState<any>(parseBankDetails(null));
-  const [settingsMessage, setSettingsMessage] = useState("");
-  const [accountsMessage, setAccountsMessage] = useState("");
-  const [pluginMessage, setPluginMessage] = useState("");
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [settingsLoading, setSettingsLoading] = useState(false);
-  const [pluginLoading, setPluginLoading] = useState(false);
-  const visibleSelected =
-    tenants.find((tenant: any) => tenant.id === selectedId) ||
-    (tenants.some((tenant: any) => tenant.id === selected?.id)
-      ? selected
-      : tenants[0]);
-  const planById = new Map((plans || []).map((plan: any) => [plan.id, plan]));
-  const activeSubscription =
-    subscriptions.find(
-      (item: any) => item.status === "active" || item.is_active,
-    ) || subscriptions[0];
-  const activePlan = activeSubscription
-    ? (planById.get(activeSubscription.plan_id) as any)
-    : null;
-  const editableModules = entitlementModules(modules || []);
-
-  async function loadTenantSubscription() {
-    if (!apiSession || !selectedId) {
-      setSubscriptions([]);
-      setSelectedModules([]);
-      return;
-    }
-    setLoading(true);
-    setMessage("");
-    try {
-      const rows = await apiFetch("/subscription-plans/tenant-subscriptions", {
-        ...apiSession,
-        tenantId: selectedId,
-      });
-      setSubscriptions(rows);
-      const current =
-        rows.find((item: any) => item.status === "active" || item.is_active) ||
-        rows[0];
-      const plan = current
-        ? (plans || []).find((item: any) => item.id === current.plan_id)
-        : null;
-      const enabled = plan?.enabled_modules?.length
-        ? plan.enabled_modules
-        : editableModules
-            .filter((module: any) => module.default_enabled)
-            .map((module: any) => module.entitlement_key);
-      setSelectedModules(enabled);
-    } catch (err: any) {
-      setSubscriptions([]);
-      setSelectedModules(
-        editableModules
-          .filter((module: any) => module.default_enabled)
-          .map((module: any) => module.entitlement_key),
-      );
-      setMessage(err.message || "Could not load tenant modules.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadTenantSettings() {
-    if (!apiSession || !selectedId) {
-      setSettings([]);
-      setNumberingRules(parseNumberingRules(null, "SUN"));
-      setCatalogIntegrations(parseCatalogIntegrations(null));
-      setBankDetails(parseBankDetails(null));
-      return;
-    }
-    setSettingsLoading(true);
-    setSettingsMessage("");
-    try {
-      const rows = await apiFetch("/settings", {
-        ...apiSession,
-        tenantId: selectedId,
-      });
-      setSettings(rows);
-      const find = (key: string) =>
-        rows.find((setting: any) => setting.key === key);
-      setNumberingRules(
-        parseNumberingRules(
-          find("numbering.rules")?.value,
-          find("invoice.prefix")?.value || "SUN",
-        ),
-      );
-      setCatalogIntegrations(
-        parseCatalogIntegrations(find("catalog.integrations")?.value),
-      );
-      const bankRow =
-        rows.find(
-          (setting: any) =>
-            setting.key === "accounts.bank_details" &&
-            setting.scope === "tenant",
-        ) || find("accounts.bank_details");
-      setBankDetails(parseBankDetails(bankRow?.value));
-    } catch (err: any) {
-      setSettings([]);
-      setNumberingRules(parseNumberingRules(null, "SUN"));
-      setCatalogIntegrations(parseCatalogIntegrations(null));
-      setBankDetails(parseBankDetails(null));
-      setSettingsMessage(err.message || "Could not load numbering settings.");
-    } finally {
-      setSettingsLoading(false);
-    }
-  }
 
   useEffect(() => {
     if (!tenants.length) return;
@@ -225,158 +140,38 @@ export function TenantBranchSettings({
     }
   }, [selectedId, setSelectedId, tenants]);
 
-  useEffect(() => {
-    loadTenantSubscription();
-    loadTenantSettings();
-  }, [apiSession?.tenantId, selectedId, plans?.length, modules?.length]);
-
-  function setNumberRule(key: string, value: any) {
-    setNumberingRules({ ...numberingRules, [key]: value });
-  }
-  function setEntityCode(key: string, value: string) {
-    setNumberingRules({
-      ...numberingRules,
-      entities: {
-        ...(numberingRules.entities || {}),
-        [key]: value.toUpperCase(),
-      },
-    });
-  }
-  function setBankDetail(key: string, value: string) {
-    setBankDetails({ ...bankDetails, [key]: value });
-  }
-
-  async function saveNumberingSettings(e: any) {
-    e.preventDefault();
-    if (!apiSession || !visibleSelected) return;
-    setSettingsLoading(true);
-    setSettingsMessage("");
-    try {
-      await Promise.all([
-        apiFetch(
-          "/settings",
-          { ...apiSession, tenantId: visibleSelected.id },
-          {
-            method: "PUT",
-            body: JSON.stringify({
-              scope: "tenant",
-              module: "numbering",
-              key: "numbering.rules",
-              value: numberingRules,
-              actor_user_id: apiSession.user?.id,
-            }),
-          },
-        ),
-        apiFetch(
-          "/settings",
-          { ...apiSession, tenantId: visibleSelected.id },
-          {
-            method: "PUT",
-            body: JSON.stringify({
-              scope: "tenant",
-              module: "invoice",
-              key: "invoice.prefix",
-              value: numberingRules.prefix,
-              actor_user_id: apiSession.user?.id,
-            }),
-          },
-        ),
-      ]);
-      await loadTenantSettings();
-      setSettingsMessage("Document numbering settings saved.");
-    } catch (err: any) {
-      setSettingsMessage(err.message || "Could not save numbering settings.");
-    } finally {
-      setSettingsLoading(false);
-    }
-  }
-  function setCatalogPlugin(key: string, patch: any) {
-    setCatalogIntegrations({
-      ...catalogIntegrations,
-      [key]: { ...(catalogIntegrations[key] || {}), ...patch },
-    });
-  }
-
-  async function saveCatalogIntegrations(e: any) {
-    e.preventDefault();
-    if (!apiSession || !visibleSelected) return;
-    setPluginLoading(true);
-    setPluginMessage("");
-    try {
-      await apiFetch(
-        "/settings",
-        { ...apiSession, tenantId: visibleSelected.id },
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "tenant",
-            module: "integrations",
-            key: "catalog.integrations",
-            value: catalogIntegrations,
-            actor_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      await loadTenantSettings();
-      setPluginMessage("Tenant catalog plugin controls saved.");
-    } catch (err: any) {
-      setPluginMessage(
-        err.message || "Could not save catalog plugin controls.",
-      );
-    } finally {
-      setPluginLoading(false);
-    }
-  }
-
-  async function saveBankDetails(e: any) {
-    e.preventDefault();
-    if (!apiSession || !visibleSelected) return;
-    setSettingsLoading(true);
-    setAccountsMessage("");
-    try {
-      await apiFetch(
-        "/settings",
-        { ...apiSession, tenantId: visibleSelected.id },
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "tenant",
-            module: "accounts",
-            key: "accounts.bank_details",
-            value: bankDetails,
-            actor_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      await loadTenantSettings();
-      setAccountsMessage("Tenant account details saved.");
-    } catch (err: any) {
-      setAccountsMessage(err.message || "Could not save account details.");
-    } finally {
-      setSettingsLoading(false);
-    }
-  }
-
   return (
-    <div className="space-y-5">
-      <Card>
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-          <div>
-            <h3 className="card-title font-bold">Tenant & Branch Settings</h3>
-            <p className="card-desc text-slate-500">
-              Configuration page for tenant type, enabled modules, branch
-              settings, queue rules, invoice prefix, and communication
-              providers.
-            </p>
-          </div>
-          <div className="w-[30%] lg:w-[25%]">
+    <div className="space-y-3">
+      <SettingsWorkspaceHeader<
+        "profile" | "banking" | "numbering" | "catalogs" | "modules"
+      >
+        icon={Building2}
+        title="Tenant & Branch Settings"
+        description="Configure tenant identity, banking, numbering, catalogs, and module access."
+        tabs={[
+          { id: "profile", label: "Tenant Profile", icon: Building2 },
+          { id: "banking", label: "Bank Details", icon: CreditCard },
+          { id: "numbering", label: "Document Numbering", icon: Hash },
+          { id: "catalogs", label: "Catalog Providers", icon: Plug },
+          { id: "modules", label: "Module Access", icon: PackageSearch },
+        ]}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        actions={
+          <div className="w-[220px]">
             <TenantPicker
               tenants={tenants}
               selectedId={selectedId}
               setSelectedId={setSelectedId}
             />
           </div>
-        </div>
+        }
+      />
+      {activeTab === "profile" && <Card className="pt-2">
+        <h3 className="card-title font-bold">Tenant Profile</h3>
+        <p className="card-desc text-slate-500">
+          Current organization identity and operating context.
+        </p>
         {visibleSelected && (
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <Info label="Tenant" value={visibleSelected.name} />
@@ -390,8 +185,8 @@ export function TenantBranchSettings({
             <Info label="Timezone" value={visibleSelected.timezone || "-"} />
           </div>
         )}
-      </Card>
-      <Card>
+      </Card>}
+      {activeTab === "banking" && <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h1 className="card-title font-bold">
@@ -403,7 +198,7 @@ export function TenantBranchSettings({
           </div>
           <Badge
             tone="blue"
-            className="rounded-lg px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm"
+            className="normal-label"
           >
             Tenant scoped
           </Badge>
@@ -470,14 +265,14 @@ export function TenantBranchSettings({
           <div className="mt-5 flex justify-end">
             <Button
               disabled={settingsLoading || !visibleSelected}
-              className="px-4 py-2 text-xs lg:px-5 lg:py-2.5 lg:text-sm"
+              className="save-button"
             >
               {settingsLoading ? "Saving..." : "Save Accounts"}
             </Button>
           </div>
         </form>
-      </Card>
-      <Card>
+      </Card>}
+      {activeTab === "numbering" && <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h1 className="card-title font-bold">
@@ -490,7 +285,7 @@ export function TenantBranchSettings({
           </div>
           <Badge
             tone="blue"
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            className="normal-label"
           >
             {settingsLoading ? "Loading" : "Tenant scoped"}
           </Badge>
@@ -539,7 +334,8 @@ export function TenantBranchSettings({
             ))}
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button disabled={settingsLoading || !visibleSelected}>
+            <Button disabled={settingsLoading || !visibleSelected}
+            className='save-button'>
               {settingsLoading ? "Saving..." : "Save Numbering"}
             </Button>
             <span className="text-xs text-slate-500">
@@ -547,8 +343,8 @@ export function TenantBranchSettings({
             </span>
           </div>
         </form>
-      </Card>
-      <Card>
+      </Card>}
+      {activeTab === "catalogs" && <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h1 className="card-title font-bold">
@@ -561,7 +357,7 @@ export function TenantBranchSettings({
           </div>
           <Badge
             tone="blue"
-            className="normal-badge"
+            className="normal-label"
           >
             Tenant scoped
           </Badge>
@@ -586,7 +382,7 @@ export function TenantBranchSettings({
             onChange={(patch: any) => setCatalogPlugin("medicine_items", patch)}
           />
           <div className="flex flex-wrap items-center gap-3 md:col-span-2">
-            <Button disabled={pluginLoading || !visibleSelected}>
+            <Button disabled={pluginLoading || !visibleSelected} className='save-button'>
               {pluginLoading ? "Saving..." : "Save Plugin Controls"}
             </Button>
             <span className="text-xs text-slate-500">
@@ -594,8 +390,8 @@ export function TenantBranchSettings({
             </span>
           </div>
         </form>
-      </Card>
-      <Card>
+      </Card>}
+      {activeTab === "modules" && <Card className="pt-2">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h4 className="card-title font-bold">
@@ -609,12 +405,12 @@ export function TenantBranchSettings({
           <div className="text-right w-[30%] lg:w-[15%]">
             {activePlan ? (
               <>
-                <Badge tone="blue" className="normal-badge">
+                <Badge tone="blue" className="normal-label">
                   {activePlan.name}
                 </Badge>
               </>
             ) : (
-              <Badge tone="amber" className="normal-badge">
+              <Badge tone="amber" className="normal-label">
                 No active plan
               </Badge>
             )}
@@ -648,7 +444,7 @@ export function TenantBranchSettings({
                   <span className="flex flex-wrap items-center gap-2">
                     <b>{module.name}</b>
                     {key === "patient_subscriptions" && (
-                      <Badge tone="green" className="normal-badge">
+                      <Badge tone="green" className="normal-label">
                         Patient Membership
                       </Badge>
                     )}
@@ -661,11 +457,7 @@ export function TenantBranchSettings({
         <p className="mt-4 text-xs font-semibold text-slate-500">
           {selectedModules.length} modules enabled by the active plan.
         </p>
-      </Card>
-      <p className="text-xs text-slate-500">
-        Detailed branch settings reuse the tenant admin settings APIs. A
-        dedicated branch CRUD/settings API page can be added next.
-      </p>
+      </Card>}
     </div>
   );
 }

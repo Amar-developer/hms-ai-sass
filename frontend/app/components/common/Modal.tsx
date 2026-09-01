@@ -63,15 +63,15 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
-        className={`max-h-[calc(100vh-2rem)] w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ${widthClasses[maxWidth]}`}
+        className={`max-h-[calc(100vh-2rem)] w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl ${widthClasses[maxWidth]}`}
       >
         <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div className="min-w-0">
-            <h2 id={titleId} className="text-lg font-black text-slate-900">
+            <h2 id={titleId} className="card-title font-black text-slate-900">
               {title}
             </h2>
             {description && (
-              <p id={descriptionId} className="mt-1 text-sm text-slate-500">
+              <p id={descriptionId} className="mt-1 card-desc text-slate-500">
                 {description}
               </p>
             )}
@@ -85,7 +85,7 @@ export function Modal({
             <X size={18} />
           </button>
         </header>
-        <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-5">
+        <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-5 scrollbar-thin">
           {children}
         </div>
       </section>

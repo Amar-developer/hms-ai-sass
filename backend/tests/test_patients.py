@@ -1,3 +1,4 @@
+import json
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
@@ -7,6 +8,10 @@ from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionPlan,
 )
+from app.modules.identity.models import User
+from app.modules.patients.models import Patient, PatientStatus
+from app.modules.patients.repositories import PatientRepository
+from app.modules.tenants.models import Branch, Tenant
 
 
 def create_tenant(client: TestClient, name: str = "Care Clinic") -> dict:
@@ -36,6 +41,46 @@ def create_patient(client: TestClient, tenant_id: str, **overrides) -> dict:
     return response.json()
 
 
+def test_patient_duplicate_mobile_queries_ignore_inactive_patients(test_engine):
+    tenant_id = "tenant_patient_duplicate_inactive"
+    with Session(test_engine) as session:
+        session.add(Tenant(id=tenant_id, name="Care Clinic"))
+        session.add(
+            Patient(
+                tenant_id=tenant_id,
+                patient_number="PAT-ACTIVE",
+                full_name="Active Patient",
+                mobile="9000000001",
+                status=PatientStatus.ACTIVE,
+            )
+        )
+        session.add(
+            Patient(
+                tenant_id=tenant_id,
+                patient_number="PAT-INACTIVE",
+                full_name="Inactive Patient",
+                mobile="9000000002",
+                status=PatientStatus.INACTIVE,
+            )
+        )
+        session.commit()
+
+        repo = PatientRepository(session)
+        primary_mobiles = {
+            patient.mobile
+            for patient in repo.patients_with_primary_mobile(tenant_id=tenant_id)
+        }
+        inactive_candidates = repo.duplicate_candidate_rows(
+            tenant_id=tenant_id,
+            normalized_name="inactive patient",
+            mobile="9000000002",
+            guardian_mobile=None,
+        )
+
+        assert primary_mobiles == {"9000000001"}
+        assert inactive_candidates == []
+
+
 def test_create_patient_generates_patient_number_and_audit(client: TestClient):
     tenant = create_tenant(client)
 
@@ -47,6 +92,52 @@ def test_create_patient_generates_patient_number_and_audit(client: TestClient):
     assert patient["tenant_id"] == tenant["id"]
     assert patient["patient_number"] == "PAT-000001"
     assert any(event["action"] == "patient.created" for event in audit)
+
+
+def test_patient_sms_consent_can_be_created_updated_and_cleared(client: TestClient):
+    tenant = create_tenant(client)
+    patient = create_patient(
+        client,
+        tenant["id"],
+        sms_consent_status="opted_in",
+        sms_consent_source="patient_written",
+        sms_preferred_language="ta",
+    )
+
+    assert patient["sms_consent_status"] == "opted_in"
+    assert patient["sms_consent_source"] == "patient_written"
+    assert patient["sms_consent_updated_at"] is not None
+    assert patient["sms_preferred_language"] == "ta"
+
+    cleared = client.patch(
+        f"/api/v1/patients/{patient['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"sms_consent_status": "not_recorded"},
+    )
+
+    assert cleared.status_code == 200
+    assert cleared.json()["sms_consent_status"] == "not_recorded"
+    assert cleared.json()["sms_consent_source"] is None
+    assert cleared.json()["sms_consent_updated_at"] is None
+
+
+def test_patient_sms_consent_requires_source(client: TestClient):
+    tenant = create_tenant(client)
+
+    response = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "SMS Consent Patient",
+            "mobile": "9876500999",
+            "sms_consent_status": "opted_in",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Consent source is required when SMS consent is recorded"
+    )
 
 
 def test_patient_count_supports_created_date_range(client: TestClient):
@@ -112,11 +203,89 @@ def test_primary_mobile_is_unique_but_can_be_reused_as_alternate(
     assert duplicate_primary.status_code == 409
     assert duplicate_primary.json()["detail"] == (
         "Mobile number is already used as the primary mobile number for another "
-        "patient. Use Alternate Phone Number for a shared family contact."
+        "active patient. Use Secondary Mobile Number only when this is the patient's "
+        "own secondary contact number."
     )
     assert shared_alternate.status_code == 201
     assert shared_alternate.json()["mobile"] is None
     assert shared_alternate.json()["alternate_mobile"] == first["mobile"]
+
+
+def test_inactive_patient_primary_mobile_can_be_reused(client: TestClient):
+    tenant = create_tenant(client)
+    inactive = create_patient(
+        client,
+        tenant["id"],
+        full_name="Inactive Patient",
+        mobile="9876543210",
+    )
+    deleted = client.delete(
+        f"/api/v1/patients/{inactive['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    replacement = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Replacement Patient",
+            "mobile": "98765 43210",
+        },
+    )
+
+    assert deleted.status_code == 200
+    assert replacement.status_code == 201
+    assert replacement.json()["mobile"] == "9876543210"
+
+
+def test_guardian_mobile_can_be_contact_path_without_blocking_later_primary(
+    client: TestClient,
+):
+    tenant = create_tenant(client)
+    child = create_patient(
+        client,
+        tenant["id"],
+        full_name="Child Without Phone",
+        mobile=None,
+        alternate_mobile=None,
+        guardian_name="Parent Patient",
+        guardian_mobile="9000000044",
+    )
+
+    father = create_patient(
+        client,
+        tenant["id"],
+        full_name="Parent Patient",
+        mobile=child["guardian_mobile"],
+        guardian_name=None,
+        guardian_mobile=None,
+    )
+
+    assert child["mobile"] is None
+    assert child["alternate_mobile"] is None
+    assert child["guardian_mobile"] == "9000000044"
+    assert father["mobile"] == "9000000044"
+
+
+def test_patient_requires_primary_secondary_or_guardian_mobile(client: TestClient):
+    tenant = create_tenant(client)
+
+    response = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "No Contact Patient",
+            "mobile": None,
+            "alternate_mobile": None,
+            "guardian_mobile": None,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "At least one contact number is required: primary mobile, secondary "
+        "mobile, or guardian mobile."
+    )
 
 
 def test_patient_cannot_use_same_primary_and_alternate_number(client: TestClient):
@@ -134,7 +303,7 @@ def test_patient_cannot_use_same_primary_and_alternate_number(client: TestClient
 
     assert response.status_code == 422
     assert response.json()["detail"] == (
-        "Primary mobile number and alternate phone number must be different."
+        "Primary mobile number and secondary mobile number must be different."
     )
 
 
@@ -170,7 +339,72 @@ def test_patient_update_enforces_primary_mobile_rules(client: TestClient):
     assert unchanged_primary.status_code == 200
 
 
-def test_patient_search_matches_name_mobile_guardian_and_area(client: TestClient):
+def test_patient_update_can_reuse_inactive_patient_primary_mobile(client: TestClient):
+    tenant = create_tenant(client)
+    inactive = create_patient(
+        client,
+        tenant["id"],
+        full_name="Inactive Patient",
+        mobile="9000000045",
+    )
+    active = create_patient(
+        client,
+        tenant["id"],
+        full_name="Active Patient",
+        mobile="9000000046",
+    )
+    client.delete(
+        f"/api/v1/patients/{inactive['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    response = client.patch(
+        f"/api/v1/patients/{active['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"mobile": "90000 00045"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["mobile"] == "9000000045"
+
+
+def test_patient_reactivation_blocks_duplicate_primary_mobile(client: TestClient):
+    tenant = create_tenant(client)
+    inactive = create_patient(
+        client,
+        tenant["id"],
+        full_name="Inactive Patient",
+        mobile="9000000047",
+    )
+    client.delete(
+        f"/api/v1/patients/{inactive['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    replacement = create_patient(
+        client,
+        tenant["id"],
+        full_name="Replacement Patient",
+        mobile="9000000047",
+    )
+
+    response = client.patch(
+        f"/api/v1/patients/{inactive['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"status": "active"},
+    )
+    changed_mobile = client.patch(
+        f"/api/v1/patients/{inactive['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"status": "active", "mobile": "9000000048"},
+    )
+
+    assert replacement["mobile"] == "9000000047"
+    assert response.status_code == 409
+    assert changed_mobile.status_code == 200
+    assert changed_mobile.json()["mobile"] == "9000000048"
+
+
+def test_patient_search_matches_name_mobile_secondary_and_area(client: TestClient):
     tenant = create_tenant(client)
     create_patient(client, tenant["id"], full_name="Ravi Kumar", area="Adyar")
     create_patient(
@@ -188,7 +422,7 @@ def test_patient_search_matches_name_mobile_guardian_and_area(client: TestClient
         "/api/v1/patients?q=adyar",
         headers={"X-Tenant-ID": tenant["id"]},
     )
-    by_guardian = client.get(
+    by_legacy_guardian = client.get(
         "/api/v1/patients?q=suresh",
         headers={"X-Tenant-ID": tenant["id"]},
     )
@@ -203,8 +437,8 @@ def test_patient_search_matches_name_mobile_guardian_and_area(client: TestClient
 
     assert by_area.status_code == 200
     assert [row["full_name"] for row in by_area.json()] == ["Ravi Kumar"]
-    assert by_guardian.status_code == 200
-    assert [row["full_name"] for row in by_guardian.json()] == ["Meena Sharma"]
+    assert by_legacy_guardian.status_code == 200
+    assert by_legacy_guardian.json() == []
     assert by_alternate_mobile.status_code == 200
     assert [row["full_name"] for row in by_alternate_mobile.json()] == ["Meena Sharma"]
     assert by_address.status_code == 200
@@ -274,6 +508,88 @@ def test_patient_page_returns_database_total_and_applies_filters(client: TestCli
     assert inactive_page.json()["items"][0]["full_name"] == "Inactive Female"
 
 
+def test_patient_page_applies_dynamic_filters_before_pagination(client: TestClient):
+    tenant = create_tenant(client)
+    create_patient(
+        client,
+        tenant["id"],
+        full_name="Alpha Match",
+        mobile="9000000011",
+        area="Adyar",
+    )
+    create_patient(
+        client,
+        tenant["id"],
+        full_name="Beta Match",
+        mobile="9000000012",
+        area="Adyar",
+    )
+    create_patient(
+        client,
+        tenant["id"],
+        full_name="Outside Area",
+        mobile="9000000013",
+        area="Velachery",
+    )
+    filters = json.dumps([{"field": "area", "operator": "equals", "value": "Adyar"}])
+
+    response = client.get(
+        "/api/v1/patients/page",
+        params={
+            "active_only": "false",
+            "limit": "1",
+            "offset": "0",
+            "filters": filters,
+        },
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert len(body["items"]) == 1
+    assert body["items"][0]["area"] == "Adyar"
+
+
+def test_patient_page_applies_dynamic_sort_before_pagination(client: TestClient):
+    tenant = create_tenant(client)
+    create_patient(client, tenant["id"], full_name="Charlie", mobile="9000000021")
+    create_patient(client, tenant["id"], full_name="Asha", mobile="9000000022")
+    sort = json.dumps({"key": "full_name", "dir": "asc"})
+
+    response = client.get(
+        "/api/v1/patients/page",
+        params={
+            "active_only": "false",
+            "limit": "1",
+            "offset": "0",
+            "sort": sort,
+        },
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["full_name"] == "Asha"
+
+
+def test_patient_page_rejects_unsupported_dynamic_filter_field(
+    client: TestClient,
+):
+    tenant = create_tenant(client)
+    filters = json.dumps(
+        [{"field": "password_hash", "operator": "like", "value": "secret"}]
+    )
+
+    response = client.get(
+        "/api/v1/patients/page",
+        params={"active_only": "false", "filters": filters},
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unsupported filter field: password_hash"
+
+
 def test_patient_search_includes_subscription_plan_name_and_status(
     client: TestClient,
     test_engine,
@@ -316,6 +632,153 @@ def test_patient_search_includes_subscription_plan_name_and_status(
     row = response.json()[0]
     assert row["subscription_plan_name"] == "Gold Care"
     assert row["subscription_status"] == "active"
+
+
+def test_patient_page_filters_by_subscription_plan_name(
+    client: TestClient,
+    test_engine,
+):
+    tenant = create_tenant(client)
+    branch = client.post(
+        f"/api/v1/tenants/{tenant['id']}/branches",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"name": "Main Branch", "code": "MAIN"},
+    ).json()
+    gold_patient = create_patient(
+        client,
+        tenant["id"],
+        branch_id=branch["id"],
+        full_name="Gold Patient",
+        mobile="9000000031",
+    )
+    create_patient(
+        client,
+        tenant["id"],
+        branch_id=branch["id"],
+        full_name="No Plan Patient",
+        mobile="9000000032",
+    )
+    with Session(test_engine) as session:
+        plan = PatientSubscriptionPlan(
+            tenant_id=tenant["id"],
+            name="Gold Care",
+            price_amount=500,
+            duration_days=30,
+        )
+        session.add(plan)
+        session.commit()
+        session.refresh(plan)
+        session.add(
+            PatientSubscriptionEnrollment(
+                tenant_id=tenant["id"],
+                branch_id=branch["id"],
+                patient_id=gold_patient["id"],
+                plan_id=plan.id,
+                starts_on=date.today(),
+                ends_on=date.today(),
+            )
+        )
+        session.commit()
+    filters = json.dumps(
+        [
+            {
+                "field": "subscription_plan_name",
+                "operator": "equals",
+                "value": "Gold Care",
+            }
+        ]
+    )
+
+    response = client.get(
+        "/api/v1/patients/page",
+        params={"active_only": "false", "filters": filters},
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["full_name"] == "Gold Patient"
+
+
+def test_patient_filter_options_are_data_backed_and_branch_scoped(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Patient Options Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        main_branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        side_branch = Branch(tenant_id=tenant.id, name="Side Branch", code="SIDE")
+        session.add(main_branch)
+        session.add(side_branch)
+        session.commit()
+        session.refresh(main_branch)
+        session.refresh(side_branch)
+        creator = User(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            name="Reception User",
+            email="reception@example.test",
+        )
+        session.add(creator)
+        session.commit()
+        session.refresh(creator)
+        creator_id = creator.id
+        main_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+            patient_number="PAT-OPT-1",
+            full_name="Main Patient",
+            mobile="9000000201",
+            gender="female",
+            created_by_user_id=creator_id,
+        )
+        side_patient = Patient(
+            tenant_id=tenant.id,
+            branch_id=side_branch.id,
+            patient_number="PAT-OPT-2",
+            full_name="Side Patient",
+            mobile="9000000202",
+            gender="male",
+        )
+        session.add(main_patient)
+        session.add(side_patient)
+        session.commit()
+        session.refresh(main_patient)
+        plan = PatientSubscriptionPlan(
+            tenant_id=tenant.id,
+            name="Gold Care",
+            price_amount=500,
+            duration_days=30,
+        )
+        session.add(plan)
+        session.commit()
+        session.refresh(plan)
+        session.add(
+            PatientSubscriptionEnrollment(
+                tenant_id=tenant.id,
+                branch_id=main_branch.id,
+                patient_id=main_patient.id,
+                plan_id=plan.id,
+                starts_on=date.today(),
+                ends_on=date.today(),
+            )
+        )
+        session.commit()
+
+        options = PatientRepository(session).filter_options(
+            tenant_id=tenant.id,
+            branch_id=main_branch.id,
+        )
+
+    assert [row.model_dump() for row in options["branch_id"]] == [
+        {"value": main_branch.id, "label": "Main Branch"}
+    ]
+    assert [row.value for row in options["gender"]] == ["female"]
+    assert [row.value for row in options["subscription_plan_name"]] == ["Gold Care"]
+    assert [row.model_dump() for row in options["created_by_user_id"]] == [
+        {"value": creator_id, "label": "Reception User"}
+    ]
 
 
 def test_patient_view_blocks_cross_tenant_access(client: TestClient):
@@ -459,12 +922,13 @@ def test_patient_view_and_summary_write_audit_events(client: TestClient):
     assert "patient.summary.viewed" in actions
 
 
-def test_patient_contact_falls_back_primary_then_alternate_then_guardian():
+def test_patient_contact_uses_only_patient_owned_numbers_for_display():
     from types import SimpleNamespace
 
     from app.modules.patients.contact import (
         patient_contact_mobile,
         patient_contact_numbers,
+        patient_whatsapp_numbers,
     )
 
     def patient(mobile="", alternate="", guardian=""):
@@ -475,27 +939,31 @@ def test_patient_contact_falls_back_primary_then_alternate_then_guardian():
         )
 
     assert patient_contact_mobile(patient(mobile="111")) == "111"
-    # No primary: fall through to the alternate, then the guardian.
+    # No primary: fall through to the secondary/alternate patient number.
     assert patient_contact_mobile(patient(alternate="222")) == "222"
-    assert patient_contact_mobile(patient(guardian="333")) == "333"
     assert patient_contact_mobile(patient(alternate="222", guardian="333")) == "222"
+    # Guardian is legacy-only and must not become the display/contact number.
+    assert patient_contact_mobile(patient(guardian="333")) is None
     # Blank strings must not count as a usable number.
     assert patient_contact_mobile(patient(mobile="   ", alternate="222")) == "222"
     assert patient_contact_mobile(patient()) is None
     assert patient_contact_mobile(None) is None
 
-    # Priority order is preserved, and a number repeated across fields is
-    # listed once so the patient is never messaged twice.
-    assert patient_contact_numbers(
+    assert patient_contact_numbers(patient(mobile="111", alternate="222")) == [
+        "111",
+        "222",
+    ]
+    assert patient_contact_numbers(patient(mobile="111", alternate="111")) == ["111"]
+    # WhatsApp still has a legacy guardian fallback after primary/secondary.
+    assert patient_whatsapp_numbers(
         patient(mobile="111", alternate="222", guardian="333")
     ) == ["111", "222", "333"]
-    assert patient_contact_numbers(patient(mobile="111", alternate="111")) == ["111"]
 
 
 def test_whatsapp_destination_uses_one_number_per_patient():
     from types import SimpleNamespace
 
-    from app.modules.integrations.whatsapp_consent import (
+    from app.modules.integrations.whatsapp.consent import (
         patient_notification_destination,
     )
 
@@ -514,7 +982,7 @@ def test_whatsapp_destination_uses_one_number_per_patient():
         )
         == "+919876500040"
     )
-    # Guardian is used when it is the only number on file.
+    # Guardian is legacy fallback when it is the only number on file.
     assert (
         patient_notification_destination(patient(guardian="9876500042"), "+91")
         == "+919876500042"
@@ -527,3 +995,61 @@ def test_whatsapp_destination_uses_one_number_per_patient():
         == "+919876500043"
     )
     assert patient_notification_destination(patient(), "+91") is None
+
+
+def test_notification_patient_resolution_covers_sms_queue_and_membership_resources(
+    test_engine,
+):
+    from app.modules.integrations.whatsapp.consent import (
+        patient_for_notification_resource,
+    )
+    from app.modules.patient_subscriptions.models import PatientSubscriptionEnrollment
+    from app.modules.queue.models import QueueEntry
+
+    with Session(test_engine) as session:
+        patient = Patient(
+            tenant_id="tenant_resolution",
+            patient_number="PAT-RESOLVE",
+            full_name="Resource Patient",
+            mobile="9876543210",
+        )
+        session.add(patient)
+        session.commit()
+        session.refresh(patient)
+        queue_entry = QueueEntry(
+            tenant_id=patient.tenant_id,
+            branch_id="branch_resolution",
+            appointment_id="appointment_resolution",
+            patient_id=patient.id,
+            token_number="Q-1",
+        )
+        enrollment = PatientSubscriptionEnrollment(
+            tenant_id=patient.tenant_id,
+            branch_id="branch_resolution",
+            patient_id=patient.id,
+            plan_id="plan_resolution",
+            starts_on=date.today(),
+            ends_on=date.today() + timedelta(days=30),
+        )
+        session.add(queue_entry)
+        session.add(enrollment)
+        session.commit()
+
+        assert (
+            patient_for_notification_resource(
+                session,
+                tenant_id=patient.tenant_id,
+                resource_type="queue_entry",
+                resource_id=queue_entry.id,
+            ).id
+            == patient.id
+        )
+        assert (
+            patient_for_notification_resource(
+                session,
+                tenant_id=patient.tenant_id,
+                resource_type="patient_subscription_enrollment",
+                resource_id=enrollment.id,
+            ).id
+            == patient.id
+        )

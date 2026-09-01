@@ -15,7 +15,6 @@ import {
   removeInvoiceOffer,
   createInvoiceAdjustmentRequest,
   createInvoiceCreditNote,
-  createInvoiceFromConsultation,
   createInvoicePayment,
   executeInvoiceAdjustmentRequest,
   fetchInvoiceDelivery,
@@ -32,14 +31,12 @@ import {
   updateInvoiceLifecycle,
 } from "./billing.api";
 
-const MAX_INVOICE_PDF_UPLOAD_BYTES = 5 * 1024 * 1024;
+const MAX_INVOICE_PDF_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 export function useBillingActions(
   session: ApiSession | null | undefined,
   options: {
-    loadLiveData: (session: ApiSession) => Promise<void>;
     refreshInvoices: () => Promise<void>;
-    refreshPendingConsultations: () => Promise<void>;
     loadReports: () => Promise<void>;
     setSettlement: (value: any) => void;
     branchId?: string;
@@ -47,9 +44,7 @@ export function useBillingActions(
 ) {
   const queryClient = useQueryClient();
   const {
-    loadLiveData,
     refreshInvoices,
-    refreshPendingConsultations,
     loadReports,
     setSettlement,
     branchId,
@@ -142,32 +137,6 @@ export function useBillingActions(
     }
   }
 
-  async function generateInvoice(a: any) {
-    if (!session) return;
-    setBusy(a.id);
-    setMessage("");
-    try {
-      const row = await createInvoiceFromConsultation(session, {
-        consultation_id: a.consultationId,
-        created_by_user_id: session.user?.id,
-      });
-      await Promise.all([
-        loadLiveData(session),
-        refreshInvoices(),
-        refreshPendingConsultations(),
-        loadReports(),
-      ]);
-      setDetail(row);
-      setMessage(
-        `Invoice ${row.invoice?.invoice_number || ""} generated for ${a.patient}.`,
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not generate invoice.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   async function sendInvoice(
     invoice: any,
     automatic = false,
@@ -188,7 +157,7 @@ export function useBillingActions(
         );
         if (blob.size > MAX_INVOICE_PDF_UPLOAD_BYTES) {
           throw new Error(
-            `The generated invoice PDF is ${(blob.size / (1024 * 1024)).toFixed(1)} MB. The maximum allowed size is 5 MB.`,
+            `The generated invoice PDF is ${(blob.size / (1024 * 1024)).toFixed(1)} MB. The maximum intake size is 50 MB.`,
           );
         }
         const form = new FormData();
@@ -257,7 +226,9 @@ export function useBillingActions(
         queryClient,
       );
       if (blob.size > MAX_INVOICE_PDF_UPLOAD_BYTES) {
-        throw new Error("The regenerated invoice PDF exceeds the 5 MB limit.");
+        throw new Error(
+          "The regenerated invoice PDF exceeds the 50 MB intake limit.",
+        );
       }
       const form = new FormData();
       form.append("file", blob, filename);
@@ -636,7 +607,6 @@ export function useBillingActions(
     setDetail,
     supplierOptions,
     detailLoading,
-    generateInvoice,
     sendInvoice,
     regenerateInvoiceDocument,
     openInvoiceDetail,

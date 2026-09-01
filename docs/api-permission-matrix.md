@@ -17,6 +17,23 @@ Current enforced guardrails:
 - Core clinical modules are entitlement-checked at API level: patients, appointments, queue, consultations, billing basic, billing advanced, lab, and pharmacy.
 - New custom subscription plans with no explicit module list default to core HMS modules: patients, appointments, queue, consultations, and billing basic.
 
+## How To Update This Matrix
+
+Use this checklist whenever a backend route changes:
+
+1. Add the FastAPI route under `backend/app/api/v1`.
+2. Confirm the permission dependency in code.
+3. Add or update the endpoint row in the correct section below.
+4. If the route is a list helper, include `/page` and `/filter-options` rows too.
+5. Run:
+
+```bash
+cd frontend
+../backend/.venv/bin/pytest ../backend/tests/test_api_docs.py -q
+```
+
+The test compares every live `/api/...` FastAPI route against Markdown endpoint rows in `docs/`.
+
 ## Permission Catalog
 
 | Permission | Purpose |
@@ -80,6 +97,54 @@ Current enforced guardrails:
 | `POST` | `/api/v1/auth/change-password` | Authenticated | Changes current user's password |
 | `POST` | `/api/v1/client-logs` | Authenticated tenant user | Legacy frontend error/warning capture path |
 | `POST` | `/api/v1/error-logs/client` | Authenticated tenant user | Persistent frontend error/warning capture path |
+
+## Live Page and Filter Endpoints
+
+These endpoints back table pagination, adaptive filters, dropdown options, and list-builder screens. They are listed separately so a fresher can quickly understand that most modules expose three list shapes:
+
+- Plain list: `/resource`
+- Paginated list: `/resource/page`
+- Filter metadata: `/resource/filter-options`
+
+When adding a new list route, document all three shapes here or in the owning module section. The backend test `backend/tests/test_api_docs.py` compares live FastAPI routes with this documentation.
+
+| Method | Endpoint | Permission | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/appointments/filter-options` | `appointments.manage` or `appointments.read` | Filter metadata for appointment tables |
+| `GET` | `/api/v1/billing/discount-offers/filter-options` | `billing.manage` or `billing.read` | Discount offer filter metadata |
+| `GET` | `/api/v1/billing/discount-offers/page` | `billing.manage` or `billing.read` | Paginated discount offer list |
+| `GET` | `/api/v1/billing/invoices/filter-options` | `billing.manage`, `invoices.read`, or billing read role | Invoice filter metadata |
+| `GET` | `/api/v1/billing/invoices/summary` | `billing.manage`, `billing.read`, or `invoices.read` | Filter-aware invoice dashboard totals |
+| `GET` | `/api/v1/billing/tax-rules/filter-options` | `billing.manage` or settings/billing read access | Tax rule filter metadata |
+| `GET` | `/api/v1/billing/tax-rules/page` | `billing.manage` or settings/billing read access | Paginated tax rule list |
+| `GET` | `/api/v1/consultations/filter-options` | `consultations.read` | Consultation filter metadata |
+| `GET` | `/api/v1/consultations/page` | `consultations.read` | Paginated consultation list |
+| `GET` | `/api/v1/expenses/filter-options` | `expenses.manage` or `expenses.read` | Expense filter metadata |
+| `GET` | `/api/v1/home-care/services/filter-options` | `home_care.read` or `home_care.manage` | Home-care service filter metadata |
+| `GET` | `/api/v1/home-care/services/page` | `home_care.read` or `home_care.manage` | Paginated home-care service catalog |
+| `GET` | `/api/v1/lab/catalog/packages/filter-options` | `lab.manage` or `lab.read` | Lab package filter metadata |
+| `GET` | `/api/v1/lab/catalog/packages/page` | `lab.manage` or `lab.read` | Paginated lab package catalog |
+| `GET` | `/api/v1/lab/catalog/tests/filter-options` | `lab.manage` or `lab.read` | Lab test filter metadata |
+| `GET` | `/api/v1/lab/catalog/tests/page` | `lab.manage` or `lab.read` | Paginated lab test catalog |
+| `GET` | `/api/v1/lab/orders/filter-options` | `lab.manage` or `lab.read` | Lab order filter metadata |
+| `GET` | `/api/v1/lab/orders/page` | `lab.manage` or `lab.read` | Paginated lab order list |
+| `GET` | `/api/v1/patients/filter-options` | `patients.read` | Patient filter metadata |
+| `GET` | `/api/v1/pharmacy/issues/filter-options` | `pharmacy.manage` or `pharmacy.read` | Pharmacy issue filter metadata |
+| `GET` | `/api/v1/pharmacy/issues/page` | `pharmacy.manage` or `pharmacy.read` | Paginated pharmacy issue list |
+| `GET` | `/api/v1/pharmacy/medicines/filter-options` | `pharmacy.manage` or `pharmacy.read` | Medicine filter metadata |
+| `GET` | `/api/v1/pharmacy/medicines/page` | `pharmacy.manage` or `pharmacy.read` | Paginated medicine catalog |
+| `GET` | `/api/v1/pharmacy/suppliers/filter-options` | Supplier, pharmacy, billing, lab, service item, or settings read access | Supplier filter metadata |
+| `GET` | `/api/v1/pharmacy/suppliers/page` | Supplier, pharmacy, billing, lab, service item, or settings read access | Paginated supplier catalog |
+| `GET` | `/api/v1/physiotherapy/equipment/filter-options` | `physiotherapy.read` | Physiotherapy equipment filter metadata |
+| `GET` | `/api/v1/physiotherapy/equipment/page` | `physiotherapy.read` | Paginated physiotherapy equipment catalog |
+| `GET` | `/api/v1/practitioners/filter-options` | Practitioner or appointment/scheduling read access | Practitioner filter metadata |
+| `GET` | `/api/v1/practitioners/page` | Practitioner or appointment/scheduling read access | Paginated practitioner list |
+| `GET` | `/api/v1/practitioners/schedules/filter-options` | `scheduling.manage` or `scheduling.read` | Schedule filter metadata |
+| `GET` | `/api/v1/practitioners/schedules/page` | `scheduling.manage` or `scheduling.read` | Paginated schedule list |
+| `GET` | `/api/v1/tenants/{tenant_id}/branches/filter-options` | `settings.manage` or tenant admin/super admin access | Branch filter metadata |
+| `GET` | `/api/v1/tenants/{tenant_id}/branches/page` | `settings.manage` or tenant admin/super admin access | Paginated branch list |
+| `GET` | `/api/v1/tenants/{tenant_id}/departments/filter-options` | `settings.manage` or tenant admin/super admin access | Department filter metadata |
+| `GET` | `/api/v1/tenants/{tenant_id}/departments/page` | `settings.manage` or tenant admin/super admin access | Paginated department list |
 
 ## Error Logs
 
@@ -186,10 +251,14 @@ Secondary tenant admins keep the existing tenant-scoped screens and APIs. They c
 | `GET` | `/api/v1/patients/references` | `patients.read` | Resolves only patient IDs referenced by the current page |
 | `GET` | `/api/v1/patients/count` | `patients.read` | Tenant patient count for dashboard summaries |
 | `GET` | `/api/v1/patients/{patient_id}` | `patients.read` | Patient detail |
+| `GET` | `/api/v1/patients/{patient_id}/communications` | `patients.read` | Tenant-scoped patient communication history |
 | `PATCH` | `/api/v1/patients/{patient_id}` | `patients.edit` | Updates patient demographics/status audit |
 | `DELETE` | `/api/v1/patients/{patient_id}` | `patients.delete` | Soft delete by deactivating patient audit |
 | `POST` | `/api/v1/patients/{patient_id}/alerts` | `patients.write` | Creates alert audit |
 | `GET` | `/api/v1/patients/{patient_id}/alerts` | `patients.read` | Alert list |
+| `GET` | `/api/v1/patients/{patient_id}/family-relationships` | `patients.read` | Lists linked family patients used for shared membership benefits |
+| `POST` | `/api/v1/patients/{patient_id}/family-relationships` | `patients.edit` | Links an existing patient as a family member |
+| `DELETE` | `/api/v1/patients/{patient_id}/family-relationships/{relationship_id}` | `patients.edit` | Deactivates a family relationship link |
 | `POST` | `/api/v1/patients/{patient_id}/photo` | `patients.edit` | Uploads or replaces patient photo/document reference |
 | `GET` | `/api/v1/patients/{patient_id}/summary` | `patients.read` | Records patient history viewed audit |
 
@@ -206,6 +275,7 @@ Patient APIs enforce the `patients` module entitlement and branch scope for bran
 | `POST` | `/api/v1/patient-subscriptions/enrollments` | `patient_subscriptions.create` |
 | `GET` | `/api/v1/patient-subscriptions/enrollments` | `patient_subscriptions.read` |
 | `PATCH` | `/api/v1/patient-subscriptions/enrollments/{enrollment_id}` | `patient_subscriptions.edit` |
+| `PATCH` | `/api/v1/patient-subscriptions/enrollments/{enrollment_id}/benefit-usage` | Tenant admin with `patient_subscriptions.edit` | Correct handover-era benefit usage with an audit reason |
 | `DELETE` | `/api/v1/patient-subscriptions/enrollments/{enrollment_id}` | `patient_subscriptions.delete` |
 | `POST` | `/api/v1/patient-subscriptions/benefits/preview` | `patient_subscriptions.read` |
 
@@ -265,6 +335,8 @@ Appointment APIs enforce the `appointments` module entitlement. Queue APIs enfor
 | `GET` | `/api/v1/consultations/clinical-templates` | `consultations.read` |
 | `GET` | `/api/v1/consultations` | `consultations.read` |
 | `POST` | `/api/v1/consultations/clinical-templates` | `consultations.write` |
+| `PATCH` | `/api/v1/consultations/clinical-templates/{template_id}` | `consultations.write` or `consultations.edit` |
+| `DELETE` | `/api/v1/consultations/clinical-templates/{template_id}` | `consultations.write` or `consultations.edit`; soft deactivates the template |
 | `GET` | `/api/v1/consultations/by-department/{department_id}/clinical-templates` | `consultations.read` |
 | `GET` | `/api/v1/consultations/{consultation_id}` | `consultations.read` |
 | `PATCH` | `/api/v1/consultations/{consultation_id}` | `consultations.write` |
@@ -354,11 +426,12 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `PATCH` | `/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier` | `billing.manage` |
 | `GET` | `/api/v1/billing/doctor-settlements/summary` | `settlements.read` |
 | `POST` | `/api/v1/billing/doctor-settlements/finalize` | `billing.manage` |
+| `POST` | `/api/v1/billing/vendor-settlements/finalize` | `billing.manage` |
 | `GET` | `/api/v1/billing/reports/due-collection` | `reports.read` |
 | `GET` | `/api/v1/billing/reports/revenue` | `reports.read` |
 | `GET` | `/api/v1/billing/reports/collections` | `billing.manage` or `reports.revenue.read` |
 
-Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, payments, refunds, credit notes, and cancellations. Invoice generation, discount approval, settlement finalization, and revenue reporting enforce `billing_advanced`. Branch-scoped users can access only branch-matching invoices, payments, fee rules, tax rules, credit notes, reports, and settlements. Doctor settlement summary returns paid-basis doctor share, finalized settlement amount, remaining payable amount, and `can_finalize`; duplicate finalization is rejected after the payable amount reaches zero.
+Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, payments, refunds, credit notes, and cancellations. Invoice generation, discount approval, settlement finalization, and revenue reporting enforce `billing_advanced`. Branch-scoped users can access only branch-matching invoices, payments, fee rules, tax rules, credit notes, reports, and settlements. Doctor settlement summary returns paid-basis doctor share, finalized settlement amount, remaining payable amount, and `can_finalize`; duplicate finalization is rejected after the payable amount reaches zero. Vendor settlement finalization records an auditable supplier payout, validates the tenant and branch scope, and rejects amounts above the adjusted gross payable.
 
 `adjustment-requests` accepts `request_type` of `cancel`, `full_refund`, `partial_refund`, or `discount`. The old direct "edit invoice amount" action is gone — a `discount` request now works for any invoice type (consultation, OP or non-OP, lab, pharmacy, physiotherapy, home care, IP, or direct) as long as no payment has been recorded yet, through the same request → approve → execute flow as `full_refund`/`partial_refund`, approved/rejected/executed with the identical `billing.manage` gate. For a consultation invoice, execution recomputes subtotal/tax/doctor-share from the lower fee, exactly as the old direct edit did; for every other invoice type it knocks the discount straight off the total/balance without touching per-item tax, the same coarse-grained way cancel/refund already adjust an invoice's top-level totals. Credit notes remain a separate, immediate, informational-only action (`POST .../credit-notes`) — issuing one records a note against the invoice and does not change its total, balance, or paid amount; a `discount`/refund execution additionally creates a `CreditNote` as part of its own audit trail.
 
@@ -471,6 +544,29 @@ Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP 
 
 Home-care APIs enforce the `home_care` module entitlement and branch scope for service catalog rows, patient bookings, and actual visit logs. Booking invoice endpoints use the shared billing permission and create invoices from completed visit logs when present, falling back to billable home-care booking items.
 
+## Patient Intelligence and Engagement
+
+| Method | Endpoint | Permission |
+| --- | --- | --- |
+| `GET` | `/api/v1/patient-intelligence/patients/{patient_id}` | `patient_intelligence.read` |
+| `GET` | `/api/v1/patient-intelligence/dashboard` | `patient_intelligence.read` |
+| `PATCH` | `/api/v1/patient-intelligence/patients/{patient_id}/manual-refill` | `patient_intelligence.manage` |
+| `PATCH` | `/api/v1/patient-intelligence/patients/{patient_id}/manual-lab` | `patient_intelligence.manage` |
+| `GET` | `/api/v1/patient-intelligence/rules` | `patient_intelligence.rules.manage` |
+| `POST` | `/api/v1/patient-intelligence/rules` | `patient_intelligence.rules.manage` |
+| `PATCH` | `/api/v1/patient-intelligence/rules/{rule_id}` | `patient_intelligence.rules.manage` |
+| `DELETE` | `/api/v1/patient-intelligence/rules/{rule_id}` | `patient_intelligence.rules.manage` |
+| `GET` | `/api/v1/patient-intelligence/content-library` | `patient_intelligence.rules.manage` |
+| `POST` | `/api/v1/patient-intelligence/content-library` | `patient_intelligence.rules.manage` |
+| `PATCH` | `/api/v1/patient-intelligence/content-library/{content_id}` | `patient_intelligence.rules.manage` |
+| `DELETE` | `/api/v1/patient-intelligence/content-library/{content_id}` | `patient_intelligence.rules.manage` |
+| `GET` | `/api/v1/patient-intelligence/configuration-options` | `patient_intelligence.rules.manage` |
+| `POST` | `/api/v1/patient-intelligence/adapt-existing-data` | `patient_intelligence.manage` |
+| `POST` | `/api/v1/patient-intelligence/engagement-actions/bulk-queue` | `patient_engagement.send` |
+| `POST` | `/api/v1/patient-intelligence/engagement-actions/{action_id}/send` | `patient_engagement.send` |
+
+All endpoints enforce the separate `patient_intelligence` plan entitlement. Existing appointments, payments, lab orders, pharmacy dispenses, home-care visits, and patient memberships remain the source of truth. Intelligence-driven WhatsApp sends additionally require explicit patient opt-in and an enabled approved template flow.
+
 ## Files, Settings, Notifications, and Audit
 
 | Method | Endpoint | Permission |
@@ -491,6 +587,19 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | `GET` | `/api/v1/settings` | `settings.manage` or `settings.read` |
 | `GET` | `/api/v1/settings/resolve` | Any of `settings.manage`, `settings.read`, `billing.manage`, `invoices.read`, `payments.manage` |
 | `GET` | `/api/v1/settings/bundle` | `settings.manage` or `settings.read` |
+| `GET` | `/api/v1/expenses` | `expenses.manage` or `expenses.read` |
+| `GET` | `/api/v1/expenses/subcategories/recent` | `expenses.manage`, `expenses.create`, or `expenses.read` |
+| `GET` | `/api/v1/expenses/{expense_id}` | `expenses.manage` or `expenses.read` |
+| `POST` | `/api/v1/expenses` | `expenses.manage` or `expenses.create` |
+| `PATCH` | `/api/v1/expenses/{expense_id}` | `expenses.manage` or `expenses.create` |
+| `POST` | `/api/v1/expenses/{expense_id}/receipt` | `expenses.manage` or `expenses.create` |
+| `POST` | `/api/v1/expenses/{expense_id}/approve` | `expenses.approve` |
+| `POST` | `/api/v1/expenses/{expense_id}/reject` | `expenses.approve` |
+| `POST` | `/api/v1/expenses/{expense_id}/reimburse` | `expenses.manage` |
+| `POST` | `/api/v1/expenses/subcategory-configs` | `expense_subcategories.manage` or `expense_subcategories.create` |
+| `GET` | `/api/v1/expenses/subcategory-configs` | `expense_subcategories.manage`, `expense_subcategories.read`, `expenses.manage`, or `expenses.create` |
+| `PATCH` | `/api/v1/expenses/subcategory-configs/{subcategory_id}` | `expense_subcategories.manage` or `expense_subcategories.edit` |
+| `DELETE` | `/api/v1/expenses/subcategory-configs/{subcategory_id}` | `expense_subcategories.manage` or `expense_subcategories.delete` |
 | `POST` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications/in-app` | Authenticated tenant user; current user's inbox only |
@@ -505,6 +614,20 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | `GET` | `/api/v1/communications/whatsapp/queue` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
 | `POST` | `/api/v1/communications/whatsapp/queue/{event_id}/retry` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
 | `POST` | `/api/v1/communications/whatsapp/queue/{event_id}/cancel` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/sms/settings` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `PUT` | `/api/v1/communications/sms/settings` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/sms/readiness` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `PUT` | `/api/v1/communications/sms/readiness` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/sms/test` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/sms/queue` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/sms/queue/{event_id}/retry` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/sms/queue/{event_id}/cancel` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/sms/usage` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/sms/health` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/sms/delivery-receipt/{tenant_id}` | Public provider callback authenticated by tenant-specific HMAC signature |
+| `GET` | `/api/v1/communications/email/settings` | `communications.manage` or `settings.manage` |
+| `PUT` | `/api/v1/communications/email/settings` | `communications.manage` or `settings.manage` |
+| `POST` | `/api/v1/communications/email/test` | `communications.manage` or `settings.manage` |
 | `POST` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events/page` | `audit.read` |

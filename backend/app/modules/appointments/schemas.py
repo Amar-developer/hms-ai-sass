@@ -70,6 +70,7 @@ class AppointmentRead(BaseModel):
     tenant_id: str
     branch_id: str
     patient_id: str
+    appointment_number: str | None = None
     department_id: str | None
     practitioner_id: str | None
     appointment_type: AppointmentType
@@ -89,6 +90,7 @@ class AppointmentRead(BaseModel):
     intake_vitals: str | None
     intake_complaints: str | None
     created_by_user_id: str | None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -107,6 +109,7 @@ class AppointmentGridRead(BaseModel):
     patient_id: str
     patient_name: str
     patient_mobile: str | None
+    appointment_number: str | None = None
     department_id: str | None
     department_name: str | None
     practitioner_id: str | None
@@ -130,6 +133,7 @@ class AppointmentGridRead(BaseModel):
     status: AppointmentStatus
     consultation_status: str | None
     created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

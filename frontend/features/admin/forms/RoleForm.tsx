@@ -24,7 +24,7 @@ export function RoleForm({
   const locked = isLocked(role);
 
   return (
-    <Card>
+    <Card className="bg-white p-3">
       <Header
         title={title}
         subtitle={role?.key || "Select permissions by module action."}

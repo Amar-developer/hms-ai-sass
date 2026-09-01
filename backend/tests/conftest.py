@@ -10,6 +10,39 @@ from app.modules.identity.security import create_access_session, hash_password
 from app.modules.subscriptions.service import ensure_default_plans
 
 
+SLOW_TEST_FILES = {
+    "test_appointments_queue.py",
+    "test_billing.py",
+    "test_identity_auth.py",
+    "test_lab_pharmacy.py",
+    "test_patient_intelligence.py",
+    "test_patient_membership_rules.py",
+    "test_patients.py",
+    "test_payments_settlements.py",
+    "test_platform.py",
+    "test_practitioners.py",
+    "test_reports_snapshots.py",
+    "test_settings_catalog_filters.py",
+    "test_whatsapp_notification_queue.py",
+}
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        fixture_names = set(getattr(item, "fixturenames", ()))
+        file_name = item.path.name
+
+        if "client" in fixture_names or "unauthenticated_client" in fixture_names:
+            item.add_marker(pytest.mark.api)
+        elif "test_engine" in fixture_names:
+            item.add_marker(pytest.mark.integration)
+        else:
+            item.add_marker(pytest.mark.unit)
+
+        if file_name in SLOW_TEST_FILES:
+            item.add_marker(pytest.mark.slow)
+
+
 @pytest.fixture()
 def test_engine():
     engine = create_engine(

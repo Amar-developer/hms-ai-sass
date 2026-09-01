@@ -1,42 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { UsersRound,ListCollapse } from "lucide-react";
 import {
-  CalendarClock,
-  CheckCircle2,
-  Clock3,
-  UsersRound,
-  X,
-} from "lucide-react";
-import {
-  Badge,
   Button,
   Card,
+  Input,
   SearchableSelect,
-  Select,
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { calculateConsultationCharge, sortQueue } from "@/lib/hmsLogic";
-import { humanizeOptionLabel } from "@/lib/options";
-import {
-  displayDate,
-  displayDate as formatDisplayDate,
-  localDateKey,
-  today,
-} from "@/utils/helper";
+import { displayDate, today } from "@/utils/helper";
 import { ConsultationWorkspace } from "./components/ConsultationWorkspace";
 import { ScheduleList } from "./components/ScheduleList";
-import { DoctorMetric } from "./components/DoctorMetric";
 import {
   asArray,
   appointmentDateKey,
-  displayTime,
   isCancelledAppointment,
   isCompletedAppointment,
-  isQueueActionLocked,
-  isWaitingAppointment,
   labTestNames,
   statusKey,
 } from "./helpers";
@@ -49,6 +32,7 @@ import {
 } from "./api";
 import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
 import { useAppointmentsQuery } from "@/features/appointments/api/useAppointmentsQuery";
+import { OPDPatientWorklist } from "@/features/opd/components/OPDPatientWorklist";
 
 export function DoctorConsultation({
   clinic,
@@ -59,6 +43,9 @@ export function DoctorConsultation({
   patients,
   doctorScope = null,
   view = "dashboard",
+  appointmentId = "",
+  onOpenAppointment,
+  onOpenConsultationInvoices,
   setActive,
   apiSession,
 }: any) {
@@ -66,9 +53,14 @@ export function DoctorConsultation({
   const {
     appointments,
     scopedAppointments,
+    isLoading: appointmentsLoading,
     refetch: refetchAppointments,
     setLocal: setAppointments,
-  } = useAppointmentsQuery(apiSession, { clinicId: clinic?.id, branchId, patients });
+  } = useAppointmentsQuery(apiSession, {
+    clinicId: clinic?.id,
+    branchId,
+    patients,
+  });
   const isDoctorUser = Boolean(
     apiSession?.user?.user_type === "doctor" ||
     apiSession?.user?.roles?.includes("doctor"),
@@ -160,18 +152,18 @@ export function DoctorConsultation({
     ...doctor,
     role: "Doctor",
   }));
-  const scanCatalog: any[] = [];
   const [doctorId, setDoctorId] = useState(() =>
     typeof window === "undefined"
       ? ""
       : sessionStorage.getItem("medizinhub.consultationDoctorId") || "",
   );
-  const [selectedAppointmentId, setSelectedAppointmentId] = useState(() =>
-    typeof window === "undefined"
-      ? ""
-      : sessionStorage.getItem("medizinhub.consultationAppointmentId") || "",
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState(
+    () =>
+      appointmentId ||
+      (typeof window === "undefined"
+        ? ""
+        : sessionStorage.getItem("medizinhub.consultationAppointmentId") || ""),
   );
-  const [tick, setTick] = useState(0);
   const [feeType, setFeeType] = useState("OP");
   const [treatmentType, setTreatmentType] = useState("general_consultation");
   const [ipBaseAmount, setIpBaseAmount] = useState(10000);
@@ -213,19 +205,38 @@ export function DoctorConsultation({
   const [addendums, setAddendums] = useState<any[]>([]);
   const [medicineAmount, setMedicineAmount] = useState(250);
   const [labNeeded, setLabNeeded] = useState(false);
-  const [admissionNeeded, setAdmissionNeeded] = useState(false);
   const [labTests, setLabTests] = useState("");
-  const [scanNeeded, setScanNeeded] = useState(false);
-  const [scanTests, setScanTests] = useState("");
   const [referDoctor, setReferDoctor] = useState(false);
   const [referDoctorId, setReferDoctorId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPatientWorkList, setShowPatientWorkList] = useState(false);
+  // `busy` covers every write action (queue calls, addendum, draft, sign)
+  // and stays true across all of them so buttons can't be double-clicked —
+  // but that also means both Save Draft and Complete would show a spinner
+  // together if it drove their ButtonLoader directly. This tracks which one
+  // is actually in flight so only that button's loader/label lights up.
+  const [pendingAction, setPendingAction] = useState<"draft" | "sign" | null>(
+    null,
+  );
   const [message, setMessage] = useState("");
   const [consultationValidationAttempted, setConsultationValidationAttempted] =
     useState(false);
-  const [selectedDate, setSelectedDate] = useState(() =>
-    today(),
-  );
+  const [selectedDate, setSelectedDate] = useState(() => today());
+
+  useEffect(() => {
+    if (!appointmentId) return;
+    const appointment = appointments.find(
+      (row: any) => String(row.id) === String(appointmentId),
+    );
+    setSelectedAppointmentId(appointmentId);
+    const practitionerId =
+      appointment?.doctorId || appointment?.practitioner_id || "";
+    if (practitionerId) {
+      setDoctorId(practitionerId);
+    }
+    const date = appointment ? appointmentDateKey(appointment) : "";
+    if (date) setSelectedDate(date);
+  }, [appointmentId, appointments.length]);
 
   useEffect(() => {
     const target = readNotificationTarget("consultation");
@@ -245,23 +256,13 @@ export function DoctorConsultation({
     );
     if (practitionerId) {
       setDoctorId(practitionerId);
-      sessionStorage.setItem(
-        "medizinhub.consultationDoctorId",
-        practitionerId,
-      );
+      sessionStorage.setItem("medizinhub.consultationDoctorId", practitionerId);
     }
     const appointmentDate = appointmentDateKey(appointment);
     if (appointmentDate) setSelectedDate(appointmentDate);
   }, [apiSession?.tenantId, scopedAppointments.length]);
 
-  const [dashboardFilter, setDashboardFilter] = useState<
-    "booked" | "waiting" | "completed" | "seen"
-  >("booked");
   const [selectedPatientDetail, setSelectedPatientDetail] = useState<any>(null);
-  useEffect(() => {
-    const id = setInterval(() => setTick((v) => v + 1), 5000);
-    return () => clearInterval(id);
-  }, []);
   useEffect(() => {
     const scopedDoctorId = doctorScope?.practitionerId || "";
     // Look up the explicitly-selected appointment in the full (unscoped)
@@ -426,11 +427,8 @@ export function DoctorConsultation({
     setAddendums([]);
     setLabNeeded(false);
     setLabTests("");
-    setScanNeeded(false);
-    setScanTests("");
     setReferDoctor(false);
     setReferDoctorId("");
-    setAdmissionNeeded(false);
   }, [selected?.id]);
   useEffect(() => {
     if (!selected?.id || !apiSession) return;
@@ -527,21 +525,10 @@ export function DoctorConsultation({
             setLabNeeded(true);
             setLabTests(labRefs.map((r: any) => r.item_name).join(", "));
           }
-          const scanRefs = detail.referrals.filter(
-            (r: any) => r.referral_type === "scan",
-          );
-          if (scanRefs.length) {
-            setScanNeeded(true);
-            setScanTests(scanRefs.map((r: any) => r.item_name).join(", "));
-          }
         } else {
           if (c.lab_referral_text) {
             setLabNeeded(true);
             setLabTests(c.lab_referral_text);
-          }
-          if (c.scan_referral_text) {
-            setScanNeeded(true);
-            setScanTests(c.scan_referral_text);
           }
         }
       } catch {}
@@ -589,15 +576,6 @@ export function DoctorConsultation({
       alive = false;
     };
   }, [selectedPatientId, Boolean(localPatient), apiSession?.tenantId]);
-  const completedToday = selectedDateQueue.filter(
-    isCompletedAppointment,
-  ).length;
-  const waitingToday = selectedDateQueue.filter(
-    (a: any) =>
-      isWaitingAppointment(a) &&
-      !isCompletedAppointment(a) &&
-      !isCancelledAppointment(a),
-  ).length;
   const finalFee =
     Number(consultationCharge || selected?.fee || 0) + Number(extraFee || 0);
   const emergencyToday = selectedDateQueue.filter(
@@ -608,43 +586,9 @@ export function DoctorConsultation({
         statusKey(a.queueStatus) === "emergency_queue" ||
         String(a.visitType || "").toLowerCase() === "emergency"),
   ).length;
-  const uniquePatientCount = new Set(
-    selectedDateQueue
-      .filter(isCompletedAppointment)
-      .map((a: any) => a.patientId || a.patient_id)
-      .filter(Boolean),
-  ).size;
-  const appointmentDays = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() + index);
-    const iso = localDateKey(date);
-    const count = doctorQueue.filter(
-      (a: any) =>
-        String(a.appointmentDate || a.appointment_date || "").slice(0, 10) ===
-          iso &&
-        !isCompletedAppointment(a) &&
-        !isCancelledAppointment(a),
-    ).length;
-    return {
-      iso,
-      day: date.getDate(),
-      label: date.toLocaleDateString(undefined, { weekday: "short" }),
-      count,
-    };
-  });
-  const scheduleRows = activeQueue
-    .filter((a: any) => {
-      if (dashboardFilter === "waiting")
-        return (
-          isWaitingAppointment(a) &&
-          !isCompletedAppointment(a) &&
-          !isCancelledAppointment(a)
-        );
-      return true;
-    })
-    .slice(0, 8);
-  const appointmentListLabel =
-    dashboardFilter === "waiting" ? "waiting" : "active";
+  const scheduleRows = selectedDateQueue.filter(
+    (appointment: any) => !isCancelledAppointment(appointment),
+  );
   const selectedPatientHistory = selected
     ? appointments
         .filter((item: any) => {
@@ -705,16 +649,6 @@ export function DoctorConsultation({
     setSelectedMedicineId("");
     setMedicineDosage("");
   }
-  function addMedicineSuggestion() {
-    const med = medicineCatalog.find(
-      (row: any) => row.id === selectedMedicineId,
-    );
-    if (med)
-      addMedicineRow(
-        med.item_name || med.name,
-        medicineDosage || med.strength || "",
-      );
-  }
   function addMedicineFromText(value: string, option?: any) {
     const med =
       option?.item ||
@@ -741,7 +675,7 @@ export function DoctorConsultation({
           type: "lab",
           name: testName,
           priority: labPriority,
-          instructions: labInstructions,
+          instructions: "",
         },
       ];
     });
@@ -751,10 +685,6 @@ export function DoctorConsultation({
     );
     setSelectedLabTestId("");
     setLabInstructions("");
-  }
-  function addLabSuggestion() {
-    const test = labCatalog.find((row: any) => row.id === selectedLabTestId);
-    if (test) addLabRow(test.name);
   }
   function addLabFromText(value: string, option?: any) {
     const test =
@@ -784,6 +714,50 @@ export function DoctorConsultation({
       }
       return items.filter((_: any, i: number) => i !== index);
     });
+  }
+  function applyClinicalTemplate(template: any) {
+    const content = template?.content || {};
+    const templateComplaints = Array.isArray(content.complaints)
+      ? content.complaints
+      : [];
+    const templateDiagnoses = Array.isArray(content.diagnoses)
+      ? content.diagnoses
+      : [];
+    const templateMedicines = Array.isArray(content.medicines)
+      ? content.medicines
+      : [];
+    const templateLabs = Array.isArray(content.labs) ? content.labs : [];
+    setComplaints(templateComplaints.join("\n"));
+    setDiagnosisRows(templateDiagnoses.join("\n"));
+    if (content.doctor_notes) setNotes(content.doctor_notes);
+    if (content.follow_up_advice) setRemarks(content.follow_up_advice);
+    if (content.treatment_type) setTreatmentType(content.treatment_type);
+    setMedicineItems(
+      templateMedicines.map((medicine: any) => ({
+        name: medicine.name || medicine.medicine_name || "",
+        dosage: medicine.dosage || "",
+        frequency: medicine.frequency || "",
+        duration: medicine.duration || "",
+        instructions: medicine.instructions || "",
+      })),
+    );
+    const labRows = templateLabs.map((lab: any) => ({
+      type: "lab",
+      name: lab.name || lab.item_name || "",
+      priority: lab.priority || "routine",
+      instructions: lab.instructions || "",
+    }));
+    setReferralItems(labRows);
+    setLabNeeded(labRows.length > 0);
+    setLabTests(
+      labRows
+        .map((lab: any) => lab.name)
+        .filter(Boolean)
+        .join(", "),
+    );
+    setMessage(
+      `Template ${template.name} applied. You can edit or remove any item.`,
+    );
   }
   function structuredPayload() {
     return {
@@ -875,6 +849,10 @@ export function DoctorConsultation({
   }
   function openConsultation(id: string) {
     setSelectedAppointmentId(id);
+    if (onOpenAppointment) {
+      onOpenAppointment(id);
+      return;
+    }
     sessionStorage.setItem("medizinhub.consultationAppointmentId", id);
     const appointment = appointments.find((row: any) => row.id === id);
     const appointmentDoctorId =
@@ -907,13 +885,8 @@ export function DoctorConsultation({
     setMedicineItems([]);
     setReferralItems([]);
 
-    setScanNeeded(false);
-    setScanTests("");
-
     setReferDoctor(false);
     setReferDoctorId("");
-
-    setAdmissionNeeded(false);
   };
 
   const {
@@ -934,6 +907,7 @@ export function DoctorConsultation({
     setAppointments,
     refetchAppointments,
     setBusy,
+    setPendingAction,
     setMessage,
     setSelectedAppointmentId,
     nextEligibleAppointment,
@@ -942,8 +916,6 @@ export function DoctorConsultation({
     labReferralSummary,
     medicineRows,
     prescription,
-    scanNeeded,
-    scanTests,
     remarks,
     treatmentType,
     notes,
@@ -972,7 +944,6 @@ export function DoctorConsultation({
       setDiagnosis("");
       setExtraFee(0);
       setLabNeeded(false);
-      setScanNeeded(false);
       setReferDoctor(false);
     },
   });
@@ -985,321 +956,207 @@ export function DoctorConsultation({
   }
   if (view === "workspace")
     return (
-      <div className="space-y-6">
-        <Card>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="card-title font-bold">Patient Queue</h3>
-              <p className="card-desc text-slate-500">
-                Select any waiting patient for consultation.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <FormField label="Doctor">
-                <SearchableSelect
-                  value={doctorId}
-                  onChange={(value) => {
-                    setDoctorId(value);
-                    setSelectedAppointmentId("");
-                  }}
-                  disabled={isDoctorUser}
-                  searchable={doctorList.length > 8}
-                  options={doctorList.map((d: any) => ({
-                    value: d.id,
-                    label: `${d.name} - ${d.specialty}`,
-                  }))}
-                />
-              </FormField>
-
-            </div>
+      <div
+        className={`grid items-start gap-4 ${showPatientWorkList ? "grid-cols-[minmax(280px,0.72fr)_minmax(0,2fr)]" : ""}`}
+      >
+        {!showPatientWorkList && (
+          <div
+            className="w-[50%] cursor-pointer bg-white p-2 flex items-center rounded-lg border-slate-300 border w-fit hover:scale-105"
+            onClick={() => setShowPatientWorkList(true)}
+          >
+            <ListCollapse size={18}/>
+            <span className="text-xs font-semibold pl-2">Open WorkList</span>
           </div>
+        )}
+        {showPatientWorkList && (
+          <OPDPatientWorklist
+            rows={selectedDateQueue}
+            patients={patients}
+            selectedId={selected?.id}
+            selectedDate={selectedDate}
+            setSelectedDate={(value) => {
+              setSelectedDate(value);
+              setSelectedAppointmentId("");
+            }}
+            doctorId={doctorId}
+            setDoctorId={(value) => {
+              setDoctorId(value);
+              setSelectedAppointmentId("");
+              sessionStorage.setItem("medizinhub.consultationDoctorId", value);
+            }}
+            doctors={doctorList}
+            doctorLocked={isDoctorUser}
+            onSelect={openConsultation}
+            setShowPatientWorkList={setShowPatientWorkList}
+            showPatientWorkList={showPatientWorkList}
+          />
+        )}
+        <div className={`min-w-0 space-y-4}`}>
           <StatusToast message={message} onClose={() => setMessage("")} />
-          <div className="scrollbar-hidden mt-4 overflow-x-auto">
-            <div className="flex gap-3 pb-1">
-              {doctorQueue
-                .filter(
-                  (a: any) =>
-                    !isCompletedAppointment(a) && !isCancelledAppointment(a),
-                )
-                .map((a: any) => (
-                  <div
-                    key={a.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openConsultation(a.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openConsultation(a.id);
-                      }
-                    }}
-                    className={`w-36 shrink-0 cursor-pointer rounded-lg border p-2.5 text-left transition ${
-                      selected?.id === a.id
-                        ? "border-slate-900 bg-slate-50"
-                        : "border-slate-200 bg-white hover:border-slate-400"
-                    }`}
-                  >
-                    <div className="mb-2 flex justify-between  flex-wrap gap-1">
-                      <Badge
-                        tone={a.tokenType === "Emergency" ? "red" : "amber"}
-                        className="table-status p-1.5 text-xs"
-                      >
-                        {humanizeOptionLabel(a.tokenType)}
-                      </Badge>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          cancelAppointment();
-                        }}
-                        className="border text-[11px] w-5 h-5 flex justify-center items-center hover:font-bold border-black/50 font-bold rounded-full"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                      {a.consultationStatus && (
-                        <Badge
-                          // className="w-[500px]"
-                          tone={
-                            a.consultationStatus === "signed" ? "green" : "blue"
-                          }
-                          className="normal-badge"
-                        >
-                          {humanizeOptionLabel(a.consultationStatus)}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="truncate text-sm font-bold text-slate-900">
-                      {a.token} · {a.patient}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {displayTime(a.time || a.appointment_time)}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {humanizeOptionLabel(a.queueStatus)}
-                    </p>
-                  </div>
-                ))}
-              {doctorQueue.filter(
-                (a: any) =>
-                  !isCompletedAppointment(a) && !isCancelledAppointment(a),
-              ).length === 0 && (
-                <p className="py-4 card-desc text-slate-500">
-                  No waiting patients in the queue.
+          {selected ? (
+            <ConsultationWorkspace
+              selected={selected}
+              patient={patient}
+              selectedPatientHistory={selectedPatientHistory}
+              templates={templates}
+              applyClinicalTemplate={applyClinicalTemplate}
+              setComplaints={setComplaints}
+              complaints={complaints}
+              setDiagnosisRows={setDiagnosisRows}
+              diagnosisRows={diagnosisRows}
+              treatmentType={treatmentType}
+              setTreatmentType={setTreatmentType}
+              remarks={remarks}
+              setRemarks={setRemarks}
+              vitals={vitals}
+              setVitals={setVitals}
+              notes={notes}
+              setNotes={setNotes}
+              medicineRows={medicineRows}
+              medicineItems={medicineItems}
+              removeMedicineItem={removeMedicineItem}
+              medicineCatalog={medicineCatalog}
+              selectedMedicineId={selectedMedicineId}
+              setSelectedMedicineId={setSelectedMedicineId}
+              medicineDosage={medicineDosage}
+              setMedicineDosage={setMedicineDosage}
+              medicineFrequency={medicineFrequency}
+              setMedicineFrequency={setMedicineFrequency}
+              medicineDuration={medicineDuration}
+              setMedicineDuration={setMedicineDuration}
+              medicineInstructions={medicineInstructions}
+              setMedicineInstructions={setMedicineInstructions}
+              addMedicineFromText={addMedicineFromText}
+              referralRows={referralRows}
+              referralItems={referralItems}
+              removeReferralItem={removeReferralItem}
+              labNeeded={labNeeded}
+              setLabNeeded={setLabNeeded}
+              labTests={labTests}
+              setLabTests={setLabTests}
+              labCatalog={labCatalog}
+              branchId={branchId}
+              selectedLabTestId={selectedLabTestId}
+              setSelectedLabTestId={setSelectedLabTestId}
+              labPriority={labPriority}
+              setLabPriority={setLabPriority}
+              labInstructions={labInstructions}
+              setLabInstructions={setLabInstructions}
+              addLabFromText={addLabFromText}
+              referDoctor={referDoctor}
+              setReferDoctor={setReferDoctor}
+              referDoctorId={referDoctorId}
+              setReferDoctorId={setReferDoctorId}
+              practitioners={practitioners}
+              doctor={doctor}
+              addendumNote={addendumNote}
+              setAddendumNote={setAddendumNote}
+              addendums={addendums}
+              saveAddendum={saveAddendum}
+              busy={busy}
+              pendingAction={pendingAction}
+              apiSession={apiSession}
+              saveBackendDraft={saveBackendDraft}
+              markDone={markDone}
+              signBackendConsultation={signBackendConsultation}
+              validationAttempted={consultationValidationAttempted}
+              requeuePatient={requeuePatient}
+              callPatient={callPatient}
+              skipPatient={skipPatient}
+              cancelAppointment={cancelAppointment}
+              openPatientDetails={openPatientDetails}
+              callNextInWorkspace={callNextInWorkspace}
+              nextPatient={nextEligibleAppointment(selected?.id)}
+              onOpenConsultationInvoices={onOpenConsultationInvoices}
+              setActive={setActive}
+              showPatientWorkList={showPatientWorkList}
+            />
+          ) : (
+            <Card className="grid min-h-[320px] place-items-center border-dashed shadow-none">
+              <div className="max-w-sm px-6 text-center">
+                <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-teal-50 text-teal-700">
+                  <UsersRound className="h-6 w-6" />
+                </span>
+                <h3 className="mt-4 text-base font-black text-slate-950">
+                  Select a patient to consult
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Choose a visit from the worklist. The clinical form will open
+                  here with the patient and appointment already linked.
                 </p>
-              )}
-            </div>
-          </div>
-        </Card>
-        <ConsultationWorkspace
-          selected={selected}
-          patient={patient}
-          selectedPatientHistory={selectedPatientHistory}
-          templates={templates}
-          setComplaints={setComplaints}
-          complaints={complaints}
-          setDiagnosisRows={setDiagnosisRows}
-          diagnosisRows={diagnosisRows}
-          treatmentType={treatmentType}
-          setTreatmentType={setTreatmentType}
-          remarks={remarks}
-          setRemarks={setRemarks}
-          vitals={vitals}
-          setVitals={setVitals}
-          notes={notes}
-          setNotes={setNotes}
-          medicineRows={medicineRows}
-          medicineItems={medicineItems}
-          removeMedicineItem={removeMedicineItem}
-          medicineCatalog={medicineCatalog}
-          selectedMedicineId={selectedMedicineId}
-          setSelectedMedicineId={setSelectedMedicineId}
-          medicineDosage={medicineDosage}
-          setMedicineDosage={setMedicineDosage}
-          medicineFrequency={medicineFrequency}
-          setMedicineFrequency={setMedicineFrequency}
-          medicineDuration={medicineDuration}
-          setMedicineDuration={setMedicineDuration}
-          medicineInstructions={medicineInstructions}
-          setMedicineInstructions={setMedicineInstructions}
-          addMedicineSuggestion={addMedicineSuggestion}
-          addMedicineFromText={addMedicineFromText}
-          referralRows={referralRows}
-          referralItems={referralItems}
-          removeReferralItem={removeReferralItem}
-          labNeeded={labNeeded}
-          setLabNeeded={setLabNeeded}
-          admissionNeeded={admissionNeeded}
-          setAdmissionNeeded={setAdmissionNeeded}
-          labTests={labTests}
-          setLabTests={setLabTests}
-          labCatalog={labCatalog}
-          branchId={branchId}
-          selectedLabTestId={selectedLabTestId}
-          setSelectedLabTestId={setSelectedLabTestId}
-          labPriority={labPriority}
-          setLabPriority={setLabPriority}
-          labInstructions={labInstructions}
-          setLabInstructions={setLabInstructions}
-          addLabSuggestion={addLabSuggestion}
-          addLabFromText={addLabFromText}
-          scanNeeded={scanNeeded}
-          setScanNeeded={setScanNeeded}
-          scanTests={scanTests}
-          setScanTests={setScanTests}
-          scanCatalog={scanCatalog}
-          referDoctor={referDoctor}
-          setReferDoctor={setReferDoctor}
-          referDoctorId={referDoctorId}
-          setReferDoctorId={setReferDoctorId}
-          practitioners={practitioners}
-          doctor={doctor}
-          addendumNote={addendumNote}
-          setAddendumNote={setAddendumNote}
-          addendums={addendums}
-          saveAddendum={saveAddendum}
-          busy={busy}
-          apiSession={apiSession}
-          saveBackendDraft={saveBackendDraft}
-          markDone={markDone}
-          signBackendConsultation={signBackendConsultation}
-          validationAttempted={consultationValidationAttempted}
-          requeuePatient={requeuePatient}
-          callPatient={callPatient}
-          skipPatient={skipPatient}
-          cancelAppointment={cancelAppointment}
-          openPatientDetails={openPatientDetails}
-          callNextInWorkspace={callNextInWorkspace}
-          setActive={setActive}
-        />
+              </div>
+            </Card>
+          )}
+        </div>
       </div>
     );
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        <DoctorMetric
-          icon={CalendarClock}
-          title="Today Booked"
-          value={activeQueue.length}
-          caption={doctor.name}
-          active={dashboardFilter === "booked"}
-          onClick={() => setDashboardFilter("booked")}
-        />
-        <DoctorMetric
-          icon={Clock3}
-          title="Waiting"
-          value={waitingToday}
-          caption="Live token queue"
-          tone="amber"
-          active={dashboardFilter === "waiting"}
-          onClick={() => setDashboardFilter("waiting")}
-        />
-        <DoctorMetric
-          icon={CheckCircle2}
-          title="Completed"
-          value={completedToday}
-          caption="Consultation done"
-          tone="green"
-          active={dashboardFilter === "completed"}
-          onClick={() => setDashboardFilter("completed")}
-        />
-        <DoctorMetric
-          icon={UsersRound}
-          title="Patients Seen"
-          value={uniquePatientCount}
-          caption={`${emergencyToday} emergency priority`}
-          tone="blue"
-          active={dashboardFilter === "seen"}
-          onClick={() => setDashboardFilter("seen")}
-        />
+    <Card className="pt-2">
+      <div className="flex flex-col gap-4  pb-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <h3 className="card-title font-bold">Doctor Schedule</h3>
+          <p className="card-desc text-slate-500">
+            Review the day, manage the queue, and open a consultation.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[230px_180px_auto] xl:items-end">
+          <FormField label="Doctor">
+            <SearchableSelect
+              value={doctorId}
+              onChange={(value) => {
+                setDoctorId(value);
+                setSelectedAppointmentId("");
+              }}
+              disabled={isDoctorUser}
+              searchable={doctorList.length > 8}
+              placeholder="Select doctor"
+              options={doctorList.map((d: any) => ({
+                value: d.id,
+                label: d.name,
+                sublabel: d.specialty,
+              }))}
+            />
+          </FormField>
+          <FormField label="Visit Date">
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(event: any) => {
+                setSelectedDate(event.target.value);
+                setSelectedAppointmentId("");
+              }}
+            />
+          </FormField>
+          <Button
+            className="h-10 whitespace-nowrap px-5 py-0 text-xs"
+            onClick={callNext}
+            disabled={!current || busy}
+          >
+            Call Next Patient
+          </Button>
+        </div>
       </div>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.8fr)]">
-        <Card>
-          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-            <div>
-              <h3 className="card-title font-bold">Upcoming Appointments</h3>
-              <p className="card-desc text-slate-500">
-                Doctor schedule, queue status, visit purpose, and consultation
-                mode.
-              </p>
-            </div>
-            <Badge tone="blue" className="normal-badge">
-              Refresh #{tick}
-            </Badge>
-          </div>
-          <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-7">
-            {appointmentDays.map((day: any) => (
-              <button
-                key={day.iso}
-                type="button"
-                onClick={() => {
-                  setSelectedDate(day.iso);
-                  setSelectedAppointmentId("");
-                }}
-                className={`rounded-2xl border p-3 text-center transition ${selectedDate === day.iso ? "border-slate-900 bg-slate-900 text-white" : day.count ? "border-slate-300 bg-slate-50 text-slate-950 hover:border-slate-500" : "border-slate-200 bg-white text-slate-950 hover:border-slate-300"}`}
-              >
-                <p className="text-xs font-bold uppercase opacity-70">
-                  {day.label}
-                </p>
-                <p className="text-xl font-black">{day.day}</p>
-                <div className="mx-auto mt-2 h-1.5 w-1.5 rounded-full bg-current opacity-70" />
-                <p className="mt-1 text-[11px] font-bold opacity-70">
-                  {day.count} booked
-                </p>
-              </button>
-            ))}
-          </div>
-        </Card>
 
-        {/* Today's booked appointments */}
-        <Card>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="card-title font-bold">
-                Today's Booked Appointments
-              </h3>
-              <p className="card-desc text-slate-500">
-                {displayDate(selectedDate)} · {appointmentListLabel}
-              </p>
-            </div>
-            <Badge tone="blue" className="normal-badge text-center">
-              {branch.name}
-            </Badge>
-          </div>
-          <StatusToast message={message} onClose={() => setMessage("")} />
-          <div className="mt-4 grid gap-3">
-            <FormField label="Doctor">
-              <SearchableSelect
-                value={doctorId}
-                onChange={(value) => {
-                  setDoctorId(value);
-                  setSelectedAppointmentId("");
-                }}
-                disabled={isDoctorUser}
-                searchable={doctorList.length > 8}
-                placeholder="Select doctor"
-                options={doctorList.map((d: any) => ({
-                  value: d.id,
-                  label: d.name,
-                  sublabel: d.specialty,
-                }))}
-              />
-            </FormField>
-            <div className="w-[20%] lg:w-full">
-              <Button onClick={callNext} disabled={!current || busy}>
-                Call Next Patient
-              </Button>
-            </div>
-          </div>
-        </Card>
-      </div>
-      <Card>
+      {/* <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2"> */}
+      {/* <span className="text-[11px] font-bold text-slate-600">
+          {displayDate(selectedDate)} · {branch.name}
+        </span> */}
+      {emergencyToday > 0 && (
+        <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-700">
+          Emergency {emergencyToday}
+        </span>
+      )}
+      {/* </div> */}
+      <StatusToast message={message} onClose={() => setMessage("")} />
+      <div className="mt-4">
         <ScheduleList
           rows={scheduleRows}
+          loading={appointmentsLoading}
           selectedId={selected?.id}
           onSelect={setSelectedAppointmentId}
           onConsult={openConsultation}
         />
-      </Card>
-    </div>
+      </div>
+    </Card>
   );
 }

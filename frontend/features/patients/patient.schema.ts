@@ -19,7 +19,18 @@ export const patientSchema = z
       .string()
       .regex(
         /^[6-9]\d{9}$/,
-        "Alternate phone number must be exactly 10 digits and start with 6, 7, 8 or 9",
+        "Secondary mobile number must be exactly 10 digits and start with 6, 7, 8 or 9",
+      )
+      .optional()
+      .or(z.literal("")),
+
+    guardianName: z.string().optional(),
+
+    guardianMobile: z
+      .string()
+      .regex(
+        /^[6-9]\d{9}$/,
+        "Guardian mobile number must be exactly 10 digits and start with 6, 7, 8 or 9",
       )
       .optional()
       .or(z.literal("")),
@@ -36,14 +47,6 @@ export const patientSchema = z
     dateOfBirth: z.string().optional(),
 
     ageYears: z.string().min(1, "Age is required"),
-
-    guardianName: z.string().optional(),
-
-    guardianMobile: z
-      .string()
-      .regex(/^\d{10}$/, "Guardian mobile must be exactly 10 digits")
-      .optional()
-      .or(z.literal("")),
 
     email: z
       .string()
@@ -77,17 +80,55 @@ export const patientSchema = z
       "pa",
       "ur",
     ]),
+
+    smsConsentStatus: z.enum(["not_recorded", "opted_in", "opted_out"]),
+
+    smsConsentSource: z.string().optional(),
+
+    smsPreferredLanguage: z.enum([
+      "tenant_default",
+      "en",
+      "hi",
+      "mr",
+      "gu",
+      "ta",
+      "te",
+      "kn",
+      "ml",
+      "bn",
+      "pa",
+      "ur",
+    ]),
+
+    monthlyTrackingEnabled: z.boolean().optional(),
+
+    monthlyRefillOn: z.string().optional(),
+
+    monthlyRefillNotes: z.string().optional(),
+
+    monthlyLabOn: z.string().optional(),
+
+    monthlyLabTestName: z.string().optional(),
+
+    monthlyLabNotes: z.string().optional(),
+
+    familyRelatedPatientId: z.string().optional(),
+
+    familyRelationship: z.string().optional(),
+
+    familyNotes: z.string().optional(),
   })
   .superRefine((values, context) => {
     const mobile = values.mobile?.trim();
     const alternateMobile = values.alternateMobile?.trim();
+    const guardianMobile = values.guardianMobile?.trim();
 
-    // At least one contact number is required
-    if (!mobile && !alternateMobile) {
+    if (!mobile && !alternateMobile && !guardianMobile) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["mobile"],
-        message: "Mobile number or alternate mobile number is required",
+        message:
+          "Primary, secondary, or guardian mobile number is required",
       });
     }
 
@@ -97,7 +138,18 @@ export const patientSchema = z
         code: z.ZodIssueCode.custom,
         path: ["alternateMobile"],
         message:
-          "Alternate phone number must be different from the primary mobile number",
+          "Secondary mobile number must be different from the primary mobile number",
+      });
+    }
+
+    if (
+      values.smsConsentStatus !== "not_recorded" &&
+      !values.smsConsentSource?.trim()
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["smsConsentSource"],
+        message: "Preference source is required when SMS consent is recorded",
       });
     }
   });

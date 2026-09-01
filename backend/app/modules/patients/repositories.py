@@ -8,7 +8,25 @@ from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionPlan,
 )
-from app.modules.patients.models import Patient, PatientAlert, PatientStatus
+from app.core.list_filters import (
+    ListFilter,
+    ListFilterOption,
+    ListSort,
+    apply_list_filters,
+    apply_list_sort,
+    labeled_filter_options,
+    list_filter_options,
+    tenant_user_filter_options,
+)
+from app.modules.patients.listing import PATIENT_LIST_SPEC
+from app.modules.patients.models import (
+    Patient,
+    PatientAlert,
+    PatientFamilyRelationship,
+    PatientStatus,
+)
+from app.modules.identity.models import User
+from app.modules.tenants.models import Branch
 
 
 class PatientRepository:
@@ -67,6 +85,7 @@ class PatientRepository:
             self.session.exec(
                 select(Patient).where(
                     Patient.tenant_id == tenant_id,
+                    Patient.status != PatientStatus.INACTIVE,
                     Patient.mobile.is_not(None),
                 )
             ).all()
@@ -81,7 +100,10 @@ class PatientRepository:
         guardian_mobile: str | None,
         limit: int = 10,
     ) -> list[Patient]:
-        statement = select(Patient).where(Patient.tenant_id == tenant_id)
+        statement = select(Patient).where(
+            Patient.tenant_id == tenant_id,
+            Patient.status != PatientStatus.INACTIVE,
+        )
         conditions = [func.lower(Patient.full_name) == normalized_name]
         if mobile:
             conditions.extend(
@@ -112,6 +134,8 @@ class PatientRepository:
         gender: str | None = None,
         from_date: date | None = None,
         to_date: date | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
         offset: int = 0,
         limit: int = 25,
     ) -> list[Patient]:
@@ -124,10 +148,11 @@ class PatientRepository:
             gender=gender,
             from_date=from_date,
             to_date=to_date,
+            list_filters=list_filters,
         )
         if q:
             term = q.strip().lower()
-            statement = statement.order_by(
+            q_order = [
                 case(
                     (func.lower(Patient.patient_number) == term, 0),
                     (func.lower(Patient.mobile) == term, 0),
@@ -138,9 +163,15 @@ class PatientRepository:
                     else_=4,
                 ),
                 Patient.updated_at.desc(),
-            )
+            ]
         else:
-            statement = statement.order_by(Patient.updated_at.desc())
+            q_order = [Patient.updated_at.desc()]
+        statement = apply_list_sort(
+            statement,
+            PATIENT_LIST_SPEC,
+            list_sort,
+            default_order=q_order,
+        )
         return list(self.session.exec(statement.offset(offset).limit(limit)).all())
 
     def count_search(
@@ -154,6 +185,7 @@ class PatientRepository:
         gender: str | None = None,
         from_date: date | None = None,
         to_date: date | None = None,
+        list_filters: list[ListFilter] | None = None,
     ) -> int:
         filtered = self._search_statement(
             tenant_id=tenant_id,
@@ -164,8 +196,98 @@ class PatientRepository:
             gender=gender,
             from_date=from_date,
             to_date=to_date,
+            list_filters=list_filters,
         ).subquery()
         return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def filter_options(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None = None,
+    ) -> dict[str, list[ListFilterOption]]:
+        patient_scope = select(Patient).where(Patient.tenant_id == tenant_id)
+        if branch_id:
+            patient_scope = patient_scope.where(Patient.branch_id == branch_id)
+        patient_rows = patient_scope.subquery()
+
+        branch_statement = select(Branch.id, Branch.name).where(
+            Branch.tenant_id == tenant_id,
+            Branch.is_active == True,  # noqa: E712
+        )
+        if branch_id:
+            branch_statement = branch_statement.where(Branch.id == branch_id)
+
+        plan_rows = self.session.exec(
+            select(
+                PatientSubscriptionPlan.name,
+                PatientSubscriptionPlan.name,
+            )
+            .join(
+                PatientSubscriptionEnrollment,
+                PatientSubscriptionEnrollment.plan_id == PatientSubscriptionPlan.id,
+            )
+            .join(
+                patient_rows,
+                patient_rows.c.id == PatientSubscriptionEnrollment.patient_id,
+            )
+            .where(PatientSubscriptionEnrollment.tenant_id == tenant_id)
+            .distinct()
+            .order_by(PatientSubscriptionPlan.name)
+            .limit(100)
+        ).all()
+        subscription_statuses = self.session.exec(
+            select(PatientSubscriptionEnrollment.status)
+            .join(
+                patient_rows,
+                patient_rows.c.id == PatientSubscriptionEnrollment.patient_id,
+            )
+            .where(PatientSubscriptionEnrollment.tenant_id == tenant_id)
+            .distinct()
+            .order_by(PatientSubscriptionEnrollment.status)
+            .limit(100)
+        ).all()
+        return {
+            "branch_id": labeled_filter_options(
+                list(
+                    self.session.exec(
+                        branch_statement.distinct().order_by(Branch.name).limit(100)
+                    ).all()
+                )
+            ),
+            "gender": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(patient_rows.c.gender)
+                        .distinct()
+                        .order_by(patient_rows.c.gender)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "status": list_filter_options(
+                list(
+                    self.session.exec(
+                        select(patient_rows.c.status)
+                        .distinct()
+                        .order_by(patient_rows.c.status)
+                        .limit(100)
+                    ).all()
+                )
+            ),
+            "subscription_plan_name": labeled_filter_options(list(plan_rows)),
+            "subscription_status": list_filter_options(list(subscription_statuses)),
+            "created_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+            "updated_by_user_id": tenant_user_filter_options(
+                self.session,
+                User,
+                tenant_id=tenant_id,
+            ),
+        }
 
     def _search_statement(
         self,
@@ -178,6 +300,7 @@ class PatientRepository:
         gender: str | None,
         from_date: date | None,
         to_date: date | None,
+        list_filters: list[ListFilter] | None = None,
     ):
         statement = select(Patient).where(Patient.tenant_id == tenant_id)
         if status:
@@ -204,8 +327,6 @@ class PatientRepository:
                 Patient.full_name,
                 Patient.mobile,
                 Patient.alternate_mobile,
-                Patient.guardian_name,
-                Patient.guardian_mobile,
                 Patient.area,
                 Patient.address,
             )
@@ -217,6 +338,8 @@ class PatientRepository:
                     )
                 )
             )
+        if list_filters:
+            statement = apply_list_filters(statement, PATIENT_LIST_SPEC, list_filters)
         return statement
 
     def doctor_has_patient_appointment(
@@ -275,6 +398,63 @@ class PatientAlertRepository:
                 )
             ).all()
         )
+
+
+class PatientFamilyRelationshipRepository:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def add(self, relationship: PatientFamilyRelationship) -> PatientFamilyRelationship:
+        self.session.add(relationship)
+        return relationship
+
+    def get_for_tenant(
+        self, tenant_id: str, relationship_id: str
+    ) -> PatientFamilyRelationship | None:
+        row = self.session.get(PatientFamilyRelationship, relationship_id)
+        if not row or row.tenant_id != tenant_id:
+            return None
+        return row
+
+    def existing_pair(
+        self, *, tenant_id: str, patient_id: str, related_patient_id: str
+    ) -> PatientFamilyRelationship | None:
+        return self.session.exec(
+            select(PatientFamilyRelationship).where(
+                PatientFamilyRelationship.tenant_id == tenant_id,
+                PatientFamilyRelationship.patient_id == patient_id,
+                PatientFamilyRelationship.related_patient_id == related_patient_id,
+            )
+        ).first()
+
+    def active_for_patient(
+        self, *, tenant_id: str, patient_id: str
+    ) -> list[PatientFamilyRelationship]:
+        return list(
+            self.session.exec(
+                select(PatientFamilyRelationship)
+                .where(
+                    PatientFamilyRelationship.tenant_id == tenant_id,
+                    PatientFamilyRelationship.is_active == True,  # noqa: E712
+                    or_(
+                        PatientFamilyRelationship.patient_id == patient_id,
+                        PatientFamilyRelationship.related_patient_id == patient_id,
+                    ),
+                )
+                .order_by(PatientFamilyRelationship.created_at)
+            ).all()
+        )
+
+    def active_related_patient_ids(
+        self, *, tenant_id: str, patient_id: str
+    ) -> list[str]:
+        related_ids: list[str] = []
+        for row in self.active_for_patient(tenant_id=tenant_id, patient_id=patient_id):
+            if row.patient_id == patient_id:
+                related_ids.append(row.related_patient_id)
+            elif row.related_patient_id == patient_id:
+                related_ids.append(row.patient_id)
+        return list(dict.fromkeys(related_ids))
 
 
 class PatientSubscriptionReadRepository:

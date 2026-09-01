@@ -2,20 +2,42 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { sections, status_filters } from "./constants";
+import { tenantAdminSections, clinic_sections, sectionSlug } from "./constants";
+import { newSegment, editSegment } from "@/lib/routeSlugs";
+
+const allAdminSections = [...tenantAdminSections, ...clinic_sections];
 import { canUseTenantAdminSection } from "./permissions";
-import { Card, StatusToast } from "@/app/components/common/ui";
-import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
-import { groupDepartmentsByName, userRoleLabels } from "./helpers";
 import {
-  UserRow,
-  RoleRow,
-  DepartmentRow,
-  BranchRow,
-  SupplierRow,
-  TaxRuleRow,
-  DiscountOfferRow,
-} from "./components/Rows";
+  Card,
+  RefreshButton,
+  SearchableSelect,
+  StatusToast,
+} from "@/app/components/common/ui";
+import { FormField } from "@/app/components/FormElements";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import { BreadcrumbSlot, useShellChrome } from "@/features/shell/AppShell";
+import { sortRows } from "@/utils/sortRows";
+import {
+  applyQueryFilters,
+  standardAuditQueryFields,
+  type QueryFieldOption,
+  type QueryFieldSchema,
+  type QueryFilterRow,
+} from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
+import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
+import { groupDepartmentsByName } from "./helpers";
+import {
+  getUserColumns,
+  getRoleColumns,
+  getDepartmentColumns,
+  getBranchColumns,
+  getSupplierColumns,
+  getTaxRuleColumns,
+  getDiscountOfferColumns,
+} from "./column";
 import { ListCard } from "./components/ListCard";
 import { PasswordResetModal } from "./components/PasswordResetModal";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
@@ -28,31 +50,14 @@ import { DepartmentForm } from "./forms/DepartmentForm";
 import { SupplierForm } from "./forms/SupplierForm";
 import { FilesPanel } from "./components/FilesPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
-import { WhatsAppIntegrationSettings } from "./components/WhatsAppIntegrationSettings";
-import {
-  BRANCH_COLUMNS,
-  DEPARTMENT_COLUMNS,
-  DISCOUNT_OFFER_COLUMNS,
-  ROLE_COLUMNS,
-  SUPPLIER_COLUMNS,
-  TAX_RULE_COLUMNS,
-  USER_COLUMNS,
-} from "@/utils/constants";
+import { WhatsAppIntegrationSettings } from "./whatsapp_integration/WhatsAppIntegrationSettings";
+import { SmsIntegrationSettings } from "./sms_integration/SmsIntegrationSettings";
+import { EmailIntegrationSettings } from "./email_integration/EmailIntegrationSettings";
+import { PatientIntelligenceSettings } from "./components/PatientIntelligenceSettings";
 import { useAdminData } from "./AdminDataContext";
 import { useTenantAdminActions } from "./api/useTenantAdminActions";
 import { Role } from "./types";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
-import { status_options } from "../superAdmin/constants";
-
-function uniqueRoleFilterOptions(roles: any[]) {
-  const byName = new Map<string, any>();
-  for (const role of roles || []) {
-    const name = String(role?.name || "").trim();
-    if (!name || byName.has(name)) continue;
-    byName.set(name, role);
-  }
-  return Array.from(byName.values());
-}
 
 export function TenantAdmin({
   apiSession,
@@ -61,55 +66,61 @@ export function TenantAdmin({
   section,
   view,
   selectedId,
+  sections = allAdminSections,
+  basePath = "/admin",
 }: any) {
   const router = useRouter();
+  const { beginNavigation } = useShellChrome();
+  const [visitedWhatsAppSettings, setVisitedWhatsAppSettings] = useState(
+    section === "whatsapp",
+  );
+  const [visitedSmsSettings, setVisitedSmsSettings] = useState(
+    section === "sms",
+  );
+  const [visitedEmailSettings, setVisitedEmailSettings] = useState(
+    section === "email",
+  );
+  useEffect(() => {
+    if (section === "whatsapp") setVisitedWhatsAppSettings(true);
+    if (section === "sms") setVisitedSmsSettings(true);
+    if (section === "email") setVisitedEmailSettings(true);
+  }, [section]);
   const [confirm, setConfirm] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
   const [reportBusy, setReportBusy] = useState("");
 
-  const [userFilters, setUserFilters] = useState({
-    status: "all",
-    role: "all",
-    branch: "all",
+  // Users/Roles/Departments/Branches/Suppliers/Tax/Offers share one
+  // search+sort+custom-filter bar (matching Patient's pattern) since only
+  // one of them is ever visible at a time — reset whenever the section
+  // changes so a filter from one entity doesn't silently no-op in another.
+  const [listQuery, setListQuery] = useState("");
+  const [listSort, setListSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
   });
-
-  const [roleFilter, setRoleFilters] = useState({
-    status: "all",
-  });
-
-  const [departmentFilters, setDepartmentFilters] = useState({
-    status: "all",
-    branch: "all",
-  });
-
-  const [branchFilter, setBranchFilter] = useState({
-    status: "all",
-  });
-  const [supplierFilter, setSupplierFilter] = useState({
-    status: "all",
-  });
-
-  const [taxFilter, setTaxFilter] = useState({
-    status: "all",
-  });
-  const [offerFilter, setOfferFilter] = useState({
-    status: "all",
-  });
+  const [listQueryFilters, setListQueryFilters] = useState<QueryFilterRow[]>(
+    [],
+  );
+  useEffect(() => {
+    setListQuery("");
+    setListSort({ key: "updated_at", dir: "desc" });
+    setListQueryFilters([]);
+  }, [section]);
 
   const data = useAdminData();
-  const whatsappModuleEnabled = Boolean(
-    clinic?.modules?.includes("whatsapp"),
-  );
+  const whatsappModuleEnabled = Boolean(clinic?.modules?.includes("whatsapp"));
+  const smsModuleEnabled = Boolean(clinic?.modules?.includes("sms"));
   const permissionKeys: string[] = apiSession?.user?.permissions || [];
+  const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const hasAdminAction = (prefix: string, action: string) =>
     Boolean(
       apiSession?.user?.is_super_admin ||
-        permissionKeys.includes("*") ||
-        apiSession?.user?.roles?.includes("tenant_admin") ||
-        apiSession?.user?.user_type === "tenant_admin" ||
-        permissionKeys.includes(`${prefix}.manage`) ||
-        permissionKeys.includes(`${prefix}.${action}`),
+      permissionKeys.includes("*") ||
+      apiSession?.user?.roles?.includes("tenant_admin") ||
+      apiSession?.user?.user_type === "tenant_admin" ||
+      permissionKeys.includes(`${prefix}.manage`) ||
+      permissionKeys.includes(`${prefix}.${action}`),
     );
 
   function goTo(
@@ -118,17 +129,19 @@ export function TenantAdmin({
     nextId = "",
     opts: { replace?: boolean } = {},
   ) {
+    const slug = sectionSlug(nextSection);
     const path =
       nextView === "create"
-        ? `/admin/${nextSection}/new`
+        ? `${basePath}/${nextSection}/${newSegment(slug)}`
         : nextView === "edit"
-          ? `/admin/${nextSection}/${nextId}/edit`
+          ? `${basePath}/${nextSection}/${nextId}/${editSegment(slug)}`
           : nextView === "view"
-            ? `/admin/${nextSection}/${nextId}`
-            : `/admin/${nextSection}`;
+            ? `${basePath}/${nextSection}/${nextId}`
+            : `${basePath}/${nextSection}`;
     if (opts.replace) {
       router.replace(path);
     } else {
+      beginNavigation(basePath.split("/").filter(Boolean)[0] || "admin", path);
       router.push(path);
     }
     requestAnimationFrame(() =>
@@ -159,7 +172,9 @@ export function TenantAdmin({
   }
 
   const actions = useTenantAdminActions({
-    apiSession,
+    // Mutations must target whichever tenant the switcher below has
+    // selected, not necessarily the session's own home tenant.
+    apiSession: data.scopedApiSession,
     branchId,
     open,
     reload: data.reload,
@@ -193,115 +208,245 @@ export function TenantAdmin({
     setReportBusy,
   });
 
-  const filteredUsers = useMemo(() => {
-    return data.users.filter((user: any) => {
-      // Status
-      if (
-        userFilters.status !== "all" &&
-        (user.is_active ? "active" : "inactive") !== userFilters.status
-      ) {
-        return false;
-      }
+  const userAuditOptions: Record<string, QueryFieldOption[]> = {
+    created_by_user_id: data.users.map((user: any) => ({
+      value: user.id,
+      label: user.name || user.email || user.id,
+    })),
+    updated_by_user_id: data.users.map((user: any) => ({
+      value: user.id,
+      label: user.name || user.email || user.id,
+    })),
+  };
 
-      // Branch
-      if (
-        userFilters.branch !== "all" &&
-        user.branch_id !== userFilters.branch
-      ) {
-        return false;
-      }
-
-      // Role
-      if (userFilters.role !== "all") {
-        const labels = userRoleLabels(user, data.roles);
-
-        if (!labels.includes(userFilters.role)) {
-          return false;
-        }
-      }
-
-      return true;
+  function distinctFieldOptions(
+    rows: any[],
+    key: string,
+    labelFor?: (value: string) => string,
+  ): { value: string; label: string }[] {
+    const seen = new Map<string, string>();
+    rows.forEach((row) => {
+      const raw = row[key];
+      if (raw === null || raw === undefined || raw === "") return;
+      const value = String(raw);
+      if (!seen.has(value)) seen.set(value, labelFor ? labelFor(value) : value);
     });
-  }, [data.users, data.roles, userFilters]);
+    return Array.from(seen.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
+  }
 
-  const filterdRoles = useMemo(() => {
-    return data.roles.filter((role: any) => {
-      if (
-        roleFilter.status !== "all" &&
-        (role.is_active ? "active" : "inactive") !== roleFilter.status
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [data.roles, roleFilter]);
+  const statusField = (rows: any[]): QueryFieldSchema => ({
+    key: "is_active",
+    label: "Status",
+    type: "select",
+    options: distinctFieldOptions(rows, "is_active", (value) =>
+      value === "true" ? "Active" : "Inactive",
+    ),
+  });
 
-  const filteredDepartments = useMemo(() => {
-    return data.departments.filter((department) => {
-      if (
-        departmentFilters.status !== "all" &&
-        (department.is_active ? "active" : "inactive") !==
-          departmentFilters.status
-      ) {
-        return false;
-      }
-      if (
-        departmentFilters.branch !== "all" &&
-        department.branch !== departmentFilters.branch
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [departmentFilters, data.departments]);
+  // Config for whichever of the 7 list sections is currently active — one
+  // shared search/sort/custom-filter bar (see listQuery/listSort/
+  // listQueryFilters above) reads from this instead of each section having
+  // its own fixed status/branch/role dropdowns.
+  const listSectionConfig: Record<
+    string,
+    { rows: any[]; searchKeys: string[]; queryFields: QueryFieldSchema[] }
+  > = {
+    users: {
+      rows: data.users,
+      searchKeys: ["name", "email", "mobile", "user_type", "roles", "id"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "email", label: "Email", type: "text" },
+        { key: "mobile", label: "Mobile", type: "text" },
+        {
+          key: "user_type",
+          label: "User Type",
+          type: "select",
+          options: distinctFieldOptions(data.users, "user_type"),
+        },
+        {
+          key: "branch_id",
+          label: "Branch",
+          type: "select",
+          options: data.branches.map((branch: any) => ({
+            value: branch.id,
+            label: branch.name,
+          })),
+        },
+        statusField(data.users),
+      ],
+    },
+    roles: {
+      rows: data.roles,
+      searchKeys: ["name", "key", "id"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "key", label: "Key", type: "text" },
+        statusField(data.roles),
+        { key: "created_at", label: "Created On", type: "date" },
+        { key: "updated_at", label: "Last Updated", type: "date" },
+      ],
+    },
+    departments: {
+      rows: data.departments,
+      searchKeys: ["name", "code", "branch_names", "description", "id"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "code", label: "Code", type: "text" },
+        { key: "description", label: "Description", type: "text" },
+        { key: "branch_names", label: "Branches", type: "text" },
+        statusField(data.departments),
+        ...standardAuditQueryFields({
+          rows: data.departments,
+          filterOptions: userAuditOptions,
+          includeUpdatedBy: true,
+        }),
+      ],
+    },
+    branches: {
+      rows: data.branches,
+      searchKeys: ["name", "code", "city", "state", "id"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "code", label: "Code", type: "text" },
+        { key: "city", label: "City", type: "text" },
+        { key: "state", label: "State", type: "text" },
+        statusField(data.branches),
+        ...standardAuditQueryFields({
+          rows: data.branches,
+          filterOptions: userAuditOptions,
+          includeUpdatedBy: true,
+        }),
+      ],
+    },
+    suppliers: {
+      rows: data.suppliers,
+      searchKeys: ["name", "gstin", "phone", "email", "address", "id"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "gstin", label: "GSTIN", type: "text" },
+        { key: "phone", label: "Phone", type: "text" },
+        { key: "email", label: "Email", type: "text" },
+        { key: "address", label: "Address", type: "text" },
+        statusField(data.suppliers),
+        ...standardAuditQueryFields({
+          rows: data.suppliers,
+          filterOptions: userAuditOptions,
+          includeUpdatedBy: true,
+        }),
+      ],
+    },
+    tax: {
+      rows: data.taxRules,
+      searchKeys: ["name", "tax_label", "service_scope", "id"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "tax_label", label: "Tax Label", type: "text" },
+        { key: "tax_percentage", label: "Tax %", type: "number" },
+        {
+          key: "service_scope",
+          label: "Service Scope",
+          type: "select",
+          options: distinctFieldOptions(data.taxRules, "service_scope"),
+        },
+        statusField(data.taxRules),
+        { key: "created_at", label: "Created On", type: "date" },
+        {
+          key: "created_by_user_id",
+          label: "Created By",
+          type: "select",
+          options: userAuditOptions.created_by_user_id,
+        },
+        {
+          key: "updated_by_user_id",
+          label: "Last Updated By",
+          type: "select",
+          options: userAuditOptions.updated_by_user_id,
+        },
+      ],
+    },
+    offers: {
+      rows: data.discountOffers,
+      searchKeys: ["name", "code", "service_scope", "discount_type", "id"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "code", label: "Code", type: "text" },
+        {
+          key: "discount_type",
+          label: "Discount Type",
+          type: "select",
+          options: distinctFieldOptions(data.discountOffers, "discount_type"),
+        },
+        {
+          key: "service_scope",
+          label: "Service Scope",
+          type: "select",
+          options: distinctFieldOptions(data.discountOffers, "service_scope"),
+        },
+        statusField(data.discountOffers),
+        { key: "created_at", label: "Created On", type: "date" },
+        {
+          key: "created_by_user_id",
+          label: "Created By",
+          type: "select",
+          options: userAuditOptions.created_by_user_id,
+        },
+        {
+          key: "updated_by_user_id",
+          label: "Last Updated By",
+          type: "select",
+          options: userAuditOptions.updated_by_user_id,
+        },
+      ],
+    },
+  };
 
-  const filteredBranches = useMemo(() => {
-    return data.branches.filter((branch) => {
-      if (
-        branchFilter.status !== "all" &&
-        (branch.is_active ? "active" : "inactive") !== branchFilter.status
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [data.branches, branchFilter]);
+  const listSortFields = [
+    { key: "name", label: "Name" },
+    { key: "is_active", label: "Status" },
+    { key: "created_at", label: "Created On" },
+    { key: "updated_at", label: "Last Modified" },
+  ];
 
-  const filteredSuppliers = useMemo(() => {
-    return data.suppliers.filter((supplier) => {
-      if (
-        supplierFilter.status !== "all" &&
-        (supplier.is_active ? "active" : "inactive") !== supplierFilter.status
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [data.suppliers, supplierFilter]);
+  const activeListConfig = listSectionConfig[section];
 
-  const filteredTaxes = useMemo(() => {
-    return data.taxRules.filter((tax) => {
-      if (
-        taxFilter.status !== "all" &&
-        (tax.is_active ? "active" : "inactive") !== taxFilter.status
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [data.taxRules, taxFilter]);
+  function matchesListQuery(row: any, searchKeys: string[]) {
+    if (!listQuery.trim()) return true;
+    const q = listQuery.trim().toLowerCase();
+    return searchKeys.some((key) =>
+      String(row[key] ?? "")
+        .toLowerCase()
+        .includes(q),
+    );
+  }
 
-  const filteredOffers = useMemo(() => {
-    return data.discountOffers.filter((offer) => {
-      if (
-        offerFilter.status !== "all" &&
-        (offer.is_active ? "active" : "inactive") !== offerFilter.status
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [data.discountOffers, offerFilter]);
+  const listRows = useMemo(() => {
+    if (!activeListConfig) return [];
+    return sortRows(
+      applyQueryFilters(
+        activeListConfig.rows.filter((row: any) =>
+          matchesListQuery(row, activeListConfig.searchKeys),
+        ),
+        activeListConfig.queryFields,
+        listQueryFilters,
+      ),
+      listSort,
+      (row: any, key: string) =>
+        key === "updated_at" ? row.updated_at || row.created_at : row[key],
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeListConfig, listQuery, listQueryFilters, listSort]);
+
+  const filteredUsers = section === "users" ? listRows : [];
+  const filterdRoles = section === "roles" ? listRows : [];
+  const filteredDepartments = section === "departments" ? listRows : [];
+  const filteredBranches = section === "branches" ? listRows : [];
+  const filteredSuppliers = section === "suppliers" ? listRows : [];
+  const filteredTaxes = section === "tax" ? listRows : [];
+  const filteredOffers = section === "offers" ? listRows : [];
 
   const selectedRole = data.roles.find((row: any) => row.id === selectedId);
   const selectedUser = data.users.find((row: any) => row.id === selectedId);
@@ -324,7 +469,7 @@ export function TenantAdmin({
   const selectedOffer = data.discountOffers.find(
     (row: any) => row.id === selectedId,
   );
-  const visibleSections = sections.filter(([sectionId]) =>
+  const visibleSections = sections.filter(([sectionId]: any) =>
     canUseTenantAdminSection(sectionId, apiSession?.user),
   );
 
@@ -366,7 +511,7 @@ export function TenantAdmin({
       (section === "tax" && Boolean(selectedTaxRule)) ||
       (section === "offers" && Boolean(selectedOffer));
     if (!selectedExists) {
-      router.replace(`/admin/${section}`);
+      router.replace(`${basePath}/${section}`);
     }
   }, [
     section,
@@ -414,76 +559,100 @@ export function TenantAdmin({
       </Card>
     );
 
+  const listSectionNouns: Record<string, string> = {
+    users: "users",
+    roles: "roles",
+    departments: "departments",
+    branches: "branches",
+    suppliers: "suppliers",
+    tax: "tax rules",
+    offers: "offers",
+  };
+
   return (
     <div className="">
       <StatusToast message={data.message} onClose={() => data.setMessage("")} />
+      {view === "list" && activeListConfig && (
+        <BreadcrumbSlot>
+          <div className="flex items-center gap-2">
+            <AdaptiveResultCount
+              shown={listRows.length}
+              total={activeListConfig.rows.length}
+              noun={listSectionNouns[section] || "records"}
+            />
+            <RefreshButton
+              onRefresh={data.reload}
+              className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+            />
+            <AdaptiveFilterTrigger
+              schema={{
+                id: `tenant-admin-${section}`,
+                searchLabel: "Search",
+                searchPlaceholder: "Search",
+                filters: [],
+                sortFields: listSortFields,
+              }}
+              query={listQuery}
+              setQuery={setListQuery}
+              filterValues={{}}
+              sort={listSort}
+              onSortChange={setListSort}
+              showSort={false}
+              onReset={() => {
+                setListQuery("");
+                setListSort(null);
+              }}
+              queryFields={activeListConfig.queryFields}
+              queryFilters={listQueryFilters}
+              onQueryFiltersChange={setListQueryFilters}
+            >
+              {isSuperAdmin && (
+                <FormField label="Tenant">
+                  <SearchableSelect
+                    searchable={false}
+                    value={data.tenantId}
+                    onChange={data.setTenantId}
+                    options={data.tenants.map((tenant: any) => ({
+                      value: tenant.id,
+                      label: tenant.name,
+                    }))}
+                  />
+                </FormField>
+              )}
+            </AdaptiveFilterTrigger>
+            <AdaptiveSortTrigger
+              fields={listSortFields}
+              sort={listSort}
+              onSortChange={setListSort}
+            />
+          </div>
+        </BreadcrumbSlot>
+      )}
       {section === "users" && view === "list" && (
         <ListCard
           title="Users"
           rows={filteredUsers}
-          searchKeys={["name", "email", "mobile", "user_type", "roles", "id"]}
           createLabel="Create User"
           canCreate={hasAdminAction("identity.users", "create")}
           onCreate={openCreate}
-          onRefresh={data.reload}
           loading={data.busy}
-          columns={USER_COLUMNS}
-          filter_className="lg:grid-cols-5 xl:grid-cols-5"
-          filters={[
-            {
-              key: "status",
-              label: "Status",
-              options: status_filters.options,
-            },
-            {
-              key: "role",
-              label: "Role",
-              options: [
-                { value: "all", label: "All Roles" },
-                ...uniqueRoleFilterOptions(data.roles).map((role: any) => ({
-                  value: role.name,
-                  label: role.name,
-                })),
-              ],
-            },
-            {
-              key: "branch",
-              label: "Branch",
-              options: [
-                { value: "all", label: "All Branches" },
-                ...data.branches.map((branch: any) => ({
-                  value: branch.id,
-                  label: branch.name,
-                })),
-              ],
-            },
-          ]}
-          onFilterChange={(key: string, value: string) =>
-            setUserFilters((prev) => ({
-              ...prev,
-              [key]: value,
-            }))
+          columns={getUserColumns({
+            roles: data.roles,
+            branches: data.branches,
+            canCopyIds,
+            canEdit: hasAdminAction("identity.users", "edit"),
+            canDelete: hasAdminAction("identity.users", "delete"),
+            onEdit: (user: any) => openEdit(user.id),
+            onStatus: (user: any) =>
+              setConfirm({ entity: "users", kind: "status", row: user }),
+            onDelete: (user: any) =>
+              setConfirm({ entity: "users", kind: "delete", row: user }),
+          })}
+          onRowClick={
+            hasAdminAction("identity.users", "edit")
+              ? (user: any) => openDetail(user.id)
+              : undefined
           }
-          filterValues={userFilters}
-          render={(user: any) => (
-            <UserRow
-              key={user.id}
-              user={user}
-              roles={data.roles}
-              branches={data.branches}
-              canCopyIds={canCopyIds}
-              canEdit={hasAdminAction("identity.users", "edit")}
-              canDelete={hasAdminAction("identity.users", "delete")}
-              onEdit={() => openEdit(user.id)}
-              onRowClick={() => openDetail(user.id)}
-              onStatus={() =>
-                setConfirm({ entity: "users", kind: "status", row: user })
-              }
-              onDelete={() =>
-                setConfirm({ entity: "users", kind: "delete", row: user })
-              }
-            />
-          )}
         />
       )}
       {section === "users" && view === "create" && (
@@ -522,38 +691,25 @@ export function TenantAdmin({
         <ListCard
           title="Roles"
           rows={filterdRoles}
-          searchKeys={["name", "key", "id"]}
           createLabel="Create Role"
           canCreate={hasAdminAction("identity.roles", "create")}
           onCreate={openCreate}
-          onRefresh={data.reload}
           loading={data.busy}
-          columns={ROLE_COLUMNS}
-          filters={[status_filters]}
-          filterValues={roleFilter}
-          onFilterChange={(key: string, value: string) => {
-            setRoleFilters((prev) => ({
-              ...prev,
-              [key]: value,
-            }));
-          }}
-          render={(role: Role) => (
-            <RoleRow
-              key={role.id}
-              role={role}
-              canCopyIds={canCopyIds}
-              canEdit={hasAdminAction("identity.roles", "edit")}
-              canDelete={hasAdminAction("identity.roles", "delete")}
-              onEdit={() => openEdit(role.id)}
-              onRowClick={() => openDetail(role.id)}
-              onStatus={() =>
-                setConfirm({ entity: "roles", kind: "status", row: role })
-              }
-              onDelete={() =>
-                setConfirm({ entity: "roles", kind: "delete", row: role })
-              }
-            />
-          )}
+          columns={getRoleColumns({
+            canCopyIds,
+            canEdit: hasAdminAction("identity.roles", "edit"),
+            canDelete: hasAdminAction("identity.roles", "delete"),
+            onEdit: (role: Role) => openEdit(role.id),
+            onStatus: (role: Role) =>
+              setConfirm({ entity: "roles", kind: "status", row: role }),
+            onDelete: (role: Role) =>
+              setConfirm({ entity: "roles", kind: "delete", row: role }),
+          })}
+          onRowClick={
+            hasAdminAction("identity.roles", "edit")
+              ? (role: Role) => openDetail(role.id)
+              : undefined
+          }
         />
       )}
       {section === "roles" && view === "create" && (
@@ -587,59 +743,32 @@ export function TenantAdmin({
         <ListCard
           title="Medical Departments"
           rows={filteredDepartments}
-          searchKeys={["name", "code", "branch_names", "description", "id"]}
           createLabel="Create  Department"
           canCreate={hasAdminAction("departments", "create")}
           onCreate={openCreate}
-          onRefresh={data.reload}
           loading={data.busy}
-          columns={DEPARTMENT_COLUMNS}
-          filters={[
-            status_filters,
-            {
-              key: "branch",
-              label: "Branch",
-              options: [
-                { value: "all", label: "All Branches" },
-                ...data.branches.map((branch: any) => ({
-                  value: branch.id,
-                  label: branch.name,
-                })),
-              ],
-            },
-          ]}
-          onFilterChange={(key: number, value: string) =>
-            setDepartmentFilters((prev) => ({
-              ...prev,
-              [key]: value,
-            }))
+          columns={getDepartmentColumns({
+            canEdit: hasAdminAction("departments", "edit"),
+            canDelete: hasAdminAction("departments", "delete"),
+            onEdit: (department: any) => openEdit(department.id),
+            onStatus: (department: any) =>
+              setConfirm({
+                entity: "departments",
+                kind: "status",
+                row: department.primary,
+              }),
+            onDelete: (department: any) =>
+              setConfirm({
+                entity: "departments",
+                kind: "delete",
+                row: department.primary,
+              }),
+          })}
+          onRowClick={
+            hasAdminAction("departments", "edit")
+              ? (department: any) => openDetail(department.id)
+              : undefined
           }
-          filterValues={departmentFilters}
-          render={(department: any) => (
-            <DepartmentRow
-              key={department.id}
-              department={department}
-              canEdit={hasAdminAction("departments", "edit")}
-              canDelete={hasAdminAction("departments", "delete")}
-              branches={data.branches}
-              onEdit={() => openEdit(department.id)}
-              onRowClick={() => openDetail(department.id)}
-              onStatus={() =>
-                setConfirm({
-                  entity: "departments",
-                  kind: "status",
-                  row: department.primary,
-                })
-              }
-              onDelete={() =>
-                setConfirm({
-                  entity: "departments",
-                  kind: "delete",
-                  row: department.primary,
-                })
-              }
-            />
-          )}
         />
       )}
       {section === "departments" && view === "create" && (
@@ -674,44 +803,25 @@ export function TenantAdmin({
         <ListCard
           title="Branches"
           rows={filteredBranches}
-          searchKeys={["name", "code", "city", "state", "id"]}
           createLabel="Create Branch"
           canCreate={hasAdminAction("branches", "create")}
           onCreate={openCreate}
-          onRefresh={data.reload}
           loading={data.busy}
-          columns={BRANCH_COLUMNS}
-          filters={[
-            {
-              key: "status",
-              label: "Status",
-              options: status_options,
-            },
-          ]}
-          onFilterChange={(key: string, value: string) => {
-            setBranchFilter((prev) => ({
-              ...prev,
-              [key]: value,
-            }));
-          }}
-          filterValues={branchFilter}
-          render={(branch: any) => (
-            <BranchRow
-              key={branch.id}
-              branch={branch}
-              canCopyIds={canCopyIds}
-              canEdit={hasAdminAction("branches", "edit")}
-              canDelete={hasAdminAction("branches", "delete")}
-              onEdit={() => openEdit(branch.id)}
-              onRowClick={() => openDetail(branch.id)}
-              onStatus={() =>
-                setConfirm({ entity: "branches", kind: "status", row: branch })
-              }
-              onDelete={() =>
-                setConfirm({ entity: "branches", kind: "delete", row: branch })
-              }
-            />
-          )}
+          columns={getBranchColumns({
+            canCopyIds,
+            canEdit: hasAdminAction("branches", "edit"),
+            canDelete: hasAdminAction("branches", "delete"),
+            onEdit: (branch: any) => openEdit(branch.id),
+            onStatus: (branch: any) =>
+              setConfirm({ entity: "branches", kind: "status", row: branch }),
+            onDelete: (branch: any) =>
+              setConfirm({ entity: "branches", kind: "delete", row: branch }),
+          })}
+          onRowClick={
+            hasAdminAction("branches", "edit")
+              ? (branch: any) => openDetail(branch.id)
+              : undefined
+          }
         />
       )}
       {section === "branches" && view === "create" && (
@@ -727,6 +837,7 @@ export function TenantAdmin({
           back={() => open("branches")}
         />
       )}
+
       {section === "branches" &&
         (view === "edit" || view === "view") &&
         selectedBranch && (
@@ -747,51 +858,24 @@ export function TenantAdmin({
         <ListCard
           title="Suppliers"
           rows={filteredSuppliers}
-          searchKeys={["name", "gstin", "phone", "email", "address", "id"]}
           createLabel="Create Supplier"
           canCreate={hasAdminAction("suppliers", "create")}
           onCreate={openCreate}
-          onRefresh={data.reload}
           loading={data.busy}
-          columns={SUPPLIER_COLUMNS}
-          filters={[
-            {
-              key: "status",
-              label: "Status",
-              options: status_options,
-            },
-          ]}
-          onFilterChange={(key: string, value: string) => {
-            setSupplierFilter((prev) => ({
-              ...prev,
-              [key]: value,
-            }));
-          }}
-          filterValues={supplierFilter}
-          render={(supplier: any) => (
-            <SupplierRow
-              key={supplier.id}
-              supplier={supplier}
-              canEdit={hasAdminAction("suppliers", "edit")}
-              canDelete={hasAdminAction("suppliers", "delete")}
-              onEdit={() => openEdit(supplier.id)}
-              onRowClick={() => openDetail(supplier.id)}
-              onStatus={() =>
-                setConfirm({
-                  entity: "suppliers",
-                  kind: "status",
-                  row: supplier,
-                })
-              }
-              onDelete={() =>
-                setConfirm({
-                  entity: "suppliers",
-                  kind: "delete",
-                  row: supplier,
-                })
-              }
-            />
-          )}
+          columns={getSupplierColumns({
+            canEdit: hasAdminAction("suppliers", "edit"),
+            canDelete: hasAdminAction("suppliers", "delete"),
+            onEdit: (supplier: any) => openEdit(supplier.id),
+            onStatus: (supplier: any) =>
+              setConfirm({ entity: "suppliers", kind: "status", row: supplier }),
+            onDelete: (supplier: any) =>
+              setConfirm({ entity: "suppliers", kind: "delete", row: supplier }),
+          })}
+          onRowClick={
+            hasAdminAction("suppliers", "edit")
+              ? (supplier: any) => openDetail(supplier.id)
+              : undefined
+          }
         />
       )}
       {section === "suppliers" && view === "create" && (
@@ -822,44 +906,25 @@ export function TenantAdmin({
         <ListCard
           title="Tax Rules"
           rows={filteredTaxes}
-          searchKeys={["name", "tax_label", "service_scope", "id"]}
           createLabel="Create Tax Rule"
           canCreate={hasAdminAction("tax", "create")}
           onCreate={openCreate}
-          onRefresh={data.reload}
           loading={data.busy}
-          columns={TAX_RULE_COLUMNS}
-          filters={[
-            {
-              key: "status",
-              label: "Status",
-              options: status_options,
-            },
-          ]}
-          onFilterChange={(key: string, value: string) => {
-            setTaxFilter((prev) => ({
-              ...prev,
-              [key]: value,
-            }));
-          }}
-          filterValues={taxFilter}
-          render={(rule: any) => (
-            <TaxRuleRow
-              key={rule.id}
-              rule={rule}
-              canEdit={hasAdminAction("tax", "edit")}
-              canDelete={hasAdminAction("tax", "delete")}
-              branches={data.branches}
-              onEdit={() => openEdit(rule.id)}
-              onRowClick={() => openDetail(rule.id)}
-              onStatus={() =>
-                setConfirm({ entity: "tax", kind: "status", row: rule })
-              }
-              onDelete={() =>
-                setConfirm({ entity: "tax", kind: "status", row: rule })
-              }
-            />
-          )}
+          columns={getTaxRuleColumns({
+            branches: data.branches,
+            canEdit: hasAdminAction("tax", "edit"),
+            canDelete: hasAdminAction("tax", "delete"),
+            onEdit: (rule: any) => openEdit(rule.id),
+            onStatus: (rule: any) =>
+              setConfirm({ entity: "tax", kind: "status", row: rule }),
+            onDelete: (rule: any) =>
+              setConfirm({ entity: "tax", kind: "status", row: rule }),
+          })}
+          onRowClick={
+            hasAdminAction("tax", "edit")
+              ? (rule: any) => openDetail(rule.id)
+              : undefined
+          }
         />
       )}
       {section === "tax" && view === "create" && (
@@ -892,44 +957,25 @@ export function TenantAdmin({
         <ListCard
           title="Discounts & Offers"
           rows={filteredOffers}
-          searchKeys={["name", "code", "service_scope", "discount_type", "id"]}
           createLabel="Create Offer"
           canCreate={hasAdminAction("discounts", "create")}
           onCreate={openCreate}
-          onRefresh={data.reload}
           loading={data.busy}
-          columns={DISCOUNT_OFFER_COLUMNS}
-          filters={[
-            {
-              key: "status",
-              label: "Status",
-              options: status_options,
-            },
-          ]}
-          onFilterChange={(key: string, value: string) => {
-            setOfferFilter((prev) => ({
-              ...prev,
-              [key]: value,
-            }));
-          }}
-          filterValues={offerFilter}
-          render={(offer: any) => (
-            <DiscountOfferRow
-              key={offer.id}
-              offer={offer}
-              canEdit={hasAdminAction("discounts", "edit")}
-              canDelete={hasAdminAction("discounts", "delete")}
-              branches={data.branches}
-              onEdit={() => openEdit(offer.id)}
-              onRowClick={() => openDetail(offer.id)}
-              onStatus={() =>
-                setConfirm({ entity: "offers", kind: "status", row: offer })
-              }
-              onDelete={() =>
-                setConfirm({ entity: "offers", kind: "status", row: offer })
-              }
-            />
-          )}
+          columns={getDiscountOfferColumns({
+            branches: data.branches,
+            canEdit: hasAdminAction("discounts", "edit"),
+            canDelete: hasAdminAction("discounts", "delete"),
+            onEdit: (offer: any) => openEdit(offer.id),
+            onStatus: (offer: any) =>
+              setConfirm({ entity: "offers", kind: "status", row: offer }),
+            onDelete: (offer: any) =>
+              setConfirm({ entity: "offers", kind: "status", row: offer }),
+          })}
+          onRowClick={
+            hasAdminAction("discounts", "edit")
+              ? (offer: any) => openDetail(offer.id)
+              : undefined
+          }
         />
       )}
       {section === "offers" && view === "create" && (
@@ -945,7 +991,9 @@ export function TenantAdmin({
         (view === "edit" || view === "view") &&
         selectedOffer && (
           <DiscountOfferForm
-            title={view === "view" ? "View Discount Offer" : "Edit Discount Offer"}
+            title={
+              view === "view" ? "View Discount Offer" : "Edit Discount Offer"
+            }
             offer={selectedOffer}
             branches={data.branches}
             busy={data.busy}
@@ -1027,12 +1075,46 @@ export function TenantAdmin({
           downloadMonthlyReport={actions.downloadMonthlyReport}
         />
       )}
-      {section === "whatsapp" && whatsappModuleEnabled && (
-        <WhatsAppIntegrationSettings apiSession={apiSession} />
+      {section === "patient-intelligence" &&
+        clinic?.modules?.includes("patient_intelligence") && (
+          <PatientIntelligenceSettings apiSession={apiSession} />
+        )}
+      {section === "patient-intelligence" &&
+        !clinic?.modules?.includes("patient_intelligence") && (
+          <Card>
+            <h3 className="card-title font-bold">Patient Intelligence</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              This module is not enabled by the tenant&apos;s active
+              subscription.
+            </p>
+          </Card>
+        )}
+      {visitedWhatsAppSettings && whatsappModuleEnabled && (
+        <div className={section === "whatsapp" ? "" : "hidden"}>
+          <WhatsAppIntegrationSettings apiSession={apiSession} />
+        </div>
       )}
       {section === "whatsapp" && !whatsappModuleEnabled && (
         <Card>
           <h3 className="card-title font-bold">WhatsApp Settings</h3>
+          <p className="mt-2 text-sm text-slate-500">
+            This module is not enabled by the tenant&apos;s active subscription.
+          </p>
+        </Card>
+      )}
+      {visitedSmsSettings && smsModuleEnabled && (
+        <div className={section === "sms" ? "" : "hidden"}>
+          <SmsIntegrationSettings apiSession={apiSession} />
+        </div>
+      )}
+      {visitedEmailSettings && (
+        <div className={section === "email" ? "" : "hidden"}>
+          <EmailIntegrationSettings apiSession={apiSession} />
+        </div>
+      )}
+      {section === "sms" && !smsModuleEnabled && (
+        <Card>
+          <h3 className="card-title font-bold">SMS Settings</h3>
           <p className="mt-2 text-sm text-slate-500">
             This module is not enabled by the tenant&apos;s active subscription.
           </p>

@@ -47,8 +47,11 @@ export function useTenantAdminData(apiSession: any, clinic: any) {
   const [reportFilters, setReportFilters] = useState<any>({
     overall: true,
     doctor: true,
+    vendor: true,
     department: true,
     invoice: true,
+    collections: true,
+    include_patient_details: false,
   });
   const [reportJobs, setReportJobs] = useState<any[]>([]);
 
@@ -178,14 +181,16 @@ export function useTenantAdminData(apiSession: any, clinic: any) {
         setReportRecipients((reportConfig.recipients || []).join(","));
         setReportCc((reportConfig.cc || []).join(","));
         setReportSendDay(Number(reportConfig.send_day || 1));
-        setReportFilters(
-          reportConfig.filters || {
+        setReportFilters({
             overall: true,
             doctor: true,
+            vendor: true,
             department: true,
             invoice: true,
-          },
-        );
+            collections: true,
+            include_patient_details: false,
+            ...(reportConfig.filters || {}),
+        });
       }
       setReportJobs(reportJobRows || []);
     } catch (err: any) {

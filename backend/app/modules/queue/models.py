@@ -26,6 +26,8 @@ class QueueEntry(SQLModel, table=True):
     missed_call_count: int = Field(default=0, ge=0)
     called_at: datetime | None = None
     completed_at: datetime | None = None
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -41,4 +43,5 @@ class QueueEvent(SQLModel, table=True):
     to_status: AppointmentStatus = Field(index=True)
     reason: str | None = Field(default=None, max_length=500)
     actor_user_id: str | None = Field(default=None, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)

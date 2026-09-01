@@ -8,7 +8,7 @@ export type NotificationTarget = {
 const TARGET_KEY = "medizinhub.notificationTarget";
 
 const MENTION_MODULE_BY_RESOURCE: Record<string, string> = {
-  appointment: "appointments",
+  appointment: "opd",
   consultation: "consultation",
   patient: "patients",
   invoice: "billing",

@@ -5,25 +5,48 @@ import { useRouter } from "next/navigation";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { humanizeOptionLabel } from "@/lib/options";
 import { today } from "@/utils/helper";
+import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { emptyLine, homeCareHourPrices } from "./constants";
-import { isBookingLocked, patientCode, userName } from "./helpers";
+import { bookingTotal, isBookingLocked, patientCode, userName } from "./helpers";
 import { BookingsList } from "./components/BookingList";
 import { InvoiceCard } from "./components/InvoiceCard";
 import { BookingForm } from "@/features/home-care/forms/HomeCareForms";
 import { patientName } from "@/utils/helper";
-import { StatusToast } from "@/app/components/common/ui";
+import { Input, RefreshButton, StatusToast } from "@/app/components/common/ui";
+import { FormField } from "@/app/components/FormElements";
 import { BookingDetail } from "./components/BookingDetail";
 import { pageSize } from "@/utils/constants";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import {
   useHomeCareActions,
   useHomeCareBookingDetail,
   useHomeCareData,
 } from "./api";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import { BreadcrumbSlot, useShellChrome } from "@/features/shell/AppShell";
+import { getHomeCareTableSchema, getHomeCareQueryFields } from "./filterSchema";
+import { sortRows } from "@/utils/sortRows";
+import { applyQueryFilters, type QueryFilterRow } from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
+import { HeartPulse, Home, MapPin, PlusCircle } from "lucide-react";
+import DataHeader from "@/app/components/common/DataHeader";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
+
+function bookingTypeOf(booking: any): "home_care" | "home_visit" {
+  if (booking.booking_type === "home_visit") return "home_visit";
+  if (booking.booking_type === "home_care") return "home_care";
+  return (booking.services || []).some(
+    (service: any) => service.service_category === "home_visit_service",
+  )
+    ? "home_visit"
+    : "home_care";
+}
 
 export function HomeCare({
   apiSession,
@@ -34,6 +57,11 @@ export function HomeCare({
   selectedId = "",
 }: any) {
   const router = useRouter();
+  const { beginNavigation } = useShellChrome();
+  const navigateHomeCare = (path: string) => {
+    beginNavigation("home_care", path);
+    router.push(path);
+  };
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   // const [view, setView] = useState<View>("list");
   const {
@@ -52,11 +80,18 @@ export function HomeCare({
   const [busy, setBusy] = useState("");
   const [filters, setFilters] = useState({
     query: "",
-    status: "all",
     fromDate: "",
     toDate: "",
   });
+  const [sort, setSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [page, setPage] = useState(1);
+  const [bookingTypeTab, setBookingTypeTab] = useState<
+    "home_care" | "home_visit"
+  >("home_care");
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
   const [confirmAction, setConfirmAction] = useState<any>(null);
   const userPermissions = apiSession?.user?.permissions || [];
@@ -125,9 +160,16 @@ export function HomeCare({
     router.replace("/home_care");
   }, [view, selectedId, loading, selected, router]);
 
+  const homeCareQueryFields = useMemo(
+    () => getHomeCareQueryFields({ rows: bookings }),
+    [bookings],
+  );
   const filteredBookings = useMemo(
     () =>
-      bookings.filter((booking: any) => {
+      sortRows(
+        applyQueryFilters(
+          bookings.filter((booking: any) => {
+        if (bookingTypeOf(booking) !== bookingTypeTab) return false;
         const patient: any = patientMap.get(booking.patient_id);
         const assigned: any = staffMap.get(booking.assigned_staff_user_id);
         const haystack = [
@@ -138,10 +180,6 @@ export function HomeCare({
           patientCode(patient),
           patient?.mobile,
           patient?.alternate_mobile,
-          patient?.guardian_name,
-          patient?.guardian,
-          patient?.guardian_mobile,
-          patient?.guardianMobile,
           patient?.area,
           patient?.address,
           booking.assigned_staff_name || userName(assigned),
@@ -156,8 +194,6 @@ export function HomeCare({
           .trim()
           .toLowerCase();
         if (query && !haystack.includes(query)) return false;
-        if (filters.status !== "all" && booking.status !== filters.status)
-          return false;
         const from = filters.fromDate
           ? new Date(filters.fromDate).getTime()
           : null;
@@ -175,8 +211,31 @@ export function HomeCare({
         if (to !== null && bookingStart !== null && bookingStart > to)
           return false;
         return true;
-      }),
-    [bookings, filters, patientMap, staffMap],
+        }),
+          homeCareQueryFields,
+          queryFilters,
+        ),
+        sort,
+        (booking, key) => {
+          if (key === "patient")
+            return (
+              booking.patient_name || patientName(patientMap.get(booking.patient_id))
+            );
+          if (key === "date_range") return booking.start_date;
+          if (key === "total") return bookingTotal(booking);
+          return booking[key];
+        },
+      ),
+    [
+      bookings,
+      bookingTypeTab,
+      filters,
+      sort,
+      patientMap,
+      staffMap,
+      homeCareQueryFields,
+      queryFilters,
+    ],
   );
   const totalPages = Math.max(1, Math.ceil(filteredBookings.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -184,6 +243,8 @@ export function HomeCare({
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
+
+  const homeCareSchema = getHomeCareTableSchema();
 
   const { invoiceDetail, setInvoiceDetail } = useHomeCareBookingDetail({
     apiSession,
@@ -210,7 +271,7 @@ export function HomeCare({
     setBusy,
     setError,
     setMessage,
-    navigateToView: (id: string) => router.push(`/home_care/${id}`),
+    navigateToView: (id: string) => navigateHomeCare(`/home_care/${id}`),
     setInvoiceDetail,
     load,
   });
@@ -220,11 +281,11 @@ export function HomeCare({
     const target = readNotificationTarget("home_care_booking");
     if (!target || !bookings.some((row: any) => row.id === target.resourceId))
       return;
-    router.push(`/home_care/${target.resourceId}`);
+    navigateHomeCare(`/home_care/${target.resourceId}`);
   }, [apiSession?.tenantId, bookings.length, view, router]);
   useEffect(() => {
     setPage(1);
-  }, [filters.query, filters.status, filters.fromDate, filters.toDate]);
+  }, [bookingTypeTab, filters.query, filters.fromDate, filters.toDate]);
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
@@ -288,38 +349,51 @@ export function HomeCare({
   }
 
   function openCreate() {
-    resetForm();
-    router.push("/home_care/new");
+    resetForm(bookingTypeTab);
+    navigateHomeCare(`/home_care/${newSegment("visit")}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function openView(booking: any) {
-    router.push(`/home_care/${booking.id}`);
+    navigateHomeCare(`/home_care/${booking.id}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function openInvoice(booking: any) {
-    router.push(`/home_care/${booking.id}/invoice`);
+    navigateHomeCare(`/home_care/${booking.id}/invoice`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function goToInvoiceModule(invoiceId: string) {
+  function goToInvoiceModule(
+    invoiceId: string,
+    section = "invoice-items",
+  ) {
     if (!invoiceId) return;
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem("medizinhub.billingInvoiceId", invoiceId);
+      window.sessionStorage.setItem(
+        "medizinhub.billingInvoiceSection",
+        section,
+      );
     }
     if (setActive) setActive("billing");
   }
 
+  async function generateInvoiceAndOpenPayment() {
+    const detail = await generateInvoice();
+    const invoiceId = detail?.invoice?.id;
+    if (invoiceId) goToInvoiceModule(invoiceId, "invoice-payment");
+  }
+
   function startEdit(booking: any) {
     if (isBookingLocked(booking)) {
-      router.push(`/home_care/${booking.id}`);
+      navigateHomeCare(`/home_care/${booking.id}`);
       setError(
         `This booking is ${humanizeOptionLabel(booking.status)} and can no longer be edited.`,
       );
       return;
     }
-    router.push(`/home_care/${booking.id}/edit`);
+    navigateHomeCare(`/home_care/${booking.id}/${editSegment("visit")}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -350,12 +424,25 @@ export function HomeCare({
     );
   }, [view, selectedId, editing]);
 
-  function resetForm() {
-    setLineItems([{ ...emptyLine }]);
+  function resetForm(type: "home_care" | "home_visit" = "home_care") {
+    const firstVisitService = visitServices[0];
+    setLineItems([
+      type === "home_visit" && firstVisitService
+        ? {
+            ...emptyLine,
+            service_id: firstVisitService.id,
+            description: firstVisitService.name,
+            quantity: "1",
+            unit_amount: String(firstVisitService.default_price || 0),
+          }
+        : type === "home_visit"
+          ? { ...emptyLine, quantity: "1", unit_amount: "0" }
+          : { ...emptyLine },
+    ]);
   }
 
   function backToList() {
-    router.push("/home_care");
+    navigateHomeCare("/home_care");
   }
 
   const isFormView = view === "create" || view === "edit";
@@ -370,26 +457,122 @@ export function HomeCare({
       <StatusToast message={error} onClose={() => setError("")} />
 
       {view === "list" && (
-        <BookingsList
-          bookings={pagedBookings}
-          total={filteredBookings.length}
-          page={safePage}
-          totalPages={totalPages}
-          onPage={setPage}
-          filters={filters}
-          setFilters={setFilters}
-          patientMap={patientMap}
-          staffMap={staffMap}
-          loading={loading}
-          onRefresh={load}
-          onCreate={openCreate}
-          onView={openView}
-          onEdit={startEdit}
-          onInvoice={openInvoice}
-          canManage={canManageBooking}
-          canCreate={canCreateBooking}
-          canCopyIds={canCopyIds}
-        />
+        <BreadcrumbSlot>
+          <div className="flex items-center gap-2">
+            <AdaptiveResultCount
+              shown={pagedBookings.length}
+              total={filteredBookings.length}
+              noun="bookings"
+            />
+            <RefreshButton
+              onRefresh={load}
+              className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+            />
+            <AdaptiveFilterTrigger
+              schema={homeCareSchema}
+              query={filters.query}
+              setQuery={(value: string) => setFilters({ ...filters, query: value })}
+              filterValues={filters}
+              onFilterChange={(key: string, value: string) =>
+                setFilters({ ...filters, [key]: value })
+              }
+              sort={sort}
+              onSortChange={setSort}
+              showSort={false}
+              onReset={() => {
+                setFilters({ query: "", fromDate: "", toDate: "" });
+                setSort(null);
+              }}
+              queryFields={homeCareQueryFields}
+              queryFilters={queryFilters}
+              onQueryFiltersChange={setQueryFilters}
+            >
+              {/* <FormField label="From">
+                <Input
+                  type="date"
+                  value={filters.fromDate}
+                  onChange={(event: any) =>
+                    setFilters({ ...filters, fromDate: event.target.value })
+                  }
+                />
+              </FormField>
+              <FormField label="To">
+                <Input
+                  type="date"
+                  value={filters.toDate}
+                  onChange={(event: any) =>
+                    setFilters({ ...filters, toDate: event.target.value })
+                  }
+                />
+              </FormField> */}
+            </AdaptiveFilterTrigger>
+            <AdaptiveSortTrigger
+              fields={homeCareSchema.sortFields}
+              sort={sort}
+              onSortChange={setSort}
+            />
+          </div>
+        </BreadcrumbSlot>
+      )}
+
+      {view === "list" && (
+        <div className="space-y-3">
+          <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <DataHeader
+             title="Home Care / Visit Workspace"
+             description="Patient bookings, scheduled services, visits and billing in one workspace"
+             cardIcon={HeartPulse}
+             canCreate={canCreateBooking}
+             buttonText="New Booking"
+             open={openCreate}
+             count={String(filteredBookings.length)}
+            />
+            <StatusTabsNav
+              ariaLabel="Home care workspace sections"
+              activeId={bookingTypeTab}
+              onSelect={(id) =>
+                setBookingTypeTab(id as "home_care" | "home_visit")
+              }
+              tabs={[
+                {
+                  id: "home_care" as const,
+                  label: "Home Care",
+                  icon: Home,
+                  count: bookings.filter(
+                    (booking: any) => bookingTypeOf(booking) === "home_care",
+                  ).length,
+                },
+                {
+                  id: "home_visit" as const,
+                  label: "Home Visits",
+                  icon: MapPin,
+                  count: bookings.filter(
+                    (booking: any) => bookingTypeOf(booking) === "home_visit",
+                  ).length,
+                },
+              ]}
+            />
+          </section>
+          <BookingsList
+            bookings={pagedBookings}
+            total={filteredBookings.length}
+            page={safePage}
+            totalPages={totalPages}
+            onPage={setPage}
+            sort={sort}
+            onSortChange={setSort}
+            patientMap={patientMap}
+            staffMap={staffMap}
+            loading={loading}
+            onCreate={openCreate}
+            onView={openView}
+            onEdit={startEdit}
+            onInvoice={openInvoice}
+            canManage={canManageBooking}
+            canCreate={canCreateBooking}
+            canCopyIds={canCopyIds}
+          />
+        </div>
       )}
 
       {isFormView && (
@@ -400,6 +583,7 @@ export function HomeCare({
           visitServices={visitServices}
           serviceLoadError={serviceLoadError}
           editing={editing}
+          initialBookingType={bookingTypeTab}
           branchId={branchId}
           busy={busy === "save"}
           patientCreateBusy={busy === "patient"}
@@ -433,14 +617,14 @@ export function HomeCare({
             })
           }
           onStatusChange={updateBookingStatus}
-          onInvoice={() => selected && openInvoice(selected)}
+          onInvoice={generateInvoiceAndOpenPayment}
           canManage={canManageBooking}
           canCreateVisit={canCreateBooking}
           canCopyIds={canCopyIds}
           apiSession={apiSession}
           onOpenInvoiceModule={() =>
             invoiceDetail?.invoice &&
-            goToInvoiceModule(invoiceDetail.invoice.id)
+            goToInvoiceModule(invoiceDetail.invoice.id, "invoice-payment")
           }
         />
       )}

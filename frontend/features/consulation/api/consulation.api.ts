@@ -41,6 +41,36 @@ export function listClinicalTemplates(
   );
 }
 
+export function createClinicalTemplate(session: ApiSession, payload: any) {
+  return apiFetch("/consultations/clinical-templates", session, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateClinicalTemplate(
+  session: ApiSession,
+  templateId: string,
+  payload: any,
+) {
+  return apiFetch(
+    `/consultations/clinical-templates/${encodeURIComponent(templateId)}`,
+    session,
+    { method: "PATCH", body: JSON.stringify(payload) },
+  );
+}
+
+export function deleteClinicalTemplate(
+  session: ApiSession,
+  templateId: string,
+) {
+  return apiFetch(
+    `/consultations/clinical-templates/${encodeURIComponent(templateId)}`,
+    session,
+    { method: "DELETE" },
+  );
+}
+
 export function listAvailableMedicines(
   session: ApiSession,
   search?: string,
@@ -66,14 +96,6 @@ export function listAvailableLabTests(
     `/lab/catalog/available-tests${params.toString() ? `?${params}` : ""}`,
     session,
   );
-}
-
-export function listPopularMedicines(session: ApiSession) {
-  return apiFetch("/pharmacy/catalog/popular-medicines", session);
-}
-
-export function listPopularLabTests(session: ApiSession) {
-  return apiFetch("/lab/catalog/popular-tests", session);
 }
 
 export function callQueueToken(

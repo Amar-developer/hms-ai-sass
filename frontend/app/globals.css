@@ -8,12 +8,12 @@
 /*
  * Global theme tokens. Change a value here and every component that uses the
  * matching semantic Tailwind color (bg-success-soft, text-danger-fg, bg-brand, …)
- * updates across the whole app. Brand stays near-black slate.
+ * updates across the whole app. Emerald is the primary clinical action color.
  */
 :root {
   /* Brand / primary */
-  --brand: #0f172a;          /* slate-900 */
-  --brand-hover: #1e293b;    /* slate-800 */
+  --brand: #047857;          /* emerald-700 */
+  --brand-hover: #065f46;    /* emerald-800 */
   --brand-fg: #ffffff;
 
   /* Success */
@@ -46,11 +46,15 @@
 }
 
 @layer components {
-  .table-status {
+  .normal-badge {
     @apply rounded-full text-xs lg:text-sm py-1 px-1 font-normal;
   }
 }
-
+@layer components {
+  .global-bg{
+    @apply bg-[#f4f6f5d9]
+  }
+}
 @layer components {
   .table-data {
     @apply text-xs lg:text-sm;
@@ -79,7 +83,21 @@
 
 @layer components {
   .save-button {
-    @apply rounded-lg px-4 py-2 lg:px-4 lg:py-2.5 md:text-sm lg:text-xs
+    @apply rounded-lg bg-brand px-4 py-2 text-brand-fg hover:bg-brand-hover lg:px-4 lg:py-2.5 md:text-sm lg:text-xs
+  }
+}
+
+@layer components {
+  .primary-action {
+    @apply inline-flex items-center justify-center rounded-lg bg-brand px-4 font-bold text-brand-fg transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-slate-300;
+  }
+
+  .secondary-action {
+    @apply inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 font-bold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:text-slate-300;
+  }
+
+  .danger-action {
+    @apply inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-4 font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-300;
   }
 }
 
@@ -125,6 +143,11 @@
   }
 }
 @layer components {
+  .normal-label {
+    @apply px-2 py-0.5 text-[10px]  rounded-lg;
+  }
+}
+@layer components {
   .card-badge {
     @apply p-2 text-xs rounded-full;
   }
@@ -139,7 +162,7 @@
 
 
 body {
-  background: #ffffff;
+  background: #f4f6f5d9;
   font-family: "Poppins", "Segoe UI", Arial, sans-serif;
 }
 
@@ -191,6 +214,12 @@ body {
   @apply block truncate w-full;
 }
 
+.table-width{
+  @apply w-full min-w-[700px] scrollbar-hidden
+}
+.table-wrapper-width {
+  @apply w-full min-w-[700px] mt-3
+}
 /* The doctor consultation prescription renders into this portal target
    instead of the app tree, then gets captured to a PDF via html2canvas (see
    exportPrescriptionPdf) and downloaded directly — no window.print() dialog,
@@ -297,9 +326,103 @@ body {
   }
 }
 
+.brand-loader-logo {
+  filter: drop-shadow(0 8px 18px rgb(2 160 216 / 0.1));
+}
+
+.brand-loader-stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.brand-loader-stroke-left {
+  animation: brand-loader-draw-left 2.25s ease-in-out infinite;
+}
+
+.brand-loader-stroke-right {
+  animation: brand-loader-draw-right 2.25s ease-in-out infinite;
+}
+
+.brand-loader-details {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: brand-loader-show-details 2.25s ease-in-out infinite;
+}
+
+@keyframes brand-loader-draw-left {
+  0%,
+  8% {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+  14% {
+    opacity: 1;
+  }
+  52%,
+  88% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes brand-loader-draw-right {
+  0%,
+  18% {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+  24% {
+    opacity: 1;
+  }
+  62%,
+  88% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes brand-loader-show-details {
+  0%,
+  55% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  68%,
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
-  .skeleton-shimmer::after {
+  .skeleton-shimmer::after,
+  .brand-loader-stroke-left,
+  .brand-loader-stroke-right,
+  .brand-loader-details {
     animation: none;
+  }
+
+  .brand-loader-stroke {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+
+  .brand-loader-details {
+    opacity: 1;
+    transform: none;
   }
 }

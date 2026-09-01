@@ -5,6 +5,7 @@ from sqlmodel import Session
 
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
 from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
@@ -13,8 +14,11 @@ from app.modules.patients.models import Gender, Patient, PatientAlert, PatientSt
 from app.modules.patients.schemas import (
     PatientAlertCreate,
     PatientAlertRead,
+    PatientCommunicationRead,
     PatientCreate,
     PatientDuplicateCandidate,
+    PatientFamilyRelationshipCreate,
+    PatientFamilyRelationshipRead,
     PatientRead,
     PatientSearchResult,
     PatientSummary,
@@ -107,6 +111,8 @@ def search_patient_page(
     gender: Gender | None = Query(default=None),
     from_date: date | None = Query(default=None),
     to_date: date | None = Query(default=None),
+    filters: str | None = Query(default=None, max_length=8000),
+    sort: str | None = Query(default=None, max_length=1000),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
     session: Session = Depends(get_session),
@@ -120,8 +126,26 @@ def search_patient_page(
         gender=gender,
         from_date=from_date,
         to_date=to_date,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
         offset=offset,
         limit=limit,
+    )
+
+
+@router.get(
+    "/filter-options",
+    response_model=dict[str, list[ListFilterOption]],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
+def patient_filter_options(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> dict[str, list[ListFilterOption]]:
+    return PatientService(session).patient_filter_options(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
     )
 
 
@@ -162,6 +186,22 @@ def patient_count(
 
 
 @router.get(
+    "/{patient_id}/communications",
+    response_model=list[PatientCommunicationRead],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
+def patient_communications(
+    patient_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    limit: int = Query(default=50, ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> list[PatientCommunicationRead]:
+    return PatientService(session).patient_communications(
+        tenant_id=tenant_id, patient_id=patient_id, limit=limit
+    )
+
+
+@router.get(
     "/{patient_id}",
     response_model=PatientRead,
 )
@@ -177,7 +217,7 @@ def get_patient(
         )
     ),
     session: Session = Depends(get_session),
-) -> Patient:
+) -> PatientRead:
     return PatientService(session).get_patient(
         tenant_id=tenant_id, patient_id=patient_id, actor=current_user
     )
@@ -252,6 +292,61 @@ def list_patient_alerts(
 ) -> list[PatientAlert]:
     return PatientService(session).list_alerts(
         tenant_id=tenant_id, patient_id=patient_id
+    )
+
+
+@router.get(
+    "/{patient_id}/family-relationships",
+    response_model=list[PatientFamilyRelationshipRead],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
+def list_patient_family_relationships(
+    patient_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+) -> list[PatientFamilyRelationshipRead]:
+    return PatientService(session).list_family_relationships(
+        tenant_id=tenant_id, patient_id=patient_id
+    )
+
+
+@router.post(
+    "/{patient_id}/family-relationships",
+    response_model=PatientFamilyRelationshipRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission(permissions.PATIENTS_EDIT))],
+)
+def create_patient_family_relationship(
+    patient_id: str,
+    payload: PatientFamilyRelationshipCreate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_permission(permissions.PATIENTS_EDIT)),
+    session: Session = Depends(get_session),
+) -> PatientFamilyRelationshipRead:
+    return PatientService(session).create_family_relationship(
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.delete(
+    "/{patient_id}/family-relationships/{relationship_id}",
+    dependencies=[Depends(require_permission(permissions.PATIENTS_EDIT))],
+)
+def delete_patient_family_relationship(
+    patient_id: str,
+    relationship_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_permission(permissions.PATIENTS_EDIT)),
+    session: Session = Depends(get_session),
+) -> dict[str, bool | str]:
+    return PatientService(session).delete_family_relationship(
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        relationship_id=relationship_id,
+        actor=current_user,
     )
 
 

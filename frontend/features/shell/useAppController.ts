@@ -13,7 +13,6 @@ import {
   fetchWithTimeout,
   type ApiSession,
 } from "@/lib/api";
-import { demoUsers, loginPresets } from "@/lib/authPresets";
 import { type LiveSummary, mapAppointment, mapPatient } from "@/lib/liveData";
 import { canOpenModule } from "@/lib/moduleAccess";
 import { fetchPatientReferences } from "@/features/patients/components/PatientSearchSelect";
@@ -45,6 +44,8 @@ import {
   tenantBranchesQueryKey,
   tenantDepartmentsQueryKey,
 } from "@/features/tenants/api/tenantReferenceQueries";
+import { parseNumberingRules } from "@/features/admin/constants";
+import { getResolvedSetting } from "@/features/settings/api/resolvedSettingQueries";
 
 const allModuleIds = nav.map(([id]) => id);
 const defaultEntitlementModuleIds = Array.from(
@@ -65,6 +66,7 @@ type WorkspaceState = {
   active?: string;
   branchId?: string;
   departmentId?: string;
+  lastPath?: string;
 };
 
 function workspaceKey(session: ApiSession) {
@@ -100,6 +102,7 @@ export function useAppController() {
   const [liveTenants, setLiveTenants] = useState<any[]>([]);
   const [doctorScope, setDoctorScope] = useState<any | null>(null);
   const [liveInvoices, setLiveInvoices] = useState<any[]>([]);
+  const [numberingRules, setNumberingRules] = useState<any>(null);
   const [enabledModules, setEnabledModules] = useState<string[]>(
     defaultEntitlementModuleIds,
   );
@@ -125,6 +128,13 @@ export function useAppController() {
     activeRef.current = value;
     setActive(value);
     if (apiSession) saveWorkspace(apiSession, { active: value });
+  }
+
+  function rememberWorkspacePath(path: string) {
+    if (!apiSession) return;
+    if (!path || !path.startsWith("/") || path.startsWith("//")) return;
+    if (path.startsWith("/login")) return;
+    saveWorkspace(apiSession, { lastPath: path });
   }
 
   function updateDepartment(value: string) {
@@ -268,7 +278,24 @@ export function useAppController() {
           [],
         )
       : Promise.resolve<any[]>([]);
-    const [tenantRows, branchRows, departmentRows] = await Promise.all([
+    const numberingRulesPromise = sessionHasAnyPermission(session, [
+      "settings.manage",
+      "settings.read",
+      "billing.manage",
+      "invoices.read",
+      "payments.manage",
+    ])
+      ? getResolvedSetting(
+          queryClient,
+          session,
+          "numbering",
+          "numbering.rules",
+        )
+          .then((setting: any) => parseNumberingRules(setting?.value, ""))
+          .catch(() => null)
+      : Promise.resolve(null);
+    const [tenantRows, branchRows, departmentRows, resolvedNumberingRules] =
+      await Promise.all([
       tenantRowsPromise,
       sessionHasAnyPermission(session, referenceReadPermissions)
         ? queryClient.fetchQuery({
@@ -296,8 +323,10 @@ export function useAppController() {
             staleTime: TENANT_REFERENCE_STALE_MS,
           })
         : Promise.resolve<any[]>([]),
+      numberingRulesPromise,
     ]);
     if (requestRevision !== liveDataRequestRef.current) return;
+    setNumberingRules(resolvedNumberingRules);
     const activeTenant = tenantRows.find(
       (tenant: any) => tenant.id === session.tenantId,
     );
@@ -684,17 +713,43 @@ export function useAppController() {
     window.addEventListener("unhandledrejection", handleUnhandled);
     window.addEventListener("error", handleWindowError);
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
-    const raw = localStorage.getItem("medizinhub.session");
-    if (raw) {
+    let cancelled = false;
+
+    async function restoreSession() {
+      const raw = localStorage.getItem("medizinhub.session");
+      if (!raw) {
+        if (!cancelled) setInitializing(false);
+        return;
+      }
       try {
         const saved = JSON.parse(raw);
         if (!saved.basePermissions) {
           saved.basePermissions = saved.user?.permissions || [];
         }
-        const workspace = readWorkspace(saved);
+        // Local storage is only a workspace snapshot. Prefer validating the
+        // HTTP-only cookie before mounting authenticated children such as
+        // notification polling. In local/dev reloads the cookie can be missing
+        // even while the saved bearer token is still valid, so fall back to the
+        // bearer token before treating the session as expired.
+        let freshUser;
+        try {
+          freshUser = await apiFetch("/auth/me", saved, {
+            suppressErrorReportStatuses: [401],
+            omitAuthorization: true,
+          });
+        } catch (error: any) {
+          if (error?.status !== 401 || !saved.accessToken) throw error;
+          freshUser = await apiFetch("/auth/me", saved, {
+            suppressErrorReportStatuses: [401],
+          });
+        }
+        if (cancelled) return;
+        const restored = { ...saved, user: freshUser };
+        localStorage.setItem("medizinhub.session", JSON.stringify(restored));
+        const workspace = readWorkspace(restored);
         const restoredActive =
           workspace.active ||
-          primaryWorkspaceSection(saved);
+          primaryWorkspaceSection(restored);
         const restoredBranchId = workspace.branchId || "";
         const restoredDepartmentId =
           workspace.departmentId || defaultDepartment.id;
@@ -704,24 +759,28 @@ export function useAppController() {
         setActive(restoredActive);
         setLiveBranchId(restoredBranchId);
         setDepartmentId(restoredDepartmentId);
-        setApiSession(saved);
+        setApiSession(restored);
         const savedRole =
-          saved.user?.roles?.[0] ||
-          (saved.user?.is_super_admin ? "super_admin" : "tenant_admin");
+          restored.user?.roles?.[0] ||
+          (restored.user?.is_super_admin ? "super_admin" : "tenant_admin");
         setRole(savedRole);
         setAuthenticated(true);
-        loadLiveData(saved, { initial: true }).catch((err: any) => {
+        void loadLiveData(restored, { initial: true }).catch((err: any) => {
           setLiveStatus(
             err.message || "Connected, but live data could not be loaded.",
           );
         });
       } catch {
-        localStorage.removeItem("medizinhub.session");
+        if (!cancelled) clearLocalSession("Session expired. Please sign in again.");
+      } finally {
+        if (!cancelled) setInitializing(false);
       }
     }
-    setInitializing(false);
+
+    void restoreSession();
 
     return () => {
+      cancelled = true;
       console.warn = originalConsoleWarn;
       console.error = originalConsoleError;
       window.removeEventListener("unhandledrejection", handleUnhandled);
@@ -823,7 +882,7 @@ export function useAppController() {
     // }, [apiSession?.tenantId]);
   }, [apiSession, apiSession?.tenantId]);
 
-  async function handleLogin(input: { email: string; password: string }) {
+  async function handleLogin(input: { identifier: string; password: string }) {
     setLiveStatus("Signing in...");
     let res: Response;
     try {
@@ -831,7 +890,10 @@ export function useAppController() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: input.email, password: input.password }),
+        body: JSON.stringify({
+          identifier: input.identifier,
+          password: input.password,
+        }),
       });
     } catch (error) {
       if (error instanceof RequestTimeoutError) {
@@ -864,6 +926,9 @@ export function useAppController() {
       try {
         tenantsRes = await fetchWithTimeout(`${API_BASE}/tenants`, {
           credentials: "include",
+          headers: body.access_token
+            ? { Authorization: `Bearer ${body.access_token}` }
+            : undefined,
         });
       } catch (error) {
         if (error instanceof RequestTimeoutError) {
@@ -889,7 +954,8 @@ export function useAppController() {
 
     const session: ApiSession = {
       tenantId,
-      email: input.email,
+      email: body.user?.email || input.identifier,
+      accessToken: body.access_token,
       basePermissions: body.user?.permissions || [],
       user: body.user,
     };
@@ -1050,6 +1116,7 @@ export function useAppController() {
   });
   const ctx = {
     clinic,
+    enabledModules,
     branch,
     branchId: effectiveBranchId,
     departmentId,
@@ -1064,6 +1131,7 @@ export function useAppController() {
     apiSession,
     loadLiveData: refreshLiveDataInBackground,
     liveInvoices,
+    numberingRules,
     isInitialLoading,
   };
   const permissionKeys = apiSession?.user?.permissions || [];
@@ -1078,14 +1146,12 @@ export function useAppController() {
     authenticated,
     initializing,
     authScreenProps: {
-      role,
-      setRole,
       onLogin: handleLogin,
-      demoUsers,
-      loginPresets,
     },
     shellProps: {
       active,
+      lastPath: apiSession ? readWorkspace(apiSession).lastPath : "",
+      rememberWorkspacePath,
       setActive: updateActive,
       nav,
       enabled,
@@ -1103,7 +1169,6 @@ export function useAppController() {
       doctorScope,
       apiSession,
       role,
-      demoUsers,
       liveStatus,
       showPassword,
       setShowPassword,

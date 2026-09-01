@@ -10,6 +10,7 @@ from app.modules.billing.models import (
     InvoiceStatus,
     Payment,
     SettlementStatus,
+    VendorSettlement,
 )
 
 
@@ -78,6 +79,44 @@ class BillingSettlementReportRepository:
                     DoctorSettlement.status == SettlementStatus.FINALIZED,
                 )
             ).all()
+        )
+
+    def list_doctor_settlements_for_period(
+        self, *, tenant_id: str, start: date, end: date
+    ) -> list[DoctorSettlement]:
+        return list(
+            self.session.exec(
+                select(DoctorSettlement)
+                .where(
+                    DoctorSettlement.tenant_id == tenant_id,
+                    DoctorSettlement.status == SettlementStatus.FINALIZED,
+                    DoctorSettlement.finalized_at >= datetime.combine(start, time.min),
+                    DoctorSettlement.finalized_at
+                    < datetime.combine(end + timedelta(days=1), time.min),
+                )
+                .order_by(DoctorSettlement.finalized_at)
+            ).all()
+        )
+
+    def list_vendor_settlements_for_period(
+        self,
+        *,
+        tenant_id: str,
+        start: date,
+        end: date,
+        supplier_id: str | None = None,
+    ) -> list[VendorSettlement]:
+        statement = select(VendorSettlement).where(
+            VendorSettlement.tenant_id == tenant_id,
+            VendorSettlement.status == "finalized",
+            VendorSettlement.finalized_at >= datetime.combine(start, time.min),
+            VendorSettlement.finalized_at
+            < datetime.combine(end + timedelta(days=1), time.min),
+        )
+        if supplier_id:
+            statement = statement.where(VendorSettlement.supplier_id == supplier_id)
+        return list(
+            self.session.exec(statement.order_by(VendorSettlement.finalized_at)).all()
         )
 
     def list_due_collection_invoices(

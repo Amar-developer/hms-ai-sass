@@ -113,7 +113,7 @@ export default function ReceiptPage() {
           type="button"
           onClick={() => void downloadPdf()}
           disabled={isExporting}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+          className="primary-action px-4 py-2 text-sm disabled:opacity-60"
         >
           {isExporting ? "Generating PDF…" : "Download PDF"}
         </button>

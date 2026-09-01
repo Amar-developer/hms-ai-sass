@@ -6,9 +6,11 @@ from app.infrastructure.integrations.adapters.email.smtp import SmtpEmailAdapter
 from app.infrastructure.integrations.adapters.messaging.http_template import (
     HttpTemplateMessageGateway,
 )
+from app.infrastructure.integrations.adapters.sms.smscountry import SmsCountryGateway
 from app.infrastructure.integrations.ports.cache import KeyValueStore
 from app.infrastructure.integrations.ports.email import EmailSender
 from app.infrastructure.integrations.ports.messaging import TemplateMessageGateway
+from app.infrastructure.integrations.ports.sms import SmsGateway
 
 
 def get_cache_store(
@@ -30,3 +32,9 @@ def get_email_sender(settings: Settings | None = None) -> EmailSender:
 
 def get_template_message_gateway() -> TemplateMessageGateway:
     return HttpTemplateMessageGateway()
+
+
+def get_sms_gateway(provider: str = "smscountry") -> SmsGateway:
+    if provider == "smscountry":
+        return SmsCountryGateway()
+    raise ValueError(f"Unsupported SMS provider: {provider}")

@@ -35,7 +35,7 @@ export async function openModule(page: Page, label: string) {
     await sidebarButton.click();
     return;
   }
-  const search = page.getByPlaceholder("Search a modules");
+  const search = page.getByPlaceholder("Search or type a command (Ctrl + G)");
   await search.fill(label);
   await page
     .getByRole("button", { name: label, exact: true })

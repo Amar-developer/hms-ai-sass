@@ -225,9 +225,8 @@ def create_patient(
     payload: dict[str, object] = {
         "branch_id": tenant.branch_id,
         "full_name": name,
+        "mobile": mobile or f"9{uuid4().int % 10**9:09d}",
     }
-    if mobile:
-        payload["mobile"] = mobile
     return assert_status(
         client.post("/patients", headers=tenant.admin.headers(), json=payload),
         201,

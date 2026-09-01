@@ -45,6 +45,11 @@ from app.modules.notifications.service import (
 
 logger = logging.getLogger(__name__)
 
+LOCKED_APPOINTMENT_STATUSES = {
+    AppointmentStatus.CANCELLED,
+    AppointmentStatus.NO_SHOW,
+}
+
 
 class ConsultationRecordService:
     """Manages the consultation note lifecycle: creation, updates, signing, and
@@ -97,6 +102,16 @@ class ConsultationRecordService:
         )
         return text or None
 
+    def _require_active_appointment(self, tenant_id: str, appointment_id: str) -> None:
+        appointment = self.references.get_appointment_for_tenant(
+            tenant_id, appointment_id
+        )
+        if appointment and appointment.status in LOCKED_APPOINTMENT_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cancelled or no-show appointments cannot be used for consultation",
+            )
+
     def _require_sign_ready(self, consultation: Consultation) -> None:
         missing: list[str] = []
         if not consultation.treatment_type or not consultation.treatment_type.strip():
@@ -147,6 +162,11 @@ class ConsultationRecordService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid appointment"
             )
+        if appointment.status in LOCKED_APPOINTMENT_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cancelled or no-show appointments cannot be used for consultation",
+            )
         require_user_branch_access(actor, appointment.branch_id)
         require_doctor_practitioner_access(
             self.session, tenant_id, actor, appointment.practitioner_id
@@ -167,9 +187,12 @@ class ConsultationRecordService:
                 "patient_id": appointment.patient_id,
                 "practitioner_id": appointment.practitioner_id,
                 "status": ConsultationStatus.DRAFT,
+                "created_by_user_id": payload.created_by_user_id or actor.id,
+                "updated_by_user_id": payload.created_by_user_id or actor.id,
             },
         )
         appointment.status = AppointmentStatus.IN_CONSULTATION
+        appointment.updated_by_user_id = actor.id
         self.consultations.add(consultation)
         self.references.add_appointment(appointment)
         try:
@@ -215,6 +238,7 @@ class ConsultationRecordService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Signed consultation records are immutable",
             )
+        self._require_active_appointment(tenant_id, consultation.appointment_id)
 
         update_fields = payload.model_dump(exclude_unset=True)
         audit_keys = {key for key in update_fields if key not in STRUCTURED_FIELD_NAMES}
@@ -232,8 +256,10 @@ class ConsultationRecordService:
             if key in STRUCTURED_FIELD_NAMES:
                 continue
             setattr(consultation, key, value)
+        now = datetime.now(timezone.utc)
         consultation.status = ConsultationStatus.IN_PROGRESS
-        consultation.updated_at = datetime.now(timezone.utc)
+        consultation.updated_at = now
+        consultation.updated_by_user_id = actor.id
         self.consultations.add(consultation)
         self.structured_rows.replace_from_payload(consultation, payload)
         self.session.commit()
@@ -282,6 +308,7 @@ class ConsultationRecordService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Consultation already signed",
             )
+        self._require_active_appointment(tenant_id, consultation.appointment_id)
         self._require_sign_ready(consultation)
 
         before = {
@@ -292,6 +319,7 @@ class ConsultationRecordService:
         now = datetime.now(timezone.utc)
         consultation.status = ConsultationStatus.SIGNED
         consultation.signed_by_user_id = actor.id
+        consultation.updated_by_user_id = actor.id
         consultation.signed_at = now
         consultation.updated_at = now
 
@@ -301,6 +329,7 @@ class ConsultationRecordService:
         if appointment:
             appointment.status = AppointmentStatus.CONSULTATION_COMPLETED
             appointment.updated_at = now
+            appointment.updated_by_user_id = actor.id
             self.references.add_appointment(appointment)
 
         queue_entry = self.references.get_queue_entry_for_appointment(
@@ -352,19 +381,6 @@ class ConsultationRecordService:
             tenant_id, consultation.patient_id
         )
         if consultation.follow_up_advice and patient:
-            queue_notification_if_allowed(
-                self.session,
-                tenant_id=tenant_id,
-                branch_id=consultation.branch_id,
-                provider=NotificationProvider.SMS,
-                event_type=NotificationEventType.FOLLOW_UP_REMINDER,
-                recipient=patient.mobile,
-                subject="Follow-up reminder",
-                message=consultation.follow_up_advice,
-                resource_type="consultation",
-                resource_id=consultation.id,
-                queued_by_user_id=actor.id,
-            )
             template_event = queue_whatsapp_template_if_allowed(
                 self.session,
                 tenant_id=tenant_id,

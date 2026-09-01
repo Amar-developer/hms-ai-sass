@@ -30,6 +30,10 @@ describe("PatientSearchSelect", () => {
         patient_number: "MHB-PAT-00044",
         mobile: "7339663139",
         status: "active",
+        intelligence_flags: [
+          { flag_key: "PREMIUM_PATIENT", category: "value", severity: "high", label: "Premium", background_color: "#ede9fe", text_color: "#5b21b6", border_color: "#c4b5fd", priority: 10 },
+          { flag_key: "ACTIVE_PATIENT", category: "engagement", severity: "positive" },
+        ],
       },
     ]);
     const onChange = vi.fn();
@@ -53,7 +57,10 @@ describe("PatientSearchSelect", () => {
     expect(apiFetchMock.mock.calls[0][0]).toContain(
       "/patients?q=Amarnath&active_only=true&limit=20",
     );
-    fireEvent.click(await screen.findByRole("button", { name: /Amarnath/i }));
+    const resultOption = await screen.findByRole("button", { name: /Amarnath/i });
+    expect(screen.getByText("Premium")).toBeTruthy();
+    expect(screen.queryByText("Active")).toBeNull();
+    fireEvent.click(resultOption);
 
     expect(onChange).toHaveBeenCalledWith("patient-44");
     view.rerender(

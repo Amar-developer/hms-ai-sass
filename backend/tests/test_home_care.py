@@ -5,7 +5,12 @@ from sqlmodel import Session, select
 
 from app.modules.audit.models import AuditEvent
 from app.modules.billing.models import Invoice
-from app.modules.home_care.models import HomeCareBooking
+from app.modules.home_care.models import HomeCareBooking, HomeCareService
+from app.modules.home_care.schemas import HomeCareBookingCreate
+from app.modules.home_care.services.booking_service import (
+    HomeCareBookingLifecycleService,
+)
+from app.modules.identity.models import User
 from app.modules.patients.models import Gender, Patient
 from app.modules.subscriptions.models import SubscriptionPlan, TenantSubscription
 from app.modules.tenants.models import Branch, Tenant, TenantStatus
@@ -50,6 +55,90 @@ def seed_home_care_tenant(test_engine):
         )
         session.commit()
         return tenant.id, branch.id, patient.id
+
+
+def test_booking_creation_queues_matching_confirmation_flow(test_engine, monkeypatch):
+    tenant_id, branch_id, patient_id = seed_home_care_tenant(test_engine)
+    captured = []
+    monkeypatch.setattr(
+        "app.modules.home_care.services.booking_service.queue_whatsapp_template_if_allowed",
+        lambda _session, **kwargs: captured.append(kwargs),
+    )
+
+    with Session(test_engine) as session:
+        actor = User(
+            tenant_id=tenant_id,
+            name="Home Care Admin",
+            email="homecare.admin@example.com",
+            user_type="tenant_admin",
+        )
+        visit_service = HomeCareService(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            code="HV-CONSULT",
+            name="Doctor Home Visit",
+            default_price=900,
+        )
+        session.add(actor)
+        session.add(visit_service)
+        session.commit()
+        session.refresh(actor)
+        session.refresh(visit_service)
+        lifecycle = HomeCareBookingLifecycleService(session)
+
+        home_care = lifecycle.create_booking(
+            tenant_id=tenant_id,
+            actor=actor,
+            payload=HomeCareBookingCreate.model_validate(
+                {
+                    "branch_id": branch_id,
+                    "patient_id": patient_id,
+                    "booking_type": "home_care",
+                    "recurrence": "daily",
+                    "start_date": "2026-08-28",
+                    "end_date": "2026-08-30",
+                    "location": "12 Home Street",
+                    "services": [
+                        {
+                            "description": "Complete Bed Bath",
+                            "quantity": 1,
+                            "unit_amount": 500,
+                        }
+                    ],
+                }
+            ),
+        )
+        home_visit = lifecycle.create_booking(
+            tenant_id=tenant_id,
+            actor=actor,
+            payload=HomeCareBookingCreate.model_validate(
+                {
+                    "branch_id": branch_id,
+                    "patient_id": patient_id,
+                    "booking_type": "home_visit",
+                    "recurrence": "daily",
+                    "start_date": "2026-08-28",
+                    "end_date": "2026-08-28",
+                    "location": "12 Home Street",
+                    "services": [{"service_id": visit_service.id, "quantity": 1}],
+                }
+            ),
+        )
+
+    assert [item["flow_key"] for item in captured] == [
+        "home_care_booking_patient",
+        "home_care_booking_patient",
+    ]
+    assert [item["resource_id"] for item in captured] == [
+        home_care.id,
+        home_visit.id,
+    ]
+    assert all(item["resource_type"] == "home_care_booking" for item in captured)
+    assert all(item["recipient"] is None for item in captured)
+    assert [item["dedupe_key"] for item in captured] == [
+        f"whatsapp:home_care_booking_patient:{home_care.id}:confirmed",
+        f"whatsapp:home_care_booking_patient:{home_visit.id}:confirmed",
+    ]
 
 
 def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine):

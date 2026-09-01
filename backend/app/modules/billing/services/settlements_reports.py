@@ -5,7 +5,7 @@ from sqlmodel import Session
 
 from app.core.access_control import enforce_entitlement, scoped_branch_id
 from app.modules.audit.service import record_audit_event
-from app.modules.billing.models import DoctorSettlement, InvoiceStatus
+from app.modules.billing.models import DoctorSettlement, InvoiceStatus, VendorSettlement
 from app.modules.billing.repositories.settlement_report_repository import (
     BillingSettlementReportRepository,
 )
@@ -16,11 +16,14 @@ from app.modules.billing.schemas import (
     DoctorSettlementSummary,
     DueCollectionReport,
     RevenueReport,
+    VendorSettlementFinalize,
+    VendorSettlementRead,
 )
 from app.modules.billing.services.membership import invoice_membership_service
 from app.modules.billing.services.money import ZERO, money_value
 from app.modules.billing.services.read_models import invoice_read
 from app.modules.identity.models import User
+from app.modules.pharmacy.models import PharmacySupplier
 from app.modules.subscriptions.service import enforce_module_enabled
 
 
@@ -90,6 +93,15 @@ def finalize_doctor_settlement(
     payload: DoctorSettlementFinalize,
     actor: User,
 ) -> DoctorSettlementRead:
+    if (
+        payload.period_start
+        and payload.period_end
+        and payload.period_end < payload.period_start
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Settlement period end must be on or after the start date.",
+        )
     summary = doctor_settlement_summary(
         session,
         tenant_id=tenant_id,
@@ -138,6 +150,11 @@ def finalize_doctor_settlement(
         total_paid_amount=summary.total_paid_amount,
         total_doctor_share=summary.total_doctor_share,
         settlement_amount=summary.payable_settlement_amount,
+        period_start=payload.period_start,
+        period_end=payload.period_end,
+        payment_method=payload.payment_method,
+        payment_reference=payload.payment_reference,
+        paid_at=payload.paid_at,
         finalized_by_user_id=actor.id,
     )
     session.add(settlement)
@@ -168,7 +185,70 @@ def finalize_doctor_settlement(
         status=settlement.status,
         finalized_by_user_id=settlement.finalized_by_user_id,
         finalized_at=settlement.finalized_at,
+        period_start=settlement.period_start,
+        period_end=settlement.period_end,
+        payment_method=settlement.payment_method,
+        payment_reference=settlement.payment_reference,
+        paid_at=settlement.paid_at,
     )
+
+
+def finalize_vendor_settlement(
+    session: Session,
+    *,
+    tenant_id: str,
+    payload: VendorSettlementFinalize,
+    actor: User,
+) -> VendorSettlementRead:
+    enforce_module_enabled(session, tenant_id, "billing_advanced")
+    branch_id = scoped_branch_id(actor, payload.branch_id)
+    if payload.period_end < payload.period_start:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Settlement period end must be on or after the start date.",
+        )
+    supplier = session.get(PharmacySupplier, payload.supplier_id)
+    if not supplier or supplier.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pharmacy supplier not found.",
+        )
+    payable = money_value(payload.gross_payable + payload.adjustment_amount)
+    if payable <= ZERO or money_value(payload.settlement_amount) > payable:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Settlement amount cannot exceed the adjusted gross payable.",
+        )
+    settlement = VendorSettlement(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        supplier_id=payload.supplier_id,
+        source_type=payload.source_type,
+        period_start=payload.period_start,
+        period_end=payload.period_end,
+        gross_payable=payload.gross_payable,
+        adjustment_amount=payload.adjustment_amount,
+        settlement_amount=payload.settlement_amount,
+        payment_method=payload.payment_method,
+        payment_reference=payload.payment_reference,
+        paid_at=payload.paid_at,
+        notes=payload.notes,
+        finalized_by_user_id=actor.id,
+    )
+    session.add(settlement)
+    session.commit()
+    session.refresh(settlement)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        actor_user_id=actor.id,
+        action="vendor_settlement.finalized",
+        resource_type="vendor_settlement",
+        resource_id=settlement.id,
+        purpose="vendor_settlement",
+    )
+    return VendorSettlementRead.model_validate(settlement)
 
 
 def due_collection_report(

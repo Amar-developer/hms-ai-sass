@@ -172,8 +172,17 @@ def main() -> None:
             for worker_results in executor.map(run_worker, range(worker_count))
             for result in worker_results
         ]
+    elapsed_seconds = time.perf_counter() - started
     summary = summarize(results)
-    summary["wall_seconds"] = round(time.perf_counter() - started, 2)
+    summary["wall_seconds"] = round(elapsed_seconds, 2)
+    # Latency says whether the requests that ran were fast; throughput says how
+    # many the system can retire per second, which is what capacity planning
+    # needs. Both were already being collected here — only the division was
+    # missing. Compare it against the concurrency used: a throughput that stops
+    # rising as concurrency increases means a saturated layer downstream.
+    summary["requests_per_second"] = (
+        round(len(results) / elapsed_seconds, 2) if elapsed_seconds > 0 else None
+    )
     summary["concurrency"] = worker_count
     summary["paths"] = paths
 
@@ -183,7 +192,7 @@ def main() -> None:
         print(
             "requests={requests} failures={failures} error_rate={error_rate:.2%} "
             "p50={p50_ms}ms p95={p95_ms}ms p99={p99_ms}ms max={max_ms}ms "
-            "wall={wall_seconds}s".format(**summary)
+            "wall={wall_seconds}s rps={requests_per_second}".format(**summary)
         )
         print(f"statuses={json.dumps(summary['statuses'], sort_keys=True)}")
 

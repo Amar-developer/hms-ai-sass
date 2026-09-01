@@ -20,6 +20,7 @@ import { SourceReferralFields } from "@/app/components/common/SourceReferralFiel
 import { formatDisplayTime } from "../helpers";
 import { visit_type_options } from "../constants";
 import { PatientIntakeSummary } from "./PatientIntakeSummary";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 function IntakeSuggestionChip({
   value,
@@ -112,40 +113,41 @@ export function AppointmentBookingFlow(props: any) {
     bookAppointment,
     booked,
     printTokenSlip,
+    openBookedAppointment,
   } = props;
 
   return (
-    <div className="space-y-5">
-      <Card>
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-          <div>
-            <h3 className="card-title font-bold">Book OP Appointment</h3>
-            <p className="card-desc text-slate-500">
-              Select or register the patient, then complete the appointment
-              details on this page.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={closeBooking}
-            className=" close-button font-bold"
-          >
-            Close
-          </button>
-        </div>
-        <StatusToast message={message} onClose={() => setMessage("")} />
-      </Card>
-
+    <div className="space-y-4">
       {bookingStep !== "success" && (
-        <Card>
-          <h4 className="card-title font-bold">Appointment Details</h4>
+        <Card className="p-3 bg-white">
+          <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center">
+            <div>
+              <h3 className="card-title font-bold">New OP Appointment</h3>
+              <p className="card-desc text-slate-500">
+                Select a patient and enter the four required visit details.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeBooking}
+              className="secondary-action h-9 text-xs"
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="mt-3 grid grid-cols-3 overflow-hidden rounded-lg border border-slate-200 text-[10px] font-bold uppercase tracking-wide">
+            <span className="bg-brand px-3 py-2 text-center text-brand-fg">1 · Patient</span>
+            <span className={`px-3 py-2 text-center ${selectedPatient ? "bg-emerald-50 text-emerald-800" : "bg-white text-slate-400"}`}>2 · Visit Details</span>
+            <span className="bg-white px-3 py-2 text-center text-slate-400">3 · Token</span>
+          </div>
+          <StatusToast message={message} onClose={() => setMessage("")} />
           <div className="mt-4">
-            <div className=" w-1/2">
+            <div className="w-full">
               <span className="mb-1 block text-sm font-bold uppercase tracking-wide text-slate-500 lg:text-xs">
                 Patient
               </span>
               {selectedPatient ? (
-                <div className="flex flex-col justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center ">
+                <div className="flex flex-col justify-   gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 sm:flex-row sm:items-center">
                   <div>
                     <b className="text-xs text-slate-900">
                       {selectedPatient.full_name}
@@ -155,10 +157,12 @@ export function AppointmentBookingFlow(props: any) {
                         ? `${selectedPatient.patient_number} · `
                         : ""}
                       {selectedPatient.mobile || "No mobile"} ·{" "}
-                      {selectedPatient.area ||
-                        selectedPatient.guardian_mobile ||
-                        "-"}
+                      {selectedPatient.area || "-"}
                     </p>
+                    <PatientFlagBadges
+                      patient={selectedPatient}
+                      className="mt-1"
+                    />
                   </div>
                   <button
                     type="button"
@@ -168,7 +172,7 @@ export function AppointmentBookingFlow(props: any) {
                       setBookingStep("appointment");
                       setPatientLookupOpen(true);
                     }}
-                    className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700"
+                    className="secondary-action h-9 text-xs"
                   >
                     Change Patient
                   </button>
@@ -267,6 +271,10 @@ export function AppointmentBookingFlow(props: any) {
                                 {patient.mobile || "No mobile"}
                                 {patient.area ? ` · ${patient.area}` : ""}
                               </span>
+                              <PatientFlagBadges
+                                patient={patient}
+                                className="mt-1"
+                              />
                             </span>
                             <span className="text-xs font-bold text-blue-600">
                               Select
@@ -315,13 +323,18 @@ export function AppointmentBookingFlow(props: any) {
 
           {bookingStep === "appointment" && selectedPatient && (
             <form
-              className="mt-5 border-t border-slate-100 pt-5"
+              className="mt-4 space-y-4"
               onSubmit={(event: any) => {
                 event.preventDefault();
                 bookAppointment();
               }}
             >
-              <div className="grid gap-3 md:grid-cols-4">
+              <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                <div className="mb-3">
+                  <h4 className="text-sm font-black text-slate-950">Visit Details</h4>
+                  <p className="text-xs text-slate-500">Choose the department, doctor, visit type, date, and source.</p>
+                </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <FormField label="Department" required>
                   <SearchableSelect
                     required
@@ -411,6 +424,7 @@ export function AppointmentBookingFlow(props: any) {
                   </p>
                 </div>
               </div>
+              </section>
               {doctorAvailabilityMessage && (
                 <div className="mt-4 rounded-lg bg-amber-50 p-4 table-data font-semibold text-amber-800">
                   {doctorAvailabilityMessage}
@@ -465,21 +479,33 @@ export function AppointmentBookingFlow(props: any) {
                 </div>
               )}
               {appointmentType !== "emergency" && (
-                <div className="mt-4 rounded-lg bg-blue-50 p-4 text-xs text-blue-800">
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
                   Consultation time will be auto-assigned from the doctor's
                   schedule when you save.
                 </div>
               )}
-              <div className="mt-4 rounded-lg bg-slate-50 p-4">
-                <div className="flex items-baseline justify-between">
-                  <h5 className="text-xs font-bold uppercase text-slate-700">
-                    Intake (Optional)
-                  </h5>
-                  <span className="text-[10px] text-xs text-slate-500">
-                    Pre-fills the doctor consultation page.
+              <details className="group rounded-xl border border-slate-200 bg-white">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                  <span>
+                    <span className="block text-xs font-bold text-slate-800">
+                      Optional intake details
+                    </span>
+                    <span className="mt-0.5 block text-[10px] text-slate-500">
+                      Vitals and complaints can be added now or during consultation.
+                    </span>
                   </span>
-                </div>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <span className="text-xs font-bold text-emerald-700 group-open:hidden">
+                    Add details
+                  </span>
+                  <span className="hidden text-xs font-bold text-emerald-700 group-open:inline">
+                    Hide
+                  </span>
+                </summary>
+                <div className="grid gap-3 border-t border-slate-200 bg-slate-50/50 p-4 md:grid-cols-3">
+                  <div className="md:col-span-3">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-700">Vital Signs</p>
+                    <p className="mt-0.5 text-[10px] text-slate-500">Optional measurements can be captured now and reused in consultation.</p>
+                  </div>
                   <FormField label="BP">
                     <Input
                       value={intakeBp}
@@ -587,7 +613,7 @@ export function AppointmentBookingFlow(props: any) {
                     );
                   })()}
 
-                  <div>
+                  <div className="md:col-span-3">
                     <TextareaField
                       label="Complaint Rows"
                       value={intakeComplaints}
@@ -612,11 +638,11 @@ export function AppointmentBookingFlow(props: any) {
                       )}
                   </div>
                 </div>
-              </div>
-              <div className="mt-5 flex flex-wrap gap-2">
+              </details>
+              <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-4">
                 <Button
                   disabled={busy || !hasAvailableDoctor}
-                  className="save-button"
+                  className="h-10 px-5 py-0 text-xs"
                 >
                   <ButtonLoader loading={busy}>
                     {busy ? "Booking..." : "Save & Generate Token"}
@@ -625,7 +651,7 @@ export function AppointmentBookingFlow(props: any) {
                 <button
                   type="button"
                   onClick={closeBooking}
-                  className="close-button font-bold"
+                  className="secondary-action h-10 text-xs"
                 >
                   Cancel
                 </button>
@@ -639,11 +665,19 @@ export function AppointmentBookingFlow(props: any) {
         <Card>
           <h4 className="font-bold">Appointment Booked</h4>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <div className="mt-4 grid gap-3 md:grid-cols-4 bg-white p-2 rounded-lg">
             <Info
               label="Patient"
               value={
                 selectedPatient?.full_name || booked.appointment?.patient || "-"
+              }
+            />
+            <Info
+              label="Visit ID"
+              value={
+                booked.appointment?.appointment_number ||
+                booked.appointment?.appointmentNumber ||
+                "-"
               }
             />
             <Info
@@ -681,6 +715,12 @@ export function AppointmentBookingFlow(props: any) {
                   "-"}
               </b>
               <span>
+                Visit ID:{" "}
+                {booked.appointment?.appointment_number ||
+                  booked.appointment?.appointmentNumber ||
+                  "-"}
+              </span>
+              <span>
                 Token:{" "}
                 {booked.queue_entry?.token_number ||
                   booked.queue_entry?.token ||
@@ -713,15 +753,18 @@ export function AppointmentBookingFlow(props: any) {
             />
           )}
 
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-5  flex flex-wrap gap-2">
             <button
               type="button"
               onClick={printTokenSlip}
-              className="close-button font-bold"
+              className="close-button bg-white font-bold"
             >
               Print Token
             </button>
-            <Button onClick={closeBooking}>Close</Button>
+            <Button onClick={closeBooking} className='close-button'>Close</Button>
+            <Button onClick={openBookedAppointment} className="save-button">
+              Continue to Consultation
+            </Button>
           </div>
 
           <ActivityLog

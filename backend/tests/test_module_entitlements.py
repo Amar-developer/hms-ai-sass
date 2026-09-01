@@ -12,7 +12,7 @@ def create_signed_consultation_on_trial(client):
     patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Trial Patient"},
+        json={"full_name": "Trial Patient", "mobile": "9000000301"},
     ).json()
     booking = client.post(
         "/api/v1/appointments",
@@ -65,6 +65,7 @@ def test_entitlements_include_enabled_modules_for_free_trial(client):
     modules = set(response.json()["enabled_modules"])
     assert "patients" in modules
     assert "billing_basic" in modules
+    assert "expense" not in modules
     assert "billing_advanced" not in modules
     assert "lab" not in modules
     assert "pharmacy" not in modules
@@ -115,6 +116,7 @@ def test_starter_entitlements_enable_advanced_billing(client):
     )
 
     assert "billing_advanced" in entitlements.json()["enabled_modules"]
+    assert "expense" not in entitlements.json()["enabled_modules"]
     assert invoice.status_code == 201
 
 
@@ -162,8 +164,13 @@ def test_custom_plan_can_enable_growth_modules(client):
     )
 
     modules = set(entitlements.json()["enabled_modules"])
-    assert {"lab", "pharmacy", "whatsapp", "sms", "voice", "billing_advanced"}.issubset(
-        modules
-    )
+    assert {
+        "lab",
+        "pharmacy",
+        "whatsapp",
+        "sms",
+        "voice",
+        "billing_advanced",
+    }.issubset(modules)
     assert "ai" not in modules
     assert "ip" not in modules

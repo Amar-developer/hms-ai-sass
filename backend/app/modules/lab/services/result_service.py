@@ -83,19 +83,6 @@ def add_lab_result_record(
     session.refresh(order)
     patient = LabReferenceRepository(session).get_patient(order.patient_id)
     if patient:
-        queue_notification_if_allowed(
-            session,
-            tenant_id=tenant_id,
-            branch_id=order.branch_id,
-            provider=NotificationProvider.SMS,
-            event_type=NotificationEventType.LAB_REPORT_READY,
-            recipient=patient.mobile,
-            subject="Lab report ready",
-            message=f"Your lab report for {order.tests} is ready.",
-            resource_type="lab_order",
-            resource_id=order.id,
-            queued_by_user_id=current_user.id,
-        )
         template_event = queue_whatsapp_template_if_allowed(
             session,
             tenant_id=tenant_id,

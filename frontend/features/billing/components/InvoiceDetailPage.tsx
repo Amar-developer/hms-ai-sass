@@ -1,36 +1,45 @@
-import { displayDateTime, money } from "@/utils/helper";
+import { money } from "@/utils/helper";
 import {
   claimedDetail,
   formatPercentage,
   invoiceDiscountParts,
   invoiceHasAppliedMembershipBenefit,
-  invoiceItemPriceBreakdown,
+  invoicePatientDueAmount,
   invoiceLinkedRecord,
   invoiceMembershipLabel,
   invoiceSource,
   invoiceTaxAdjustedDiscount,
   isMembershipPlanInvoice,
-  itemTypeLabel,
   numberValue,
-  percentLabel,
 } from "../helpers";
 import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  BookOpen,
+  ClipboardList,
+  CreditCard,
+  Landmark,
+  Package,
+  ReceiptText,
+} from "lucide-react";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Input, SearchableSelect } from "@/app/components/common/ui";
 import { BillLine } from "./BillLine";
 import { InvoiceMeta } from "./InvoiceMeta";
-import {
-  Badge,
-  ActionButton,
-  ActionGroup,
-  Card,
-} from "@/app/components/common/ui";
+import { Badge, ActionButton, ActionGroup } from "@/app/components/common/ui";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { DataTable } from "@/app/components/common/DataTable";
+import {
+  getAdjustmentRequestColumns,
+  getHospitalLedgerColumns,
+  getInvoiceItemColumns,
+  getSettlementHistoryColumns,
+} from "../Column";
 
 export function InvoiceDetailPage({
   detail,
@@ -187,7 +196,7 @@ export function InvoiceDetailPage({
         : offerBenefit?.reason || "No Offer & Discount Applied";
   const taxableAmount = numberValue(invoice.taxable_amount);
   const taxAmount = numberValue(invoice.tax_amount);
-  const balanceDue = numberValue(invoice.balance_amount);
+  const balanceDue = invoicePatientDueAmount(invoice);
   const invoiceDelivery = detail.invoice_delivery || {};
   const invoiceDeliveries = Array.isArray(detail.invoice_deliveries)
     ? detail.invoice_deliveries
@@ -216,7 +225,21 @@ export function InvoiceDetailPage({
   const [payRows, setPayRows] = useState<any[]>([
     { method: defaultPaymentMethod, amount: "", reference: "" },
   ]);
+  const [activeWorkspaceSection, setActiveWorkspaceSection] =
+    useState("invoice-items");
   useEffect(() => {
+    const requestedSection =
+      typeof window !== "undefined"
+        ? window.sessionStorage.getItem("medizinhub.billingInvoiceSection")
+        : null;
+    setActiveWorkspaceSection(
+      requestedSection === "invoice-payment"
+        ? requestedSection
+        : "invoice-items",
+    );
+    if (requestedSection && typeof window !== "undefined") {
+      window.sessionStorage.removeItem("medizinhub.billingInvoiceSection");
+    }
     setPayRows([
       {
         method: defaultPaymentMethod,
@@ -270,34 +293,6 @@ export function InvoiceDetailPage({
       rows.length > 1 ? rows.filter((_, i) => i !== index) : rows,
     );
   }
-  function signedMoney(
-    value: any,
-    mode: "delta" | "debit" | "credit" = "delta",
-  ) {
-    const amount = numberValue(value);
-    if (amount === 0) return money(0);
-    if (mode === "credit") return `+${money(Math.abs(amount))}`;
-    if (mode === "debit") return `-${money(Math.abs(amount))}`;
-    return `${amount > 0 ? "+" : "-"}${money(Math.abs(amount))}`;
-  }
-  function amountTone(
-    value: any,
-    mode: "delta" | "debit" | "credit" = "delta",
-  ) {
-    const amount = numberValue(value);
-    if (amount === 0) return "text-slate-500";
-    if (mode === "debit" || amount < 0) return "text-rose-700";
-    return "text-emerald-700";
-  }
-  function itemMrp(item: any) {
-    return numberValue(item.mrp_amount);
-  }
-  function itemRate(item: any) {
-    const pricing = invoiceItemPriceBreakdown(item, invoice);
-    return pricing.rateUnit;
-  }
-  const itemTableColSpan =
-    7 + (showItemVendor ? 2 : 0) + (showItemPricing ? 1 : 0);
   const canApproveDiscounts =
     isTenantBillingAdmin || hasPermission("billing.discounts.approve");
   const canManageRefunds =
@@ -361,6 +356,120 @@ export function InvoiceDetailPage({
     }
     return Math.max(-numberValue(entry.paid_amount_delta), 0);
   }
+  const paymentById = new Map<string, any>(
+    payments.map((payment: any) => [payment.id, payment]),
+  );
+  function paymentAccount(entry: any) {
+    const payment = paymentById.get(entry.related_payment_id);
+    const method = String(payment?.method || "").toLowerCase();
+    if (method.includes("cash")) return "Cash";
+    if (method.includes("upi") || method.includes("gpay") || method.includes("paytm")) {
+      return "UPI / Bank";
+    }
+    if (method.includes("card")) return "Card Settlement";
+    if (method.includes("bank")) return "Bank";
+    return "Cash / Bank";
+  }
+  function hospitalLedgerLine(entry: any) {
+    const entryType = String(entry.entry_type || "");
+    const invoiceDelta = numberValue(entry.invoice_total_delta);
+    const paidDelta = numberValue(entry.paid_amount_delta);
+    const balanceDelta = numberValue(entry.balance_amount_delta);
+    const explicitCredit = numberValue(entry.credit_amount);
+    const explicitDebit = numberValue(entry.debit_amount);
+    const movementAmount = Math.max(
+      Math.abs(explicitCredit),
+      Math.abs(explicitDebit),
+      Math.abs(invoiceDelta),
+      Math.abs(paidDelta),
+      Math.abs(balanceDelta),
+    );
+
+    if (entryType === "invoice_submitted") {
+      const amount = Math.abs(invoiceDelta || balanceDelta || explicitDebit);
+      return {
+        debitAccount: "Accounts Receivable",
+        debitAmount: amount,
+        creditAccount: "Service Revenue",
+        creditAmount: amount,
+      };
+    }
+    if (entryType === "payment_recorded") {
+      const amount = Math.abs(explicitCredit || paidDelta || balanceDelta);
+      return {
+        debitAccount: paymentAccount(entry),
+        debitAmount: amount,
+        creditAccount: "Accounts Receivable",
+        creditAmount: amount,
+      };
+    }
+    if (
+      entryType === "invoice_offer_applied" ||
+      entryType === "discount_applied"
+    ) {
+      const amount = Math.abs(explicitCredit || invoiceDelta || balanceDelta);
+      return {
+        debitAccount: "Discount / Concession",
+        debitAmount: amount,
+        creditAccount: "Accounts Receivable",
+        creditAmount: amount,
+      };
+    }
+    if (entryType === "membership_benefit_applied") {
+      const amount = Math.abs(explicitCredit || invoiceDelta || balanceDelta);
+      return {
+        debitAccount: "Membership Benefit",
+        debitAmount: amount,
+        creditAccount: "Accounts Receivable",
+        creditAmount: amount,
+      };
+    }
+    if (
+      entryType === "invoice_offer_removed" ||
+      entryType === "discount_removed"
+    ) {
+      const amount = Math.abs(explicitDebit || invoiceDelta || balanceDelta);
+      return {
+        debitAccount: "Accounts Receivable",
+        debitAmount: amount,
+        creditAccount: "Discount Reversal",
+        creditAmount: amount,
+      };
+    }
+    if (entryType.includes("refund")) {
+      const amount = Math.abs(explicitDebit || paidDelta || balanceDelta || movementAmount);
+      return {
+        debitAccount: "Refund / Patient Payable",
+        debitAmount: amount,
+        creditAccount: paymentAccount(entry),
+        creditAmount: amount,
+      };
+    }
+    if (balanceDelta > 0 || invoiceDelta > 0 || explicitDebit > 0) {
+      const amount = Math.abs(explicitDebit || invoiceDelta || balanceDelta);
+      return {
+        debitAccount: "Accounts Receivable",
+        debitAmount: amount,
+        creditAccount: "Adjustment Income",
+        creditAmount: amount,
+      };
+    }
+    if (balanceDelta < 0 || invoiceDelta < 0 || explicitCredit > 0) {
+      const amount = Math.abs(explicitCredit || invoiceDelta || balanceDelta);
+      return {
+        debitAccount: "Adjustment / Write-off",
+        debitAmount: amount,
+        creditAccount: "Accounts Receivable",
+        creditAmount: amount,
+      };
+    }
+    return {
+      debitAccount: "-",
+      debitAmount: 0,
+      creditAccount: "-",
+      creditAmount: 0,
+    };
+  }
   const financialLedgerEntries = ledgerEntries.filter(
     (entry: any) =>
       entry.entry_type !== "credit_note_issued" &&
@@ -380,11 +489,18 @@ export function InvoiceDetailPage({
     .reduce(
       (running: any, entry: any) => {
         const next = {
-          invoiceTotal:
+          invoiceTotal: Math.max(
+            0,
             running.invoiceTotal + numberValue(entry.invoice_total_delta),
-          paidAmount: running.paidAmount + numberValue(entry.paid_amount_delta),
-          balanceAmount:
+          ),
+          paidAmount: Math.max(
+            0,
+            running.paidAmount + numberValue(entry.paid_amount_delta),
+          ),
+          balanceAmount: Math.max(
+            0,
             running.balanceAmount + numberValue(entry.balance_amount_delta),
+          ),
         };
         ledgerRunningById.set(entry.id, next);
         return next;
@@ -430,16 +546,41 @@ export function InvoiceDetailPage({
     (a: any, b: any) =>
       new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime(),
   );
+  const workspaceSections = [
+    { id: "invoice-items", label: "Bill Items", icon: Package, count: items.length },
+    { id: "invoice-payment", label: "Payment", icon: CreditCard },
+    {
+      id: "invoice-settlements",
+      label: "Settlements",
+      icon: Landmark,
+      count: settlementRows.length,
+    },
+    {
+      id: "invoice-adjustments",
+      label: "Adjustments",
+      icon: ReceiptText,
+      count: adjustmentRequests.length,
+    },
+    ...(canReviewAnyAdjustment
+      ? [{ id: "invoice-ledger", label: "Ledger", icon: BookOpen }]
+      : []),
+  ];
+  function openWorkspaceSection(sectionId: string) {
+    setActiveWorkspaceSection(sectionId);
+  }
   return (
-    <div className="">
-      <Card>
-        <div className="-mx-6 -mt-6 border-b border-slate-200 bg-white px-6 py-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
+    <div className="space-y-3">
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
+              <ClipboardList className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base lg:text-xl font-bold">
-                  {source.label} Invoice
-                </h3>
+                <h2 className="text-base font-black tracking-tight text-slate-950">
+                  Invoice Workspace
+                </h2>
                 <Badge
                   tone={
                     invoice.status === "paid"
@@ -453,19 +594,22 @@ export function InvoiceDetailPage({
                             ? "red"
                             : "slate"
                   }
-                  className="normal-badge"
+                  className="normal-label"
                 >
                   {humanizeOptionLabel(invoice.status)}
                 </Badge>
                 {membershipLabel && (
                   <Badge tone="green" className="normal-badge">
-                    {membershipLabel}
+                  {membershipLabel}
                   </Badge>
                 )}
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <p className="mt-0.5 text-xs font-medium text-slate-500">
+                {source.label} billing, collection, adjustments and accounting in one workspace
+              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <div className="flex items-center gap-2">
-                  <b className="table-data">{invoice.invoice_number}</b>
+                  <b className="font-black text-slate-900">{invoice.invoice_number}</b>
                   <CopyIdButton
                     value={invoice.id}
                     label="Invoice ID"
@@ -479,226 +623,100 @@ export function InvoiceDetailPage({
                     invoice.patient_number ||
                     "Patient"}
                 </span>
+                <span className="text-slate-400">·</span>
+                <span className="text-slate-500">{linkedRecord}</span>
               </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-stretch sm:self-auto">
+            <div className="hidden rounded-lg bg-slate-50 px-3 py-2 text-right sm:block">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Grand total
+              </p>
+              <p className="text-sm font-black tabular-nums text-slate-950">
+                {money(invoice.total_amount)}
+              </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="close-button font-bold hover:bg-slate-50"
+              className="close-button inline-flex h-9 flex-1 items-center justify-center gap-2 whitespace-nowrap px-3 text-xs font-bold hover:bg-slate-50 sm:flex-none"
             >
+              <ArrowLeft className="h-4 w-4" />
               Back to Invoices
             </button>
           </div>
         </div>
 
-        <div className="pt-5">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="grid gap-3 text-sm md:grid-cols-4">
-              <InvoiceMeta label="Type" value={source.label} />
-              <InvoiceMeta label="Source" value={linkedRecord} />
-              <InvoiceMeta
-                label="Patient"
-                value={
-                  invoice.patient_name ||
-                  patient?.name ||
-                  patient?.full_name ||
-                  invoice.patient_number ||
-                  "Patient"
-                }
-              />
-              <InvoiceMeta
-                label="Status"
-                value={humanizeOptionLabel(invoice.status || "issued")}
-              />
-            </div>
-          </div>
+        <nav
+          className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+          aria-label="Invoice workspace sections"
+        >
+          {workspaceSections.map((section) => {
+            const Icon = section.icon;
+            const active = activeWorkspaceSection === section.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                aria-current={active ? "page" : undefined}
+                onClick={() => openWorkspaceSection(section.id)}
+                className={`inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-xs font-bold transition-colors ${
+                  active
+                    ? "bg-brand text-brand-fg"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{section.label}</span>
+                {Boolean(section.count) && (
+                  <span
+                    className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                      active
+                        ? "bg-white/20 text-brand-fg"
+                        : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {section.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </section>
 
-          <div className="mt-5 ">
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h4 className="card-title font-bold">
-                    {source.label} Bill Items
-                  </h4>
-                  <p className="table-data text-slate-500">
-                    Line items linked to this invoice.
-                  </p>
-                </div>
-                <div className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2.5 py-2">
-                  <span className="text-[10px] font-bold uppercase text-slate-500">
-                    Items
-                  </span>
-                  <span className="text-xs font-black tabular-nums text-slate-950">
-                    {items.length}
-                  </span>
-                </div>
-              </div>
-              <div className="m-3 overflow-x-auto rounded-xl border border-slate-200">
-                <table
-                  className={`w-full border-separate border-spacing-0 text-left text-xs ${showItemVendor || showItemPricing ? "min-w-[980px]" : "min-w-[760px]"}`}
-                >
-                  <thead className="bg-slate-100 text-[11px] font-medium text-slate-500">
-                    <tr>
-                      <th className="w-12 border-r border-slate-200 px-3 py-2 text-center">
-                        No.
-                      </th>
-                      <th className="min-w-52 border-r border-slate-200 px-3 py-2">
-                        Item
-                      </th>
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">
-                        Quantity
-                      </th>
-                      {showItemVendor && (
-                        <th className="min-w-36 border-r border-slate-200 px-3 py-2">
-                          {vendorLabel}
-                        </th>
-                      )}
-                      {showItemVendor && (
-                        <th className="border-r border-slate-200 px-3 py-2 text-right">
-                          {vendorPriceLabel}
-                        </th>
-                      )}
-                      {showItemPricing && (
-                        <th className="border-r border-slate-200 px-3 py-2 text-right">
-                          MRP
-                        </th>
-                      )}
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">
-                        Rate (INR)
-                      </th>
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">
-                        Discount %
-                      </th>
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">
-                        Discount amount
-                      </th>
-                      <th className="px-3 py-2 text-right">Payable (INR)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={itemTableColSpan}
-                          className="border-t border-slate-200 px-4 py-5 text-sm font-semibold text-slate-500"
-                        >
-                          No bill items found.
-                        </td>
-                      </tr>
-                    )}
-                    {items.map((item: any, index: number) => {
-                      const pricing = invoiceItemPriceBreakdown(item, invoice);
-                      const displayDiscount = pricing.effectiveDiscount;
-                      const discountBase =
-                        pricing.mrpTotal > 0
-                          ? pricing.mrpTotal
-                          : pricing.lineAmount;
-                      const itemSupplierOptions =
-                        supplierOptions[item.id] || [];
-                      const vendorName =
-                        item.vendor_name || item.supplier_id || "";
-                      const canPickSupplier =
-                        showSupplierPicker &&
-                        item.item_type === "lab" &&
-                        itemSupplierOptions.length > 0;
-                      const vendorAmount =
-                        numberValue(item.vendor_amount) ||
-                        (canPickSupplier && itemSupplierOptions.length === 1
-                          ? numberValue(itemSupplierOptions[0].buying_price)
-                          : 0);
-                      return (
-                        <tr
-                          key={item.id}
-                          className="align-middle hover:bg-slate-50/70"
-                        >
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-center tabular-nums text-slate-600">
-                            {index + 1}
-                          </td>
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5">
-                            <span
-                              className="block max-w-64 truncate font-bold text-slate-900"
-                              title={
-                                item.description ||
-                                itemTypeLabel(item.item_type)
-                              }
-                            >
-                              {item.description ||
-                                itemTypeLabel(item.item_type)}
-                            </span>
-                          </td>
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-semibold tabular-nums text-slate-700">
-                            {item.quantity}
-                          </td>
-                          {showItemVendor && (
-                            <td className="border-r border-t border-slate-200 px-3 py-2.5">
-                              {canPickSupplier ? (
-                                <SearchableSelect
-                                  value={item.supplier_id || ""}
-                                  onChange={(value) =>
-                                    updateInvoiceItemSupplier?.(
-                                      invoice,
-                                      item,
-                                      value,
-                                    )
-                                  }
-                                  disabled={busy === `supplier-${item.id}`}
-                                  searchable={itemSupplierOptions.length > 8}
-                                  placeholder="No supplier"
-                                  options={[
-                                    {
-                                      value: "",
-                                      label: "No supplier",
-                                    },
-                                    ...itemSupplierOptions.map(
-                                      (supplier: any) => ({
-                                        value: supplier.supplier,
-                                        label: supplier.supplier_name,
-                                        sublabel: money(supplier.buying_price),
-                                      }),
-                                    ),
-                                  ]}
-                                />
-                              ) : (
-                                <span className="font-medium text-slate-800">
-                                  {vendorName || "-"}
-                                </span>
-                              )}
-                            </td>
-                          )}
-                          {showItemVendor && (
-                            <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
-                              {vendorAmount > 0 ? money(vendorAmount) : "-"}
-                            </td>
-                          )}
-                          {showItemPricing && (
-                            <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
-                              {itemMrp(item) > 0 ? money(itemMrp(item)) : "-"}
-                            </td>
-                          )}
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums text-slate-800">
-                            {money(itemRate(item))}
-                          </td>
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
-                            {displayDiscount > 0
-                              ? percentLabel(displayDiscount, discountBase)
-                              : "-"}
-                          </td>
-                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums text-emerald-700">
-                            {displayDiscount > 0
-                              ? `-${money(displayDiscount)}`
-                              : "-"}
-                          </td>
-                          <td className="border-t border-slate-200 px-3 py-2.5 text-right font-black tabular-nums text-slate-900">
-                            {money(pricing.payableAmount)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+        <div>
+          <section
+            id="invoice-items"
+            className={
+              activeWorkspaceSection === "invoice-items" ? "block" : "hidden"
+            }
+          >
+              <div>
+                <DataTable
+                  columns={getInvoiceItemColumns({
+                    invoice,
+                    showItemVendor,
+                    showItemPricing,
+                    vendorLabel,
+                    vendorPriceLabel,
+                    showSupplierPicker,
+                    supplierOptions,
+                    busy,
+                    updateInvoiceItemSupplier,
+                  })}
+                  data={items}
+                  emptyMessage="No bill items found."
+                  emptyDescription="Line items billed for this invoice will show up here."
+                  emptyIcon={Package}
+                  minBodyHeight={`${items.length > 0 ?'':'220px'}`}
+                  className="[&>div]:border-slate-200"
+                  tableClassName="border-collapse [&_thead]:border-b [&_thead]:border-slate-200 [&_th]:border-r [&_th]:border-slate-200 [&_th]:text-xs [&_th:last-child]:border-r-0 [&_td]:border-r [&_td]:border-slate-100 [&_td:last-child]:border-r-0"
+                />
               </div>
               {canRequestDiscountBase ? (
-                <div className="mx-3 mb-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
+                <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
                   <span className="text-xs font-bold text-slate-500">
                     Need a lower price on this bill? Use "Request Discount" in
                     Refund &amp; Cancellation Requests below — it applies once
@@ -706,24 +724,29 @@ export function InvoiceDetailPage({
                   </span>
                 </div>
               ) : membershipLocksAdditionalDiscounts ? (
-                <div className="mx-3 mb-3 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3">
+                <div className="mt-3 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3">
                   <span className="text-xs font-bold text-purple-800">
                     Additional discounts and promotional offers are unavailable
                     because a patient membership benefit is applied.
                   </span>
                 </div>
               ) : null}
-            </div>
+          </section>
 
-            <aside className="rounded-lg border mt-3 border-slate-200 bg-white">
-              <div className="border-b border-slate-200 px-4 py-4">
+          <section
+            id="invoice-payment"
+            className={`overflow-hidden rounded-lg border border-slate-200 bg-slate-50/50 ${
+              activeWorkspaceSection === "invoice-payment" ? "block" : "hidden"
+            }`}
+          >
+              <div className="border-b border-slate-200 bg-white px-4 py-3">
                 <h4 className="card-title font-bold">Payment Summary</h4>
                 <p className="card-desc text-slate-500">
-                  Staff collection view
+                  Totals, collection and invoice delivery.
                 </p>
               </div>
-              <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-                <div className="divide-y">
+              <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+                <div className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white px-4">
                   <BillLine
                     label="Item total"
                     value={money(invoice.subtotal_amount)}
@@ -852,13 +875,13 @@ export function InvoiceDetailPage({
                   />
                   <BillLine
                     label="Balance due"
-                    value={money(invoice.balance_amount)}
+                    value={money(balanceDue)}
                     strong
-                    danger={numberValue(invoice.balance_amount) > 0}
+                    danger={balanceDue > 0}
                   />
                 </div>
-                <div className="">
-                  <div className="rounded-2xl bg-slate-50 p-4">
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       <InvoiceMeta
                         label="Tax rule"
@@ -873,7 +896,7 @@ export function InvoiceDetailPage({
                     </div>
                   </div>
                   {canCollectPayment ? (
-                    <div className="rounded-2xl my-3 border border-slate-200 bg-white p-4">
+                    <div className="rounded-lg border border-slate-200 bg-white p-3">
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-bold text-slate-900">
@@ -886,7 +909,7 @@ export function InvoiceDetailPage({
                         <button
                           type="button"
                           onClick={addPayRow}
-                          className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-900 hover:bg-slate-50"
+                          className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-brand hover:text-brand"
                         >
                           + Add mode
                         </button>
@@ -895,7 +918,7 @@ export function InvoiceDetailPage({
                         {payRows.map((row, index) => (
                           <div
                             key={index}
-                            className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                            className="rounded-lg border border-slate-200 bg-slate-50/70 p-3"
                           >
                             <div className="grid gap-2 sm:grid-cols-2">
                               <SearchableSelect
@@ -907,7 +930,7 @@ export function InvoiceDetailPage({
                                 options={invoicePaymentOptions}
                               />
                               <Input
-                                className="text-right tabular-nums"
+                                className="rounded-lg px-2 py-2 lg:px-2 lg:py-2 text-xs lg:text-xs placeholder:text-xs text-right tabular-nums"
                                 type="number"
                                 min="0"
                                 step="0.01"
@@ -943,7 +966,7 @@ export function InvoiceDetailPage({
                           </div>
                         ))}
                       </div>
-                      <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold">
+                      <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold">
                         <span className="text-slate-500">Entering</span>
                         <span className="tabular-nums text-slate-900">
                           {money(enteredTotal)} / {money(balanceDue)}
@@ -974,7 +997,7 @@ export function InvoiceDetailPage({
                           labSupplierMissing
                         }
                         onClick={() => collectSplitPayment(invoice, payRows)}
-                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-3.5 text-sm lg:text-base   font-black tracking-wide text-white shadow-lg shadow-slate-900/20 transition hover:from-slate-800 hover:to-slate-600 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                        className="primary-action mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <ButtonLoader loading={busy === invoice.id}>
                           {busy === invoice.id ? (
@@ -996,31 +1019,31 @@ export function InvoiceDetailPage({
                       </button>
                     </div>
                   ) : isPaymentClosed ? (
-                    <div className="flex mt-3 items-center justify-between rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700">
+                    <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700">
                       <span>{humanizeOptionLabel(invoice.status)} invoice</span>
                       <span>Payment locked</span>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 mt-3">
+                    <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-800">
                       <span>Payment settled</span>
                       <span>{money(invoice.paid_amount)}</span>
                     </div>
                   )}
                   {String(invoice.status || "").toLowerCase() === "paid" && (
                     <div
-                      className={`rounded-lg border p-3 mt-3 text-xs ${
+                      className={`rounded-lg border bg-white p-3 text-xs ${
                         invoiceDeliveryStatus === "sent"
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                          ? "border-emerald-200 text-emerald-900"
                           : ["failed", "cancelled"].includes(
                                 invoiceDeliveryStatus,
                               )
-                            ? "border-red-200 bg-red-50 text-red-900"
-                            : "border-amber-200 bg-amber-50 text-amber-900"
+                            ? "border-red-200 text-red-900"
+                            : "border-amber-200 text-amber-900"
                       }`}
                     >
-                      <div className="flex items-center justify-between  gap-3 mt-2">
+                      <div className="flex items-center justify-between gap-3">
                         <span className="font-bold">
-                          Patient invoice delivery
+                          WhatsApp invoice
                         </span>
                         <Badge
                           tone={
@@ -1049,16 +1072,18 @@ export function InvoiceDetailPage({
                         </p>
                       )}
                       {invoiceDeliveries.length > 0 && (
-                        <div className="mt-3 border-t border-current/15 pt-2">
-                          <p className="mb-1 font-bold">Recent deliveries</p>
+                        <div className="mt-2 border-t border-slate-100 pt-2">
+                          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                            Recent
+                          </p>
                           {invoiceDeliveries
-                            .slice(0, 5)
+                            .slice(0, 3)
                             .map((delivery: any, index: number) => (
                               <div
                                 key={
                                   delivery.delivery_id || delivery.id || index
                                 }
-                                className="flex justify-between gap-3 py-0.5"
+                                className="flex justify-between gap-3 py-1 text-slate-600"
                               >
                                 <span>
                                   {humanizeOptionLabel(
@@ -1068,7 +1093,7 @@ export function InvoiceDetailPage({
                                     ? ` · PDF v${delivery.artifact_version}`
                                     : ""}
                                 </span>
-                                <span className="font-bold">
+                                <span className="font-bold text-slate-800">
                                   {humanizeOptionLabel(
                                     delivery.status || "queued",
                                   )}
@@ -1079,7 +1104,7 @@ export function InvoiceDetailPage({
                       )}
                     </div>
                   )}
-                  <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 mt-3 ">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
                     {canSendInvoice && (
                       <ActionButton
                         onClick={() => sendInvoice(invoice)}
@@ -1087,7 +1112,7 @@ export function InvoiceDetailPage({
                           busy === `send-invoice-whatsapp-${invoice.id}` ||
                           invoiceDeliveryPending
                         }
-                        className='rounded-lg border px-3 lg:text-xs'
+                        className="rounded-lg border px-3 text-xs"
                       >
                         <ButtonLoader
                           loading={
@@ -1185,70 +1210,40 @@ export function InvoiceDetailPage({
                   </div>
                 </div>
               </div>
-            </aside>
-          </div>
+          </section>
 
-          <div className="mt-5 rounded-lg border border-slate-200">
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+          <section
+            id="invoice-settlements"
+            className={`rounded-lg  ${
+              activeWorkspaceSection === "invoice-settlements"
+                ? "block"
+                : "hidden"
+            }`}
+          >
+            <div className=" rounded-lg border-slate-200 bg-white px-4 py-3 mb-2">
               <h4 className="card-title font-bold">Settlement History</h4>
             </div>
             <div className="overflow-auto">
-              {settlementRows.length === 0 ? (
-                <p className="p-4 table-data text-slate-500">
-                  No payments or credit notes recorded yet.
-                </p>
-              ) : (
-                <table className="w-full min-w-[820px] table-fixed text-left text-xs">
-                  <thead className="bg-slate-50 font-semibold uppercase text-slate-500">
-                    <tr>
-                      <th className="w-[180px] px-4 py-3">Date & Time</th>
-                      <th className="w-[120px] px-3 py-3">Type</th>
-                      <th className="w-[170px] px-3 py-3">Method / No.</th>
-                      <th className="px-3 py-3">Reference / Reason</th>
-                      <th className="w-[120px] px-3 py-3">Status</th>
-                      <th className="w-[130px] px-4 py-3 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {settlementRows.map((row: any) => (
-                      <tr key={row.id} className="align-middle">
-                        <td className="px-4 py-3 font-semibold text-slate-700">
-                          {displayDateTime(row.date)}
-                        </td>
-                        <td className="px-3 py-3 font-semibold text-slate-900">
-                          {row.type}
-                        </td>
-                        <td className="px-3 py-3 capitalize text-slate-700">
-                          {row.method}
-                        </td>
-                        <td
-                          className="truncate px-3 py-3 text-slate-600"
-                          title={row.reference}
-                        >
-                          {row.reference}
-                        </td>
-                        <td className="px-3 py-3">
-                          <Badge tone={row.tone} className="normal-badge">
-                            {humanizeOptionLabel(row.status)}
-                          </Badge>
-                        </td>
-                        <td
-                          className={`px-4 py-3 text-right font-black tabular-nums ${row.informational ? "text-slate-700" : amountTone(row.amount)}`}
-                        >
-                          {row.informational
-                            ? money(row.amount)
-                            : signedMoney(row.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <DataTable
+                columns={getSettlementHistoryColumns()}
+                data={settlementRows}
+                emptyMessage="No payments or credit notes recorded yet."
+                emptyDescription="Payments collected and credit notes issued against this invoice will show up here."
+                emptyIcon={Landmark}
+                minBodyHeight={`${settlementRows.length > 0 ?'':'220px'}`}
+              />
             </div>
-          </div>
+          </section>
 
-          <div className="mt-5 rounded-lg border border-slate-200">
-            <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 lg:flex-row lg:items-center sm:justify-between">
+          <section
+            id="invoice-adjustments"
+            className={`rounded-lg  ${
+              activeWorkspaceSection === "invoice-adjustments"
+                ? "block"
+                : "hidden"
+            }`}
+          >
+            <div className="rounded-lg flex flex-col gap-3 border-slate-200 bg-white px-4 py-3 lg:flex-row lg:items-center sm:justify-between mb-2">
               <div>
                 <h4 className="card-title font-bold">
                   Discount, Refund & Cancellation Requests
@@ -1287,219 +1282,66 @@ export function InvoiceDetailPage({
               </ActionGroup>
             </div>
             <div className="overflow-auto">
-              {adjustmentRequests.length === 0 ? (
-                <p className="p-4 table-data text-slate-500">
-                  No refund or cancellation requests yet.
-                </p>
-              ) : (
-                <table className="w-full min-w-[980px] text-left text-xs">
-                  <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
-                    <tr>
-                      <th className="whitespace-nowrap px-4 py-3">Requested</th>
-                      <th className="whitespace-nowrap px-4 py-3">Type</th>
-                      <th className="whitespace-nowrap px-4 py-3 text-right">
-                        Amount
-                      </th>
-                      <th className="whitespace-nowrap px-4 py-3">Reason</th>
-                      <th className="whitespace-nowrap px-4 py-3">
-                        Requested By
-                      </th>
-                      <th className="whitespace-nowrap px-4 py-3">Status</th>
-                      <th className="whitespace-nowrap px-4 py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {adjustmentRequests.map((row: any) => (
-                      <tr
-                        key={row.id}
-                        className="whitespace-nowrap align-middle"
-                      >
-                        <td className="px-4 py-3 font-semibold text-slate-700">
-                          {displayDateTime(row.created_at)}
-                        </td>
-                        <td className="px-4 py-3 font-bold capitalize">
-                          {humanizeOptionLabel(row.request_type)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-black tabular-nums">
-                          {money(row.amount)}
-                        </td>
-                        <td
-                          className="max-w-[260px] truncate px-4 py-3 font-semibold text-slate-600"
-                          title={row.reason}
-                        >
-                          {row.reason}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-slate-700">
-                          {row.requested_by_user_name || "Unknown user"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge
-                            tone={
-                              row.status === "executed"
-                                ? "green"
-                                : row.status === "rejected"
-                                  ? "red"
-                                  : row.status === "approved"
-                                    ? "blue"
-                                    : "amber"
-                            }
-                            className="normal-badge"
-                          >
-                            {humanizeOptionLabel(row.status)}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          {canDecideAdjustment(row) &&
-                          row.status === "pending" ? (
-                            <ActionGroup>
-                              <ActionButton
-                                onClick={() => approveAdjustment?.(row)}
-                              >
-                                Approve
-                              </ActionButton>
-                              <ActionButton
-                                tone="danger"
-                                onClick={() => rejectAdjustment?.(row)}
-                              >
-                                Reject
-                              </ActionButton>
-                            </ActionGroup>
-                          ) : canDecideAdjustment(row) &&
-                            row.status === "approved" &&
-                            !adjustmentClosed ? (
-                            <ActionButton
-                              onClick={() => executeAdjustment?.(row)}
-                            >
-                              Execute
-                            </ActionButton>
-                          ) : (
-                            <span className="text-slate-400">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <DataTable
+                columns={getAdjustmentRequestColumns({
+                  canDecideAdjustment,
+                  adjustmentClosed,
+                  approveAdjustment,
+                  rejectAdjustment,
+                  executeAdjustment,
+                })}
+                data={adjustmentRequests}
+                className="rounded-none"
+                emptyMessage="No refund or cancellation requests yet."
+                emptyDescription="Discount, refund, and cancellation requests raised on this invoice will show up here."
+                emptyIcon={ClipboardList}
+                minBodyHeight={`${adjustmentRequests.length > 0 ?'':'220px'}`}
+              />
             </div>
-          </div>
+          </section>
 
           {canReviewAnyAdjustment && (
-            <div className="mt-5 rounded-lg border border-slate-200">
-              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <h4 className="card-title font-bold">Billing Ledger</h4>
+            <section
+              id="invoice-ledger"
+              className={`rounded-lg  ${
+                activeWorkspaceSection === "invoice-ledger" ? "block" : "hidden"
+              }`}
+            >
+              <div className="rounded-lg border-slate-200 bg-white px-4 py-3 mb-2 ">
+                <h4 className="card-title font-bold">
+                  Hospital Accounting Ledger
+                </h4>
                 <p className="card-desc text-slate-500">
-                  Invoice lifecycle is tracked for audit. Credit and debit show
-                  only payment, refund, or membership benefit movement.
+                  Company point-of-view journal view for this invoice. Debits
+                  and credits show the hospital accounts affected by each event.
                 </p>
               </div>
-              <div className="overflow-auto">
-                {financialLedgerEntries.length === 0 && (
-                  <p className="p-4 table-data text-slate-500">
-                    No financial ledger entries recorded yet.
-                  </p>
-                )}
-                {financialLedgerEntries.length > 0 && (
-                  <table className="w-full min-w-[1040px] text-left text-xs">
-                    <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
-                      <tr>
-                        <th className="whitespace-nowrap px-4 py-3">
-                          Date & Time
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3">
-                          Activity
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3">User</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Credit
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Debit
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Bill Amount
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Paid
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">
-                          Balance
-                        </th>
-                        <th className="whitespace-nowrap px-4 py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
-                      {financialLedgerEntries.map((entry: any) => {
-                        const running = ledgerRunningById.get(entry.id) || {
-                          invoiceTotal: 0,
-                          paidAmount: 0,
-                          balanceAmount: 0,
-                        };
-                        const creditAmount = ledgerCreditAmount(entry);
-                        const debitAmount = ledgerDebitAmount(entry);
-                        return (
-                          <tr
-                            key={entry.id}
-                            className="whitespace-nowrap align-middle"
-                          >
-                            <td className="px-4 py-3 font-semibold text-slate-700">
-                              {displayDateTime(entry.created_at)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="font-bold capitalize text-slate-950">
-                                {humanizeOptionLabel(entry.entry_type)}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-slate-700">
-                              {entry.actor_user_name || "Unknown user"}
-                            </td>
-                            <td
-                              className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(creditAmount, "credit")}`}
-                            >
-                              {signedMoney(creditAmount, "credit")}
-                            </td>
-                            <td
-                              className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(debitAmount, "debit")}`}
-                            >
-                              {signedMoney(debitAmount, "debit")}
-                            </td>
-                            <td className="px-4 py-3 text-right font-black tabular-nums text-slate-700">
-                              {money(running.invoiceTotal)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-black tabular-nums text-slate-700">
-                              {money(running.paidAmount)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-black tabular-nums text-slate-700">
-                              {money(running.balanceAmount)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <Badge
-                                tone={
-                                  entry.status_after === "cancelled"
-                                    ? "amber"
-                                    : "slate"
-                                }
-                                className="normal-badge"
-                              >
-                                {humanizeOptionLabel(entry.status_after)}
-                              </Badge>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
+              <div className="table-wrapper-width">
+                <DataTable
+                  columns={getHospitalLedgerColumns({
+                    ledgerRunningById,
+                    hospitalLedgerLine,
+                  })}
+                  data={financialLedgerEntries}
+                  emptyMessage="No financial ledger entries recorded yet."
+                  emptyDescription="Debit and credit journal entries generated for this invoice will show up here."
+                  emptyIcon={BookOpen}
+                  minBodyHeight={`${financialLedgerEntries.length > 0 ?'':'220px'}`}
+                  className="table-width"
+                  tableClassName="min-w-[1480px]"
+                  rowClassName="odd:bg-white even:bg-slate-50/40 hover:bg-emerald-50/30"
+                />
               </div>
-            </div>
+            </section>
           )}
         </div>
-      </Card>
-      <ActivityLog
-        resourceType="invoice"
-        resourceId={invoice?.id}
-        apiSession={apiSession}
-      />
+      <section id="invoice-activity">
+        <ActivityLog
+          resourceType="invoice"
+          resourceId={invoice?.id}
+          apiSession={apiSession}
+        />
+      </section>
     </div>
   );
 }

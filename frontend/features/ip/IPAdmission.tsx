@@ -29,6 +29,7 @@ import {
   useIpAdmissionsQuery,
 } from "./api";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
 
 
 
@@ -242,10 +243,10 @@ export function IPAdmission({
           message={error}
           onClose={() => setError("")}
         />
-        <Card>
+        <Card className="bg-white p-3">
           <div className="flex flex-col gap-2">
-            <h4 className="text-xl font-bold">Convert OP to IP</h4>
-            <p className="text-sm text-slate-500">
+            <h4 className="card-title font-bold">Convert OP to IP</h4>
+            <p className="card-desc text-slate-500">
               Use this when an OP patient requires admission after doctor
               consultation or clinical review.
             </p>
@@ -288,11 +289,11 @@ export function IPAdmission({
               <button
                 type="button"
                 onClick={() => navigate("list")}
-                className="rounded-2xl border px-5 py-3 text-sm font-bold"
+                className="close-button"
               >
                 Cancel
               </button>
-              <Button disabled={busy === "admission"}>
+              <Button disabled={busy === "admission"} className='save-button'>
                 <ButtonLoader loading={busy === "admission"}>
                   {busy === "admission" ? "Creating..." : "Create IP Admission"}
                 </ButtonLoader>
@@ -317,10 +318,10 @@ export function IPAdmission({
           message={error}
           onClose={() => setError("")}
         />
-        <Card>
+        <Card className="bg-white p-3">
           <div className="flex flex-col gap-2">
-            <h4 className="text-xl font-bold">Direct IP Admission</h4>
-            <p className="text-sm text-slate-500">
+            <h4 className="card-title font-bold">Direct IP Admission</h4>
+            <p className="card-desc text-slate-500">
               Use this for direct admission, emergency admission, or referred IP
               cases without an OP appointment.
             </p>
@@ -343,11 +344,11 @@ export function IPAdmission({
               <button
                 type="button"
                 onClick={() => navigate("list")}
-                className="rounded-2xl border px-5 py-3 text-sm font-bold"
+                className="close-button"
               >
                 Cancel
               </button>
-              <Button disabled={busy === "admission"}>
+              <Button disabled={busy === "admission"} className='save-button'>
                 <ButtonLoader loading={busy === "admission"}>
                   {busy === "admission" ? "Admitting..." : "Admit Patient"}
                 </ButtonLoader>
@@ -370,11 +371,11 @@ export function IPAdmission({
       <StatusToast message={error} onClose={() => setError("")} />
 
       <div className="grid gap-6">
-        <Card>
+        <Card className="bg-white p-3">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
             <div>
               <h4 className="card-title font-bold">IP Admissions</h4>
-              <p className="table-data text-slate-500">
+              <p className="card-desc text-slate-500">
                 Select active or completed admissions to view the full IP
                 workflow below.
               </p>
@@ -425,6 +426,11 @@ export function IPAdmission({
                       row.patient ||
                       row.patient_id}
                   </div>
+                  <PatientFlagBadges
+                    patient={p}
+                    className="mt-1"
+                    inverse={selectedAdmission?.id === row.id}
+                  />
                   <div
                     className={`mt-1 line-clamp-2 text-sm ${selectedAdmission?.id === row.id ? "text-slate-300" : "text-slate-500"}`}
                   >
@@ -455,7 +461,7 @@ export function IPAdmission({
           />
         </Card>
 
-        <Card>
+        <Card className="bg-white p-3">
           <h4 className="text-lg font-bold">IP Workflow</h4>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <Info
@@ -527,7 +533,7 @@ export function IPAdmission({
               <Info title="Legacy Charges" value={inr(legacyChargeTotal)} />
             </div>
           )}
-          <p className="mt-4 text-sm text-slate-500">
+          <p className="mt-4 card-desc text-slate-500">
             Select an IP admission from the left to manage treatment,
             consultation, consent, discharge, and billing.
           </p>

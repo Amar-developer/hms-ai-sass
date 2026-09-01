@@ -4,6 +4,23 @@ export function fetchPharmacyIssues(session: ApiSession, signal?: AbortSignal) {
   return apiFetch("/pharmacy/issues", session, { signal });
 }
 
+export function fetchPharmacyIssuePage(
+  session: ApiSession,
+  params: URLSearchParams,
+) {
+  return apiFetch(`/pharmacy/issues/page?${params.toString()}`, session);
+}
+
+export function fetchPharmacyIssueFilterOptions(
+  session: ApiSession,
+  params: URLSearchParams,
+) {
+  return apiFetch(
+    `/pharmacy/issues/filter-options?${params.toString()}`,
+    session,
+  );
+}
+
 export function fetchPharmacyMedicines(session: ApiSession, signal?: AbortSignal) {
   return apiFetch("/pharmacy/medicines", session, { signal });
 }

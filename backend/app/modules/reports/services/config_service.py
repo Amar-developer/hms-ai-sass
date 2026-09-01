@@ -41,7 +41,15 @@ def load_monthly_report_config(session: Session, tenant_id: str) -> dict:
         "send_day": int(values.get(SettingKey.REPORT_MONTHLY_EMAIL_SEND_DAY, 1) or 1),
         "filters": values.get(
             SettingKey.REPORT_MONTHLY_EMAIL_FILTERS,
-            {"overall": True, "doctor": True, "department": True, "invoice": True},
+            {
+                "overall": True,
+                "doctor": True,
+                "vendor": True,
+                "department": True,
+                "invoice": True,
+                "collections": True,
+                "include_patient_details": False,
+            },
         )
         or {},
         "last_sent_period": str(

@@ -140,8 +140,19 @@ export function useSuperAdminData(apiSession: any) {
       return;
     }
     const requestSequence = ++tenantAccessLoadSequence.current;
-    // Never display one tenant's grantable catalog while another tenant is
-    // loading. Primary-tenant catalogs can contain platform-only permissions.
+    // Never leave the previous tenant's roles/users/departments/branches on
+    // screen while a new tenant's data is loading — those rows are still
+    // clickable, and navigating into a detail page for a record that
+    // belongs to the tenant you just switched away from trips the detail
+    // guard in SuperAdminDashboard (the id won't exist in the freshly
+    // loaded list) and bounces straight back to the listing. Primary-tenant
+    // catalogs can also contain platform-only permissions, so that one was
+    // already cleared eagerly.
+    setRoles([]);
+    setUsers([]);
+    setDepartments([]);
+    setTenantBranches([]);
+    setTenantSubscriptions([]);
     setPermissionCatalog([]);
     setTenantAccessLoading(true);
     try {

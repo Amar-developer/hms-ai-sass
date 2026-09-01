@@ -24,7 +24,7 @@ test.describe("accessibility smoke", () => {
     for (const [moduleLabel, landmarkText] of [
       ["Dashboard", "Tenant Operations Analysis"],
       ["EMR / Patient Management", "EMR / Patient Management"],
-      ["Appointments", "Appointments"],
+      ["OPD Workspace", "OPD Workspace"],
       ["Invoices", "Invoices & Payments"],
     ] as const) {
       test(`@extended ${moduleLabel} has no serious accessibility violations`, async ({
@@ -60,8 +60,8 @@ test.describe("responsive application shell", () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto("/");
       await expect(page.getByTitle("Profile")).toBeVisible();
-      await expect(page.getByPlaceholder("Search a modules")).toBeVisible();
-      await page.getByPlaceholder("Search a modules").fill("Invoices");
+      await expect(page.getByPlaceholder("Search or type a command (Ctrl + G)")).toBeVisible();
+      await page.getByPlaceholder("Search or type a command (Ctrl + G)").fill("Invoices");
       await page.getByRole("button", { name: "Invoices", exact: true }).last().click();
       await expect(page.getByText("Invoices & Payments")).toBeVisible();
     });

@@ -29,7 +29,10 @@ from app.modules.billing.schemas import (
     InvoiceRead,
     PaymentRead,
 )
-from app.modules.billing.services.invoice_status import update_invoice_payment_status
+from app.modules.billing.services.invoice_status import (
+    calculate_invoice_payment_state,
+    update_invoice_payment_status,
+)
 from app.modules.billing.services.membership import invoice_membership_benefit
 from app.modules.billing.services.offers import invoice_offer_benefit
 from app.modules.billing.services.money import ZERO, money_value, percentage_amount
@@ -390,6 +393,17 @@ def read_invoice_detail(
         payment_methods_override=payment_methods,
         adjustment_requests_override=adjustment_requests,
     )
+    if invoice.status != InvoiceStatus.CANCELLED:
+        collected = sum(money_value(payment.amount) for payment in payments)
+        refunded = sum(money_value(payment.refunded_amount) for payment in payments)
+        paid_amount, balance_amount, invoice_status = calculate_invoice_payment_state(
+            total_amount=invoice.total_amount,
+            collected_amount=collected,
+            refunded_amount=refunded,
+        )
+        invoice_response.paid_amount = paid_amount
+        invoice_response.balance_amount = balance_amount
+        invoice_response.status = invoice_status
     return InvoiceDetailRead(
         status=invoice_response.status,
         invoice=invoice_response,

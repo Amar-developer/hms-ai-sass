@@ -1,7 +1,7 @@
 
 export function IPHeader({ view, setView }: any) {
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between bg-white p-3 rounded-lg">
       <div>
         <h3 className="card-title font-bold">IP Management</h3>
         <p className="card-desc text-slate-500">

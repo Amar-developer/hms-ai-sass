@@ -1,16 +1,17 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { PlusCircle } from "lucide-react";
+import { Button } from "@/app/components/common/ui";
 
 export function CreateActionButton({ label, onClick }: any) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center justify-center gap-2 bg-slate-900 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:w-full font-bold text-white shadow-sm transition hover:bg-slate-800"
+      className="primary-action gap-2 p-3 text-xs w-auto shadow-sm "
     >
-      <Plus size={16} />
+      <PlusCircle size={16} />
       <span>{label}</span>
-    </button>
+    </Button>
   );
 }

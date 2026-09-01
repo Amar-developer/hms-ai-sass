@@ -1,10 +1,39 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge, Card, StatusToast } from "@/app/components/common/ui";
+import {
+  Badge,
+  Card,
+  RefreshButton,
+  SearchableSelect,
+  StatusToast,
+} from "@/app/components/common/ui";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import { BreadcrumbSlot, useShellChrome } from "@/features/shell/AppShell";
+import { sortRows } from "@/utils/sortRows";
+import {
+  applyQueryFilters,
+  standardAuditQueryFields,
+  type QueryFieldOption,
+  type QueryFieldSchema,
+  type QueryFilterRow,
+} from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
 import { superAdminPath } from "./routing";
-import { catalogSubscriptionPlans,tenantSelectOptions } from "./helpers";
+import {
+  catalogSubscriptionPlans,
+  groupRolesByName,
+  tenantSelectOptions,
+} from "./helpers";
+import {
+  platformSectionsForUser,
+  superAdminSettingsSections,
+  tenantTypes,
+  tenant_status_options,
+} from "./constants";
 import { Overview } from "./components/overview/Overview";
 import { TenantManagement } from "./components/tenants/TenantManagement";
 import { EditTenant } from "./components/tenants/EditTenant";
@@ -24,7 +53,8 @@ import { PasswordResetModal } from "./components/shared/PasswordResetModal";
 import { SubscriptionManagement } from "./components/subscriptions/SubscriptionManagement";
 import { TenantBranchSettings } from "./components/subscriptions/TenantBranchSettings";
 import { TenantPicker } from "./components/shared/TenantPicker";
-import { WhatsAppIntegrationSettings } from "@/features/admin/components/WhatsAppIntegrationSettings";
+import { WhatsAppIntegrationSettings } from "../admin/whatsapp_integration/WhatsAppIntegrationSettings";
+import { SmsIntegrationSettings } from "../admin/sms_integration/SmsIntegrationSettings";
 import { UserForm } from "@/features/admin/forms/UserForm";
 import { BranchForm } from "@/features/admin/forms/BranchForm";
 import { DepartmentForm } from "@/features/admin/forms/DepartmentForm";
@@ -43,7 +73,39 @@ export function SuperAdminDashboard({
   selectedDetailId = "",
 }: any) {
   const router = useRouter();
+  const { beginNavigation } = useShellChrome();
   const currentSection = section || "overview";
+  const [visitedWhatsAppSettings, setVisitedWhatsAppSettings] = useState(
+    currentSection === "whatsappSettings",
+  );
+  const [visitedSmsSettings, setVisitedSmsSettings] = useState(
+    currentSection === "smsSettings",
+  );
+  useEffect(() => {
+    if (currentSection === "whatsappSettings") {
+      setVisitedWhatsAppSettings(true);
+    }
+    if (currentSection === "smsSettings") setVisitedSmsSettings(true);
+  }, [currentSection]);
+
+  // Tenants/Roles/Users/Departments/Branches share one global search+sort+
+  // custom-filter bar (same pattern as TenantAdmin's listQuery/listSort/
+  // listQueryFilters) since only one of them is ever visible at a time —
+  // reset whenever the section changes so a filter from one entity doesn't
+  // silently no-op in another.
+  const [listQuery, setListQuery] = useState("");
+  const [listSort, setListSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
+  const [listQueryFilters, setListQueryFilters] = useState<QueryFilterRow[]>(
+    [],
+  );
+  useEffect(() => {
+    setListQuery("");
+    setListSort({ key: "updated_at", dir: "desc" });
+    setListQueryFilters([]);
+  }, [currentSection]);
 
   // Children set the target record and then switch section as two separate
   // calls (setSelectedRoleId(id); setSection("roleEdit")). Since the id now
@@ -59,6 +121,7 @@ export function SuperAdminDashboard({
 
   const selectedRoleId = selectedDetailId;
   const selectedUserId = selectedDetailId;
+  console.log(selectedUserId)
   const selectedDepartmentId = selectedDetailId;
   const selectedBranchId = selectedDetailId;
   const setSelectedRoleId = (id: string) => {
@@ -75,9 +138,14 @@ export function SuperAdminDashboard({
   };
 
   function changeSection(nextSection: string) {
-    router.push(superAdminPath(nextSection, pendingIds.current));
+    const path = superAdminPath(nextSection, pendingIds.current);
+    beginNavigation("superadmin", path);
+    router.push(path);
   }
   const [confirmAction, setConfirmAction] = useState<any>(null);
+  function requestSuspendTenant(tenant: any) {
+    setConfirmAction({ kind: "delete", entity: "tenant", tenant });
+  }
   const [tenantSuccess, setTenantSuccess] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
 
@@ -108,17 +176,34 @@ export function SuperAdminDashboard({
       apiSession?.user?.user_type === "support_admin",
   );
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
+  const settingsModuleId = (() => {
+    if (["createTenant", "tenantEdit"].includes(currentSection)) {
+      return "tenants";
+    }
+    if (
+      ["roleCreate", "roleEdit", "rolePermissions", "roleAssign"].includes(
+        currentSection,
+      )
+    ) {
+      return "roles";
+    }
+    return currentSection;
+  })();
+  const permittedSettingsModuleIds = new Set(
+    platformSectionsForUser(apiSession?.user).map(([id]) => id),
+  );
+  const settingsModuleOptions = superAdminSettingsSections
+    .filter(([id]) => permittedSettingsModuleIds.has(id))
+    .map(([id, label]) => ({ value: id, label }));
+  const showSettingsModulePicker = settingsModuleOptions.some(
+    (option) => option.value === settingsModuleId,
+  );
 
   const selectableTenants = tenantSelectOptions(data.tenants);
   const selected =
     selectableTenants.find((t) => t.id === data.selectedId) ||
     selectableTenants.find((t) => t.is_primary) ||
     selectableTenants[0];
-  const settingsTenant = ["settings", "whatsappSettings"].includes(
-    currentSection,
-  )
-    ? selected
-    : null;
   const customerTenants = tenantSelectOptions(
     data.tenants.filter((t) => !t.is_primary),
   );
@@ -145,10 +230,13 @@ export function SuperAdminDashboard({
   const tenantWhatsAppEnabled = Boolean(
     activeTenantPlan?.enabled_modules?.includes("whatsapp"),
   );
+  const tenantSmsEnabled = Boolean(
+    activeTenantPlan?.enabled_modules?.includes("sms"),
+  );
 
   useEffect(() => {
     if (
-      currentSection === "whatsappSettings" &&
+      ["whatsappSettings", "smsSettings"].includes(currentSection) &&
       customerTenants.length > 0 &&
       !customerTenants.some((tenant: any) => tenant.id === data.selectedId)
     ) {
@@ -258,16 +346,7 @@ export function SuperAdminDashboard({
       },
     };
     const route = detailRoutes[currentSection];
-    console.log("[superadmin-detail-guard]", {
-      currentSection,
-      selectedDetailId,
-      busy: data.busy,
-      tenantAccessLoading: data.tenantAccessLoading,
-      usersCount: data.users.length,
-      userIds: data.users.map((u: any) => u.id),
-      route,
-    });
-    if (route && !route.exists) router.replace(superAdminPath(route.list));
+    if (route && !route?.exists) router.replace(superAdminPath(route.list));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     currentSection,
@@ -294,6 +373,183 @@ export function SuperAdminDashboard({
     (branch: any) => branch.id === selectedBranchId,
   );
 
+  function distinctFieldOptions(
+    rows: any[],
+    key: string,
+    labelFor?: (value: string) => string,
+  ): QueryFieldOption[] {
+    const seen = new Map<string, string>();
+    rows.forEach((row) => {
+      const raw = row[key];
+      if (raw === null || raw === undefined || raw === "") return;
+      const value = String(raw);
+      if (!seen.has(value)) seen.set(value, labelFor ? labelFor(value) : value);
+    });
+    return Array.from(seen.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
+  }
+
+  const statusField = (rows: any[]): QueryFieldSchema => ({
+    key: "is_active",
+    label: "Status",
+    type: "select",
+    options: distinctFieldOptions(rows, "is_active", (value) =>
+      value === "true" ? "Active" : "Inactive",
+    ),
+  });
+
+  const userAuditOptions: Record<string, QueryFieldOption[]> = {
+    created_by_user_id: data.users.map((user: any) => ({
+      value: user.id,
+      label: user.name || user.email || user.id,
+    })),
+    updated_by_user_id: data.users.map((user: any) => ({
+      value: user.id,
+      label: user.name || user.email || user.id,
+    })),
+  };
+
+  const groupedRoles = groupRolesByName(data.roles);
+  const nonSuperAdminUsers = data.users.filter(
+    (user: any) => !user.is_super_admin,
+  );
+
+  // Config for whichever of the 5 list sections is currently active — the
+  // shared search/sort/custom-filter bar in the breadcrumb (below) reads
+  // from this instead of each section owning its own fixed status/type
+  // dropdowns and its own Tenant picker.
+  const listSectionConfig: Record<
+    string,
+    { rows: any[]; searchKeys: string[]; queryFields: QueryFieldSchema[] }
+  > = {
+    tenants: {
+      rows: selectableTenants,
+      searchKeys: ["name", "legal_name", "id"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "legal_name", label: "Legal Name", type: "text" },
+        {
+          key: "tenant_type",
+          label: "Type",
+          type: "select",
+          options: tenantTypes.map(([value, label]) => ({ value, label })),
+        },
+        {
+          key: "status",
+          label: "Status",
+          type: "select",
+          options: tenant_status_options.filter(
+            (option) => option.value !== "all",
+          ),
+        },
+        { key: "updated_at", label: "Last Updated", type: "date" },
+      ],
+    },
+    roles: {
+      rows: groupedRoles,
+      searchKeys: ["name", "display_key", "id"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        statusField(groupedRoles),
+        { key: "created_at", label: "Created On", type: "date" },
+        { key: "updated_at", label: "Last Updated", type: "date" },
+      ],
+    },
+    users: {
+      rows: nonSuperAdminUsers,
+      searchKeys: ["name", "email", "mobile", "user_type", "roles", "id"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "email", label: "Email", type: "text" },
+        { key: "mobile", label: "Mobile", type: "text" },
+        {
+          key: "user_type",
+          label: "User Type",
+          type: "select",
+          options: distinctFieldOptions(nonSuperAdminUsers, "user_type"),
+        },
+        statusField(nonSuperAdminUsers),
+      ],
+    },
+    departments: {
+      rows: data.departments,
+      searchKeys: ["name", "code", "description"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "code", label: "Code", type: "text" },
+        { key: "description", label: "Description", type: "text" },
+        statusField(data.departments),
+        ...standardAuditQueryFields({
+          rows: data.departments,
+          filterOptions: userAuditOptions,
+          includeUpdatedBy: true,
+        }),
+      ],
+    },
+    branches: {
+      rows: data.tenantBranches,
+      searchKeys: ["name", "code", "area", "city", "state"],
+      queryFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "code", label: "Code", type: "text" },
+        { key: "city", label: "City", type: "text" },
+        { key: "state", label: "State", type: "text" },
+        statusField(data.tenantBranches),
+        ...standardAuditQueryFields({
+          rows: data.tenantBranches,
+          filterOptions: userAuditOptions,
+          includeUpdatedBy: true,
+        }),
+      ],
+    },
+  };
+
+  const listSortFields = [
+    { key: "name", label: "Name" },
+    { key: "is_active", label: "Status" },
+    { key: "created_at", label: "Created On" },
+    { key: "updated_at", label: "Last Modified" },
+  ];
+
+  const listSectionNouns: Record<string, string> = {
+    tenants: "tenants",
+    roles: "roles",
+    users: "users",
+    departments: "departments",
+    branches: "branches",
+  };
+
+  const activeListConfig = listSectionConfig[currentSection];
+
+  function matchesListQuery(row: any, searchKeys: string[]) {
+    if (!listQuery.trim()) return true;
+    const q = listQuery.trim().toLowerCase();
+    return searchKeys.some((key) =>
+      String(row[key] ?? "")
+        .toLowerCase()
+        .includes(q),
+    );
+  }
+
+  const listRows = useMemo(() => {
+    if (!activeListConfig) return [];
+    return sortRows(
+      applyQueryFilters(
+        activeListConfig.rows.filter((row: any) =>
+          matchesListQuery(row, activeListConfig.searchKeys),
+        ),
+        activeListConfig.queryFields,
+        listQueryFilters,
+      ),
+      listSort,
+      (row: any, key: string) =>
+        key === "updated_at" ? row.updated_at || row.created_at : row[key],
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeListConfig, listQuery, listQueryFilters, listSort]);
+
   if (!isPrivilegedWorkspace)
     return (
       <Card>
@@ -305,29 +561,75 @@ export function SuperAdminDashboard({
     );
 
   return (
-    <div className="min-w-0 space-y-5">
-      <Card className="rounded-lg">
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-          <div>
-            <h3 className="card-title font-bold">
-              {settingsTenant?.name || "MedizinHub HMS Primary Tenant"}
-            </h3>
-            <p className="card-desc text-slate-500">
-              {settingsTenant
-                ? "Manage tenant settings, branches, numbering, modules, and providers for the selected tenant."
-                : "Manage tenants, roles, subscriptions, and platform settings from separate pages."}
-            </p>
-          </div>
-          <Badge tone="blue" className="px-2 py-2 lg:px-4 lg:py-3 text-xs rounded-lg">
-            {isRoot
-              ? "Root Platform Access"
-              : apiSession?.user?.user_type === "support_admin"
-                ? "Temporary Support Access"
-                : "Scoped Platform Access"}
-          </Badge>
-        </div>
-      </Card>
+    <div className="min-w-0 ">
       <StatusToast message={data.message} onClose={() => data.setMessage("")} />
+      {showSettingsModulePicker && (
+        <BreadcrumbSlot>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="hidden shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:inline">
+              Settings module
+            </span>
+            <SearchableSelect
+              value={settingsModuleId}
+              onChange={openListing}
+              options={settingsModuleOptions}
+              placeholder="Open settings module"
+              searchable={false}
+              className="w-[170px] sm:w-[210px]"
+            />
+          </div>
+        </BreadcrumbSlot>
+      )}
+      {activeListConfig && !["tenants", "roles"].includes(currentSection) && (
+        <BreadcrumbSlot>
+          <div className="flex items-center gap-2">
+            <AdaptiveResultCount
+              shown={listRows.length}
+              total={activeListConfig.rows.length}
+              noun={listSectionNouns[currentSection] || "records"}
+            />
+            <RefreshButton
+              onRefresh={data.reload}
+              className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+            />
+            <AdaptiveFilterTrigger
+              schema={{
+                id: `superadmin-${currentSection}`,
+                searchLabel: "Search",
+                searchPlaceholder: "Search",
+                filters: [],
+                sortFields: listSortFields,
+              }}
+              query={listQuery}
+              setQuery={setListQuery}
+              filterValues={{}}
+              sort={listSort}
+              onSortChange={setListSort}
+              showSort={false}
+              onReset={() => {
+                setListQuery("");
+                setListSort(null);
+              }}
+              queryFields={activeListConfig.queryFields}
+              queryFilters={listQueryFilters}
+              onQueryFiltersChange={setListQueryFilters}
+            >
+              {isRoot && currentSection !== "tenants" && (
+                <TenantPicker
+                  tenants={selectableTenants}
+                  selectedId={data.selectedId}
+                  setSelectedId={setSelectedTenantId}
+                />
+              )}
+            </AdaptiveFilterTrigger>
+            <AdaptiveSortTrigger
+              fields={listSortFields}
+              sort={listSort}
+              onSortChange={setListSort}
+            />
+          </div>
+        </BreadcrumbSlot>
+      )}
       {currentSection === "overview" && (
         <Overview
           customerTenants={customerTenants}
@@ -350,15 +652,14 @@ export function SuperAdminDashboard({
       )}
       {currentSection === "tenants" && (
         <TenantManagement
-          tenants={selectableTenants}
+          rows={listRows}
           setSelectedId={setSelectedTenantId}
           setSection={changeSection}
           switchTenant={switchTenant}
           apiSession={apiSession}
           canCopyIds={canCopyIds}
           busy={data.busy}
-          suspendTenant={actions.suspendTenant}
-          onRefresh={data.reload}
+          suspendTenant={requestSuspendTenant}
         />
       )}
       {currentSection === "tenantEdit" && selected && (
@@ -374,7 +675,7 @@ export function SuperAdminDashboard({
           subscriptions={data.tenantSubscriptions}
           busy={data.busy}
           updateTenant={(e: any) => actions.updateTenant(e, selected)}
-          suspendTenant={actions.suspendTenant}
+          suspendTenant={requestSuspendTenant}
           back={() => changeSection("tenants")}
         />
       )}
@@ -385,22 +686,21 @@ export function SuperAdminDashboard({
           templates={data.primaryTemplates}
           busy={data.busy}
           createTenant={actions.createTenant}
+          back={() => changeSection("tenants")}
         />
       )}
       {currentSection === "roles" && (
         <RolesManagement
-          tenants={selectableTenants}
-          customerTenants={customerTenants}
           selected={selected}
+          tenants={selectableTenants}
           selectedId={data.selectedId}
           setSelectedId={setSelectedTenantId}
-          roles={data.roles}
+          rows={listRows}
           canCopyIds={canCopyIds}
           setSelectedRoleId={setSelectedRoleId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
-          onRefresh={data.reload}
-          busy={data.busy}
+          busy={data.busy || data.tenantAccessLoading}
         />
       )}
       {currentSection === "roleCreate" && (
@@ -448,16 +748,12 @@ export function SuperAdminDashboard({
       )}
       {currentSection === "users" && (
         <TenantUsers
-          tenants={selectableTenants}
-          selectedId={data.selectedId}
-          setSelectedId={setSelectedTenantId}
-          users={data.users.filter((user: any) => !user.is_super_admin)}
+          rows={listRows}
           canCopyIds={canCopyIds}
           setSelectedUserId={setSelectedUserId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
-          onRefresh={data.reload}
-          busy={data.busy}
+          busy={data.busy || data.tenantAccessLoading}
         />
       )}
       {currentSection === "userCreate" && (
@@ -491,17 +787,12 @@ export function SuperAdminDashboard({
       )}
       {currentSection === "departments" && (
         <DepartmentsManagement
-          tenants={selectableTenants}
-          customerTenants={customerTenants}
           selected={selected}
-          selectedId={data.selectedId}
-          setSelectedId={setSelectedTenantId}
-          departments={data.departments}
+          rows={listRows}
           setSelectedDepartmentId={setSelectedDepartmentId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
-          onRefresh={data.reload}
-          busy={data.busy}
+          busy={data.busy || data.tenantAccessLoading}
         />
       )}
       {currentSection === "departmentCreate" && (
@@ -546,17 +837,13 @@ export function SuperAdminDashboard({
       )}
       {currentSection === "branches" && (
         <BranchesManagement
-          tenants={selectableTenants}
           selected={selected}
-          selectedId={data.selectedId}
-          setSelectedId={setSelectedTenantId}
-          branches={data.tenantBranches}
+          rows={listRows}
           canCopyIds={canCopyIds}
           setSelectedBranchId={setSelectedBranchId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
-          onRefresh={data.reload}
-          busy={data.busy}
+          busy={data.busy || data.tenantAccessLoading}
         />
       )}
       {currentSection === "branchCreate" && (
@@ -616,22 +903,45 @@ export function SuperAdminDashboard({
           reloadPlans={data.reload}
         />
       )}
-      {currentSection === "whatsappSettings" && (
-        <div className="space-y-5">
-          <Card>
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-              <TenantPicker
-                tenants={customerTenants}
-                selectedId={data.selectedId}
-                setSelectedId={setSelectedTenantId}
-              />
-              <Badge tone={tenantWhatsAppEnabled ? "green" : "slate"} className="normal-badge">
-                {tenantWhatsAppEnabled
-                  ? "Included in active subscription"
-                  : "Not included in active subscription"}
-              </Badge>
-            </div>
-          </Card>
+      {visitedWhatsAppSettings && (
+        <div
+          className={
+            currentSection === "whatsappSettings" ? "space-y-3" : "hidden"
+          }
+        >
+          {currentSection === "whatsappSettings" && (
+            <BreadcrumbSlot>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="hidden shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:inline">
+                  Tenant
+                </span>
+                <SearchableSelect
+                  value={data.selectedId}
+                  onChange={setSelectedTenantId}
+                  options={customerTenants.map((tenant: any) => ({
+                    value: tenant.id,
+                    label: tenant.name,
+                  }))}
+                  placeholder="Select tenant"
+                  searchable={false}
+                  className="w-[150px] sm:w-[190px]"
+                />
+                <Badge
+                  tone={tenantWhatsAppEnabled ? "green" : "slate"}
+                  className="normal-label inline-flex whitespace-nowrap"
+                >
+                  <span className="sm:hidden">
+                    {tenantWhatsAppEnabled ? "Included" : "Not included"}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {tenantWhatsAppEnabled
+                      ? "Included in active subscription"
+                      : "Not included in active subscription"}
+                  </span>
+                </Badge>
+              </div>
+            </BreadcrumbSlot>
+          )}
           {tenantWhatsAppEnabled ? (
             <WhatsAppIntegrationSettings
               apiSession={apiSession}
@@ -648,12 +958,64 @@ export function SuperAdminDashboard({
           )}
         </div>
       )}
+      {visitedSmsSettings && (
+        <div
+          className={
+            currentSection === "smsSettings" ? "space-y-5" : "hidden"
+          }
+        >
+          <Card className="mt-3">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <TenantPicker
+                tenants={customerTenants}
+                selectedId={data.selectedId}
+                setSelectedId={setSelectedTenantId}
+              />
+              <Badge
+                tone={tenantSmsEnabled ? "green" : "slate"}
+                className="normal-badge"
+              >
+                {tenantSmsEnabled
+                  ? "Included in active subscription"
+                  : "Not included in active subscription"}
+              </Badge>
+            </div>
+          </Card>
+          {tenantSmsEnabled ? (
+            <SmsIntegrationSettings
+              apiSession={apiSession}
+              tenantId={data.selectedId}
+            />
+          ) : (
+            <Card>
+              <h3 className="card-title font-bold">SMS Settings</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Enable the SMS module in the tenant&apos;s subscription before
+                configuring SMSCountry and DLT template details.
+              </p>
+            </Card>
+          )}
+        </div>
+      )}
       {confirmAction && (
         <ConfirmModal
           action={confirmAction}
           busy={data.busy}
+          title={
+            confirmAction.entity === "tenant" ? "Deactivate Tenant" : undefined
+          }
+          message={
+            confirmAction.entity === "tenant"
+              ? `Deactivate tenant ${confirmAction.tenant?.name}? This suspends access and keeps tenant records for audit and compliance.`
+              : undefined
+          }
+          confirmLabel={
+            confirmAction.entity === "tenant" ? "Yes, Deactivate" : undefined
+          }
           onCancel={() => setConfirmAction(null)}
           onConfirm={() => {
+            if (confirmAction.entity === "tenant")
+              return actions.suspendTenant(confirmAction.tenant);
             if (confirmAction.entity === "branch")
               return confirmAction.kind === "delete"
                 ? actions.deleteEntity("branches", confirmAction.branch)

@@ -1,9 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  ActionButton,
-  Badge,
+  BadgeCheck,
+  Ban,
+  Clock3,
+  PackageCheck,
+  Pill,
+  PlusCircle,
+  Stethoscope,
+} from "lucide-react";
+import { newSegment } from "@/lib/routeSlugs";
+import {
   Button,
   Card,
   Input,
@@ -13,23 +22,20 @@ import {
 } from "@/app/components/common/ui";
 import { FormField, NumberField } from "@/app/components/FormElements";
 import { SearchPicker } from "@/app/components/clinicalRows";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { displayDate, displayDateTime, today } from "@/utils/helper";
+import { money, today } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
+import { DataTable } from "@/app/components/common/DataTable";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
-import {
-  isBilledIssue,
-  isCancelledIssue,
-  isDispensed,
-} from "@/features/pharmacy/helpers";
 import { ConsultPrescriptionModal } from "./components/ConsultPrescriptionModal";
 import { MedicineDetailModal } from "./components/MedicineDetailModal";
 import { PatientSearchSelect } from "../patients/components/PatientSearchSelect";
-import {
-  canCopyDatabaseIds,
-  CopyIdButton,
-} from "@/app/components/common/CopyIdButton";
-import { RowActions } from "../admin/components/RowActions";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import type { PharmacyIssueSummary } from "@/lib/contracts";
 import {
   useAvailableMedicines,
@@ -37,16 +43,56 @@ import {
   usePharmacyActions,
   usePharmacyWorkspace,
 } from "./api";
+import {
+  fetchPharmacyIssueFilterOptions,
+  fetchPharmacyIssuePage,
+} from "./api/pharmacy.api";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { getPharmacyColumns, getPrescriptionColumns } from "./Column";
+import { getPharmacyTableSchema, getPharmacyQueryFields } from "./filterSchema";
+import {
+  type QueryFieldOption,
+  type QueryFilterRow,
+} from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
+import DataHeader from "@/app/components/common/DataHeader";
 
 const pageSize = 10;
+const PHARMACY_STATUS_TAB_ID = "pharmacy-worklist-status-tab";
+
+const pharmacyStatusTabs = [
+  { id: "all", label: "All Issues", icon: Pill },
+  { id: "requested", label: "Requested", icon: Clock3 },
+  { id: "partially_dispensed", label: "Partial", icon: PackageCheck },
+  { id: "dispensed", label: "Dispensed", icon: BadgeCheck },
+  { id: "billed", label: "Billed", icon: BadgeCheck },
+  { id: "cancelled", label: "Cancelled", icon: Ban },
+];
+
+function currentMonthRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const format = (date: Date) =>
+    [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+  return { fromDate: format(from), toDate: format(to) };
+}
 
 export function Pharmacy({
   apiSession,
   branchId,
   appointments,
   loadLiveData,
+  numberingRules,
+  onConsultationPendingCountChange,
+  workspaceMode = "direct",
+  view = "list",
 }: any) {
+  const router = useRouter();
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [patientId, setPatientId] = useState("");
   const [source, setSource] = useState("op_direct");
@@ -81,9 +127,7 @@ export function Pharmacy({
   const [supplierName, setSupplierName] = useState("Demo Pharma Supplier");
   const [purchaseQty, setPurchaseQty] = useState("50");
   const [purchaseOrderId, setPurchaseOrderId] = useState("PO-001");
-  const [purchaseDate, setPurchaseDate] = useState(() =>
-    today(),
-  );
+  const [purchaseDate, setPurchaseDate] = useState(() => today());
   const [purchaseDiscount, setPurchaseDiscount] = useState("0");
   const [lineDiscount, setLineDiscount] = useState("0");
   const [cgst, setCgst] = useState("6");
@@ -96,6 +140,34 @@ export function Pharmacy({
     useState<PharmacyIssueSummary | null>(null);
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [page, setPage] = useState(1);
+  const [worklistQuery, setWorklistQuery] = useState("");
+  const [worklistSort, setWorklistSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
+  const [worklistQueryFilters, setWorklistQueryFilters] = useState<
+    QueryFilterRow[]
+  >([]);
+  const [issuePageRows, setIssuePageRows] = useState<PharmacyIssueSummary[]>(
+    [],
+  );
+  const [issueTotal, setIssueTotal] = useState(0);
+  const [issueLoading, setIssueLoading] = useState(false);
+  const [issueSummaryRows, setIssueSummaryRows] = useState<
+    PharmacyIssueSummary[]
+  >([]);
+  const [issueSummaryTotal, setIssueSummaryTotal] = useState(0);
+  const [issueTabCountRows, setIssueTabCountRows] = useState<
+    PharmacyIssueSummary[]
+  >([]);
+  const [issueTabCountTotal, setIssueTabCountTotal] = useState(0);
+  const [filterOptions, setFilterOptions] = useState<
+    Record<string, QueryFieldOption[]>
+  >({});
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [worklistFromDate, setWorklistFromDate] = useState("");
+  const [worklistToDate, setWorklistToDate] = useState("");
 
   const { issues, issuesLoaded, medicines, batches, suppliers, load } =
     usePharmacyWorkspace(apiSession, branchId, {
@@ -151,6 +223,23 @@ export function Pharmacy({
           ),
     [appointments, issuedConsultationIds, issuesLoaded],
   );
+  const visibleConsultationPrescriptions = useMemo(
+    () =>
+      prescriptionReady.filter(
+        (a: any) => !dismissedConsultations.includes(a.consultationId),
+      ),
+    [prescriptionReady, dismissedConsultations],
+  );
+
+  useEffect(() => {
+    if (workspaceMode !== "consultation") return;
+    onConsultationPendingCountChange?.(visibleConsultationPrescriptions.length);
+  }, [
+    workspaceMode,
+    visibleConsultationPrescriptions.length,
+    onConsultationPendingCountChange,
+  ]);
+
   const invoicedIssueIds = useMemo(
     () =>
       new Set([
@@ -161,16 +250,282 @@ export function Pharmacy({
       ]),
     [issues, localInvoicedIssueIds],
   );
-  const totalPages = Math.max(1, Math.ceil(issues.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const pharmacyPageRows = issues.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
+  const worklistSourceOptions = useMemo(() => {
+    const set = new Set<string>();
+    issues.forEach((issue: any) => {
+      if (issue.source) set.add(String(issue.source));
+    });
+    return [
+      { value: "all", label: "All Sources" },
+      ...Array.from(set).map((source) => ({
+        value: source,
+        label: humanizeOptionLabel(source),
+      })),
+    ];
+  }, [issues]);
+
+  const worklistStatusOptions = useMemo(() => {
+    const set = new Set<string>();
+    issues.forEach((issue: any) => {
+      if (issue.status) set.add(String(issue.status));
+    });
+    return [
+      { value: "all", label: "All Status" },
+      ...Array.from(set).map((status) => ({
+        value: status,
+        label: humanizeOptionLabel(status),
+      })),
+    ];
+  }, [issues]);
+
+  const pharmacySchema = getPharmacyTableSchema();
+  const pharmacyQueryFields = useMemo(
+    () =>
+      getPharmacyQueryFields({
+        sourceOptions: worklistSourceOptions,
+        statusOptions: worklistStatusOptions,
+        rows: issuePageRows,
+        filterOptions,
+      }),
+    [
+      worklistSourceOptions,
+      worklistStatusOptions,
+      issuePageRows,
+      filterOptions,
+    ],
   );
+
   const { patients, patientMap } = usePatientReferencesQuery(
     apiSession,
-    issues.map((issue: any) => issue.patient_id),
+    [...issues, ...issuePageRows].map((issue: any) => issue.patient_id),
   );
+
+  async function loadPharmacyIssuePage(nextPage = page) {
+    if (!apiSession) return;
+    setIssueLoading(true);
+    const params = new URLSearchParams({
+      limit: String(pageSize),
+      offset: String((nextPage - 1) * pageSize),
+    });
+    if (branchId) params.set("branch_id", branchId);
+    if (worklistQuery.trim()) params.set("q", worklistQuery.trim());
+    if (worklistFromDate) params.set("from_date", worklistFromDate);
+    if (worklistToDate) params.set("to_date", worklistToDate);
+    const filters = [...worklistQueryFilters];
+    if (amountMin.trim()) {
+      filters.push({
+        id: "amount-min",
+        field: "amount",
+        operator: "gte",
+        value: amountMin.trim(),
+      });
+    }
+    if (amountMax.trim()) {
+      filters.push({
+        id: "amount-max",
+        field: "amount",
+        operator: "lte",
+        value: amountMax.trim(),
+      });
+    }
+    if (filters.length) params.set("filters", JSON.stringify(filters));
+    if (worklistSort) params.set("sort", JSON.stringify(worklistSort));
+    try {
+      const result = await fetchPharmacyIssuePage(apiSession, params);
+      setIssuePageRows(result?.items || []);
+      setIssueTotal(Number(result?.total || 0));
+    } catch (err: any) {
+      setMessage(err.message || "Could not load pharmacy issues.");
+    } finally {
+      setIssueLoading(false);
+    }
+  }
+
+  function buildPharmacySummaryParams(offset: number) {
+    const params = new URLSearchParams({
+      limit: "100",
+      offset: String(offset),
+    });
+    if (branchId) params.set("branch_id", branchId);
+    if (worklistQuery.trim()) params.set("q", worklistQuery.trim());
+
+    const hasActiveFilters = Boolean(
+      worklistQuery.trim() ||
+      worklistQueryFilters.length ||
+      amountMin.trim() ||
+      amountMax.trim() ||
+      worklistFromDate ||
+      worklistToDate,
+    );
+    const defaultMonth = currentMonthRange();
+    const fromDate = hasActiveFilters
+      ? worklistFromDate
+      : defaultMonth.fromDate;
+    const toDate = hasActiveFilters ? worklistToDate : defaultMonth.toDate;
+    if (fromDate) params.set("from_date", fromDate);
+    if (toDate) params.set("to_date", toDate);
+
+    const filters = [...worklistQueryFilters];
+    if (amountMin.trim()) {
+      filters.push({
+        id: "amount-min",
+        field: "amount",
+        operator: "gte",
+        value: amountMin.trim(),
+      });
+    }
+    if (amountMax.trim()) {
+      filters.push({
+        id: "amount-max",
+        field: "amount",
+        operator: "lte",
+        value: amountMax.trim(),
+      });
+    }
+    if (filters.length) params.set("filters", JSON.stringify(filters));
+    return params;
+  }
+
+  function buildPharmacyTabCountParams(offset: number) {
+    const params = new URLSearchParams({
+      limit: "100",
+      offset: String(offset),
+    });
+    if (branchId) params.set("branch_id", branchId);
+    if (worklistQuery.trim()) params.set("q", worklistQuery.trim());
+    if (worklistFromDate) params.set("from_date", worklistFromDate);
+    if (worklistToDate) params.set("to_date", worklistToDate);
+
+    const filters = worklistQueryFilters.filter(
+      (row) => row.id !== PHARMACY_STATUS_TAB_ID,
+    );
+    if (amountMin.trim()) {
+      filters.push({
+        id: "amount-min",
+        field: "amount",
+        operator: "gte",
+        value: amountMin.trim(),
+      });
+    }
+    if (amountMax.trim()) {
+      filters.push({
+        id: "amount-max",
+        field: "amount",
+        operator: "lte",
+        value: amountMax.trim(),
+      });
+    }
+    if (filters.length) params.set("filters", JSON.stringify(filters));
+    return params;
+  }
+
+  async function loadPharmacySummary() {
+    if (!apiSession) return;
+    try {
+      const first = await fetchPharmacyIssuePage(
+        apiSession,
+        buildPharmacySummaryParams(0),
+      );
+      const total = Number(first?.total || 0);
+      const rows = Array.isArray(first?.items) ? [...first.items] : [];
+      for (let offset = rows.length; offset < total; offset += 100) {
+        const next = await fetchPharmacyIssuePage(
+          apiSession,
+          buildPharmacySummaryParams(offset),
+        );
+        rows.push(...(Array.isArray(next?.items) ? next.items : []));
+      }
+      setIssueSummaryRows(rows);
+      setIssueSummaryTotal(total);
+    } catch {
+      setIssueSummaryRows([]);
+      setIssueSummaryTotal(0);
+    }
+  }
+
+  async function loadPharmacyTabCounts() {
+    if (!apiSession) return;
+    try {
+      const first = await fetchPharmacyIssuePage(
+        apiSession,
+        buildPharmacyTabCountParams(0),
+      );
+      const total = Number(first?.total || 0);
+      const rows = Array.isArray(first?.items) ? [...first.items] : [];
+      for (let offset = rows.length; offset < total; offset += 100) {
+        const next = await fetchPharmacyIssuePage(
+          apiSession,
+          buildPharmacyTabCountParams(offset),
+        );
+        rows.push(...(Array.isArray(next?.items) ? next.items : []));
+      }
+      setIssueTabCountRows(rows);
+      setIssueTabCountTotal(total);
+    } catch {
+      setIssueTabCountRows([]);
+      setIssueTabCountTotal(0);
+    }
+  }
+
+  async function loadPharmacyFilterOptions() {
+    if (!apiSession) return;
+    const params = new URLSearchParams();
+    if (branchId) params.set("branch_id", branchId);
+    const result = await fetchPharmacyIssueFilterOptions(
+      apiSession,
+      params,
+    ).catch(() => ({}));
+    setFilterOptions(result || {});
+  }
+
+  const totalPages = Math.max(1, Math.ceil(issueTotal / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pharmacyPageRows = issuePageRows;
+  const activePharmacyStatus =
+    worklistQueryFilters.find((row) => row.id === PHARMACY_STATUS_TAB_ID)
+      ?.value || "all";
+  const pharmacyStatusCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    issueTabCountRows.forEach((issue: any) => {
+      const status = String(issue.status || "");
+      if (status) counts.set(status, (counts.get(status) || 0) + 1);
+    });
+    return counts;
+  }, [issueTabCountRows]);
+  const pharmacySummaryAmount = useMemo(
+    () =>
+      issueSummaryRows.reduce(
+        (total: number, issue: any) => total + Number(issue.amount || 0),
+        0,
+      ),
+    [issueSummaryRows],
+  );
+  const pharmacyEnterAmountCount = useMemo(
+    () =>
+      issueSummaryRows.filter((issue: any) => Number(issue.amount || 0) <= 0)
+        .length,
+    [issueSummaryRows],
+  );
+
+  function selectPharmacyStatus(status: string) {
+    const otherFilters = worklistQueryFilters.filter(
+      (row) => row.id !== PHARMACY_STATUS_TAB_ID,
+    );
+    setWorklistQueryFilters(
+      status === "all"
+        ? otherFilters
+        : [
+            ...otherFilters,
+            {
+              id: PHARMACY_STATUS_TAB_ID,
+              field: "status",
+              operator: "equals",
+              value: status,
+            },
+          ],
+    );
+    setPage(1);
+  }
   useEffect(() => {
     if (!medicineId && medicines[0]?.id) setMedicineId(medicines[0].id);
   }, [medicines, medicineId]);
@@ -182,6 +537,38 @@ export function Pharmacy({
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
   useEffect(() => {
+    setPage(1);
+  }, [
+    worklistQuery,
+    worklistQueryFilters,
+    worklistSort,
+    amountMin,
+    amountMax,
+    worklistFromDate,
+    worklistToDate,
+  ]);
+  useEffect(() => {
+    if (!apiSession) return;
+    const timer = window.setTimeout(() => {
+      void loadPharmacyIssuePage(page);
+      void loadPharmacySummary();
+      void loadPharmacyTabCounts();
+      void loadPharmacyFilterOptions();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [
+    apiSession?.tenantId,
+    branchId,
+    page,
+    worklistQuery,
+    worklistQueryFilters,
+    worklistSort,
+    amountMin,
+    amountMax,
+    worklistFromDate,
+    worklistToDate,
+  ]);
+  useEffect(() => {
     if (typeof window !== "undefined")
       localStorage.setItem(
         "medizinhub.pharmacyDismissedConsultations",
@@ -191,6 +578,25 @@ export function Pharmacy({
   useEffect(() => {
     if (consultDetailError) setMessage(consultDetailError);
   }, [consultDetailError]);
+
+  function resetWorklistFilters() {
+    setWorklistQuery("");
+    setWorklistQueryFilters([]);
+    setWorklistSort(null);
+    setAmountMin("");
+    setAmountMax("");
+    setWorklistFromDate("");
+    setWorklistToDate("");
+    setPage(1);
+  }
+
+  function refreshPharmacyWorkspace() {
+    void load();
+    void loadPharmacyIssuePage(page);
+    void loadPharmacySummary();
+    void loadPharmacyTabCounts();
+    void loadPharmacyFilterOptions();
+  }
 
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
@@ -263,6 +669,10 @@ export function Pharmacy({
       setIssueItems([]);
       setSelectedMedicineId("");
       setMedicineSearch("");
+      setPage(1);
+      void loadPharmacyIssuePage(1);
+      void loadPharmacyFilterOptions();
+      router.push("/pharmacy");
     }
   }
 
@@ -281,6 +691,10 @@ export function Pharmacy({
   }
 
   async function handleGenerateInvoice(issue: any) {
+    if (Number(issue?.amount || 0) <= 0) {
+      setMessage("Enter pharmacy issue amount before generating invoice.");
+      return;
+    }
     const detail = await generateInvoice(issue);
     if (detail) {
       setLocalInvoicedIssueIds((ids) =>
@@ -311,10 +725,54 @@ export function Pharmacy({
     const amount = Number(editingAmountValue || 0);
     const ok = await updateIssueAmount(issue, amount);
     if (ok) {
+      // updateIssueAmount only reloads usePharmacyWorkspace's own `issues`
+      // list — the worklist table renders the separately server-paginated
+      // `issuePageRows`/`issueSummaryRows` (the latter feeding the "Enter
+      // Amount" count and total amount tiles), which that reload never
+      // touches, so the edited amount only showed up after a manual
+      // refresh/page reload. Patch them in place here instead of waiting on
+      // another fetch.
+      const patchAmount = (rows: typeof issuePageRows) =>
+        rows.map((row) => (row.id === issue.id ? { ...row, amount } : row));
+      setIssuePageRows(patchAmount);
+      setIssueSummaryRows(patchAmount);
       setEditingAmountId("");
       setEditingAmountValue("");
     }
   }
+
+  function isAmountBusy(issue: any) {
+    return busy === `amount-${issue.id}`;
+  }
+
+  const prescriptionColumns = getPrescriptionColumns({
+    busy,
+    canCreatePharmacyIssue,
+    numberingRules,
+    onCreate: (a: any) => createFromConsultation(a),
+    onDismiss: (a: any) =>
+      setDismissedConsultations((ids: string[]) => [...ids, a.consultationId]),
+  });
+
+  const pharmacyColumns = getPharmacyColumns({
+    pageSize,
+    safePage,
+    patientMap,
+    canCopyIds,
+    invoicedIssueIds,
+    editingAmountId,
+    editingAmountValue,
+    setEditingAmountValue,
+    startEditAmount,
+    cancelEditAmount,
+    saveIssueAmount,
+    amountBusy: isAmountBusy,
+    canEditPharmacyIssue,
+    canDispensePharmacyIssue,
+    canBillPharmacyIssue,
+    busy,
+    handleIssueAction,
+  });
 
   if (!apiSession)
     return (
@@ -325,37 +783,59 @@ export function Pharmacy({
         </p>
       </Card>
     );
-  return (
-    <div className="space-y-6">
-      {selectedIssue && (
-        <MedicineDetailModal
-          issue={selectedIssue}
-          apiSession={apiSession}
-          patient={
-            selectedIssue.patient_name ||
-            (patientMap.get(selectedIssue.patient_id) as any)?.name ||
-            publicDisplayValue(selectedIssue.patient_id, "Patient")
-          }
-          onClose={() => setSelectedIssue(null)}
-        />
-      )}
-      {viewConsult && (
-        <ConsultPrescriptionModal
-          a={viewConsult}
-          detail={consultDetail}
-          loading={loadingDetail}
-          busy={busy}
-          onClose={() => setViewConsult(null)}
-          onCreate={(a: any) => {
-            setViewConsult(null);
-            createFromConsultation(a);
-          }}
-        />
-      )}
-      <StatusToast message={message} onClose={() => setMessage("")} />
-      {canCreatePharmacyIssue && (
-        <Card>
-          <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
+
+  if (workspaceMode === "consultation") {
+    const visiblePrescriptions = visibleConsultationPrescriptions;
+    return (
+      <div className="space-y-3">
+        {viewConsult && (
+          <ConsultPrescriptionModal
+            a={viewConsult}
+            detail={consultDetail}
+            loading={loadingDetail}
+            busy={busy}
+            onClose={() => setViewConsult(null)}
+            onCreate={(a: any, pricePayload?: any) => {
+              setViewConsult(null);
+              createFromConsultation(a, pricePayload);
+            }}
+          />
+        )}
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        <Card className="pt-2">
+          <div className="mt-2">
+            <DataTable
+              columns={prescriptionColumns}
+              data={visiblePrescriptions}
+              loading={!issuesLoaded}
+              emptyMessage="No consultation prescriptions are waiting."
+              emptyDescription="Prescriptions from signed OPD consultations will show up here."
+              emptyIcon={Stethoscope}
+              minBodyHeight={`${visiblePrescriptions.length > 0 ? "" : "220px"}`}
+              rowClassName="hover:bg-emerald-50/30"
+              onRowClick={(row: any) => setViewConsult(row)}
+            />
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (view === "create" && canCreatePharmacyIssue) {
+    return (
+      <div className="space-y-4">
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        <button
+          type="button"
+          onClick={() => router.push("/pharmacy")}
+          className="close-button font-bold bg-white"
+        >
+          Back to Worklist
+        </button>
+        <Card className="p-4 bg-white">
+          <h3 className="card-title font-bold">
+            Create Direct Prescription Order
+          </h3>
           <form
             onSubmit={handleCreateDirect}
             className="mt-4 grid gap-3 md:grid-cols-4"
@@ -449,10 +929,7 @@ export function Pharmacy({
               >
                 Add
               </button>
-              <Button
-                disabled={busy === "create"}
-                className="w-[130px] px-1 lg:px-2 py-2.5"
-              >
+              <Button disabled={busy === "create"} className="save-button">
                 {busy === "create" ? "Saving..." : "Create Order"}
               </Button>
             </div>
@@ -473,317 +950,169 @@ export function Pharmacy({
             )}
           </form>
         </Card>
-      )}
-      <Card>
-        <h3 className="card-title font-bold">Doctor Prescriptions</h3>
-        <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
-          {(() => {
-            const visible = prescriptionReady.filter(
-              (a: any) => !dismissedConsultations.includes(a.consultationId),
-            );
-            return (
-              <table className="w-full min-w-[900px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Prescription</th>
-                    <th className="px-4 py-3">Patient</th>
-                    <th className="px-4 py-3">Doctor</th>
-                    <th className="px-4 py-3">Date &amp; Time</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {visible.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-5 text-slate-500">
-                        No completed prescriptions ready.
-                      </td>
-                    </tr>
-                  ) : (
-                    visible.slice(0, 6).map((a: any) => (
-                      <tr key={a.id}>
-                        <td className="px-4 py-3 font-bold">
-                          {a.token || "-"}
-                        </td>
-                        <td className="px-4 py-3 font-semibold">{a.patient}</td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {a.doctor && a.doctor !== "Unassigned"
-                            ? a.doctor
-                            : "-"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                          {displayDateTime(
-                            a.consultationSignedAt ||
-                              a.consultationCreatedAt ||
-                              a.appointmentDate,
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end gap-2">
-                            <ActionButton
-                              onClick={() => setViewConsult(a)}
-                              className="close-button"
-                            >
-                              View
-                            </ActionButton>
-                            {canCreatePharmacyIssue && (
-                              <Button
-                                disabled={busy === a.consultationId}
-                                onClick={() => createFromConsultation(a)}
-                                className="rounded-lg px-2 py-2 text-xs lg:px-4"
-                              >
-                                {busy === a.consultationId
-                                  ? "Creating..."
-                                  : "Create Issue"}
-                              </Button>
-                            )}
-                            <ActionButton
-                              onClick={() =>
-                                setDismissedConsultations((ids: string[]) => [
-                                  ...ids,
-                                  a.consultationId,
-                                ])
-                              }
-                              className="close-button"
-                            >
-                              Remove
-                            </ActionButton>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            );
-          })()}
-        </div>
-      </Card>
-      <Card>
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="card-title font-bold">Pharmacy Worklist</h3>
-          <RefreshButton onRefresh={load} />
-        </div>
-        <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1060px] table-fixed text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="w-[80px] px-4 py-3">#</th>
-                <th className="w-[150px]">Date & Time</th>
-                <th className="w-[150px]">Patient</th>
-                <th className="w-[140px]">Source</th>
-                <th className="w-[150px]">Status</th>
-                <th className="w-[100px]">Amount</th>
-                <th className="w-[80px] pr-4 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {!issuesLoaded && (
-                <tr>
-                  <td colSpan={7} className="p-0">
-                    <TableSkeleton />
-                  </td>
-                </tr>
-              )}
-              {issuesLoaded && issues.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="card-desc px-4 py-4 text-slate-500"
-                  >
-                    No pharmacy issues yet.
-                  </td>
-                </tr>
-              )}
-              {issuesLoaded && pharmacyPageRows.map((issue: any, index: number) => {
-                const p: any = patientMap.get(issue.patient_id);
-                const selected = selectedIssue?.id === issue.id;
-                const dispensed = isDispensed(issue);
-                const cancelled = isCancelledIssue(issue);
-                const invoiced = invoicedIssueIds.has(issue.id);
-                const billed = isBilledIssue(issue) || invoiced;
-                const rowBusy = busy === issue.id;
-                const invoiceBusy = busy === `invoice-${issue.id}`;
-                const amountBusy = busy === `amount-${issue.id}`;
-                const statusLabel = billed
-                  ? "Billed"
-                  : humanizeOptionLabel(issue.status);
-                const statusTone = billed
-                  ? "green"
-                  : dispensed
-                    ? "green"
-                    : cancelled
-                      ? "red"
-                      : "amber";
-                return (
-                  <tr
-                    key={issue.id}
-                    onClick={() => setSelectedIssue(issue)}
-                    className={`cursor-pointer transition hover:bg-slate-50 ${selected ? "bg-slate-50" : ""}`}
-                  >
-                    <td className="px-4 py-4">
-                      <b>{(safePage - 1) * pageSize + index + 1}</b>
-                    </td>
-                    <td>
-                      <b className="text-xs">{displayDate(issue.created_at)}</b>
-                      <p className="text-xs text-slate-500">
-                        {new Date(issue.created_at).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </td>
-                    <td className="text-xs">
-                      <div className="flex items-center gap-2">
-                        <span>
-                          {issue.patient_name ||
-                            p?.name ||
-                            publicDisplayValue(issue.patient_id, "Patient")}
-                        </span>
-                        <CopyIdButton
-                          value={issue.id}
-                          label="Pharmacy Issue ID"
-                          allowed={canCopyIds}
-                        />
-                      </div>
-                    </td>
-                    <td>
-                      <Badge className="table-status w-[70%] text-xs px-2">
-                        {humanizeOptionLabel(issue.source)}
-                      </Badge>
-                    </td>
-                    <td>
-                      <Badge
-                        tone={statusTone as any}
-                        className="table-status w-[60%] text-xs"
-                      >
-                        {statusLabel}
-                      </Badge>
-                    </td>
-                    <td onClick={(event) => event.stopPropagation()}>
-                      {editingAmountId === issue.id ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={0}
-                            autoFocus
-                            value={editingAmountValue}
-                            onChange={(event: any) =>
-                              setEditingAmountValue(event.target.value)
-                            }
-                            onKeyDown={(event: any) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                saveIssueAmount(issue);
-                              }
-                              if (event.key === "Escape") {
-                                event.preventDefault();
-                                cancelEditAmount();
-                              }
-                            }}
-                            className="w-20 rounded-xl border px-2 py-1 text-sm outline-none focus:border-slate-500"
-                          />
-                          <button
-                            type="button"
-                            disabled={amountBusy}
-                            onClick={() => saveIssueAmount(issue)}
-                            className="rounded-xl border px-2 py-1 text-xs font-bold disabled:bg-slate-50 disabled:text-slate-300"
-                          >
-                            {amountBusy ? "Saving" : "Save"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelEditAmount}
-                            className="rounded-xl border px-2 py-1 text-xs font-bold"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <b>₹{issue.amount}</b>
-                          {canEditPharmacyIssue && (
-                            <button
-                              type="button"
-                              disabled={cancelled || billed}
-                              onClick={() => startEditAmount(issue)}
-                              className="rounded-xl border px-2 py-1 text-xs font-bold disabled:bg-slate-50 disabled:text-slate-300"
-                            >
-                              Edit
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td
-                      className="pr-4"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="ml-auto flex justify-center">
-                        <RowActions
-                          className="right-8 top-0"
-                          width="w-48"
-                          actions={[
-                            {
-                              label: "Partial dispense",
-                              hidden: !canDispensePharmacyIssue,
-                              disabled:
-                                dispensed ||
-                                cancelled ||
-                                invoiced ||
-                                rowBusy ||
-                                invoiceBusy,
-                              onClick: () =>
-                                handleIssueAction(issue, "partial"),
-                            },
-                            {
-                              label: "Dispense",
-                              hidden: !canDispensePharmacyIssue,
-                              disabled:
-                                dispensed ||
-                                cancelled ||
-                                invoiced ||
-                                rowBusy ||
-                                invoiceBusy,
-                              onClick: () =>
-                                handleIssueAction(issue, "dispense"),
-                            },
-                            {
-                              label: "Generate invoice",
-                              hidden: invoiced || !canBillPharmacyIssue,
-                              disabled: rowBusy || invoiceBusy,
-                              onClick: () =>
-                                handleIssueAction(issue, "invoice"),
-                            },
-                            {
-                              label: "Cancel order",
-                              hidden: !canDispensePharmacyIssue,
-                              disabled:
-                                dispensed ||
-                                cancelled ||
-                                invoiced ||
-                                rowBusy ||
-                                invoiceBusy,
-                              danger: true,
-                              onClick: () => handleIssueAction(issue, "cancel"),
-                            },
-                          ]}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <Pagination
-          page={safePage}
-          totalPages={totalPages}
-          total={issues.length}
-          onPage={setPage}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {selectedIssue && (
+        <MedicineDetailModal
+          issue={selectedIssue}
+          apiSession={apiSession}
+          patient={
+            selectedIssue.patient_name ||
+            (patientMap.get(selectedIssue.patient_id) as any)?.name ||
+            publicDisplayValue(selectedIssue.patient_id, "Patient")
+          }
+          onClose={() => setSelectedIssue(null)}
         />
-      </Card>
+      )}
+      {viewConsult && (
+        <ConsultPrescriptionModal
+          a={viewConsult}
+          detail={consultDetail}
+          loading={loadingDetail}
+          busy={busy}
+          onClose={() => setViewConsult(null)}
+          onCreate={(a: any, pricePayload?: any) => {
+            setViewConsult(null);
+            createFromConsultation(a, pricePayload);
+          }}
+        />
+      )}
+      <StatusToast message={message} onClose={() => setMessage("")} />
+      <BreadcrumbSlot>
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={pharmacyPageRows.length}
+            total={issueTotal}
+            noun="issues"
+          />
+          <RefreshButton
+            onRefresh={refreshPharmacyWorkspace}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={pharmacySchema}
+            query={worklistQuery}
+            setQuery={setWorklistQuery}
+            filterValues={{}}
+            sort={worklistSort}
+            onSortChange={setWorklistSort}
+            showSort={false}
+            onReset={resetWorklistFilters}
+            queryFields={pharmacyQueryFields}
+            queryFilters={worklistQueryFilters}
+            onQueryFiltersChange={setWorklistQueryFilters}
+          ></AdaptiveFilterTrigger>
+          <AdaptiveSortTrigger
+            fields={pharmacySchema.sortFields}
+            sort={worklistSort}
+            onSortChange={setWorklistSort}
+          />
+        </div>
+      </BreadcrumbSlot>
+      <div className="space-y-3">
+        <section className="grid gap-3 sm:grid-cols-3">
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
+              <Pill className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Issues
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {issueSummaryTotal}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
+              <Clock3 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Enter Amount
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {pharmacyEnterAmountCount}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-600">
+              <BadgeCheck className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Amount
+              </p>
+              <p className="text-xl font-black text-slate-950">
+                {money(pharmacySummaryAmount)}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <DataHeader
+            title="Pharmacy Workspace"
+            description="Prescriptions, dispensing, issue amounts and billing in one workspace"
+            cardIcon={Pill}
+            canCreate={canCreatePharmacyIssue}
+            buttonText="Create Prescription"
+            open={() =>
+              router.push(`/pharmacy/${newSegment("pharmacy-order")}`)
+            }
+            count={String(pharmacyPageRows.length)}
+          />
+          <StatusTabsNav
+            ariaLabel="Pharmacy worklist sections"
+            activeId={activePharmacyStatus}
+            onSelect={selectPharmacyStatus}
+            tabs={pharmacyStatusTabs.map((tab) => ({
+              id: tab.id,
+              label: tab.label,
+              icon: tab.icon,
+              count:
+                tab.id === "all"
+                  ? issueTabCountTotal
+                  : pharmacyStatusCounts.get(tab.id) || 0,
+            }))}
+          />
+        </section>
+
+        {!issuesLoaded || issueLoading ? (
+          <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
+            <TableSkeleton rows={8} columns={pharmacyColumns.length} showHeader />
+          </div>
+        ) : (
+          <div className="table-wrapper-width">
+            <DataTable
+              className="table-width"
+              columns={pharmacyColumns}
+              data={pharmacyPageRows}
+              emptyMessage="No pharmacy issues match your filters."
+              emptyDescription="Pharmacy issues created for patients will show up here."
+              emptyIcon={Pill}
+              minBodyHeight={`${pharmacyPageRows.length > 0 ? "" : "220px"}`}
+              onRowClick={setSelectedIssue}
+              sort={worklistSort ?? undefined}
+              onSortChange={setWorklistSort}
+            />
+          </div>
+        )}
+        {issuesLoaded && (
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            total={issueTotal}
+            onPage={setPage}
+          />
+        )}
+      </div>
     </div>
   );
 }

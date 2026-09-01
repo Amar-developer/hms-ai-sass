@@ -12,6 +12,7 @@ type UseConsultationActionsParams = {
   setAppointments: (updater: (appointments: any[]) => any[]) => void;
   refetchAppointments: () => Promise<any[]>;
   setBusy: (value: boolean) => void;
+  setPendingAction: (value: "draft" | "sign" | null) => void;
   setMessage: (value: string) => void;
   setSelectedAppointmentId: (id: string) => void;
   nextEligibleAppointment: (excludeId?: string) => any;
@@ -20,8 +21,6 @@ type UseConsultationActionsParams = {
   labReferralSummary: () => string;
   medicineRows: string;
   prescription: string;
-  scanNeeded: boolean;
-  scanTests: string;
   remarks: string;
   treatmentType: string;
   notes: string;
@@ -61,6 +60,7 @@ export function useConsultationActions({
   setAppointments,
   refetchAppointments,
   setBusy,
+  setPendingAction,
   setMessage,
   setSelectedAppointmentId,
   nextEligibleAppointment,
@@ -69,8 +69,6 @@ export function useConsultationActions({
   labReferralSummary,
   medicineRows,
   prescription,
-  scanNeeded,
-  scanTests,
   remarks,
   treatmentType,
   notes,
@@ -245,9 +243,6 @@ export function useConsultationActions({
       labNeeded,
       labTests,
       labAmount: labNeeded ? labTests.split(",").length * 350 : 0,
-      scanNeeded,
-      scanTests,
-      scanAmount: scanNeeded ? scanTests.split(",").length * 900 : 0,
       referDoctor,
       referDoctorId: referralDoctor?.id,
       referDoctorName: referralDoctor?.name,
@@ -290,6 +285,7 @@ export function useConsultationActions({
 
   async function saveBackendDraft() {
     setBusy(true);
+    setPendingAction("draft");
     setMessage("");
     try {
       const consultationId = await ensureBackendConsultation();
@@ -297,7 +293,6 @@ export function useConsultationActions({
       await consulationApi.updateConsultation(apiSession as ApiSession, consultationId, {
         prescription_text: medicineRows || prescription,
         lab_referral_text: labText || null,
-        scan_referral_text: scanNeeded ? scanTests : null,
         follow_up_advice: remarks,
         patient_remarks: remarks,
         ...consultationDraftPayload(),
@@ -308,6 +303,7 @@ export function useConsultationActions({
       setMessage(err.message || "Could not save consultation.");
     } finally {
       setBusy(false);
+      setPendingAction(null);
     }
   }
 
@@ -329,7 +325,6 @@ export function useConsultationActions({
       !hasComplaints ? "complaints" : "",
       !hasDiagnosis ? "diagnosis" : "",
       !notes.trim() ? "doctor notes" : "",
-      scanNeeded && !scanTests.trim() ? "scan / diagnostic" : "",
       referDoctor && !referDoctorId ? "recommended doctor" : "",
     ].filter(Boolean);
     if (missingFields.length > 0) {
@@ -343,6 +338,7 @@ export function useConsultationActions({
       return;
     }
     setBusy(true);
+    setPendingAction("sign");
     setMessage("");
     try {
       const consultationId = await ensureBackendConsultation();
@@ -350,7 +346,6 @@ export function useConsultationActions({
       await consulationApi.updateConsultation(apiSession as ApiSession, consultationId, {
         prescription_text: medicineRows || prescription,
         lab_referral_text: labText || null,
-        scan_referral_text: scanNeeded ? scanTests : null,
         follow_up_advice: remarks,
         patient_remarks: remarks,
         ...draftPayload,
@@ -367,6 +362,7 @@ export function useConsultationActions({
       setMessage(err.message || "Could not sign consultation.");
     } finally {
       setBusy(false);
+      setPendingAction(null);
     }
   }
 

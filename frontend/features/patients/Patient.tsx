@@ -2,39 +2,44 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, PlusCircle, Users } from "lucide-react";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
-import { Empty } from "@/app/components/common/Empty";
 import { Pagination } from "@/app/components/common/Pagination";
-import {
-  Button,
-  Card,
-  Input,
-  RefreshButton,
-  SearchableSelect,
-  StatusToast,
-} from "@/app/components/common/ui";
-import { apiFetch, apiUpload, type ApiSession } from "@/lib/api";
+import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
+import { type ApiSession } from "@/lib/api";
 import { readNotificationTarget } from "@/lib/notificationTarget";
-import { FormField } from "@/app/components/FormElements";
-import { toRow, todayInputValue } from "./helpers";
+import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
-import { PatientDetail } from "./components/PatientDetail";
-import { activeTenantOptions } from "@/utils/helper";
-import { PatientRow } from "./components/PatientRow";
+import { PatientFlow, type PatientSectionId } from "./PatientFlow";
+import { PatientDetailSkeleton } from "./components/PatientDetailSkeleton";
 import { mapPatient } from "@/lib/liveData";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
-import { patient_status_options } from "./constants";
-import { useQueryClient } from "@tanstack/react-query";
-import { getTenantBranches } from "@/features/tenants/api/tenantReferenceQueries";
-import { FilterSection } from "@/app/components/common/FilterSection";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import { BreadcrumbSlot, useShellChrome } from "@/features/shell/AppShell";
+import { DataTable } from "@/app/components/common/DataTable";
+import { canReadPatientLinkedModule } from "./patientModuleAccess";
+import {
+  usePatientListData,
+  usePatientDetailData,
+  usePatientActions,
+  type PatientListFilters,
+} from "./api";
+import { getPatientColumns } from "./Column";
+import { getPatientTableSchema, getPatientQueryFields } from "./filterSchema";
+import { type QueryFilterRow } from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
+import type { AppNavigationTarget } from "@/lib/navigationTarget";
+import DataHeader from "@/app/components/common/DataHeader";
 
 type PatientProps = {
   apiSession: ApiSession | null;
   branchId?: string;
+  enabledModules?: string[];
+  isInitialLoading?: boolean;
   loadLiveData?: (session: ApiSession) => void | Promise<unknown>;
-  setActive?: (page: string) => void;
+  setActive?: (page: AppNavigationTarget) => void;
   setPatients?: (updater: (prev: any[]) => any[]) => void;
 };
 
@@ -42,14 +47,21 @@ const pageSize = 10;
 export function Patient({
   apiSession,
   branchId,
+  enabledModules,
+  isInitialLoading = false,
   loadLiveData,
   setActive,
   setPatients,
   view = "list",
   selectedId = "",
-}: PatientProps & { view?: string; selectedId?: string }) {
+  section = "home",
+}: PatientProps & {
+  view?: string;
+  selectedId?: string;
+  section?: PatientSectionId;
+}) {
   const router = useRouter();
-  const queryClient = useQueryClient();
+  const { beginNavigation } = useShellChrome();
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const userPermissions = apiSession?.user?.permissions || [];
@@ -59,38 +71,158 @@ export function Patient({
       userPermissions.includes("*") ||
       keys.some((key) => userPermissions.includes(key)),
     );
+  const canReadIp = canReadPatientLinkedModule(
+    apiSession,
+    enabledModules,
+    "ip",
+  );
+  const canReadPhysiotherapy = canReadPatientLinkedModule(
+    apiSession,
+    enabledModules,
+    "physiotherapy",
+  );
+  const canReadHomeCare = canReadPatientLinkedModule(
+    apiSession,
+    enabledModules,
+    "home_care",
+  );
   const canCreatePatient = hasPermission("patients.write", "patients.create");
   const canEditPatient = hasPermission("patients.edit");
   const canDeletePatient = hasPermission("patients.delete");
-  const [tenants, setTenants] = useState<any[]>([]);
+  const canReadIntelligence = Boolean(
+    (!enabledModules || enabledModules.includes("patient_intelligence")) &&
+    hasPermission(
+      "patient_intelligence.read",
+      "patient_intelligence.manage",
+      "patient_intelligence.rules.manage",
+    ),
+  );
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
-  const [branches, setBranches] = useState<any[]>([]);
-  const [rows, setRows] = useState<any[]>([]);
-  const [totalRows, setTotalRows] = useState(0);
-  const [selectedDetail, setSelectedDetail] = useState<any>(null);
-  const [summary, setSummary] = useState<any>(null);
-  const [consultations, setConsultations] = useState<any[]>([]);
-  const [labOrders, setLabOrders] = useState<any[]>([]);
-  const [pharmacyIssues, setPharmacyIssues] = useState<any[]>([]);
-  const [physioCases, setPhysioCases] = useState<any[]>([]);
-  const [patientIpAdmissions, setPatientIpAdmissions] = useState<any[]>([]);
-  const [membershipPlans, setMembershipPlans] = useState<any[]>([]);
-  const [membershipEnrollments, setMembershipEnrollments] = useState<any[]>([]);
-  const [patientInvoices, setPatientInvoices] = useState<any[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [gender, setGender] = useState("all");
   const [branchFilter, setBranchFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const DEFAULT_SORT: SortState = { key: "updated_at", dir: "desc" };
+  const [sort, setSort] = useState<SortState | null>(DEFAULT_SORT);
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [confirm, setConfirm] = useState<any>(null);
   const scopedSession =
     apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
+
+  const {
+    tenants,
+    branches,
+    rows,
+    totalRows,
+    filterOptions,
+    setRows,
+    loadTenants,
+    loadData,
+  } = usePatientListData({
+    apiSession,
+    tenantId,
+    setTenantId,
+    setBusy,
+    setMessage,
+  });
+
+  const {
+    selectedDetail,
+    setSelectedDetail,
+    summary,
+    consultations,
+    labOrders,
+    homeCareBookings,
+    pharmacyIssues,
+    physioCases,
+    patientIpAdmissions,
+    membershipPlans,
+    membershipEnrollments,
+    patientInvoices,
+    patientCommunications,
+    familyRelationships,
+    patientIntelligence,
+    setPatientIntelligence,
+    patientIntelligenceError,
+    loadPatientDetail,
+  } = usePatientDetailData({
+    canReadPhysiotherapy,
+    canReadIp,
+    canReadHomeCare,
+    canReadIntelligence,
+    setBusy,
+    setMessage,
+    initialId: selectedId,
+  });
+
   const selected =
     selectedDetail || rows.find((row: any) => row.id === selectedId);
+
+  const patientSchema = getPatientTableSchema({ isSuperAdmin, tenants });
+  const patientQueryFields = getPatientQueryFields({
+    rows,
+    branches,
+    filterOptions,
+  });
+
+  const filterValues = {
+    tenant: tenantId,
+    branch: branchFilter,
+    status,
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    setPage(1);
+    setMessage("");
+
+    const overrides: Record<string, string> = {};
+
+    switch (key) {
+      case "tenant":
+        setTenantId(value);
+        refreshPatients(value, 1, overrides);
+        return;
+
+      case "branch":
+        setBranchFilter(value);
+        overrides.branchFilter = value; // ← force the new value
+        break;
+
+      case "status":
+        setStatus(value);
+        overrides.status = value; // ← force the new value
+        break;
+    }
+
+    refreshPatients(tenantId, 1, overrides);
+  };
+
+  function resetPatientFilters() {
+    setStatus("all");
+    setGender("all");
+    setBranchFilter("all");
+    setFromDate("");
+    setToDate("");
+    setQueryFilters([]);
+    setSort(DEFAULT_SORT);
+    setPage(1);
+    setMessage("");
+    loadData(tenantId, 1, {
+      query: "",
+      status: "all",
+      gender: "all",
+      branchFilter: "all",
+      fromDate: "",
+      toDate: "",
+      queryFilters: [],
+      sort: DEFAULT_SORT,
+    });
+  }
 
   function syncSharedPatient(patient: any) {
     if (!setPatients || !patient?.id) return;
@@ -102,139 +234,54 @@ export function Patient({
     );
   }
 
-  async function loadTenants() {
-    if (!apiSession?.user?.is_super_admin) return;
-    const tenantRows = activeTenantOptions(
-      await apiFetch("/tenants", apiSession),
-    );
-    setTenants(tenantRows);
-    if (!tenantId || !tenantRows.some((tenant: any) => tenant.id === tenantId))
-      setTenantId(
-        tenantRows.find((tenant: any) => !tenant.is_primary)?.id ||
-          tenantRows[0]?.id ||
-          apiSession.tenantId,
-      );
-  }
-
-  async function loadData(
-    nextTenantId = tenantId,
-    nextPage = page,
-    filterOverrides: Record<string, string> = {},
+  function refreshPatients(
+    nextTenantId: string = tenantId,
+    nextPage: number = page,
+    overrides: Partial<PatientListFilters> = {},
   ) {
-    if (!apiSession || !nextTenantId) return;
-    setBusy(true);
-    const session = { ...apiSession, tenantId: nextTenantId };
-    try {
-      const filters = {
-        query,
-        status,
-        gender,
-        branchFilter,
-        fromDate,
-        toDate,
-        ...filterOverrides,
-      };
-      const params = new URLSearchParams({
-        limit: String(pageSize),
-        offset: String((nextPage - 1) * pageSize),
-        active_only: "false",
-      });
-      if (filters.query) params.set("q", filters.query);
-      if (filters.status && filters.status !== "all")
-        params.set("status", filters.status);
-      if (filters.gender && filters.gender !== "all")
-        params.set("gender", filters.gender);
-      if (filters.branchFilter && filters.branchFilter !== "all")
-        params.set("branch_id", filters.branchFilter);
-      if (filters.fromDate) params.set("from_date", filters.fromDate);
-      if (filters.toDate) params.set("to_date", filters.toDate);
-      const [branchRows, patientRows] = await Promise.all([
-        getTenantBranches(queryClient, session, nextTenantId).catch(() => []),
-        apiFetch(`/patients/page?${params.toString()}`, session),
-      ]);
-      setBranches(branchRows);
-      setRows(patientRows.items || []);
-      setTotalRows(patientRows.total || 0);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load patients.");
-    } finally {
-      setBusy(false);
-    }
+    return loadData(nextTenantId, nextPage, {
+      query,
+      status,
+      gender,
+      branchFilter,
+      fromDate,
+      toDate,
+      queryFilters,
+      sort,
+      ...overrides,
+    });
   }
 
-  async function loadPatientDetail(id: string) {
-    if (!scopedSession || !id) return;
-    setBusy(true);
-    setConsultations([]);
-    setLabOrders([]);
-    setPharmacyIssues([]);
-    setPhysioCases([]);
-    setPatientIpAdmissions([]);
-    setMembershipEnrollments([]);
-    setPatientInvoices([]);
-    try {
-      const [
-        detail,
-        summaryData,
-        consultationRows,
-        labRows,
-        pharmacyRows,
-        physioRows,
-        ipRows,
-        planRows,
-        enrollmentRows,
-        invoiceRows,
-      ] = await Promise.all([
-        apiFetch(`/patients/${id}`, scopedSession),
-        apiFetch(`/patients/${id}/summary`, scopedSession),
-        apiFetch(
-          `/consultations?patient_id=${id}&limit=50`,
-          scopedSession,
-        ).catch(() => []),
-        apiFetch(`/lab/orders?patient_id=${id}&limit=50`, scopedSession).catch(
-          () => [],
-        ),
-        apiFetch(
-          `/pharmacy/issues?patient_id=${id}&limit=50`,
-          scopedSession,
-        ).catch(() => []),
-        apiFetch(
-          `/physiotherapy/cases?patient_id=${id}&limit=50`,
-          scopedSession,
-        ).catch(() => []),
-        apiFetch(
-          `/ip/admissions?patient_id=${id}&limit=50`,
-          scopedSession,
-        ).catch(() => []),
-        apiFetch(
-          "/patient-subscriptions/plans?include_inactive=true",
-          scopedSession,
-        ).catch(() => []),
-        apiFetch(
-          `/patient-subscriptions/enrollments?patient_id=${id}`,
-          scopedSession,
-        ).catch(() => []),
-        apiFetch(`/billing/invoices?patient_id=${id}`, scopedSession).catch(
-          () => [],
-        ),
-      ]);
-      setSelectedDetail(detail);
-      setSummary(summaryData);
-      setConsultations(Array.isArray(consultationRows) ? consultationRows : []);
-      setLabOrders(Array.isArray(labRows) ? labRows : []);
-      setPharmacyIssues(Array.isArray(pharmacyRows) ? pharmacyRows : []);
-      setPhysioCases(Array.isArray(physioRows) ? physioRows : []);
-      setPatientIpAdmissions(Array.isArray(ipRows) ? ipRows : []);
-      setMembershipPlans(Array.isArray(planRows) ? planRows : []);
-      setMembershipEnrollments(
-        Array.isArray(enrollmentRows) ? enrollmentRows : [],
-      );
-      setPatientInvoices(Array.isArray(invoiceRows) ? invoiceRows : []);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load patient details.");
-    } finally {
-      setBusy(false);
-    }
+  function handleQueryFiltersChange(nextFilters: QueryFilterRow[]) {
+    setQueryFilters(nextFilters);
+    setPage(1);
+    setMessage("");
+    loadData(tenantId, 1, {
+      query,
+      status,
+      gender,
+      branchFilter,
+      fromDate,
+      toDate,
+      queryFilters: nextFilters,
+      sort,
+    });
+  }
+
+  function handleSortChange(nextSort: SortState | null) {
+    setSort(nextSort);
+    setPage(1);
+    setMessage("");
+    loadData(tenantId, 1, {
+      query,
+      status,
+      gender,
+      branchFilter,
+      fromDate,
+      toDate,
+      queryFilters,
+      sort: nextSort,
+    });
   }
 
   useEffect(() => {
@@ -245,7 +292,7 @@ export function Patient({
   useEffect(() => {
     if (apiSession && tenantId) {
       setPage(1);
-      loadData(tenantId, 1);
+      refreshPatients(tenantId, 1);
     }
   }, [apiSession?.email, tenantId]);
 
@@ -259,7 +306,7 @@ export function Patient({
     const timer = window.setTimeout(() => {
       setPage(1);
       setMessage("");
-      loadData(tenantId, 1);
+      refreshPatients(tenantId, 1);
     }, 400);
     return () => window.clearTimeout(timer);
   }, [query]);
@@ -299,39 +346,28 @@ export function Patient({
         Date.now() - pending.at < 10000
       )
         setMessage(pending.message);
-    } catch {
-      // ignore malformed payloads
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    } catch {}
   }, []);
 
-  function setPendingMessage(id: string, text: string) {
-    if (typeof window === "undefined") return;
-    sessionStorage.setItem(
-      "medizinhub.patientPendingMessage",
-      JSON.stringify({ id, message: text, at: Date.now() }),
-    );
-  }
-
-  // Fetch (or refetch) the full record whenever the URL names a different
-  // patient than what's currently cached — covers detail/edit views for
-  // both in-app navigation and direct/bookmarked links. The ref bridges the
-  // one-render gap before setBusy(true) (fired inside loadPatientDetail)
-  // actually takes effect, so the guard effect below can't mistake "about
-  // to fetch" for "finished loading, found nothing" and bounce prematurely.
   const detailFetchInFlightRef = useRef(false);
+  // Keyed by patient id, not by mount: this component is rendered from
+  // ../layout.tsx (see the comment there) so it stays mounted across
+  // PatientFlow's tab switches — only `view`/`selectedId`/`section` change.
+  // fetchedForRef stops those tab switches from re-triggering a fetch for a
+  // patient we've already loaded; it only re-fires when selectedId actually
+  // changes (a different patient) or on a genuine remount (hard refresh).
+  const fetchedForRef = useRef<string | null>(null);
   useEffect(() => {
+    if (isInitialLoading) return;
     if ((view !== "detail" && view !== "edit") || !selectedId) return;
-    if (selectedDetail?.id === selectedId) return;
+    if (fetchedForRef.current === selectedId) return;
+    fetchedForRef.current = selectedId;
     detailFetchInFlightRef.current = true;
-    loadPatientDetail(selectedId).finally(() => {
+    loadPatientDetail(scopedSession, selectedId).finally(() => {
       detailFetchInFlightRef.current = false;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selectedId, selectedDetail?.id]);
+  }, [view, selectedId, isInitialLoading]);
 
-  // Bounce back to the list if a direct/bookmarked detail or edit link no
-  // longer resolves to a real patient, but only once loading has finished.
   useEffect(() => {
     if (
       (view !== "detail" && view !== "edit") ||
@@ -342,18 +378,18 @@ export function Patient({
     )
       return;
     router.replace("/patients");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, selectedId, busy, selectedDetail?.id]);
 
   function open(nextView: string, id = "") {
     const path =
       nextView === "create"
-        ? "/patients/new"
+        ? `/patients/${newSegment("patient")}`
         : nextView === "edit" && id
-          ? `/patients/${id}/edit`
+          ? `/patients/${id}/${editSegment("patient")}`
           : nextView === "detail" && id
             ? `/patients/${id}`
             : "/patients";
+    beginNavigation("patients", path);
     router.push(path);
     setMessage("");
     requestAnimationFrame(() =>
@@ -366,206 +402,48 @@ export function Patient({
     open("edit", id);
   }
 
-  async function createPatient(data: any) {
-    if (!scopedSession) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const created = await apiFetch("/patients", scopedSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: data.branchId || null,
-          full_name: data.fullName,
-          mobile: data.mobile || null,
-          alternate_mobile: data.alternateMobile || null,
-          email: data.email || null,
-          gender: data.gender || "unknown",
-          date_of_birth: data.dateOfBirth || null,
-          age_years: data.ageYears ? Number(data.ageYears) : null,
-          guardian_name: data.guardianName || null,
-          guardian_mobile: data.guardianMobile || null,
-          area: data.area || null,
-          address: data.address || null,
-          blood_group: data.bloodGroup || null,
-          whatsapp_consent_status: data.whatsappConsentStatus || "not_recorded",
-          whatsapp_consent_source: data.whatsappConsentSource || null,
-          whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
-        }),
-      });
-      setRows((previous: any[]) => [
-        toRow(created),
-        ...previous.filter((row: any) => row.id !== created.id),
-      ]);
-      syncSharedPatient(created);
-      await loadData(tenantId);
-      setPendingMessage(created.id, `Patient created: ${created.full_name}`);
-      open("detail", created.id);
-    } catch (err: any) {
-      setMessage(err.message || "Could not create patient.");
-    } finally {
-      setBusy(false);
-    }
+  function openPatientSection(id: string, nextSection: PatientSectionId) {
+    if (!id) return;
+    const path =
+      nextSection === "home"
+        ? `/patients/${id}`
+        : `/patients/${id}/${nextSection}`;
+    beginNavigation("patients", path);
+    router.push(path);
   }
 
-  async function updatePatient(data: any) {
-    if (!scopedSession || !selectedId) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(`/patients/${selectedId}`, scopedSession, {
-        method: "PATCH",
-        body: JSON.stringify({
-          branch_id: data.branchId || null,
-          full_name: data.fullName,
-          mobile: data.mobile || null,
-          alternate_mobile: data.alternateMobile || null,
-          email: data.email || null,
-          gender: data.gender || "unknown",
-          date_of_birth: data.dateOfBirth || null,
-          age_years: data.ageYears ? Number(data.ageYears) : null,
-          guardian_name: data.guardianName || null,
-          guardian_mobile: data.guardianMobile || null,
-          area: data.area || null,
-          address: data.address || null,
-          blood_group: data.bloodGroup || null,
-          status: data.status || "active",
-          whatsapp_consent_status: data.whatsappConsentStatus || "not_recorded",
-          whatsapp_consent_source: data.whatsappConsentSource || null,
-          whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
-        }),
-      });
-      setRows((previous: any[]) => [
-        toRow(updated),
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-      syncSharedPatient(updated);
-      setSelectedDetail(updated);
-      await loadData(tenantId);
-      setPendingMessage(updated.id, "Patient updated.");
-      open("detail", updated.id);
-    } catch (err: any) {
-      setMessage(err.message || "Could not update patient.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function uploadPhoto(file: File) {
-    if (!scopedSession || !selectedId) return;
-    const fd = new FormData();
-    fd.append("file", file);
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiUpload(
-        `/patients/${selectedId}/photo`,
-        scopedSession,
-        fd,
-      );
-      setSelectedDetail(updated);
-      setRows((previous: any[]) => [
-        toRow(updated),
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-      syncSharedPatient(updated);
-      setMessage("Photo uploaded.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not upload photo.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function deactivatePatient(row: any) {
-    if (!scopedSession) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      await apiFetch(`/patients/${row.id}`, scopedSession, {
-        method: "DELETE",
-      });
-      setRows((previous: any[]) =>
-        previous.map((item: any) =>
-          item.id === row.id ? { ...item, status: "inactive" } : item,
-        ),
-      );
-      if (setPatients) {
-        setPatients((previous: any[]) =>
-          previous.map((item: any) =>
-            item.id === row.id ? { ...item, status: "inactive" } : item,
-          ),
-        );
-      }
-      if (selectedId === row.id)
-        setSelectedDetail({ ...selectedDetail, status: "inactive" });
-      setMessage("Patient deleted/deactivated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not delete patient.");
-    } finally {
-      setBusy(false);
-      setConfirm(null);
-    }
-  }
-
-  async function activatePatient(row: any) {
-    if (!scopedSession) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(`/patients/${row.id}`, scopedSession, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "active" }),
-      });
-      setRows((previous: any[]) =>
-        previous.map((item: any) =>
-          item.id === row.id ? { ...item, status: updated.status } : item,
-        ),
-      );
-      syncSharedPatient(updated);
-      if (selectedId === row.id) setSelectedDetail(updated);
-      setMessage("Patient activated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not activate patient.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function enrollMembership(data: any) {
-    if (!scopedSession || !selectedId) return false;
-    if (!data.planId) {
-      setMessage("Select membership plan.");
-      return false;
-    }
-    setBusy(true);
-    setMessage("");
-    try {
-      await apiFetch("/patient-subscriptions/enrollments", scopedSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: data.branchId || selected?.branch_id || branchId,
-          patient_id: selectedId,
-          plan_id: data.planId,
-          starts_on: data.startsOn || todayInputValue(),
-          paid_amount:
-            data.paidAmount !== "" ? Number(data.paidAmount) : undefined,
-          payment_method: data.paymentMethod || "cash",
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await Promise.all([
-        loadPatientDetail(selectedId),
-        loadLiveData?.(scopedSession),
-      ]);
-      setMessage("Patient membership enrolled and purchase invoice created.");
-      return true;
-    } catch (err: any) {
-      setMessage(err.message || "Could not enroll membership.");
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }
+  const {
+    createPatient,
+    updatePatient,
+    uploadPhoto,
+    sendEngagementAction,
+    saveManualPrescriptionDate,
+    saveManualLabDate,
+    deactivatePatient,
+    activatePatient,
+    enrollMembership,
+    updateMembershipBenefitUsage,
+    createFamilyRelationship,
+    deleteFamilyRelationship,
+  } = usePatientActions({
+    apiSession,
+    scopedSession,
+    selectedId,
+    selected,
+    branchId,
+    setBusy,
+    setMessage,
+    setConfirm,
+    setRows,
+    setSelectedDetail,
+    setPatientIntelligence,
+    loadPatientDetail,
+    syncSharedPatient,
+    setPatients,
+    refreshPatients: () => refreshPatients(tenantId),
+    loadLiveData,
+    openDetail: (id: string) => open("detail", id),
+  });
 
   if (!apiSession)
     return (
@@ -583,6 +461,7 @@ export function Patient({
         title="Create Patient"
         branches={branches}
         defaultBranchId={branchId || apiSession?.user?.branch_id || ""}
+        apiSession={scopedSession}
         busy={busy}
         error={message}
         onSubmit={createPatient}
@@ -590,12 +469,6 @@ export function Patient({
       />
     );
   if (view === "edit" && selected && canEditPatient) {
-    // `selected` can still be the lightweight list row (missing
-    // date_of_birth/blood_group, which aren't part of that shape) if the
-    // full-detail fetch hasn't resolved yet — e.g. navigating here directly
-    // rather than via the detail page. The form's defaultValues are only
-    // evaluated once at mount, so mounting on the partial row would freeze
-    // those fields blank; wait for the full record instead of guessing.
     if (selectedDetail?.id !== selectedId) {
       return (
         <Card>
@@ -610,6 +483,8 @@ export function Patient({
         patient={selected}
         branches={branches}
         defaultBranchId={branchId || apiSession?.user?.branch_id || ""}
+        apiSession={scopedSession}
+        familyRelationships={familyRelationships}
         busy={busy}
         error={message}
         onSubmit={updatePatient}
@@ -619,195 +494,132 @@ export function Patient({
   }
   if (view === "detail" && selected)
     return (
-      <PatientDetail
-        apiSession={apiSession}
+      <PatientFlow
+        activeSection={section}
+        onSectionChange={(nextSection: PatientSectionId) =>
+          openPatientSection(selected.id, nextSection)
+        }
+        apiSession={scopedSession}
         patient={selected}
         summary={summary}
         patientIpAdmissions={patientIpAdmissions}
         consultations={consultations}
         labOrders={labOrders}
+        homeCareBookings={homeCareBookings}
         pharmacyIssues={pharmacyIssues}
         physioCases={physioCases}
         membershipPlans={membershipPlans}
         membershipEnrollments={membershipEnrollments}
         patientInvoices={patientInvoices}
+        patientCommunications={patientCommunications}
+        familyRelationships={familyRelationships}
+        patientIntelligence={patientIntelligence}
+        patientIntelligenceError={patientIntelligenceError}
         branches={branches}
         loading={busy}
         message={message}
         onMessageClose={() => setMessage("")}
         onEnrollMembership={enrollMembership}
+        onUpdateMembershipBenefitUsage={updateMembershipBenefitUsage}
+        onCreateFamilyRelationship={createFamilyRelationship}
+        onDeleteFamilyRelationship={deleteFamilyRelationship}
         onBack={() => open("list")}
         onEdit={() => openPatientEdit(selected.id)}
         onUploadPhoto={uploadPhoto}
+        onSaveManualPrescriptionDate={saveManualPrescriptionDate}
+        onSaveManualLabDate={saveManualLabDate}
+        onSendEngagementAction={sendEngagementAction}
         setActive={setActive}
       />
+    );
+  // Route-driven tabs remount this page on every switch, so `selected`
+  // (selectedDetail || rows.find(...)) is briefly empty while the fresh
+  // fetch runs — without this branch that fell through to the patient LIST
+  // view below, flashing its generic table skeleton over the detail page.
+  if (view === "detail" && !selected)
+    return (
+      <PatientDetailSkeleton section={section} onBack={() => open("list")} />
     );
 
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageRows = rows;
 
-  const patientFilters = [
-    {
-      key: "branch",
-      label: "Branch",
-      options: [
-        { value: "all", label: "All branches" },
-        ...branches.map((b: any) => ({
-          value: b.id,
-          label: b.name,
-        })),
-      ],
-    },
-    {
-      key: "status",
-      label: "Status",
-      options: patient_status_options,
-    },
-  ];
-
-  const filterValues = {
-    branch: branchFilter,
-    status,
-  };
-
-  const handleFilterChange = (key: string, value: string) => {
-    setPage(1);
-    setMessage("");
-
-    const overrides: Record<string, string> = {};
-
-    switch (key) {
-      case "branch":
-        setBranchFilter(value);
-        overrides.branchFilter = value; // ← force the new value
-        break;
-
-      case "status":
-        setStatus(value);
-        overrides.status = value; // ← force the new value
-        break;
-    }
-
-    loadData(tenantId, 1, overrides);
-  };
+  const patientColumns = getPatientColumns({
+    branches,
+    canCopyIds,
+    canEditPatient,
+    canDeletePatient,
+    onView: (id: string) => open("detail", id),
+    onEdit: (id: string) => openPatientEdit(id),
+    onDelete: (row: any) => setConfirm({ row }),
+    onActivate: (row: any) => activatePatient(row),
+  });
 
   return (
     <Card className="">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-        <div className="min-w-0">
-          <h3 className="card-title font-bold">EMR / Patient Management</h3>
-          <p className="mt-1 max-w-3xl card-desc text-slate-500">
-            Tenant-scoped patient registry with history, alerts, treatment
-            timeline, and audited record views.
-          </p>
-        </div>
+      <BreadcrumbSlot>
         <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={pageRows.length}
+            total={totalRows}
+            noun="patients"
+          />
           <RefreshButton
             onRefresh={() => {
               setMessage("");
-              loadData(tenantId);
+              refreshPatients(tenantId);
             }}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
           />
-          {canCreatePatient && (
-            <button
-              type="button"
-              onClick={() => open("create")}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
-            >
-              <Plus size={16} />
-              Create Patient
-            </button>
-          )}
-        </div>
-      </div>
-      <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 mt-3">
-        <div
-          className={`grid gap-3 ${isSuperAdmin ? "md:grid-cols-3 lg:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "  "}`}
-        >
-          {isSuperAdmin && (
-            <FormField label="Tenant">
-              <SearchableSelect
-                searchable={false}
-                value={tenantId}
-                onChange={setTenantId}
-                options={tenants.map((t: any) => ({
-                  value: t.id,
-                  label: t.name,
-                }))}
-              />
-            </FormField>
-          )}
-
-          <FilterSection
-            title="Patient / Mobile"
-            filters={patientFilters}
-            filterValues={filterValues}
-            className="lg:grid-cols-4"
+          <AdaptiveFilterTrigger
+            schema={patientSchema}
             query={query}
             setQuery={setQuery}
+            filterValues={filterValues}
             onFilterChange={handleFilterChange}
-            onReset={() => {
-              setStatus("all");
-              setGender("all");
-              setBranchFilter("all");
-              setFromDate("");
-              setToDate("");
-              setPage(1);
-              setMessage("");
+            sort={sort}
+            onSortChange={handleSortChange}
+            showSort={false}
+            onReset={resetPatientFilters}
+            queryFields={patientQueryFields}
+            queryFilters={queryFilters}
+            onQueryFiltersChange={handleQueryFiltersChange}
+          />
+          <AdaptiveSortTrigger
+            fields={patientSchema.sortFields}
+            sort={sort}
+            onSortChange={handleSortChange}
+          />
+        </div>
+      </BreadcrumbSlot>
 
-              loadData(tenantId, 1, {
-                query: "",
-                status: "all",
-                gender: "all",
-                branchFilter: "all",
-                fromDate: "",
-                toDate: "",
-              });
-            }}
-          >
-          </FilterSection>
+      <DataHeader
+        title="EMR / Patient Management"
+        description="Tenant-scoped patient registry with history, alerts, treatment
+              timeline, and audited record views"
+        canCreate={canCreatePatient}
+        cardIcon={Users}
+        buttonText="Create Patient"
+        open={open}
+        count={String(rows.length)}
+      />
+      <StatusToast message={message} onClose={() => setMessage("")} />
+        <div className="table-wrapper-width">
+          <DataTable
+            columns={patientColumns}
+            data={pageRows}
+            loading={busy}
+            emptyMessage="No patients match your search."
+            emptyDescription="Patients registered here will show up in this list once added."
+            emptyIcon={Users}
+            minBodyHeight={`${pageRows.length > 0 ? "" : "220px"}`}
+            onRowClick={(row: any) => open("detail", row.id)}
+            sort={sort ?? undefined}
+            onSortChange={handleSortChange}
+            className="table-width"
+          />
         </div>
-      </div>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin mt-3">
-        <div className="min-w-[1120px]">
-          <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_.65fr]  lg:grid grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
-            <span className="text-sm">Patient</span>
-            <span className="text-sm">Mobile</span>
-            <span className="text-sm">Branch</span>
-            <span className="text-sm">Gender / Age</span>
-            <span className="text-sm">Plan</span>
-            <span className="text-sm text-center">Status</span>
-            <span className="text-sm text-center">Actions</span>
-          </div>
-          <div className="divide-y divide-slate-200 z-0">
-            {busy && <TableSkeleton />}
-            {!busy && pageRows.length === 0 && (
-              <Empty text="No patients match your search." />
-            )}{" "}
-            {!busy &&
-              pageRows.map((row: any) => (
-                <PatientRow
-                  key={row.id}
-                  row={row}
-                  branches={branches}
-                  canCopyIds={canCopyIds}
-                  onView={() => open("detail", row.id)}
-                  onEdit={
-                    canEditPatient ? () => openPatientEdit(row.id) : undefined
-                  }
-                  onDelete={
-                    canDeletePatient ? () => setConfirm({ row }) : undefined
-                  }
-                  onActivate={
-                    canEditPatient ? () => activatePatient(row) : undefined
-                  }
-                />
-              ))}
-          </div>
-        </div>
-      </div>
       <Pagination
         page={safePage}
         totalPages={totalPages}
@@ -815,7 +627,7 @@ export function Patient({
         onPage={(nextPage) => {
           setPage(nextPage);
           setMessage("");
-          loadData(tenantId, nextPage);
+          refreshPatients(tenantId, nextPage);
         }}
       />
       {confirm && (

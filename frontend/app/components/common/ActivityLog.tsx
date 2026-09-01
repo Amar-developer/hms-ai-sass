@@ -223,7 +223,7 @@ export function ActivityLog({
   ].sort((a, b) => parseInstant(a.at).getTime() - parseInstant(b.at).getTime());
   return (
     <div ref={containerRef}>
-      <Card className="px-3 py-3 lg:px-4 lg:py-4 text-xs lg:text-sm mt-5 ">
+      <Card className="mt-3">
         <h4 className="text-sm font-black text-slate-950">Comments</h4>
         <div className="mt-2 flex gap-2">
           <MentionCommentInput
@@ -234,16 +234,18 @@ export function ActivityLog({
             disabled={posting}
           />
         </div>
-        <div className="mt-2 flex justify-end">
-          <Button
-            type="button"
-            disabled={posting || !draft.trim()}
-            onClick={postComment}
-            className="rounded-lg px-4 py-2 text-xs"
-          >
-            {posting ? "Posting…" : "Comment"}
-          </Button>
-        </div>
+        {draft.length > 0 && (
+          <div className="mt-2 flex justify-end">
+            <Button
+              type="button"
+              disabled={posting || !draft.trim()}
+              onClick={postComment}
+              className="rounded-lg px-4 py-2 text-xs"
+            >
+              {posting ? "Posting…" : "Comment"}
+            </Button>
+          </div>
+        )}
 
         <h4 className="mt-5 text-sm font-black text-slate-950">Activity</h4>
         {loading && timeline.length === 0 && (
@@ -257,54 +259,51 @@ export function ActivityLog({
           </p>
         )}
         <ul className="mt-3 space-y-3 h-[130px] overflow-y-auto scrollbar-thin">
-         {timeline.map((item) => {
-  const name =
-    item.kind === "comment"
-      ? item.data.author_name ||
-        item.data.author_email ||
-        "Someone"
-      : item.data.actor_name ||
-        item.data.actor_email ||
-        "Someone";
+          {timeline.map((item) => {
+            const name =
+              item.kind === "comment"
+                ? item.data.author_name || item.data.author_email || "Someone"
+                : item.data.actor_name || item.data.actor_email || "Someone";
 
-  const { initials, color } = userIcon(name);
+            const { initials, color } = userIcon(name);
 
-  return (
-    <li
-      key={`${item.kind}-${item.data.id}`}
-      className={`border-l-2 pl-3 text-sm text-slate-700 ${
-        item.kind === "comment" &&
-        item.data.id === highlightedCommentId
-          ? "rounded-r-lg border-blue-500 bg-blue-50 px-3 py-2 ring-1 ring-blue-200"
-          : "border-slate-200"
-      }`}
-    >
-      <div className="flex items-start gap-2">
-        <span
-          className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${color}`}
-        >
-          {initials}
-        </span>
+            return (
+              <li
+                key={`${item.kind}-${item.data.id}`}
+                className={`border-l-2 pl-3 text-sm text-slate-700 ${
+                  item.kind === "comment" &&
+                  item.data.id === highlightedCommentId
+                    ? "rounded-r-lg border-blue-500 bg-blue-50 px-3 py-2 ring-1 ring-blue-200"
+                    : "border-slate-200"
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <span
+                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${color}`}
+                  >
+                    {initials}
+                  </span>
 
-        <div>
-          {item.kind === "comment" ? (
-            <>
-              <span className="font-black text-slate-950">{name}</span>{" "}
-              commented:{" "}
-              <span>{renderCommentBody(item.data)}</span>
-            </>
-          ) : (
-            <span>{describeEvent(item.data)}</span>
-          )}
+                  <div>
+                    {item.kind === "comment" ? (
+                      <>
+                        <span className="font-black text-slate-950">
+                          {name}
+                        </span>{" "}
+                        commented: <span>{renderCommentBody(item.data)}</span>
+                      </>
+                    ) : (
+                      <span>{describeEvent(item.data)}</span>
+                    )}
 
-          <div className="mt-1 text-xs text-slate-500">
-            {timeAgo(item.at, now)}
-          </div>
-        </div>
-      </div>
-    </li>
-  );
-})}
+                    <div className="mt-1 text-xs text-slate-500">
+                      {timeAgo(item.at, now)}
+                    </div>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </Card>
     </div>

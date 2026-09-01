@@ -34,7 +34,17 @@ export async function getDashboardReports({
     todayParams.set("branch_id", branchId);
   }
 
-  const [collections, todayPaid, monthlyDue, todayDue, patientCount] =
+  const homeCareParams = new URLSearchParams();
+  if (branchId) homeCareParams.set("branch_id", branchId);
+
+  const [
+    collections,
+    todayPaid,
+    monthlyDue,
+    todayDue,
+    patientCount,
+    homeCareBookings,
+  ] =
     await Promise.all([
       (queryClient
         ? getBillingReport(
@@ -88,6 +98,11 @@ export async function getDashboardReports({
         `/patients/count?from_date=${today}&to_date=${today}`,
         apiSession,
       ).catch(() => null),
+
+      apiFetch(
+        `/home-care/bookings${homeCareParams.toString() ? `?${homeCareParams}` : ""}`,
+        apiSession,
+      ).catch(() => []),
     ]);
 
   return {
@@ -96,5 +111,6 @@ export async function getDashboardReports({
     monthlyDue,
     todayDue,
     patientCount,
+    homeCareBookings,
   };
 }

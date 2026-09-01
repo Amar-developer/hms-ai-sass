@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.exc import InterfaceError, OperationalError, ResourceClosedError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import Session
 
@@ -16,7 +17,7 @@ from app.core.runtime_metrics import (
     reset_for_tests,
     snapshot,
 )
-from app.main import database_pool_timeout_handler
+from app.main import database_pool_timeout_handler, database_unavailable_handler
 from app.modules.notifications.services.operational_metrics import (
     read_queue_metrics,
     read_worker_metrics,
@@ -32,10 +33,27 @@ from scripts.start_api import migration_lock, run_deployment_gate, uvicorn_comma
 from scripts.summarize_api_metrics import parse_lines
 
 
-async def _request(headers: list[tuple[bytes, bytes]]) -> list[dict]:
+PARAM_ROUTE = "/api/v1/patients/{patient_id}"
+
+
+async def _request(
+    headers: list[tuple[bytes, bytes]],
+    *,
+    path: str = "/health",
+    route_path: str | None = "/health",
+) -> list[dict]:
+    """Drive ObservabilityMiddleware over one request.
+
+    ``route_path`` mirrors what Starlette's router does: on a match it stores
+    the resolved route in the shared scope, which the outer middleware reads
+    after the inner app returns. Passing None models a request that matched no
+    route, which is what a 404 looks like from here.
+    """
     messages: list[dict] = []
 
-    async def app(_scope, _receive, send):
+    async def app(scope, _receive, send):
+        if route_path is not None:
+            scope["route"] = SimpleNamespace(path=route_path)
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"ok"})
 
@@ -48,7 +66,7 @@ async def _request(headers: list[tuple[bytes, bytes]]) -> list[dict]:
     scope = {
         "type": "http",
         "method": "GET",
-        "path": "/health",
+        "path": path,
         "headers": headers,
         "state": {},
     }
@@ -144,6 +162,55 @@ def test_pool_timeout_returns_fast_retryable_service_unavailable():
     assert snapshot()["database_pool_timeouts"] == 1
 
 
+@pytest.mark.parametrize(
+    "exc",
+    [
+        OperationalError("SELECT 1", {}, Exception("server closed the connection")),
+        InterfaceError("SELECT 1", {}, Exception("connection already closed")),
+        ResourceClosedError("This Connection is closed"),
+    ],
+    ids=["operational", "interface", "resource_closed"],
+)
+def test_pooler_dropped_connection_is_shed_as_503_not_500(exc):
+    """Measured on staging: under saturation PgBouncer waits query_wait_timeout
+    and then closes the queued connection. None of these three classes inherit
+    from another, and ResourceClosedError is the one a cold engine actually
+    raises, so all three must map to a retryable 503."""
+    request = SimpleNamespace(state=SimpleNamespace(request_id="request-shed"))
+
+    response = asyncio.run(database_unavailable_handler(request, exc))
+
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "3"
+    assert json.loads(response.body)["request_id"] == "request-shed"
+
+
+def test_the_app_registers_a_handler_for_every_dropped_connection_error():
+    """The handler only sheds load if it is actually wired to the app, and a
+    class left off DATABASE_UNAVAILABLE_ERRORS still returns a bare 500."""
+    from app.main import DATABASE_UNAVAILABLE_ERRORS, create_app
+
+    handlers = create_app().exception_handlers
+
+    assert set(DATABASE_UNAVAILABLE_ERRORS) == {
+        OperationalError,
+        InterfaceError,
+        ResourceClosedError,
+    }
+    for error_type in DATABASE_UNAVAILABLE_ERRORS:
+        assert handlers[error_type] is database_unavailable_handler
+    assert handlers[SQLAlchemyTimeoutError] is database_pool_timeout_handler
+
+
+def test_dropped_connection_errors_do_not_share_a_base_class():
+    """Guards the reason the tuple exists. If a future SQLAlchemy makes one a
+    subclass of another, this narrows to a single registration -- but until
+    then, registering only OperationalError silently misses the other two."""
+    assert not issubclass(ResourceClosedError, (OperationalError, InterfaceError))
+    assert not issubclass(InterfaceError, OperationalError)
+    assert not issubclass(OperationalError, InterfaceError)
+
+
 def test_runtime_metrics_report_request_and_database_percentiles():
     reset_for_tests()
     asyncio.run(_request([]))
@@ -157,6 +224,30 @@ def test_runtime_metrics_report_request_and_database_percentiles():
     assert metrics["database_queries"]["SELECT"]["p50_ms"] == 12.5
     assert metrics["database_queries"]["SELECT"]["p99_ms"] == 25.0
     assert metrics["database_pool_checkout_wait"]["p95_ms"] == 4.5
+
+
+def test_requests_are_keyed_by_route_template_not_by_url():
+    """Metric keys must stay bounded by the routing table.
+
+    Keying on the raw path let every distinct URL allocate a permanent entry:
+    the metric dictionaries prune old samples but never drop keys, so a
+    scanner walking unmatched URLs, or a path parameter reaching the fallback,
+    would grow the process without limit.
+    """
+    reset_for_tests()
+
+    asyncio.run(_request([], path="/api/v1/patients/pat-1", route_path=PARAM_ROUTE))
+    asyncio.run(_request([], path="/api/v1/patients/pat-2", route_path=PARAM_ROUTE))
+    for index in range(25):
+        asyncio.run(_request([], path=f"/nope-{index}", route_path=None))
+
+    requests = snapshot()["requests"]
+
+    # Two distinct patient URLs collapse onto the one route template.
+    assert requests[f"GET {PARAM_ROUTE}"]["total"] == 2
+    # Twenty-five distinct unmatched URLs collapse onto a single key.
+    assert requests["GET UNMATCHED"]["total"] == 25
+    assert set(requests) == {f"GET {PARAM_ROUTE}", "GET UNMATCHED"}
 
 
 def test_combined_log_summary_calculates_deployment_percentiles():

@@ -5,7 +5,10 @@ export const API_BASE = (
   process.env.NEXT_PUBLIC_MEDIZINHUB_API_URL || "http://127.0.0.1:8000/api/v1"
 ).replace(/\/$/, "");
 
-export const UPLOADS_BASE = API_BASE.replace(/\/api\/v1$/, "");
+export const UPLOADS_BASE =
+  API_BASE === "/api/backend"
+    ? "/api/backend-root"
+    : API_BASE.replace(/\/api\/v1$/, "");
 
 export function uploadAssetUrl(value: string | null | undefined): string {
   const path = String(value || "").trim();
@@ -18,12 +21,14 @@ export function uploadAssetUrl(value: string | null | undefined): string {
 export type ApiSession = {
   tenantId: string;
   email: string;
+  accessToken?: string;
   basePermissions?: string[];
   user: {
     id?: string;
     tenant_id?: string | null;
     tenant_name?: string | null;
     branch_id?: string | null;
+    username?: string | null;
     email?: string;
     is_super_admin?: boolean;
     user_type?: string;
@@ -94,6 +99,8 @@ export type ApiErrorLike = Error & {
 
 type ApiFetchOptions = RequestInit & {
   suppressErrorReportStatuses?: number[];
+  omitAuthorization?: boolean;
+  omitIdempotencyKey?: boolean;
 };
 
 const GENERIC_FORBIDDEN =
@@ -292,15 +299,30 @@ async function readErrorDetail(res: Response) {
   return detail;
 }
 
+function backendTransportError(path: string) {
+  return new Error(
+    `The request to MedizinHub HMS backend at ${API_BASE}${path} could not be completed. ` +
+      "The API may be unavailable, or the browser may have blocked an error response. " +
+      "Confirm /health or /api/v1/health opens, then check the backend logs and CORS settings.",
+  );
+}
+
 export async function apiFetch<T = any>(
   path: string,
   session: ApiSession,
   options: ApiFetchOptions = {},
 ): Promise<T> {
-  const { suppressErrorReportStatuses = [], ...fetchOptions } = options;
+  const {
+    suppressErrorReportStatuses = [],
+    omitAuthorization = false,
+    omitIdempotencyKey = false,
+    ...fetchOptions
+  } = options;
   let res: Response;
   const method = String(fetchOptions.method || "GET").toUpperCase();
-  const idempotencyKey = idempotencyKeyFor(path, session, fetchOptions);
+  const idempotencyKey = omitIdempotencyKey
+    ? null
+    : idempotencyKeyFor(path, session, fetchOptions);
   const correlationId = requestId();
   try {
     const attempts = method === "GET" || method === "HEAD" ? 2 : 1;
@@ -313,6 +335,9 @@ export async function apiFetch<T = any>(
             credentials: "include",
             headers: {
               "Content-Type": "application/json",
+              ...(!omitAuthorization && session.accessToken
+                ? { Authorization: `Bearer ${session.accessToken}` }
+                : {}),
               "X-Tenant-ID": session.tenantId,
               "X-Request-ID": correlationId,
               ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
@@ -339,14 +364,13 @@ export async function apiFetch<T = any>(
       },
       session,
     );
-    throw new Error(
-      `Could not connect to MedizinHub HMS backend at ${API_BASE}. Start the FastAPI server, confirm /health or /api/v1/health opens, and check NEXT_PUBLIC_MEDIZINHUB_API_URL/CORS settings.`,
-    );
+    throw backendTransportError(path);
   }
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
     if (
+      res.status !== 401 &&
       res.status !== 503 &&
       !suppressErrorReportStatuses.includes(res.status)
     ) {
@@ -384,6 +408,9 @@ export async function apiBlob(
           cache: options.cache ?? "no-store",
           credentials: "include",
           headers: {
+            ...(session.accessToken
+              ? { Authorization: `Bearer ${session.accessToken}` }
+              : {}),
             "X-Tenant-ID": session.tenantId,
             "X-Request-ID": correlationId,
             ...(options.headers || {}),
@@ -405,21 +432,21 @@ export async function apiBlob(
       },
       session,
     );
-    throw new Error(
-      `Could not connect to MedizinHub HMS backend at ${API_BASE}. Start the FastAPI server, confirm /health or /api/v1/health opens, and check NEXT_PUBLIC_MEDIZINHUB_API_URL/CORS settings.`,
-    );
+    throw backendTransportError(path);
   }
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    reportApiFailure(
-      path,
-      res.status,
-      detail,
-      res.headers.get("x-request-id"),
-      String(options.method || "GET").toUpperCase(),
-      session,
-    );
+    if (res.status !== 401) {
+      reportApiFailure(
+        path,
+        res.status,
+        detail,
+        res.headers.get("x-request-id"),
+        String(options.method || "GET").toUpperCase(),
+        session,
+      );
+    }
     throw apiError(path, detail, res);
   }
   const method = String(options.method || "GET").toUpperCase();
@@ -445,6 +472,9 @@ export async function apiUpload(
           cache: "no-store",
           credentials: "include",
           headers: {
+            ...(session.accessToken
+              ? { Authorization: `Bearer ${session.accessToken}` }
+              : {}),
             "X-Tenant-ID": session.tenantId,
             "X-Request-ID": correlationId,
           },
@@ -463,21 +493,21 @@ export async function apiUpload(
       },
       session,
     );
-    throw new Error(
-      `Could not connect to MedizinHub HMS backend at ${API_BASE}.`,
-    );
+    throw backendTransportError(path);
   }
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    reportApiFailure(
-      path,
-      res.status,
-      detail,
-      res.headers.get("x-request-id"),
-      "POST",
-      session,
-    );
+    if (res.status !== 401) {
+      reportApiFailure(
+        path,
+        res.status,
+        detail,
+        res.headers.get("x-request-id"),
+        "POST",
+        session,
+      );
+    }
     throw apiError(path, detail, res);
   }
   notifyLiveDataChanged(path, session, "POST");

@@ -10,3 +10,21 @@ tests/**/__pycache__
 .env
 .env.*
 Dockerfile.dev
+
+# Test and demo code, excluded from the runtime image only.
+#
+# These stay in Git — tests are required by CI, which runs pytest against the
+# checkout rather than the image, and seed_demo.py is imported by
+# tests/test_seed_demo.py. Excluding them here keeps them off the dev and
+# production hosts without deleting anything.
+#
+# Local development is unaffected: docker-compose.local.yml bind-mounts
+# ./backend over /app, so every one of these files is present there and
+# `exec backend python scripts/seed_demo.py` keeps working.
+#
+# The safety argument matters more than the ~2MB: a script that writes demo
+# patients, appointments and invoices has no business sitting inside a
+# container that can reach the production database.
+tests/
+e2e/
+scripts/seed_demo.py

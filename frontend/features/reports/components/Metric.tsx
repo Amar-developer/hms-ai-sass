@@ -1,6 +1,14 @@
-import { Card } from "@/app/components/common/ui";
-
-function Metric({ icon: Icon, label, value, hint, trend }: any) {
+function Metric({ icon: Icon, label, value, trend, tone = "emerald" }: any) {
+  const toneClasses: Record<string, string> = {
+    amber: "bg-amber-50 text-amber-600 ring-amber-100",
+    blue: "bg-blue-50 text-blue-600 ring-blue-100",
+    emerald: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+    indigo: "bg-indigo-50 text-indigo-600 ring-indigo-100",
+    rose: "bg-rose-50 text-rose-600 ring-rose-100",
+    sky: "bg-sky-50 text-sky-600 ring-sky-100",
+    slate: "bg-slate-100 text-slate-600 ring-slate-200",
+    violet: "bg-violet-50 text-violet-600 ring-violet-100",
+  };
   const trendTone =
     trend?.tone === "up"
       ? "text-emerald-600"
@@ -8,25 +16,28 @@ function Metric({ icon: Icon, label, value, hint, trend }: any) {
         ? "text-rose-600"
         : "text-slate-400";
   return (
-    <Card>
-      <div>
-        <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 shrink-0 text-slate-500" />
-          <p className="text-xs lg:text-sm text-slate-500">{label}</p>
-        </div>
-        <p className="mt-2 text-xl lg:text-2xl font-bold">{value}</p>
-        {hint && (
-          <p className="mt-2 text-[10px] lg:text-xs font-semibold text-slate-500">
-            {hint}
-          </p>
-        )}
+    <div className="flex h-full min-h-[74px] items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:border-slate-300">
+      <span
+        className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ring-1 ${
+          toneClasses[tone] || toneClasses.emerald
+        }`}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+          {label}
+        </p>
+        <p className="mt-0.5 text-xl font-black tabular-nums text-slate-950">
+          {value}
+        </p>
         {trend && (
-          <p className={`mt-1 text-[10px] lg:text-xs font-bold ${trendTone}`}>
+          <p className={`mt-0.5 text-[10px] font-bold ${trendTone}`}>
             {trend.text}
           </p>
         )}
       </div>
-    </Card>
+    </div>
   );
 }
 

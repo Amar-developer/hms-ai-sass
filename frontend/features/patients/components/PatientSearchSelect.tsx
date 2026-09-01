@@ -17,6 +17,10 @@ import {
 import { searchPatients } from "@/lib/hmsLogic";
 import type { PatientReference } from "@/lib/contracts";
 import { mapWithConcurrency } from "@/lib/concurrency";
+import {
+  patientFlagBadgeData,
+  patientValueTierFlags,
+} from "./PatientFlagBadges";
 
 const MIN_QUERY_LENGTH = 2;
 const SEARCH_LIMIT = 20;
@@ -51,6 +55,9 @@ function patientOption(patient: PatientReference) {
     value: String(patient.id),
     label: patientDisplayName(patient) || number || "Patient",
     sublabel: [number, mobile].filter(Boolean).join(" · "),
+    badges: patientValueTierFlags(patient.intelligence_flags).map(
+      patientFlagBadgeData,
+    ),
   };
 }
 
@@ -147,11 +154,11 @@ export function usePatientSearch({
 
     const controller = new AbortController();
     apiFetch<PatientReference>(
-      `/patients/${encodeURIComponent(selectedPatientId)}`,
+      `/patients/references?ids=${encodeURIComponent(selectedPatientId)}`,
       apiSession,
       { signal: controller.signal },
     )
-      .then(setSelectedPatient)
+      .then((rows: any) => setSelectedPatient(Array.isArray(rows) ? rows[0] || null : rows))
       .catch((error) => {
         if (error?.name !== "AbortError") setSelectedPatient(null);
       });

@@ -25,7 +25,10 @@ INVOICE_PDF = OptimizationProfile(
 UPLOADED_LAB_PDF = OptimizationProfile(
     name="uploaded_lab_pdf",
     kind="pdf",
-    preserve_original=True,
+    # Lab PDFs are optimized before object storage. The resulting verified PDF
+    # remains the immutable clinical artifact; the oversized transport bytes
+    # are not duplicated in S3.
+    preserve_original=False,
     minimum_size_bytes=512 * 1024,
     target_size_bytes=5 * 1024 * 1024,
     maximum_size_bytes=10 * 1024 * 1024,

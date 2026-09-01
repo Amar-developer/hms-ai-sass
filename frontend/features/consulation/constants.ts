@@ -43,14 +43,3 @@ export const treatment_type_options = [
   { value: "procedure_review", label: "Procedure Review" },
   { value: "follow_up", label: "Follow-up" },
 ];
-
-export const COMPLAINT_SUGGESTIONS = [
-  "Fever | 2 days | medium",
-  "Cough | 1 day | mild",
-  "Headache | 3 days | severe",
-  "Body pain | 2 days | medium",
-  "Cold & running nose | 1 day | mild",
-  "Stomach pain | 1 day | medium",
-  "Sore throat | 2 days | mild",
-  "Fatigue | 3 days | medium",
-];

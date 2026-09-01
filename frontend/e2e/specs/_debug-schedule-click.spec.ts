@@ -20,8 +20,6 @@ test.describe("debug schedule row click", () => {
     await row.click();
 
     await page.waitForTimeout(1000);
-    console.log("URL after click:", page.url());
-    console.log("Console/page errors:", JSON.stringify(errors, null, 2));
     await expect(page.getByText("Edit Doctor Schedule")).toBeVisible({ timeout: 5000 });
   });
 });

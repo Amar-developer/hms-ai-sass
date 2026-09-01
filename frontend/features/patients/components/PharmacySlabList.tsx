@@ -4,7 +4,7 @@ import { Card,Badge } from "@/app/components/common/ui";
 
 export function PharmacySlabList({ slabs }: any) {
   return (
-    <Card>
+    <Card className="bg-white p-3">
       <div className="flex items-center justify-between gap-3">
         <h4 className="card-title font-bold">Pharmacy Discount Slabs</h4>
         <Badge tone="blue" className="normal-badge">

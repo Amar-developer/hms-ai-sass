@@ -19,6 +19,19 @@ export type PatientReference = {
   critical_alert_count?: number;
   subscription_plan_name?: string | null;
   subscription_status?: string | null;
+  intelligence_flags?: PatientIntelligenceFlagCompact[];
+};
+
+export type PatientIntelligenceFlagCompact = {
+  flag_key: string;
+  category?: string;
+  severity?: string;
+  explanation?: string | null;
+  label?: string;
+  background_color?: string;
+  text_color?: string;
+  border_color?: string;
+  priority?: number;
 };
 
 export type PatientDisplayFields = {

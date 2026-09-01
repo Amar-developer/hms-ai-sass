@@ -9,7 +9,10 @@ const SECTION_PERMISSION_PREFIXES: Record<string, string[]> = {
   membership: ["patient_subscriptions"],
   files: ["files"],
   settings: ["settings"],
+  "patient-intelligence": ["patient_intelligence"],
   whatsapp: ["communications.whatsapp"],
+  sms: ["communications.sms"],
+  email: ["communications"],
 };
 
 export function canUseTenantAdminSection(section: string, user: any) {
@@ -27,6 +30,19 @@ export function canUseTenantAdminSection(section: string, user: any) {
       permissions.includes("communications.read") &&
       (permissions.includes("communications.manage") ||
         permissions.includes("communications.whatsapp.manage"))
+    );
+  }
+  if (section === "email") {
+    return (
+      permissions.includes("communications.read") &&
+      permissions.includes("communications.manage")
+    );
+  }
+  if (section === "sms") {
+    return (
+      permissions.includes("communications.read") &&
+      (permissions.includes("communications.manage") ||
+        permissions.includes("communications.sms.manage"))
     );
   }
   const prefixes = SECTION_PERMISSION_PREFIXES[section] || [];

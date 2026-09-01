@@ -5,6 +5,7 @@ import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.modules.identity.models import AuthSession, User
@@ -62,9 +63,13 @@ def create_access_session(session: Session, user: User) -> tuple[str, AuthSessio
 
 
 def find_user_by_login(
-    session: Session, email: str, tenant_id: str | None = None
+    session: Session, identifier: str, tenant_id: str | None = None
 ) -> User | None:
-    statement = select(User).where(User.email == email.lower(), User.is_active == True)  # noqa: E712
+    normalized = identifier.strip().lower()
+    statement = select(User).where(
+        or_(User.email == normalized, User.username == normalized),
+        User.is_active == True,  # noqa: E712
+    )
     if tenant_id:
         statement = statement.where(User.tenant_id == tenant_id)
     return session.exec(statement).first()

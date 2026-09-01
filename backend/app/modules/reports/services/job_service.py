@@ -24,7 +24,6 @@ from app.modules.reports.schemas import (
 from app.modules.reports.services.config_service import load_monthly_report_config
 from app.modules.reports.services.monthly_revenue import build_monthly_revenue_report
 from app.modules.reports.services.period import previous_month_range
-from app.modules.reports.services.profit import build_profit_report_email_attachments
 from app.modules.reports.services.read_models import read_job
 from app.modules.tenants.models import now_utc
 
@@ -84,13 +83,7 @@ def process_report_job(session: Session, job_id: str) -> ReportJob:
             end=end,
             filters=filters,
         )
-        profit_attachments = build_profit_report_email_attachments(
-            session,
-            tenant_id=job.tenant_id,
-            start=start,
-            end=end,
-        )
-        attachments = [(filename, content), *profit_attachments]
+        attachments = [(filename, content)]
         artifact_service = ArtifactService(session)
         artifact_rows = [
             artifact_service.store_generated(
@@ -130,14 +123,15 @@ def process_report_job(session: Session, job_id: str) -> ReportJob:
             recipient=", ".join([*recipients, *cc]),
             subject=f"Monthly revenue report: {start.isoformat()} to {end.isoformat()}",
             message=(
-                "Please find the permanent monthly revenue and settlement reports "
-                "attached. Resends reuse these exact stored artifacts."
+                "Please find the monthly revenue, doctor settlement, vendor "
+                "settlement, and reconciliation workbook attached. Resends reuse "
+                "this exact stored artifact."
             ),
             idempotency_key=f"report-job:{job.id}:email",
             queued_by_user_id=job.queued_by_user_id,
         )
         job.status = ReportJobStatus.DELIVERING
-        job.attachment_filename = f"{len(attachments)} attachments: {filename}"
+        job.attachment_filename = filename
         job.provider_message_id = None
         job.sent_at = None
         job.failure_reason = None
@@ -168,6 +162,8 @@ def queue_monthly_report(
     cc = (
         [str(email) for email in payload.cc] if payload.cc is not None else config["cc"]
     )
+    if not recipients:
+        recipients = [actor.email] if actor.email else []
     if not recipients:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

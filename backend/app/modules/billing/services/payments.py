@@ -116,19 +116,6 @@ def record_invoice_payment(
             session.add(paid_event)
             session.commit()
     elif invoice.balance_amount > 0 and patient:
-        queue_notification_if_allowed(
-            session,
-            tenant_id=tenant_id,
-            branch_id=invoice.branch_id,
-            provider=NotificationProvider.SMS,
-            event_type=NotificationEventType.PAYMENT_REMINDER,
-            recipient=patient.mobile,
-            subject="Payment pending",
-            message=f"Payment pending for invoice {invoice.invoice_number}: Rs. {invoice.balance_amount}.",
-            resource_type="invoice",
-            resource_id=invoice.id,
-            queued_by_user_id=payload.collected_by_user_id,
-        )
         pending_template_event = queue_whatsapp_template_if_allowed(
             session,
             tenant_id=tenant_id,
@@ -165,8 +152,8 @@ def record_invoice_payment(
         branch_id=invoice.branch_id,
         actor_user_id=payload.collected_by_user_id,
         action="payment.recorded",
-        resource_type="payment",
-        resource_id=payment.id,
+        resource_type="invoice",
+        resource_id=invoice.id,
         purpose="payment_collection",
         changes=diff_changes(
             before, {key: getattr(invoice, key) for key in INVOICE_PAYMENT_FIELDS}

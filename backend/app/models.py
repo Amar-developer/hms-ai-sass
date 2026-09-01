@@ -23,6 +23,7 @@ from app.modules.consultations.models import (
 )
 from app.modules.consultations.models import ConsultationReferral, ConsultationVital
 from app.modules.error_logs.models import ErrorLog
+from app.modules.expenses.models import Expense, ExpenseSubcategory
 from app.modules.files.models import FileDocument
 from app.modules.home_care.models import (
     HomeCareBooking,
@@ -66,10 +67,23 @@ from app.modules.notifications.models import (
     NotificationEvent,
     ProductAnnouncement,
 )
-from app.modules.patients.models import Patient, PatientAlert, PatientContact
+from app.modules.patients.models import (
+    Patient,
+    PatientAlert,
+    PatientContact,
+    PatientFamilyRelationship,
+)
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionPlan,
+)
+from app.modules.patient_intelligence.models import (
+    PatientEngagementAction,
+    PatientIntelligenceFlag,
+    PatientIntelligenceFlagHistory,
+    PatientIntelligencePatientSetting,
+    PatientIntelligenceRule,
+    PatientMetricSnapshot,
 )
 from app.modules.pharmacy.models import (
     MedicineBatch,
@@ -136,6 +150,8 @@ __all__ = [
     "HomeCareVisitLog",
     "DoctorSettlement",
     "ErrorLog",
+    "Expense",
+    "ExpenseSubcategory",
     "FileDocument",
     "DiscountApproval",
     "DiscountOffer",
@@ -166,8 +182,15 @@ __all__ = [
     "Patient",
     "PatientAlert",
     "PatientContact",
+    "PatientFamilyRelationship",
     "PatientSubscriptionEnrollment",
     "PatientSubscriptionPlan",
+    "PatientEngagementAction",
+    "PatientIntelligenceFlag",
+    "PatientIntelligenceFlagHistory",
+    "PatientIntelligencePatientSetting",
+    "PatientIntelligenceRule",
+    "PatientMetricSnapshot",
     "Payment",
     "MedicineBatch",
     "MedicineCatalog",

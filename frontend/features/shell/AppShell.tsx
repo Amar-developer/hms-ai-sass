@@ -8,13 +8,15 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
+import { createPortal } from "react-dom";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ChevronRight, Home } from "lucide-react";
 import { SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { canUseTenantAdminSection } from "../admin/permissions";
-import { tenantAdminSections } from "../admin/constants";
+import { tenantAdminSections, clinic_sections } from "../admin/constants";
 import { platformSectionsForUser } from "@/features/superAdmin/SuperAdminDashboard";
+import { superAdminClinicSections } from "@/features/superAdmin/constants";
 import {
   parseSuperAdminSegments,
   superAdminPath,
@@ -23,13 +25,17 @@ import { reportSections } from "@/features/reports/constants";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
-import { activeTenantOptions } from "@/utils/helper";
-import { useNavigationSkeleton } from "@/app/components/common/loader/useNavigationSkeleton";
-import { ModuleSkeleton } from "@/app/components/common/loader/ModuleSkeleton";
-import { BreadcrumbBarSkeleton } from "@/app/components/common/loader/BreadcrumbBarSkeleton";
+import type { AppNavigationTarget } from "@/lib/navigationTarget";
+import {
+  opdAppointmentPath,
+  opdSectionFromSegment,
+} from "@/features/opd/routing";
+import { isNewSegment, isEditSegment } from "@/lib/routeSlugs";
+import { Button } from "@/app/components/common/ui";
 
 type ShellChromeValue = {
-  navigatePage: (target: string | { id: string; section?: string }) => void;
+  navigatePage: (target: AppNavigationTarget) => void;
+  beginNavigation: (page: string, path: string) => void;
   activePage: string;
   enabled: (id: string) => boolean;
   nav: any;
@@ -38,10 +44,13 @@ type ShellChromeValue = {
   switchTenant: any;
   tenantAdminSection: string;
   setTenantAdminSection: (value: string) => void;
+  clinicSection: string;
+  setClinicSection: (value: string) => void;
   reportsSection: string;
   setReportsSection: (value: string) => void;
   superAdminSection: string;
   setSuperAdminSection: (value: string) => void;
+  breadcrumbSlotEl: HTMLDivElement | null;
 };
 
 const ShellChromeContext = createContext<ShellChromeValue | null>(null);
@@ -55,17 +64,96 @@ export function useShellChrome(): ShellChromeValue {
   return value;
 }
 
+// Lets a module page render into the breadcrumb row's right corner (e.g. an
+// AdaptiveFilterTrigger) without AppShell needing a per-page special case.
+// Portals straight into the DOM node AppShell owns, rather than routing the
+// content through React state — state would mean every render of the calling
+// page re-registers a brand-new element, which never stabilizes and loops.
+// Render nothing (or null children) while the page has nothing to show here
+// (e.g. a detail view).
+export function BreadcrumbSlot({ children }: { children: ReactNode }) {
+  const { breadcrumbSlotEl } = useShellChrome();
+  if (!breadcrumbSlotEl) return null;
+  return createPortal(children, breadcrumbSlotEl);
+}
+
+function BreadcrumbSeparator({ className = "" }: { className?: string }) {
+  return (
+    <ChevronRight
+      aria-hidden="true"
+      size={12}
+      className={`shrink-0 text-slate-900 ${className}`}
+    />
+  );
+}
+
+function humanizeRouteSlug(value: string): string {
+  return value
+    .replace(/^(new|edit)-/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function routeActionLabel(segment: string, fallbackEntity = ""): string {
+  if (segment === "new") return `Create ${fallbackEntity}`.trim();
+  if (isNewSegment(segment)) return `Create ${humanizeRouteSlug(segment)}`;
+  if (isEditSegment(segment)) return `Edit ${humanizeRouteSlug(segment)}`;
+  return "";
+}
+
+function BreadcrumbCrumb({
+  label,
+  onClick,
+  current = false,
+  className = "",
+}: {
+  label: string;
+  onClick: () => void;
+  current?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={current}
+      className={`truncate rounded-md py-2 text-[11px] font-bold text-brand hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent ${className}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+const OPD_SECTION_LABELS: Record<string, string> = {
+  appointments: "Appointments",
+  schedule: "Doctor Schedule",
+  consultation: "Consultation",
+  "lab-services": "Lab & Services",
+  prescriptions: "Prescriptions",
+  invoices: "Billing",
+  payments: "Payments",
+  templates: "Templates",
+};
+
+const OPD_SECTION_HREFS: Record<string, string> = {
+  appointments: "/opd/appointments",
+  schedule: "/opd/schedule",
+  consultation: "/opd/consultation",
+  "lab-services": "/opd/lab-services",
+  prescriptions: "/opd/prescriptions",
+  invoices: "/opd/billing",
+  payments: "/opd/payments",
+  templates: "/opd/templates",
+};
+
 export function AppShell({
   children,
   ...props
 }: { children: ReactNode } & Record<string, any>) {
   const {
-    setActive,
     nav,
     enabled,
     clinic,
-    clinics,
-    tenants = [],
     clinicId,
     changeClinic,
     branchId,
@@ -77,7 +165,6 @@ export function AppShell({
     doctorScope,
     apiSession,
     role,
-    demoUsers,
     liveStatus,
     showPassword,
     setShowPassword,
@@ -85,6 +172,7 @@ export function AppShell({
     switchTenant,
     liveSummary,
     isInitialLoading,
+    rememberWorkspacePath,
   } = props;
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canAccessPlatformWorkspace = Boolean(
@@ -92,11 +180,15 @@ export function AppShell({
     apiSession?.user?.user_type === "platform_admin" ||
     apiSession?.user?.user_type === "support_admin",
   );
-  const canManagePlatformTenants = Boolean(
-    isSuperAdmin ||
-    apiSession?.user?.permissions?.includes("platform.tenants.manage"),
-  );
   const visiblePlatformSections = platformSectionsForUser(apiSession?.user);
+  // The Sidebar's "Settings" dropdown (superadmin) must not repeat the
+  // users/branches/departments sections Clinic Setup already shows — those
+  // ids are the CLINIC_SECTION_IDS excluded here (see superAdminClinicSections
+  // above, which is the flip side of this same filter).
+  const visiblePlatformSettingsSections = visiblePlatformSections.filter(
+    ([id]: any) =>
+      !superAdminClinicSections.some(([clinicId]: any) => clinicId === id),
+  );
   const passwordChangeRequired = Boolean(
     apiSession?.user?.must_change_password,
   );
@@ -106,45 +198,52 @@ export function AppShell({
   const canAccessErrorLogs = enabled("error_logs");
   const router = useRouter();
   const pathname = usePathname();
-  const [pendingPage, setPendingPage] = useState("");
+  const searchParams = useSearchParams();
+  const [clinicOpen, setClinicOpen] = useState(false);
+  // Doctors/Scheduling/Items/Expense are full standalone modules with their
+  // own routes, now rooted at /clinic/{id} — nested visually under the
+  // Clinic dropdown rather than moved into it, so they keep their existing
+  // permission gating (enabled("practitioners")/etc.).
+  const clinicModuleIds = ["practitioners", "scheduling", "items", "expense"];
+  const clinicModulePath = (id: string) => `/clinic/${id}`;
 
-  // Sidebar navigation uses router.push() on click rather than <Link>, so it
-  // gets none of Next.js's automatic hover/viewport prefetching — every
-  // click was a cold fetch, which is why the URL and page appeared to hang
-  // on the old route until the new one finished loading. Warm the cache for
-  // every reachable module route up front so clicks resolve instantly.
-  useEffect(() => {
-    for (const [id] of visibleNav) {
-      router.prefetch(`/${id}`);
-    }
-    if (canAccessErrorLogs) {
-      router.prefetch("/error_logs");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleNav.map(([id]: any) => id).join(","), canAccessErrorLogs]);
   const routeSegment =
     pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
+  const clinicRouteModuleId =
+    routeSegment === "clinic" &&
+    clinicModuleIds.includes(pathname.split("/")[2])
+      ? pathname.split("/")[2]
+      : "";
+  const legacyOPDRoute = ["appointments", "consultation"].includes(
+    routeSegment,
+  );
+  const effectiveRouteSegment =
+    routeSegment === "doctor"
+      ? "queue"
+      : legacyOPDRoute
+        ? "opd"
+        : clinicRouteModuleId || routeSegment;
+  const knownRouteSegments = new Set([
+    ...nav.map(([id]: any) => id),
+    "error_logs",
+  ]);
+  const isKnownRouteSegment = knownRouteSegments.has(effectiveRouteSegment);
   const resolvedActivePage =
-    routeSegment === "error_logs" && canAccessErrorLogs
-      ? routeSegment
-      : visibleNav.some(([id]: any) => id === routeSegment)
-        ? routeSegment
+    effectiveRouteSegment === "error_logs" && canAccessErrorLogs
+      ? effectiveRouteSegment
+      : visibleNav.some(([id]: any) => id === effectiveRouteSegment)
+        ? effectiveRouteSegment
         : canAccessPlatformWorkspace
           ? "superadmin"
           : visibleNav[0]?.[0] || "dashboard";
-  const activePage = pendingPage || resolvedActivePage;
-  // pendingPage is set the instant a nav click fires and cleared once the
-  // pathname actually lands (see the effect below) — that window is exactly
-  // "a route change or module switch is in flight", independent of the
-  // sidebar, which keeps rendering the live nav state throughout. Next's
-  // own loading.tsx Suspense fallback only fires for server data fetches,
-  // so client-rendered modules swap with no transition state at all unless
-  // we drive the header + content skeletons off this signal ourselves.
-  const showNavigationSkeleton = useNavigationSkeleton(Boolean(pendingPage));
+  const activePage = isKnownRouteSegment
+    ? effectiveRouteSegment
+    : resolvedActivePage;
   const primaryRole = apiSession?.user?.roles?.[0] || role;
   const roleLabel =
-    demoUsers.find((u: any) => u[0] === primaryRole)?.[1] ||
-    primaryRole?.replace(/_/g, " ") ||
+    primaryRole
+      ?.replace(/_/g, " ")
+      .replace(/\b\w/g, (character: string) => character.toUpperCase()) ||
     "User";
   const isTenantAdmin = Boolean(
     apiSession?.user?.roles?.includes("tenant_admin") ||
@@ -177,20 +276,6 @@ export function AppShell({
     .map((department: any) => department.name)
     .filter(Boolean);
   const displayClinicName = clinic.name || "Hospital / Clinic";
-  const visibleTenantOptions = activeTenantOptions(tenants);
-  const tenantOptions = canManagePlatformTenants
-    ? visibleTenantOptions.length
-      ? visibleTenantOptions.map((tenant: any) => ({
-          value: tenant.id,
-          label: tenant.name || tenant.id,
-        }))
-      : [
-          {
-            value: apiSession?.tenantId || clinic.id,
-            label: displayClinicName,
-          },
-        ]
-    : clinics;
   const superAdminSectionParents: Record<string, string> = {
     tenantEdit: "tenants",
     createTenant: "tenants",
@@ -218,34 +303,83 @@ export function AppShell({
     ? parseSuperAdminSegments(pathname.split("/").slice(2)).section
     : "overview";
   function setSuperAdminSection(value: string) {
-    router.push(superAdminPath(value));
+    const path = superAdminPath(value);
+    beginNavigation("superadmin", path);
+    router.push(path);
   }
   const activeSuperAdminSection = isVisibleSuperAdminSection(superAdminSection)
     ? superAdminSection
     : visiblePlatformSections[0]?.[0] || superAdminSection;
+  const [breadcrumbSlotEl, setBreadcrumbSlotEl] =
+    useState<HTMLDivElement | null>(null);
   const [superAdminSettingsOpen, setSuperAdminSettingsOpen] = useState(true);
   // Tenant Admin sections are real nested routes (/admin/users, /admin/roles,
   // ...) now, so the current section is derived from the URL instead of
   // tracked as independent state — that's what keeps the breadcrumb and
   // sidebar highlight correct on back/forward and direct navigation too.
   const tenantAdminSection = pathname.startsWith("/admin/")
+    ? pathname.split("/")[2] || "files"
+    : "files";
+  function setTenantAdminSection(value: string) {
+    const path = `/admin/${value}`;
+    beginNavigation("admin", path);
+    router.push(path);
+  }
+
+  // Clinic section (only /clinic/...)
+  const clinicSection = pathname.startsWith("/clinic/")
     ? pathname.split("/")[2] || "users"
     : "users";
-  function setTenantAdminSection(value: string) {
-    router.push(`/admin/${value}`);
+
+  function setClinicSection(value: string) {
+    const path = `/clinic/${value}`;
+    beginNavigation("clinic", path);
+    router.push(path);
   }
   const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(false);
   const visibleTenantAdminSections = tenantAdminSections.filter(
     ([sectionId]: any) =>
       canUseTenantAdminSection(sectionId, apiSession?.user) &&
-      (sectionId !== "whatsapp" || clinic.modules?.includes("whatsapp")),
+      (sectionId !== "whatsapp" || clinic.modules?.includes("whatsapp")) &&
+      (sectionId !== "patient-intelligence" ||
+        clinic.modules?.includes("patient_intelligence")),
+  );
+  // Clinic is one shared dropdown for both roles — tenant admins get
+  // tenant-scoped sections, platform/super-admin users get the platform
+  // template sections (users/branches/departments), both routed under
+  // /clinic/{section} (see superAdminPath in routing.ts for how the two
+  // stay disambiguated).
+  const visibleClinicSections = canAccessPlatformWorkspace
+    ? superAdminClinicSections.filter(([id]: any) =>
+        visiblePlatformSections.some(([visibleId]: any) => visibleId === id),
+      )
+    : clinic_sections.filter(([sectionId]: any) =>
+        canUseTenantAdminSection(sectionId, apiSession?.user),
+      );
+  const clinicModuleSections = nav.filter(
+    ([id]: any) => clinicModuleIds.includes(id) && enabled(id),
+  );
+  // Sidebar renders these nested inside Clinic instead of as their own
+  // top-level row — visibleNav itself stays untouched since prefetching,
+  // the search palette, and activePage resolution all still need them.
+  const sidebarVisibleNav = visibleNav.filter(
+    ([id]: any) =>
+      !clinicModuleIds.includes(id) && !["admin", "superadmin"].includes(id),
   );
   const activeTenantAdminSection = visibleTenantAdminSections.some(
-    ([sectionId]: any) => sectionId === tenantAdminSection,
+    ([id]: any) => id === tenantAdminSection,
   )
     ? tenantAdminSection
     : visibleTenantAdminSections[0]?.[0] || tenantAdminSection;
+
+  const activeClinicSection = visibleClinicSections.some(
+    ([id]: any) => id === clinicSection,
+  )
+    ? clinicSection
+    : visibleClinicSections[0]?.[0] || clinicSection;
+
   const [profileOpen, setProfileOpen] = useState(false);
+  const mainScrollRef = useRef<HTMLElement>(null);
   const [reportsOpen, setReportsOpen] = useState(true);
   // Report tabs are real nested routes (/reports/metrix, /reports/lab, ...),
   // so the active tab is derived from the URL rather than tracked separately
@@ -255,20 +389,31 @@ export function AppShell({
     ? pathname.split("/")[2] || "metrix"
     : "metrix";
   function setReportsSection(value: string) {
-    router.push(`/reports/${value}`);
+    const path = `/reports/${value}`;
+    beginNavigation("reports", path);
+    router.push(path);
   }
   const [sideBarOpen, setSidebarOpen] = useState(true);
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
   const [isDesktop, setIsDesktop] = useState(false);
   const profileOpenRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const pathSegments = pathname.split("/").filter(Boolean);
   const activeNavLabel =
     activePage === "error_logs"
       ? "Error Logs"
       : visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
+  const activeOPDSection =
+    activePage === "opd"
+      ? opdSectionFromSegment(pathSegments[1])
+      : "";
+  const activeOPDBreadcrumbSection =
+    activeOPDSection === "new" ? "appointments" : activeOPDSection;
 
   const activeSectionLabel =
-    activePage === "superadmin"
+    activePage === "opd"
+      ? OPD_SECTION_LABELS[activeOPDBreadcrumbSection] || ""
+      : activePage === "superadmin"
       ? String(
           visiblePlatformSections.find(
             ([id]: any) =>
@@ -279,16 +424,69 @@ export function AppShell({
         )
       : activePage === "admin"
         ? String(
-            tenantAdminSections.find(
+            visibleTenantAdminSections.find(
+              // only pure admin sections
               ([id]: any) => id === activeTenantAdminSection,
             )?.[1] ?? "",
           )
-        : activePage === "reports"
+        : activePage === "clinic"
           ? String(
-              reportSections.find(([id]: any) => id === reportsSection)?.[1] ??
-                "",
+              visibleClinicSections.find(
+                ([id]: any) => id === activeClinicSection,
+              )?.[1] ?? "",
             )
-          : "";
+          : activePage === "reports"
+            ? String(
+                reportSections.find(
+                  ([id]: any) => id === reportsSection,
+                )?.[1] ?? "",
+              )
+            : "";
+  const activeSectionHref =
+    activePage === "opd"
+      ? OPD_SECTION_HREFS[activeOPDBreadcrumbSection] || "/opd/consultation"
+      : activePage === "superadmin"
+        ? superAdminPath(
+            superAdminSectionParents[activeSuperAdminSection] ||
+              activeSuperAdminSection,
+          )
+        : activePage === "admin"
+          ? `/admin/${activeTenantAdminSection}`
+          : activePage === "clinic"
+            ? `/clinic/${activeClinicSection}`
+            : activePage === "reports"
+              ? `/reports/${reportsSection}`
+              : "";
+  const activeModuleHref =
+    activePage === "error_logs"
+      ? "/error_logs"
+      : activePage === "opd"
+        ? "/opd/consultation"
+        : activePage === "admin"
+          ? "/admin"
+          : activePage === "clinic"
+            ? "/clinic"
+            : activePage === "reports"
+              ? "/reports"
+              : activePage === "superadmin"
+                ? "/superadmin"
+                : clinicModuleIds.includes(activePage)
+                  ? clinicModulePath(activePage)
+                  : `/${activePage}`;
+
+  // The trailing "new-{slug}"/"edit-{slug}" URL segment self-describes its
+  // action for every module/submodule alike, so the breadcrumb's "Create"/
+  // "Edit" crumb is derived straight from the URL instead of needing each
+  // module to report its own view state up to the shell.
+  const lastPathSegment = pathSegments.at(-1) || "";
+  const activeViewLabel =
+    activePage === "opd" && activeOPDSection === "new"
+      ? "Create Appointment"
+      : routeActionLabel(lastPathSegment);
+  function navigateBreadcrumb(href: string) {
+    if (!href || href === pathname) return;
+    router.push(href);
+  }
 
   const searchItems = [
     ...visibleNav.map(([id, label]: any) => ({
@@ -310,17 +508,20 @@ export function AppShell({
           },
         ]
       : []),
-    ...tenantAdminSections
-      .filter(([sectionId]: any) =>
-        visibleTenantAdminSections.some(([id]: any) => id === sectionId),
-      )
-      .map(([id, label]: any) => ({
-        id: `admin-${id}`,
-        label: `${label}`,
-        description: "Tenant Admin",
-        keywords: `settings admin ${label}`,
-        action: () => navigatePage({ id: "admin", section: id }),
-      })),
+    ...visibleTenantAdminSections.map(([id, label]: any) => ({
+      id: `admin-${id}`,
+      label: `${label}`,
+      description: "Settings",
+      keywords: `settings admin ${label}`,
+      action: () => navigatePage({ id: "admin", section: id }),
+    })),
+    ...visibleClinicSections.map(([id, label]: any) => ({
+      id: `clinic-${id}`,
+      label: `${label}`,
+      description: "Clinic",
+      keywords: `clinic ${label}`,
+      action: () => navigatePage({ id: "clinic", section: id }),
+    })),
     ...(visibleNav.some(([id]: any) => id === "reports")
       ? reportSections.map(([id, label]: any) => ({
           id: `reports-${id}`,
@@ -347,60 +548,151 @@ export function AppShell({
     "ip",
     "physiotherapy",
   ].includes(activePage);
-  function navigatePage(target: string | { id: string; section?: string }) {
-    const id = typeof target === "string" ? target : target.id;
+  function navigatePage(target: AppNavigationTarget) {
+    const requestedId = typeof target === "string" ? target : target.id;
     const section = typeof target === "string" ? undefined : target.section;
+    const appointmentId =
+      typeof target === "string" ? undefined : target.appointmentId;
+
+    const legacyOPDPath: Record<string, string> = {
+      appointments: "/opd/appointments",
+      consultation: "/opd/consultation",
+    };
+    const id =
+      requestedId === "doctor"
+        ? "queue"
+        : legacyOPDPath[requestedId]
+          ? "opd"
+          : requestedId;
 
     if (!id) return;
 
-    if (id === "admin" && section) {
+    // Settings
+    if (id === "admin") {
       setTenantAdminSettingsOpen(true);
-      setTenantAdminSection(section);
+      setClinicOpen(false);
+      if (section) {
+        setTenantAdminSection(section); // → /admin/{section}
+      } else {
+        setTenantAdminSection(activeTenantAdminSection);
+      }
       return;
     }
 
+    // Clinic
+    if (id === "clinic") {
+      setClinicOpen(true);
+      setTenantAdminSettingsOpen(false);
+      if (section) {
+        setClinicSection(section); // → /clinic/{section}
+      } else {
+        setClinicSection(activeClinicSection);
+      }
+      return;
+    }
+    // ---- Reports ----
     if (id === "reports" && section) {
       setReportsOpen(true);
+      setClinicOpen(false);
       setReportsSection(section);
       return;
     }
 
+    // ---- Super-admin ----
     if (id === "superadmin" && section) {
       setSuperAdminSettingsOpen(true);
-
       if (isVisibleSuperAdminSection(section)) {
         setSuperAdminSection(section);
         return;
       }
     }
 
-    if (id === activePage) return;
+    // ---- normal modules ----
+    const destinationPath =
+      id === "opd" && appointmentId
+        ? opdAppointmentPath(appointmentId)
+        : requestedId === "doctor"
+          ? "/queue"
+          : legacyOPDPath[requestedId] ||
+            (id === "admin"
+              ? `/admin/${tenantAdminSection}`
+              : id === "clinic"
+                ? `/clinic/${clinicSection}`
+                : id === "reports"
+                  ? `/reports/${reportsSection}`
+                  : id === "superadmin"
+                    ? superAdminPath(superAdminSection)
+                    : clinicModuleIds.includes(id)
+                      ? clinicModulePath(id)
+                      : id === "opd"
+                        ? "/opd/consultation"
+                      : `/${id}`);
 
-    setPendingPage(id);
-    setActive(id);
-    router.push(
-      id === "admin"
-        ? `/admin/${tenantAdminSection}`
-        : id === "reports"
-          ? `/reports/${reportsSection}`
-          : id === "superadmin"
-            ? superAdminPath(superAdminSection)
-            : `/${id}`,
-    );
+    if (id === activePage && pathname === destinationPath) return;
+
+    beginNavigation(id, destinationPath);
+    router.push(destinationPath);
+  }
+
+  function beginNavigation(page: string, path: string) {
+    // Link/router navigation owns the transition. Keeping the mounted route
+    // visible avoids masking a stalled development server behind a loader.
+    void page;
+    void path;
   }
 
   // Permission/entitlement gating can make the pathname's module unavailable
   // (e.g. after a role/tenant switch) — redirect to the computed fallback
   // rather than silently rendering a different module under a stale URL.
   useEffect(() => {
-    if (resolvedActivePage !== routeSegment) {
-      router.replace(`/${resolvedActivePage}`);
+    if (routeSegment === "doctor" && resolvedActivePage === "queue") {
+      router.replace("/queue");
+    } else if (legacyOPDRoute && resolvedActivePage === "opd") {
+      const legacyDestination = pathname.startsWith("/appointments/new")
+        ? "/opd/new"
+        : routeSegment === "appointments"
+          ? "/opd/appointments"
+          : "/opd/consultation";
+      router.replace(legacyDestination);
+    } else if (
+      !isKnownRouteSegment &&
+      resolvedActivePage !== effectiveRouteSegment
+    ) {
+      router.replace(
+        clinicModuleIds.includes(resolvedActivePage)
+          ? clinicModulePath(resolvedActivePage)
+          : resolvedActivePage === "opd"
+            ? "/opd/consultation"
+          : `/${resolvedActivePage}`,
+      );
     }
-  }, [resolvedActivePage, routeSegment, router]);
+  }, [
+    legacyOPDRoute,
+    pathname,
+    resolvedActivePage,
+    routeSegment,
+    effectiveRouteSegment,
+    isKnownRouteSegment,
+    router,
+  ]);
 
   useEffect(() => {
-    setPendingPage("");
+    if (!rememberWorkspacePath || !pathname || pathname === "/login") return;
+    const query = searchParams.toString();
+    rememberWorkspacePath(query ? `${pathname}?${query}` : pathname);
+  }, [pathname, rememberWorkspacePath, searchParams]);
+
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [pathname]);
+
+  // Direct/bookmarked navigation into Clinic (or into Doctors/Scheduling/
+  // Items, now nested under it) should land with the dropdown already
+  // expanded, not just highlighted.
+  useEffect(() => {
+    if (activePage === "clinic" || clinicModuleIds.includes(activePage))
+      setClinicOpen(true);
+  }, [activePage]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -439,24 +731,9 @@ export function AppShell({
     };
   }, [profileOpen]);
 
-  useEffect(() => {
-    const highTrafficRoutes = new Set([
-      "dashboard",
-      "appointments",
-      "patients",
-      "practitioners",
-      "queue",
-      "billing",
-    ]);
-    visibleNav.forEach(([id]: any) => {
-      if (highTrafficRoutes.has(id) && id !== activePage) {
-        router.prefetch(`/${id}`);
-      }
-    });
-  }, [activePage, router, visibleNav.map(([id]: any) => id).join("|")]);
-
   const shellChromeValue: ShellChromeValue = {
     navigatePage,
+    beginNavigation,
     activePage,
     enabled,
     nav,
@@ -465,34 +742,72 @@ export function AppShell({
     switchTenant,
     tenantAdminSection: activeTenantAdminSection,
     setTenantAdminSection,
+    clinicSection: activeClinicSection,
+    setClinicSection,
     reportsSection,
     setReportsSection,
     superAdminSection: activeSuperAdminSection,
     setSuperAdminSection,
+    breadcrumbSlotEl,
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-white text-slate-900">
+    <div className="flex h-screen flex-col overflow-hidden bg-white text-slate-900">
       {/* {isInitialLoading && <PageLoader label={"Loading"} />} */}
+      <AppHeader
+        isPlatformWorkspace={canAccessPlatformWorkspace}
+        apiSession={apiSession}
+        branchId={branchId}
+        setBranchId={setBranchId}
+        clinic={clinic}
+        canChangeBranch={canChangeBranch}
+        isDoctorUser={isDoctorUser}
+        branchName={branchName}
+        departmentNames={departmentNames}
+        displayClinicName={displayClinicName}
+        searchItems={searchItems}
+        profileOpen={profileOpen}
+        setProfileOpen={setProfileOpen}
+        profileOpenRef={profileOpenRef}
+        roleLabel={roleLabel}
+        handleLogout={handleLogout}
+        setShowPassword={setShowPassword}
+        navigatePage={navigatePage}
+        settingsSections={
+          canAccessPlatformWorkspace
+            ? visiblePlatformSettingsSections
+            : visibleTenantAdminSections
+        }
+        activeSettingsSection={
+          canAccessPlatformWorkspace
+            ? activeSuperAdminSection
+            : activeTenantAdminSection
+        }
+        tabletCollapsed={tabletCollapsed}
+        setTabletCollapsed={setTabletCollapsed}
+        setSidebarOpen={setSidebarOpen}
+        sideBarOpen={sideBarOpen}
+      />
       {/* Sidebar */}
       {!isDesktop && (
         <div
           className={`
-    fixed left-0 top-0 z-40 h-screen bg-white border-r border-slate-200
+    fixed bottom-0 left-0 top-14 z-40 bg-white
     transition-all duration-300
 
-    md:w-14
+    md:w-16
     ${!tabletCollapsed ? "md:w-64" : ""}
 
-    lg:hidden lg:w-50
+    hidden md:block lg:hidden lg:w-64
   `}
         >
           {/* Tablet view Sidebar */}
           <div className="w-fit scrollbar-hidden h-full overflow-y-auto  ">
             <Sidebar
-              visibleNav={visibleNav}
+              visibleNav={sidebarVisibleNav}
               activePage={activePage}
               navigatePage={navigatePage}
+              beginNavigation={beginNavigation}
               isSuperAdmin={isSuperAdmin}
               canAccessPlatformWorkspace={canAccessPlatformWorkspace}
               reportsOpen={reportsOpen}
@@ -503,39 +818,46 @@ export function AppShell({
               setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
               tenantAdminSection={activeTenantAdminSection}
               setTenantAdminSection={setTenantAdminSection}
+              clinicSection={activeClinicSection} // new
+              setClinicSection={setClinicSection}
               superAdminSettingsOpen={superAdminSettingsOpen}
               setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
               superAdminSection={activeSuperAdminSection}
               setSuperAdminSection={setSuperAdminSection}
               visibleTenantAdminSections={visibleTenantAdminSections}
+              visibleClinicSections={visibleClinicSections}
+              clinicModuleSections={clinicModuleSections}
               enabled={enabled}
               clinic={clinic}
               setSidebarOpen={setSidebarOpen}
               sideBarOpen={sideBarOpen}
               reportSections={reportSections}
               reportSection={reportsSection}
-              superAdminSections={visiblePlatformSections}
+              superAdminSections={visiblePlatformSettingsSections}
               tabletCollapsed={tabletCollapsed}
               setTabletCollapsed={setTabletCollapsed}
+              clinicOpen={clinicOpen}
+              setClinicOpen={setClinicOpen}
             />
           </div>
         </div>
       )}
-      <div className="h-full lg:flex">
+      <div className="min-h-0 flex-1 lg:flex">
         <aside
-          className={`scrollbar-hidden hidden h-screen md:w-64 lg:w-64  shrink-0 overflow-y-auto overflow-x-hidden border-r border-slate-200 bg-white p-2 px-0 lg:block`}
+          className="scrollbar-hidden hidden h-full w-64 shrink-0 overflow-y-auto overflow-x-hidden bg-white px-0 py-2 lg:block"
         >
           {/* Desktop view */}
           {isDesktop && (
             <div
-              className={`fixed left-0 top-0 z-40 h-screen w-fit transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
+              className={`h-full w-fit transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
                 sideBarOpen ? "translate-x-0" : "-translate-x-full"
               }`}
             >
               <Sidebar
-                visibleNav={visibleNav}
+                visibleNav={sidebarVisibleNav}
                 activePage={activePage}
                 navigatePage={navigatePage}
+                beginNavigation={beginNavigation}
                 isSuperAdmin={isSuperAdmin}
                 canAccessPlatformWorkspace={canAccessPlatformWorkspace}
                 reportsOpen={reportsOpen}
@@ -546,24 +868,30 @@ export function AppShell({
                 setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
                 tenantAdminSection={activeTenantAdminSection}
                 setTenantAdminSection={setTenantAdminSection}
+                clinicSection={activeClinicSection} // new
+                setClinicSection={setClinicSection}
                 superAdminSettingsOpen={superAdminSettingsOpen}
                 setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
                 superAdminSection={activeSuperAdminSection}
                 setSuperAdminSection={setSuperAdminSection}
                 visibleTenantAdminSections={visibleTenantAdminSections}
+                visibleClinicSections={visibleClinicSections}
+                clinicModuleSections={clinicModuleSections}
                 enabled={enabled}
                 clinic={clinic}
                 setSidebarOpen={setSidebarOpen}
                 sideBarOpen={sideBarOpen}
                 reportSections={reportSections}
                 reportSection={reportsSection}
-                superAdminSections={visiblePlatformSections}
+                superAdminSections={visiblePlatformSettingsSections}
                 tabletCollapsed={tabletCollapsed}
                 setTabletCollapsed={setTabletCollapsed}
+                clinicOpen={clinicOpen}
+                setClinicOpen={setClinicOpen}
               />
             </div>
           )}
-          <div className="mt-4 rounded-lg bg-slate-50 p-4 text-xs leading-5 text-slate-500">
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             <b className="text-slate-900">
               {canAccessPlatformWorkspace ? "Platform Access" : clinic.type}
             </b>
@@ -581,37 +909,13 @@ export function AppShell({
         </aside>
 
         <main
+          ref={mainScrollRef}
           className={`
-    scrollbar-hidden h-screen min-w-0 flex-1 overflow-y-auto bg-white
-    md:ml-14
+    scrollbar-hidden relative h-full min-w-0 flex-1 overflow-y-auto bg-[#f4f6f5d9] [scrollbar-gutter:stable]
+    md:ml-16
     lg:ml-0
   `}
         >
-          <AppHeader
-            isSuperAdmin={canManagePlatformTenants}
-            apiSession={apiSession}
-            tenantOptions={tenantOptions}
-            switchTenant={switchTenant}
-            branchId={branchId}
-            setBranchId={setBranchId}
-            clinic={clinic}
-            canChangeBranch={canChangeBranch}
-            isDoctorUser={isDoctorUser}
-            branchName={branchName}
-            departmentNames={departmentNames}
-            displayClinicName={displayClinicName}
-            searchItems={searchItems}
-            profileOpen={profileOpen}
-            setProfileOpen={setProfileOpen}
-            profileOpenRef={profileOpenRef}
-            roleLabel={roleLabel}
-            handleLogout={handleLogout}
-            setShowPassword={setShowPassword}
-            setReportsOpen={setReportsOpen}
-            navigatePage={navigatePage}
-            // setTabletCollapsed={setTabletCollapsed}
-          />
-
           {(showPassword || passwordChangeRequired) && (
             <ChangePassword
               apiSession={apiSession}
@@ -628,19 +932,16 @@ export function AppShell({
             />
           )}
 
-          {showNavigationSkeleton ? (
-            <BreadcrumbBarSkeleton />
-          ) : (
-            <div className="bg-white px-4 py-2 lg:px-6">
-            <div className="flex min-w-0 flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                {/* Back / Forward group */}
-                <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <div className=" border-slate-100  px-4 py-2 lg:px-5 bg-[#f4f6f5d9]">
+              <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-2">
+                  {/* Back / Forward group */}
+                  {/* <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
                   <button
                     type="button"
                     onClick={() => router.back()}
                     title="Previous page"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
                   >
                     <ArrowLeft size={14} />
                   </button>
@@ -648,137 +949,144 @@ export function AppShell({
                     type="button"
                     onClick={() => router.forward()}
                     title="Forward"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
                   >
                     <ArrowRight size={14} />
                   </button>
+                </div> */}
+
+                  {/* Divider */}
+
+                  {/* Breadcrumb */}
+                  <div className="flex min-w-0 items-center gap-2 p-2 rounded-lg  ">
+                    <Button
+                      type="button"
+                      onClick={() => navigatePage("dashboard")}
+                      disabled={
+                        activePage === "dashboard" || !enabled("dashboard")
+                      }
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold hover:bg-white hover:text-emerald-600 disbaled:cursor-pointer disabled:bg-emerlad-600 disabled:text-white"
+                    >
+                      <Home size={14} /> Dashboard
+                    </Button>
+
+                    {activePage !== "dashboard" && (
+                      <>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbCrumb
+                          label={activeNavLabel}
+                          onClick={() => navigateBreadcrumb(activeModuleHref)}
+                          current={!activeSectionLabel && !activeViewLabel}
+                        />
+                      </>
+                    )}
+
+                    {activeSectionLabel && (
+                      <>
+                        <BreadcrumbSeparator className="hidden sm:block" />
+                        <BreadcrumbCrumb
+                          label={activeSectionLabel}
+                          onClick={() => navigateBreadcrumb(activeSectionHref)}
+                          current={!activeViewLabel}
+                          className="hidden sm:inline"
+                        />
+                      </>
+                    )}
+
+                    {activeViewLabel && (
+                      <>
+                        <BreadcrumbSeparator />
+                        <span className="truncate text-[11px] font-bold text-slate-900">
+                          {activeViewLabel}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                {/* Divider */}
-                <span className="h-5 w-px bg-slate-200" />
-
-                {/* Breadcrumb */}
-                <div className="flex min-w-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => navigatePage("dashboard")}
-                    disabled={
-                      activePage === "dashboard" || !enabled("dashboard")
-                    }
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
-                  >
-                    <Home size={14} /> Dashboard
-                  </button>
-
-                  {activePage !== "dashboard" && (
-                    <>
-                      <span className="text-slate-300">/</span>
-                      <span className="truncate text-xs font-bold text-slate-900">
-                        {activeNavLabel}
+                {activePage === "admin" &&
+                  visibleTenantAdminSections.length > 0 && (
+                    <div className="flex shrink-0 items-center justify-end gap-2">
+                      <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
+                        Settings
                       </span>
-                    </>
+                      <SearchableSelect
+                        value={activeTenantAdminSection}
+                        onChange={(value: string) => {
+                          setTenantAdminSettingsOpen(true);
+                          setTenantAdminSection(value);
+                        }}
+                        options={visibleTenantAdminSections.map(
+                          ([id, label]: any) => ({
+                            label,
+                            value: id,
+                          }),
+                        )}
+                        searchable={false}
+                        className="min-w-[200px] scrollbar-thin"
+                      />
+                    </div>
                   )}
 
-                  {activeSectionLabel && (
-                    <>
-                      <span className="hidden text-slate-300 sm:inline">/</span>
-                      <span className="hidden truncate text-xs text-slate-500 sm:inline">
-                        {activeSectionLabel}
+                {/* {activePage === "clinic" &&
+                  visibleClinicSections.length > 0 && (
+                    <div className="flex shrink-0 items-center justify-end gap-2">
+                      <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
+                        Clinic
                       </span>
-                    </>
-                  )}
-                </div>
-              </div>
+                      <SearchableSelect
+                        value={activeClinicSection}
+                        onChange={(value: string) => {
+                          setClinicOpen(true);
+                          setClinicSection(value);
+                        }}
+                        options={visibleClinicSections.map(
+                          ([id, label]: any) => ({
+                            label,
+                            value: id,
+                          }),
+                        )}
+                        searchable={false}
+                        className="min-w-[200px] scrollbar-thin"
+                      />
+                    </div>
+                  )} */}
 
-              {activePage === "admin" &&
-                visibleTenantAdminSections.length > 0 && (
+                {pageNeedsDepartmentFilter && departmentOptions.length > 0 && (
                   <div className="flex shrink-0 items-center justify-end gap-2">
                     <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
-                      Tenant Admin
+                      Department
                     </span>
                     <SearchableSelect
-                      value={activeTenantAdminSection}
-                      onChange={(value: string) => {
-                        setTenantAdminSettingsOpen(true);
-                        setTenantAdminSection(value);
-                      }}
-                      options={visibleTenantAdminSections.map(
-                        ([id, label]: any) => ({
-                          label,
-                          value: id,
-                        }),
-                      )}
+                      value={departmentId}
+                      onChange={(value) => setDepartmentId(value)}
+                      options={departmentOptions.map((department: any) => ({
+                        value: department.id,
+                        label: department.name,
+                      }))}
+                      disabled={!canChangeDepartment}
+                      className=" min-w-[170px] "
+                      placeholder="Select department"
                       searchable={false}
-                      className="min-w-[200px] scrollbar-thin"
                     />
                   </div>
                 )}
 
-              {pageNeedsDepartmentFilter && departmentOptions.length > 0 && (
-                <div className="flex shrink-0 items-center justify-end gap-2">
-                  <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
-                    Department
-                  </span>
-                  <SearchableSelect
-                    value={departmentId}
-                    onChange={(value) => setDepartmentId(value)}
-                    options={departmentOptions.map((department: any) => ({
-                      value: department.id,
-                      label: department.name,
-                    }))}
-                    disabled={!canChangeDepartment}
-                    className=" min-w-[170px] "
-                    placeholder="Select department"
-                    searchable={false}
-                  />
-                </div>
-              )}
+                <div
+                  ref={setBreadcrumbSlotEl}
+                  className="flex shrink-0 items-center justify-end gap-2 empty:hidden"
+                />
+              </div>
             </div>
-          </div>
-          )}
 
           <section
-            className=" py-4 px-6"
-            aria-busy={showNavigationSkeleton}
-            aria-live="polite"
+            className=" py-2 px-6 bg-[#f4f6f5d9]"
           >
             <ShellChromeContext.Provider value={shellChromeValue}>
-              {showNavigationSkeleton ? (
-                <ModuleSkeleton label="Loading page" />
-              ) : (
-                children
-              )}
+              {children}
             </ShellChromeContext.Provider>
           </section>
         </main>
-      </div>
-    </div>
-  );
-}
-
-type BrandBlockProps = {
-  compact?: boolean;
-  setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
-};
-
-export function BrandBlock({
-  compact = false,
-  setSidebarOpen,
-}: BrandBlockProps) {
-  return (
-    <div className="flex items-center gap-3">
-      <div
-        className={`${compact ? "rounded-xl p-2" : "rounded-2xl p-3"} bg-slate-900 text-white`}
-      >
-        <HeartPulse size={compact ? 20 : 24} />
-      </div>
-      <div className="min-w-0">
-        <h1 className={`${compact ? "text-base" : "text-sm"} font-bold`}>
-          MedizinHub HMS
-        </h1>
-        <p className="truncate text-sm text-slate-500">
-          Healthcare SaaS Workspace
-        </p>
       </div>
     </div>
   );

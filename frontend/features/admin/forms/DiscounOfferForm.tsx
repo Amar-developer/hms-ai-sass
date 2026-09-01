@@ -1,4 +1,4 @@
-import { Form, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { Actions } from "../components/Actions";
 import { Header } from "../components/Header";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -63,7 +63,7 @@ export function DiscountOfferForm({
     });
   }, [offer, reset]);
   return (
-    <Card>
+    <Card className="p-4 bg-white">
       <Header
         title={title}
         subtitle="Offers can be applied to consultation, lab, pharmacy, or item invoices with an optional minimum bill amount."

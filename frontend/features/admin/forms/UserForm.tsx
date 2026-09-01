@@ -45,6 +45,7 @@ export function UserForm({
 
     defaultValues: {
       name: user?.name || "",
+      username: user?.username || "",
       email: user?.email || "",
       userType: user?.user_type || defaultUserType || "staff",
       mobile: user?.mobile || "",
@@ -68,6 +69,7 @@ export function UserForm({
     if (!user?.id) return;
     reset({
       name: user?.name || "",
+      username: user?.username || "",
       email: user?.email || "",
       userType: user?.user_type || defaultUserType || "staff",
       mobile: user?.mobile || "",
@@ -178,7 +180,7 @@ export function UserForm({
       : canResetTenantUserPassword(apiSession, user);
 
   return (
-    <Card>
+    <Card className="bg-white p-4">
       <Header
         title={title}
         subtitle={user?.email || "Create tenant-scoped users only."}
@@ -208,6 +210,20 @@ export function UserForm({
 
           {errors.name && (
             <p className="text-xs text-red-500">{errors.name.message}</p>
+          )}
+        </FormField>
+
+        <FormField label="Username" required>
+          <Input
+            {...register("username")}
+            autoComplete="off"
+            placeholder="e.g. grace.reception"
+          />
+          <p className="text-[11px] text-slate-500">
+            Used for sign-in; letters, numbers, dots, hyphens, and underscores only.
+          </p>
+          {errors.username && (
+            <p className="text-xs text-red-500">{errors.username.message}</p>
           )}
         </FormField>
 
@@ -335,7 +351,7 @@ export function UserForm({
         </div>
 
         {canResetPassword && (
-          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-bold">Password reset</p>
               <p className="mt-1 text-xs text-slate-500">
@@ -345,7 +361,7 @@ export function UserForm({
             <button
               type="button"
               onClick={() => onResetPassword?.(user)}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold shadow-sm transition hover:bg-slate-100"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border bg-white px-4 py-3 text-xs cursor-pointer font-bold shadow-sm transition hover:bg-slate-100"
             >
               <KeyRound size={16} />
               <span>Reset Password</span>

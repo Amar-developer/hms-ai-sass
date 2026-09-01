@@ -1,15 +1,16 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { Scheduling } from "@/features/scheduling/Scheduling";
-import { useWorkspace } from "@/features/shell/WorkspaceContext";
+import { useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 
-export default function SchedulingPage() {
-  const ctx = useWorkspace();
+// Scheduling now lives at /clinic/scheduling — this stub keeps old
+// bookmarks/links working by forwarding straight through.
+export default function SchedulingRedirect() {
+  const router = useRouter();
   const params = useParams();
   const segments = (params?.segments as string[] | undefined) || [];
-  const [first, second] = segments;
-  const view = first === "new" ? "create" : second === "edit" ? "edit" : "list";
-  const selectedId = view === "edit" ? first : "";
-  return <Scheduling {...ctx} view={view} selectedId={selectedId} />;
+  useEffect(() => {
+    router.replace(`/clinic/scheduling${segments.length ? `/${segments.join("/")}` : ""}`);
+  }, [router, segments.join("/")]);
+  return null;
 }

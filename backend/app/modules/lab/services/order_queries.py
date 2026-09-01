@@ -1,7 +1,10 @@
+from datetime import date
+
 from sqlmodel import Session
 
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
 from app.core.access_control import require_user_branch_access
-from app.core.pagination import DEFAULT_LIST_LIMIT
+from app.core.pagination import DEFAULT_LIST_LIMIT, Page
 from app.modules.billing.services.source_references import (
     active_lab_invoice_reference_map,
 )
@@ -22,6 +25,11 @@ def list_lab_orders_records(
     branch_id: str | None,
     patient_id: str | None,
     status_filter: LabOrderStatus | None,
+    q: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    list_filters: list[ListFilter] | None = None,
+    list_sort: ListSort | None = None,
     limit: int = DEFAULT_LIST_LIMIT,
     offset: int = 0,
 ) -> list[LabOrderRead]:
@@ -31,6 +39,11 @@ def list_lab_orders_records(
         branch_id=branch_id,
         patient_id=patient_id,
         status_filter=status_filter,
+        q=q,
+        from_date=from_date,
+        to_date=to_date,
+        list_filters=list_filters,
+        list_sort=list_sort,
         limit=limit,
         offset=offset,
     )
@@ -54,6 +67,63 @@ def list_lab_orders_records(
         read.billing_invoice_id = invoice_references.get(order.id)
         result.append(read)
     return result
+
+
+def list_lab_order_page(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    patient_id: str | None,
+    status_filter: LabOrderStatus | None,
+    q: str | None,
+    from_date: date | None,
+    to_date: date | None,
+    list_filters: list[ListFilter],
+    list_sort: ListSort | None,
+    limit: int,
+    offset: int,
+) -> Page[LabOrderRead]:
+    items = list_lab_orders_records(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
+        status_filter=status_filter,
+        q=q,
+        from_date=from_date,
+        to_date=to_date,
+        list_filters=list_filters,
+        list_sort=list_sort,
+        limit=limit,
+        offset=offset,
+    )
+    total = LabOrderRepository(session).count_orders(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
+        status_filter=status_filter,
+        q=q,
+        from_date=from_date,
+        to_date=to_date,
+        list_filters=list_filters,
+    )
+    return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+def list_lab_order_filter_options(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    patient_id: str | None,
+) -> dict[str, list[ListFilterOption]]:
+    enforce_module_enabled(session, tenant_id, "lab")
+    return LabOrderRepository(session).filter_options(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
+    )
 
 
 def get_lab_order_detail(

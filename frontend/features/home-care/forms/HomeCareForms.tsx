@@ -53,6 +53,7 @@ export function BookingForm({
   visitServices,
   serviceLoadError,
   editing,
+  initialBookingType = "home_care",
   branchId,
   busy,
   patientCreateBusy,
@@ -76,7 +77,7 @@ export function BookingForm({
     resolver: zodResolver(bookingSchema),
     defaultValues: {
       patient_id: "",
-      booking_type: "home_care",
+      booking_type: initialBookingType,
       recurrence: "daily",
       visit_day_mode: "all",
       visit_weekdays: [],
@@ -124,7 +125,7 @@ export function BookingForm({
     } else {
       reset({
         patient_id: "",
-        booking_type: "home_care",
+        booking_type: initialBookingType,
         recurrence: "daily",
         visit_day_mode: "all",
         visit_weekdays: [],
@@ -137,7 +138,7 @@ export function BookingForm({
       setLookupPatient(null);
       setPatientSearch("");
     }
-  }, [editing?.id, reset]);
+  }, [editing?.id, initialBookingType, reset]);
 
   const patientId = watch("patient_id");
   const bookingType = watch("booking_type");
@@ -262,7 +263,7 @@ export function BookingForm({
     if (result !== false) {
       reset({
         patient_id: "",
-        booking_type: "home_care",
+        booking_type: initialBookingType,
         recurrence: "daily",
         visit_day_mode: "all",
         visit_weekdays: [],
@@ -284,7 +285,7 @@ export function BookingForm({
   }, [lineItems, setValue]);
 
   return (
-    <Card>
+    <Card className="p-4 bg-white">
       <div className="flex justify-between gap-3">
         <div>
           <h3 className="card-title font-bold">

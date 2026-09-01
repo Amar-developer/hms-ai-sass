@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { Badge, Card, Input } from "@/app/components/common/ui";
+import { Badge, Card, Input, Button  } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { apiFetch } from "@/lib/api";
 import { displayDateTime } from "@/utils/helper";
@@ -104,7 +104,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
 
   return (
     <div className="space-y-5">
-      <Card>
+      <Card className="mt-3 bg-white p-3">
         <h3 className="card-title font-bold">Add Root Super Admin</h3>
         <p className="card-desc mt-1 text-slate-500">
           Creates a root-level platform owner under the primary tenant. The
@@ -145,19 +145,19 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
             <Input name="reason" minLength={3} required placeholder="Operational continuity" />
           </FormField>
           <div className="md:col-span-2 xl:col-span-3">
-            <button
-              className="rounded-lg bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-50"
+            <Button
+              className="save-button"
               disabled={busy}
             >
               <ButtonLoader loading={busy}>
                 {busy ? "Creating..." : "Create root Super Admin"}
               </ButtonLoader>
-            </button>
+            </Button>
           </div>
         </form>
       </Card>
 
-      <Card>
+      <Card className="bg-white p-3">
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-start">
           <div>
             <h3 className="card-title font-bold">Root Super Administrators</h3>
@@ -165,13 +165,13 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
               Root access is global. Use Platform Admin or tenant roles for routine work.
             </p>
           </div>
-          <button
-            className="rounded-lg border px-3 py-2 font-bold"
+          <Button
+            className="close-button bg-white text-slate-600 hover:bg-slate-200"
             onClick={() => void load()}
             disabled={loading}
           >
             Refresh
-          </button>
+          </Button>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <FormField label="Your current password for status changes">
@@ -205,7 +205,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
               {loading && admins.length === 0 && (
                 <tr>
                   <td colSpan={5} className="p-0">
-                    <TableSkeleton />
+                    <TableSkeleton columns={5} />
                   </td>
                 </tr>
               )}
@@ -221,7 +221,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
                   <td className="px-4 py-3 font-bold">{admin.name}</td>
                   <td className="px-4 py-3">{admin.email}</td>
                   <td className="px-4 py-3">
-                    <Badge tone={admin.is_active ? "green" : "red"} className="normal-badge">
+                    <Badge tone={admin.is_active ? "green" : "red"} className="normal-label">
                       {admin.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </td>
@@ -230,7 +230,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
                   </td>
                   <td className="px-4 py-3">
                     <button
-                      className="rounded-lg border px-3 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-40"
+                      className="close-button disabled:cursor-not-allowed disabled:opacity-40"
                       disabled={busy || admin.id === apiSession.user.id}
                       onClick={() => void changeStatus(admin)}
                     >

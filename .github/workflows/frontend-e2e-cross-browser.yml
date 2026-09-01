@@ -1,8 +1,6 @@
 name: Frontend E2E Cross Browser
 
 on:
-  schedule:
-    - cron: "30 19 * * *"
   workflow_dispatch:
     inputs:
       full_suite:
@@ -70,10 +68,6 @@ jobs:
             bash ../scripts/run_frontend_e2e.sh --project=chromium
             bash ../scripts/run_frontend_e2e.sh --project=firefox
             bash ../scripts/run_frontend_e2e.sh --project=webkit
-          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
-            npm run test:e2e:extended
-            bash ../scripts/run_frontend_e2e.sh --project=firefox --grep @critical
-            bash ../scripts/run_frontend_e2e.sh --project=webkit --grep @critical
           else
             npm run test:e2e:cross-browser
           fi
@@ -87,4 +81,4 @@ jobs:
             frontend/playwright-report
             frontend/test-results
           if-no-files-found: ignore
-          retention-days: 14`
+          retention-days: 14

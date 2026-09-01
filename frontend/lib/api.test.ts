@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  AUTH_SESSION_EXPIRED_EVENT,
   LIVE_DATA_CHANGED_EVENT,
   LIVE_DATA_CHANGED_STORAGE_KEY,
   RequestTimeoutError,
@@ -92,6 +93,29 @@ describe("uploaded asset URL resolution", () => {
 });
 
 describe("api live-data synchronization", () => {
+  it("does not misreport a blocked backend error response as a stopped server", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(apiFetch("/patient-intelligence/patients/patient-one", session))
+      .rejects.toThrow("may have blocked an error response");
+  });
+
+  it("expires the local session without recursively reporting a 401", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ detail: "Session expired" }, 401));
+    const listener = vi.fn();
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, listener);
+
+    await expect(apiFetch("/notifications/in-app", session)).rejects.toThrow(
+      "Session expired",
+    );
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, listener);
+  });
+
   it("bypasses cached reads without publishing a change", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
@@ -108,6 +132,43 @@ describe("api live-data synchronization", () => {
     expect(listener).not.toHaveBeenCalled();
     expect(localStorage.getItem(LIVE_DATA_CHANGED_STORAGE_KEY)).toBeNull();
     window.removeEventListener(LIVE_DATA_CHANGED_EVENT, listener);
+  });
+
+  it("can validate a restored browser session using cookies only", async () => {
+    const tokenSession = { ...session, accessToken: "stored-token" };
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ id: "user-one" }));
+
+    await apiFetch("/auth/me", tokenSession, { omitAuthorization: true });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/me"),
+      expect.objectContaining({
+        credentials: "include",
+        headers: expect.not.objectContaining({
+          Authorization: "Bearer stored-token",
+        }),
+      }),
+    );
+  });
+
+  it("sends bearer authorization for normal API calls when present", async () => {
+    const tokenSession = { ...session, accessToken: "stored-token" };
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ id: "user-one" }));
+
+    await apiFetch("/auth/me", tokenSession);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/me"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer stored-token",
+        }),
+      }),
+    );
   });
 
   it("publishes tenant-scoped changes after a successful write", async () => {

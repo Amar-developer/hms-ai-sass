@@ -1,35 +1,38 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Package, PackageOpen, Plus, PlusCircle } from "lucide-react";
 import {
-  ActionButton,
-  Badge,
   Card,
   RefreshButton,
+  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import { NumberField, SelectField } from "@/app/components/FormElements";
-import { humanizeOptionLabel } from "@/lib/options";
-import {
-  homeServiceTypes,
-  itemTypes,
-  modalities,
-  price_options,
-  serviceItemTypes,
-  sort_type_options,
-} from "@/features/items/constants";
+import { FormField } from "@/app/components/FormElements";
+import { homeServiceTypes, serviceItemTypes } from "@/features/items/constants";
 import { ItemForm } from "@/features/items/forms/ItemForms";
-import { ItemFormValues, itemSchema } from "@/features/items/items.schema";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { RowActions } from "../admin/components/RowActions";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { generatedItemCode } from "./helpers";
 import { useItemsActions, useItemsData } from "./api";
-import { FilterSection } from "@/app/components/common/FilterSection";
+import { AdaptiveFilterTrigger } from "@/app/components/common/AdaptiveFilterTrigger";
+import { AdaptiveSortTrigger } from "@/app/components/common/AdaptiveSortTrigger";
+import { AdaptiveResultCount } from "@/app/components/common/AdaptiveResultCount";
+import { BreadcrumbSlot } from "@/features/shell/AppShell";
 import { DataTable } from "@/app/components/common/DataTable";
-import { Column } from "@/utils/types";
 import { Pagination } from "@/app/components/common/Pagination";
+import { getItemsColumns } from "./Column";
+import { getItemsTableSchema, getItemsQueryFields } from "./filterSchema";
+import { sortRows } from "@/utils/sortRows";
+import { newSegment, editSegment, viewSegment } from "@/lib/routeSlugs";
+import { ItemDetail } from "@/features/items/components/ItemDetail";
+import {
+  applyQueryFilters,
+  type QueryFieldOption,
+  type QueryFilterRow,
+} from "@/utils/queryFilter";
+import type { SortState } from "@/utils/types";
+import DataHeader from "@/app/components/common/DataHeader";
 
 function itemCodePreview(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -68,65 +71,72 @@ function createEmptyForm(type: string) {
   };
 }
 
-export function Items({ apiSession, branchId }: any) {
-  const {
-    register,
-    handleSubmit,
-    control,
-    reset,
-    formState: { errors },
-  } = useForm<ItemFormValues>({
-    resolver: zodResolver(itemSchema),
-    defaultValues: {
-      name: "",
-      generic_name: "",
-      mrp_price: "",
-      price: "",
-      purchase_price: "",
-      supplier_id: "",
-      reorder_level: "",
-      sample_type: "",
-      description: "",
-      modality_type: "ift",
-      manufacturer: "",
-      model_number: "",
-      serial_number: "",
-      is_portable: "false",
-    },
+function mergeFilterOptions(
+  ...sources: Record<string, QueryFieldOption[]>[]
+): Record<string, QueryFieldOption[]> {
+  const merged: Record<string, QueryFieldOption[]> = {};
+  sources.forEach((source) => {
+    Object.entries(source || {}).forEach(([key, options]) => {
+      const seen = new Set((merged[key] || []).map((option) => option.value));
+      const next = [...(merged[key] || [])];
+      options.forEach((option) => {
+        if (seen.has(option.value)) return;
+        seen.add(option.value);
+        next.push(option);
+      });
+      merged[key] = next;
+    });
   });
-  const [type, setType] = useState("medicine");
+  return merged;
+}
+
+export function Items({
+  apiSession,
+  branchId,
+  view = "list",
+  selectedId = "",
+  itemType = "medicine",
+}: any) {
+  const router = useRouter();
+  const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const [type, setType] = useState(itemType);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
+  const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
+  const scopedSession =
+    apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
   const {
+    tenants,
     medicines,
     tests,
     packages,
     equipment,
     homeCareServices,
     stockSuppliers,
+    medicineFilterOptions,
+    labTestFilterOptions,
+    labPackageFilterOptions,
+    physioEquipmentFilterOptions,
+    homeCareServiceFilterOptions,
     loading,
     loadError,
     load,
-  } = useItemsData({ apiSession, branchId });
+  } = useItemsData({ apiSession: scopedSession, branchId });
   const [packageTestIds, setPackageTestIds] = useState<string[]>([]);
-  const [editing, setEditing] = useState<any>(null);
   const [confirmAction, setConfirmAction] = useState<any>(null);
   const [filters, setFilters] = useState({
-    type: "all",
-    query: "",
     labOnly: "all",
-    priceBand: "all",
-    sortBy: "name",
   });
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortState | null>({
+    key: "updated_at",
+    dir: "desc",
+  });
+  const [queryFilters, setQueryFilters] = useState<QueryFilterRow[]>([]);
   const [page, setPage] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 10;
-  const [form, setForm] = useState<any>(() => createEmptyForm("medicine"));
-  const autoCode = editing
-    ? type === "physio_equipment"
-      ? form.serial_number || form.code || ""
-      : form.code || ""
-    : itemCodePreview(type, form.name);
+  const [form, setForm] = useState<any>(() => createEmptyForm(itemType));
 
   const supplierName = (id: string | null | undefined) =>
     stockSuppliers.find((supplier: any) => supplier.id === id)?.name || "-";
@@ -140,9 +150,21 @@ export function Items({ apiSession, branchId }: any) {
         mrp_price: row.mrp_price || 0,
         price: row.default_sale_price,
         purchase_price: row.purchase_price || 0,
+        supplier_id: row.supplier_id || "",
         supplier: supplierName(row.supplier_id),
-        meta: row.generic_name || row.form || "-",
+        branch_id: row.branch_id || "",
+        department: "",
+        sample_type: "",
+        generic_name: row.generic_name || "",
+        form: row.form || "",
+        manufacturer: row.manufacturer || "",
+        modality_type: "",
+        is_portable: "",
+        meta: row.generic_name || row.form || row.manufacturer || "-",
+        created_by_user_id: row.created_by_user_id || "",
+        updated_by_user_id: row.updated_by_user_id || "",
         created_at: row.created_at || row.updated_at || "",
+        updated_at: row.updated_at || row.created_at || "",
         id: row.id,
         raw: row,
       })),
@@ -154,9 +176,18 @@ export function Items({ apiSession, branchId }: any) {
         mrp_price: row.mrp_price || 0,
         price: row.default_price,
         purchase_price: row.purchase_price || 0,
+        supplier_id: row.supplier_id || "",
         supplier: supplierName(row.supplier_id),
+        branch_id: row.branch_id || "",
+        department: row.department || "",
+        sample_type: row.sample_type || "",
+        modality_type: "",
+        is_portable: "",
         meta: row.sample_type || "-",
+        created_by_user_id: row.created_by_user_id || "",
+        updated_by_user_id: row.updated_by_user_id || "",
         created_at: row.created_at || row.updated_at || "",
+        updated_at: row.updated_at || row.created_at || "",
         id: row.id,
         raw: row,
       })),
@@ -168,9 +199,18 @@ export function Items({ apiSession, branchId }: any) {
         mrp_price: row.mrp_price || 0,
         price: row.package_price,
         purchase_price: null,
+        supplier_id: "",
         supplier: "-",
+        branch_id: row.branch_id || "",
+        department: "",
+        sample_type: "",
+        modality_type: "",
+        is_portable: "",
         meta: row.description || `${row.test_ids?.length || 0} tests`,
+        created_by_user_id: row.created_by_user_id || "",
+        updated_by_user_id: row.updated_by_user_id || "",
         created_at: row.created_at || row.updated_at || "",
+        updated_at: row.updated_at || row.created_at || "",
         id: row.id,
         raw: row,
       })),
@@ -182,9 +222,19 @@ export function Items({ apiSession, branchId }: any) {
         mrp_price: row.mrp_price || 0,
         price: null,
         purchase_price: row.purchase_price || 0,
+        supplier_id: row.supplier_id || "",
         supplier: supplierName(row.supplier_id),
+        branch_id: row.branch_id || "",
+        department: "",
+        sample_type: "",
+        modality_type: row.modality_type || "",
+        is_portable: String(Boolean(row.is_portable)),
+        manufacturer: row.manufacturer || "",
         meta: `${row.modality_type} · ${row.is_portable ? "Portable" : "Fixed"}`,
+        created_by_user_id: row.created_by_user_id || "",
+        updated_by_user_id: row.updated_by_user_id || "",
         created_at: row.created_at || row.updated_at || "",
+        updated_at: row.updated_at || row.created_at || "",
         id: row.id,
         raw: row,
       })),
@@ -199,9 +249,18 @@ export function Items({ apiSession, branchId }: any) {
             mrp_price: row.mrp_price || 0,
             price: row.default_price,
             purchase_price: null,
+            supplier_id: "",
             supplier: "-",
+            branch_id: row.branch_id || "",
+            department: "",
+            sample_type: "",
+            modality_type: "",
+            is_portable: "",
             meta: row.description || "Home visit",
+            created_by_user_id: row.created_by_user_id || "",
+            updated_by_user_id: row.updated_by_user_id || "",
             created_at: row.created_at || row.updated_at || "",
+            updated_at: row.updated_at || row.created_at || "",
             id: row.id,
             raw: row,
           };
@@ -209,64 +268,128 @@ export function Items({ apiSession, branchId }: any) {
     ],
     [medicines, tests, packages, equipment, homeCareServices, stockSuppliers],
   );
+  // The route (not stray component state) is the source of truth for which
+  // record is being edited — this is what `type`/`editing` used to track
+  // locally before edit became route-driven, which left them permanently
+  // uninitialized and caused edits to be submitted as the wrong item type.
+  const editingRow = useMemo(
+    () =>
+      view === "edit" ? rows.find((row: any) => row.id === selectedId) : null,
+    [view, selectedId, rows],
+  );
   const filteredRows = useMemo(
     () =>
       rows.filter((row: any) => {
-        if (filters.type !== "all" && row.type !== filters.type) return false;
         if (
           filters.labOnly === "lab" &&
           !["lab_test", "lab_package"].includes(row.type)
         )
           return false;
-        if (filters.priceBand === "priced" && Number(row.price || 0) <= 0)
-          return false;
-        if (filters.priceBand === "free" && Number(row.price || 0) > 0)
-          return false;
-        const query = String(filters.query || "")
-          .trim()
-          .toLowerCase();
+        const trimmedQuery = query.trim().toLowerCase();
         if (
-          query &&
+          trimmedQuery &&
           !`${row.kind} ${row.name} ${row.code} ${row.meta} ${row.id}`
             .toLowerCase()
-            .includes(query)
+            .includes(trimmedQuery)
         )
           return false;
         return true;
       }),
-    [rows, filters],
+    [rows, filters, query],
   );
-  const sortedRows = useMemo(() => {
-    const valueFor = (row: any) => {
-      if (filters.sortBy === "latest") return row.created_at || row.id || "";
-      if (filters.sortBy === "type") return row.kind || "";
-      if (filters.sortBy === "code") return row.code || "";
-      if (filters.sortBy === "price") return Number(row.price ?? -1);
-      if (filters.sortBy === "mrp") return Number(row.mrp_price ?? -1);
-      return row.name || "";
-    };
-    return [...filteredRows].sort((a: any, b: any) => {
-      const left = valueFor(a);
-      const right = valueFor(b);
-      if (typeof left === "number" && typeof right === "number") {
-        return left - right;
-      }
-      const result = String(left).localeCompare(String(right));
-      return filters.sortBy === "latest" ? -result : result;
-    });
-  }, [filteredRows, filters.sortBy]);
+  const itemsQueryFields = useMemo(
+    () =>
+      getItemsQueryFields({
+        rows,
+        filterOptions: mergeFilterOptions(
+          medicineFilterOptions,
+          labTestFilterOptions,
+          labPackageFilterOptions,
+          physioEquipmentFilterOptions,
+          homeCareServiceFilterOptions,
+        ),
+      }),
+    [
+      rows,
+      medicineFilterOptions,
+      labTestFilterOptions,
+      labPackageFilterOptions,
+      physioEquipmentFilterOptions,
+      homeCareServiceFilterOptions,
+    ],
+  );
+  const sortedRows = useMemo(
+    () =>
+      sortRows(
+        applyQueryFilters(filteredRows, itemsQueryFields, queryFilters),
+        sort,
+        (row, key) => {
+          if (key === "type") return row.kind || "";
+          if (key === "mrp_price") return Number(row.mrp_price ?? -1);
+          if (key === "price") return Number(row.price ?? -1);
+          return row[key];
+        },
+      ),
+    [filteredRows, itemsQueryFields, queryFilters, sort],
+  );
 
   useEffect(() => {
     if (loadError) setMessage(loadError);
   }, [loadError]);
 
+  // Bounce back to the list if a direct/bookmarked edit or view link no
+  // longer resolves to a real item, but only once loading has finished.
+  // Navigating during render (rather than here) updates the router while
+  // Items is still rendering, which React flags as an invalid setState.
+  useEffect(() => {
+    if ((view !== "edit" && view !== "view") || loading) return;
+    if (!rows.some((row: any) => row.id === selectedId)) open("list");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedId, loading, rows]);
+
+  // The route is the source of truth for which type is being created — this
+  // component instance isn't remounted on navigation (same [[...segments]]
+  // page), so `type`/`form` local state needs to be re-seeded whenever the
+  // URL's type segment changes, not just on first mount.
+  useEffect(() => {
+    if (view !== "create") return;
+    setType(itemType);
+    setForm(createEmptyForm(itemType));
+    setPackageTestIds([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, itemType]);
+
+  // Same idea for edit: `type` drives which fields useItemsActions builds
+  // into the save payload, so it has to match the record actually being
+  // edited, not whatever type was last selected elsewhere in the module.
+  useEffect(() => {
+    if (view !== "edit" || !editingRow) return;
+    setType(editingRow.type);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, editingRow?.id]);
+
   function setField(key: string, value: any) {
     setForm((prev: any) => ({ ...prev, [key]: value }));
   }
 
+  function open(nextView: string, id = "", nextType = "medicine") {
+    const path =
+      nextView === "create"
+        ? `/clinic/items/${nextType}/${newSegment("item")}`
+        : nextView === "edit" && id
+          ? `/clinic/items/${id}/${editSegment("item")}`
+          : nextView === "view" && id
+            ? `/clinic/items/${id}/${viewSegment("item")}`
+            : "/clinic/items";
+    router.push(path);
+    requestAnimationFrame(() =>
+      window.scrollTo({ top: 0, behavior: "smooth" }),
+    );
+  }
+
   function changeItemType(nextType: string) {
     if (
-      editing &&
+      editingRow &&
       homeServiceTypes.includes(type) &&
       homeServiceTypes.includes(nextType)
     ) {
@@ -278,9 +401,10 @@ export function Items({ apiSession, branchId }: any) {
       return;
     }
     setType(nextType);
-    setEditing(null);
     setPackageTestIds([]);
     resetItemForm(nextType);
+    if (view === "create")
+      router.replace(`/clinic/items/${nextType}/${newSegment("item")}`);
   }
 
   function resetItemForm(nextType = type) {
@@ -289,12 +413,12 @@ export function Items({ apiSession, branchId }: any) {
   }
 
   const { handleItemSubmit, confirmDelete } = useItemsActions({
-    apiSession,
+    apiSession: scopedSession,
     type,
-    editing,
+    editing: editingRow,
     rows,
     packageTestIds,
-    setEditing,
+    setEditing: () => {},
     setBusy,
     setMessage,
     setConfirmAction,
@@ -303,21 +427,22 @@ export function Items({ apiSession, branchId }: any) {
     load,
   });
 
+  async function submitItem(data: any) {
+    const ok = await handleItemSubmit(data);
+    if (ok) open("list");
+    return ok;
+  }
+
   function startEdit(row: any) {
-    const raw = row.raw;
-    setEditing(row);
-    setType(row.type);
-    if (row.type === "lab_package") {
-      setPackageTestIds(raw.test_ids || []);
-    } else {
-      setPackageTestIds([]);
-    }
+    open("edit", row.id);
+  }
+
+  function openView(row: any) {
+    open("view", row.id);
   }
 
   function cancelEdit() {
-    setEditing(null);
-    setPackageTestIds([]);
-    resetItemForm(type);
+    open("list");
   }
 
   function deleteItem(row: any) {
@@ -336,190 +461,175 @@ export function Items({ apiSession, branchId }: any) {
     setPage(1);
   }
 
-  const itemFilters = [
-    {
-      key: "type",
-      label: "Type",
-      options: [
-        { value: "all", label: "All item types" },
-        ...itemTypes.map(([value, label]) => ({ value, label })),
-      ],
-    },
-    {
-      key: "sortBy",
-      label: "Sort By",
-      options: sort_type_options,
-    },
-    {
-      key: "priceBand",
-      label: "Price",
-      options: price_options,
-    },
-  ];
+  const itemsSchema = getItemsTableSchema();
 
-  const filterValues = {
-    type: filters.type,
-    sortBy: filters.sortBy,
-    priceBand: filters.priceBand,
-  };
+  const filterValues = {};
 
-  const itemColumns: Column<any>[] = [
-    {
-      key: "type",
-      header: "Type",
-      width: "180px",
-      render: (row: any) => (
-        <p className="text-sm font-bold">{humanizeOptionLabel(row.kind)}</p>
-      ),
-    },
-    {
-      key: "name",
-      header: "Item",
-      width: "180px",
-      render: (row: any) => <b className="text-sm">{row.name}</b>,
-    },
-    {
-      key: "supplier",
-      header: "Supplier",
-      width: "130px",
-      render: (row: any) => <span className="text-sm">{row.supplier}</span>,
-    },
-    {
-      key: "mrp_price",
-      header: "MRP",
-      width: "100px",
-      render: (row: any) => (
-        <span className="text-sm">
-          {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
-        </span>
-      ),
-    },
-    {
-      key: "purchase_price",
-      header: "Purchase",
-      width: "100px",
-      render: (row: any) => (
-        <span className="text-sm">
-          {row.purchase_price === null ? "-" : `₹${row.purchase_price || 0}`}
-        </span>
-      ),
-    },
-    {
-      key: "price",
-      header: "Sale Price",
-      width: "120px",
-      className: "text-center",
-      cellClassName: "text-center",
-      render: (row: any) => (
-        <span className="text-sm">
-          {row.price === null ? "-" : `₹${row.price}`}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      width: "100px",
-      className: "text-right",
-      cellClassName: "text-right",
-      disableRowClick: true,
-      render: (row: any) => (
-        <div className="flex justify-end">
-          <RowActions
-            actions={[
-              {
-                label: "Edit",
-                onClick: () => {
-                  startEdit(row);
+  function resetItemFilters() {
+    setFilters({ labOnly: "all" });
+    setSort({ key: "name", dir: "asc" });
+    setPage(1);
+  }
 
-                  setTimeout(() => {
-                    containerRef.current?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    });
-                  }, 100);
-                },
-              },
-              {
-                label: busy === `delete-${row.id}` ? "Deleting..." : "Delete",
-                onClick: () => deleteItem(row),
-                disabled: busy === `delete-${row.id}`,
-                danger: true,
-              },
-            ]}
-            className="right-8 -bottom-5"
-          />
-        </div>
-      ),
-    },
-  ];
+  const itemColumns = getItemsColumns({
+    deleteItem,
+    startEdit,
+    containerRef,
+    busy,
+  });
 
-  return (
-    <div className="space-y-6 scroll-mt-24" ref={containerRef}>
-      <Card>
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
+  if (view === "view") {
+    const viewedRow = rows.find((row: any) => row.id === selectedId);
+
+    if (!viewedRow) return null;
+
+    return (
+      <div className="space-y-4">
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        {view !== "view" && (
+          <button
+            type="button"
+            onClick={() => open("list")}
+            className="close-button font-bold "
+          >
+            Back to Items
+          </button>
+        )}
+        <ItemDetail
+          item={viewedRow}
+          canEdit
+          onEdit={() => startEdit(viewedRow)}
+          back={() => open("list")}
+        />
+      </div>
+    );
+  }
+
+  // Route-driven create/edit, mirroring Doctors.tsx: these two views render
+  // only the form, no breadcrumb/filter bar/table alongside it.
+  if (view === "create" || view === "edit") {
+    if (view === "edit" && !editingRow) {
+      return null;
+    }
+
+    return (
+      <div className="space-y-4">
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        <button
+          type="button"
+          onClick={() => open("list")}
+          className="close-button font-bold bg-white"
+        >
+          Back to Items
+        </button>
+        <Card className="p-3 bg-white">
           <div>
-            <h3 className="card-title font-bold">Items</h3>
+            <h3 className="card-title font-bold">
+              {view === "edit" ? "Edit Item" : "Create Item"}
+            </h3>
             <p className="card-desc text-slate-500">
               ERP-style item master for medicines, lab tests, Service,
               physiotherapy equipment, and home care / visit services.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <RefreshButton onRefresh={load} />
-            <Badge tone="blue" className="normal-badge">
-              {sortedRows.length} items
-            </Badge>
-          </div>
-        </div>
-        <StatusToast message={message} onClose={() => setMessage("")} />
-        <ItemForm
-          type={type}
-          initialData={editing?.raw}
-          stockSuppliers={stockSuppliers}
-          busy={busy === "save"}
-          onSubmit={handleItemSubmit}
-          onCancel={cancelEdit}
-          editing={editing}
-          onTypeChange={changeItemType}
-        />
-      </Card>
+          <ItemForm
+            type={view === "edit" ? editingRow.type : type}
+            initialData={view === "edit" ? editingRow.raw : undefined}
+            stockSuppliers={stockSuppliers}
+            busy={busy === "save"}
+            onSubmit={submitItem}
+            onCancel={cancelEdit}
+            editing={view === "edit" ? editingRow : null}
+            onTypeChange={changeItemType}
+          />
+        </Card>
+        {confirmAction && (
+          <ConfirmModal
+            action={confirmAction}
+            busy={busy === `delete-${confirmAction.row.id}`}
+            onCancel={() => setConfirmAction(null)}
+            onConfirm={confirmDelete}
+          />
+        )}
+      </div>
+    );
+  }
 
-      {/* Item List */}
-      <Card>
-        <div className="flex flex-col gap-4">
-          <div>
-            <h3 className="card-title font-bold">Item List</h3>
-            <p className="card-desc text-slate-500">
-              Configure items used across healthcare services
-            </p>
-          </div>
-          <FilterSection
-            title="Items"
-            filters={itemFilters}
-            filterValues={filterValues}
-            className="lg:grid-cols-5"
-            query={filters.query}
-            setQuery={(value: string) => updateFilter("query", value)}
-            onFilterChange={updateFilter}
-            onReset={() => {
-              setFilters({
-                type: "all",
-                query: "",
-                labOnly: "all",
-                priceBand: "all",
-                sortBy: "name",
-              });
+  return (
+    <div className="space-y-4 scroll-mt-24" ref={containerRef}>
+      <BreadcrumbSlot>
+        <div className="flex items-center gap-2">
+          <AdaptiveResultCount
+            shown={pagedRows.length}
+            total={sortedRows.length}
+            noun="items"
+          />
+          <RefreshButton
+            onRefresh={load}
+            className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+          />
+          <AdaptiveFilterTrigger
+            schema={itemsSchema}
+            query={query}
+            setQuery={(value: string) => {
+              setQuery(value);
               setPage(1);
             }}
+            filterValues={filterValues}
+            onFilterChange={updateFilter}
+            sort={sort}
+            onSortChange={setSort}
+            showSort={false}
+            onReset={resetItemFilters}
+            queryFields={itemsQueryFields}
+            queryFilters={queryFilters}
+            onQueryFiltersChange={setQueryFilters}
+          >
+            {isSuperAdmin && (
+              <FormField label="Tenant">
+                <SearchableSelect
+                  searchable={false}
+                  value={tenantId}
+                  onChange={setTenantId}
+                  options={tenants.map((t: any) => ({
+                    value: t.id,
+                    label: t.name,
+                  }))}
+                />
+              </FormField>
+            )}
+          </AdaptiveFilterTrigger>
+          <AdaptiveSortTrigger
+            fields={itemsSchema.sortFields}
+            sort={sort}
+            onSortChange={setSort}
           />
         </div>
-        <div className="mt-4">
+      </BreadcrumbSlot>
+
+      {/* Item List */}
+        <DataHeader
+          title="Item List"
+          description="Configure items used across healthcare services"
+          cardIcon={PackageOpen}
+          buttonText="Create Item"
+          open={open}
+          count={String(rows.length)}
+        />
+        <StatusToast message={message} onClose={() => setMessage("")} />
+        <div className="table-wrapper-width">
           <DataTable
             columns={itemColumns}
             data={pagedRows}
             loading={loading}
             emptyMessage="No items match your filter."
+            emptyDescription="Medicines, tests, services, and equipment added here will show up in this list."
+            emptyIcon={Package}
+            minBodyHeight={`${pagedRows.length > 0 ? "" : "220px"}`}
+            sort={sort ?? undefined}
+            onSortChange={setSort}
+            onRowClick={openView}
+            className="table-width"
           />
           {confirmAction && (
             <ConfirmModal
@@ -536,7 +646,6 @@ export function Items({ apiSession, branchId }: any) {
           total={sortedRows.length}
           onPage={setPage}
         />
-      </Card>
     </div>
   );
 }

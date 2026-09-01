@@ -1,15 +1,24 @@
 from datetime import date
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
+from app.core.list_filters import ListFilter, ListSort
 from app.core.pagination import Page
+from app.modules.patient_intelligence.models import (
+    IntelligenceFlagStatus,
+    PatientIntelligenceFlag,
+    PatientIntelligenceRule,
+)
 from app.modules.patients.models import PatientStatus
 from app.modules.patients.repositories import (
     PatientAlertRepository,
     PatientRepository,
     PatientSubscriptionReadRepository,
 )
-from app.modules.patients.schemas import PatientSearchResult
+from app.modules.patients.schemas import (
+    PatientIntelligenceFlagCompact,
+    PatientSearchResult,
+)
 from app.modules.patients.services.mappers import (
     alert_count_maps,
     patient_search_result,
@@ -22,6 +31,61 @@ class PatientSearchService:
         self.patients = PatientRepository(session)
         self.alerts = PatientAlertRepository(session)
         self.subscriptions = PatientSubscriptionReadRepository(session)
+        self.session = session
+
+    def _intelligence_flags(
+        self, *, tenant_id: str, patient_ids: list[str]
+    ) -> dict[str, list[PatientIntelligenceFlagCompact]]:
+        if not patient_ids:
+            return {}
+        rows = self.session.exec(
+            select(PatientIntelligenceFlag, PatientIntelligenceRule)
+            .join(
+                PatientIntelligenceRule,
+                PatientIntelligenceRule.id == PatientIntelligenceFlag.rule_id,
+            )
+            .where(
+                PatientIntelligenceFlag.tenant_id == tenant_id,
+                PatientIntelligenceFlag.patient_id.in_(patient_ids),
+                PatientIntelligenceFlag.status.notin_(
+                    [IntelligenceFlagStatus.RESOLVED, IntelligenceFlagStatus.CLOSED]
+                ),
+                PatientIntelligenceRule.is_enabled.is_(True),
+                PatientIntelligenceRule.display_as_patient_badge.is_(True),
+            )
+        ).all()
+        rows.sort(
+            key=lambda item: (
+                item[0].patient_id,
+                item[1].priority,
+                item[1].rule_key,
+            )
+        )
+        result: dict[str, list[PatientIntelligenceFlagCompact]] = {}
+        for flag, rule in rows:
+            if not all(
+                [
+                    rule.badge_label,
+                    rule.badge_background_color,
+                    rule.badge_text_color,
+                    rule.badge_border_color,
+                ]
+            ):
+                continue
+            result.setdefault(flag.patient_id, []).append(
+                PatientIntelligenceFlagCompact(
+                    flag_key=flag.flag_key,
+                    category=flag.category.value,
+                    severity=flag.severity,
+                    explanation=flag.explanation,
+                    label=rule.badge_label,
+                    background_color=rule.badge_background_color,
+                    text_color=rule.badge_text_color,
+                    border_color=rule.badge_border_color,
+                    priority=rule.priority,
+                )
+            )
+        return result
 
     def search(
         self,
@@ -34,6 +98,8 @@ class PatientSearchService:
         gender: str | None = None,
         from_date: date | None = None,
         to_date: date | None = None,
+        list_filters: list[ListFilter] | None = None,
+        list_sort: ListSort | None = None,
         offset: int = 0,
         limit: int = 25,
     ) -> list[PatientSearchResult]:
@@ -46,6 +112,8 @@ class PatientSearchService:
             gender=gender,
             from_date=from_date,
             to_date=to_date,
+            list_filters=list_filters,
+            list_sort=list_sort,
             offset=offset,
             limit=limit,
         )
@@ -61,6 +129,9 @@ class PatientSearchService:
                 patient_ids=patient_ids,
             )
         )
+        intelligence_flags = self._intelligence_flags(
+            tenant_id=tenant_id, patient_ids=patient_ids
+        )
 
         return [
             patient_search_result(
@@ -68,6 +139,7 @@ class PatientSearchService:
                 alert_counts,
                 critical_counts,
                 subscription_details,
+                intelligence_flags,
             )
             for patient in patients
         ]
@@ -83,6 +155,8 @@ class PatientSearchService:
         gender: str | None,
         from_date: date | None,
         to_date: date | None,
+        list_filters: list[ListFilter],
+        list_sort: ListSort | None,
         offset: int,
         limit: int,
     ) -> Page[PatientSearchResult]:
@@ -95,6 +169,8 @@ class PatientSearchService:
             gender=gender,
             from_date=from_date,
             to_date=to_date,
+            list_filters=list_filters,
+            list_sort=list_sort,
             offset=offset,
             limit=limit,
         )
@@ -107,6 +183,7 @@ class PatientSearchService:
             gender=gender,
             from_date=from_date,
             to_date=to_date,
+            list_filters=list_filters,
         )
         return Page(items=items, total=total, limit=limit, offset=offset)
 
@@ -116,4 +193,11 @@ class PatientSearchService:
         patients = self.patients.list_references(
             tenant_id=tenant_id, patient_ids=patient_ids
         )
-        return [patient_search_result(patient) for patient in patients]
+        intelligence_flags = self._intelligence_flags(
+            tenant_id=tenant_id,
+            patient_ids=[patient.id for patient in patients],
+        )
+        return [
+            patient_search_result(patient, intelligence_flags=intelligence_flags)
+            for patient in patients
+        ]

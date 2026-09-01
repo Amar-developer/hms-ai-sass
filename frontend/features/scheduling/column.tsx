@@ -22,19 +22,38 @@ export function getScheduleColumns({
 }: GetScheduleColumnsParams) {
   return [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "doctor",
       header: "Doctor",
-      width: "130px",
+      width: "150px",
+      sortable: true,
       render: (row: any) => {
         const doctor = doctors.find(
           (item: any) => item.id === row.practitioner_id,
         );
         return (
-          <b className="text-sm">
-            {row.practitioner_full_name ||
-              doctor?.full_name ||
-              publicDisplayValue(row.practitioner_id, "Doctor")}
-          </b>
+          <div className="max-w-[150px]">
+            <p
+              className="truncate font-semibold"
+              title={
+                row.practitioner_full_name ||
+                doctor?.full_name ||
+                publicDisplayValue(row.practitioner_id, "Doctor")
+              }
+            >
+              {row.practitioner_full_name ||
+                doctor?.full_name ||
+                publicDisplayValue(row.practitioner_id, "Doctor")}
+            </p>
+          </div>
         );
       },
     },
@@ -42,6 +61,7 @@ export function getScheduleColumns({
       key: "branch",
       header: "Branch",
       width: "180px",
+      sortable: true,
       render: (row: any) => {
         const branch = branches.find((item: any) => item.id === row.branch_id);
         return (
@@ -73,9 +93,19 @@ export function getScheduleColumns({
       header: "Days",
       width: "130px",
       render: (row: any) => (
-        <span className="text-sm">
-          {formatWeekdaysLabel(row.mode, row.weekdays)}
-        </span>
+        <div className="max-w-[100px]">
+          <p
+            className="text-sm truncate"
+            title={formatWeekdaysLabel(row.mode, row.weekdays)}
+          >
+            {formatWeekdaysLabel(row.mode, row.weekdays)}
+          </p>
+        </div>
+        // <div className="max-w-[200px]">
+        //           <p className="font-bold truncate text-xs" title={file?.file_name}>
+        //             {capitalizeFirst(file.file_name)}
+        //           </p>
+        //         </div>
       ),
     },
     {
@@ -102,11 +132,9 @@ export function getScheduleColumns({
       width: "100px",
       className: "text-center",
       cellClassName: "text-center",
+      sortable: true,
       render: (row: any) => (
-        <Badge
-          tone={row.is_active ? "green" : "red"}
-          className="table-status text-sm"
-        >
+        <Badge tone={row.is_active ? "green" : "red"} className="normal-label">
           {row.is_active ? "Active" : "Inactive"}
         </Badge>
       ),

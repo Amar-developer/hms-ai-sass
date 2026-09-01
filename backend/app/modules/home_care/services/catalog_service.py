@@ -2,6 +2,8 @@ from fastapi import HTTPException, status
 from sqlmodel import Session
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
+from app.core.pagination import Page
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.home_care.models import HomeCareService
 from app.modules.home_care.repositories import HomeCareServiceRepository
@@ -34,6 +36,54 @@ class HomeCareCatalogService:
         enforce_module_enabled(self.session, tenant_id, "home_care")
         scoped_branch_id(actor, branch_id)
         return self.services.list_active(tenant_id)
+
+    def list_service_page(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        include_inactive: bool,
+        q: str | None,
+        list_filters: list[ListFilter],
+        list_sort: ListSort | None,
+        limit: int,
+        offset: int,
+        actor: User,
+    ) -> Page[HomeCareServiceRead]:
+        enforce_module_enabled(self.session, tenant_id, "home_care")
+        branch_scope = scoped_branch_id(actor, branch_id)
+        rows = self.services.list_page(
+            tenant_id=tenant_id,
+            branch_id=branch_scope,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+            list_sort=list_sort,
+            limit=limit,
+            offset=offset,
+        )
+        total = self.services.count_page(
+            tenant_id=tenant_id,
+            branch_id=branch_scope,
+            include_inactive=include_inactive,
+            q=q,
+            list_filters=list_filters,
+        )
+        return Page(
+            items=[
+                HomeCareServiceRead.model_validate(row, from_attributes=True)
+                for row in rows
+            ],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    def list_service_filter_options(
+        self, *, tenant_id: str
+    ) -> dict[str, list[ListFilterOption]]:
+        enforce_module_enabled(self.session, tenant_id, "home_care")
+        return self.services.filter_options(tenant_id=tenant_id)
 
     def create_service(
         self, *, tenant_id: str, payload: HomeCareServiceCreate, actor: User

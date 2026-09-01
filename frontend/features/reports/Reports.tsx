@@ -1408,13 +1408,14 @@ export function Reports({
     );
   }
 
-  const activeReportInvoices = reportInvoices.filter(
-    (invoice: any) =>
-      !["cancelled", "refunded"].includes(
-        String(invoice.status || "").toLowerCase(),
-      ),
-  );
-  const sectionReportInvoices = activeReportInvoices.filter((invoice: any) => {
+  function isHomeVisitInvoice(invoice: any) {
+    return (
+      homeVisitInvoiceIds.has(invoice.id) ||
+      homeVisitBookingIds.has(invoice.home_care_booking_id)
+    );
+  }
+
+  const sectionPaidInvoices = filteredInvoices.filter((invoice: any) => {
     const type = invoiceType(invoice);
     if (section === "lab") return type === "lab";
     if (section === "pharmacy") return type === "pharmacy";
@@ -1422,7 +1423,6 @@ export function Reports({
     if (section === "appointments") return type === "consultation";
     return true;
   });
-  const sectionPaidInvoices = sectionReportInvoices.filter(isPaidInvoice);
   const summaryInvoices = sectionPaidInvoices;
   const reportCardTotals = {
     grandTotal: summaryInvoices.reduce(
@@ -1524,12 +1524,13 @@ export function Reports({
     ];
   });
   const homeCareReportRows = filteredInvoices
-    .filter((invoice: any) => invoiceType(invoice) === "home_care")
+    .filter((invoice: any) => {
+      if (invoiceType(invoice) !== "home_care") return false;
+      return true;
+    })
     .map((invoice: any) => {
       const patient: any = patientById.get(invoice.patient_id);
-      const isHomeVisit =
-        homeVisitInvoiceIds.has(invoice.id) ||
-        homeVisitBookingIds.has(invoice.home_care_booking_id);
+      const isHomeVisit = isHomeVisitInvoice(invoice);
       return {
         id: invoice.id,
         invoice: invoice.invoice_number,
@@ -1540,6 +1541,7 @@ export function Reports({
           patient?.full_name ||
           invoice.patient_name ||
           publicDisplayValue(invoice.patient_id),
+        patientReference: patient,
         staff: invoiceDoctorStaffName(invoice),
         invoiceIds: new Set([invoice.id]),
         totalAmount: reportedInvoiceTotal(invoice),
@@ -1803,6 +1805,7 @@ export function Reports({
         return (
           <HomeCareReports
             homeCareReportRows={homeCareReportRows}
+            variant="combined"
             openSections={openSections}
             setOpenSections={setOpenSections}
             money={money}

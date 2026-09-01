@@ -106,6 +106,7 @@ class ConsultationRead(BaseModel):
     follow_up_advice: str | None
     patient_remarks: str | None
     created_by_user_id: str | None
+    updated_by_user_id: str | None
     signed_by_user_id: str | None
     signed_at: datetime | None
     created_at: datetime
@@ -132,6 +133,13 @@ class ConsultationTemplateCreate(BaseModel):
     template_type: str = Field(default="consultation", max_length=80)
     content: dict = Field(default_factory=dict)
     created_by_user_id: UserId | None = None
+
+
+class ConsultationTemplateUpdate(BaseModel):
+    department_id: DepartmentId | None = None
+    name: str | None = Field(default=None, min_length=2, max_length=180)
+    template_type: str | None = Field(default=None, max_length=80)
+    content: dict | None = None
 
 
 class ConsultationTemplateRead(BaseModel):

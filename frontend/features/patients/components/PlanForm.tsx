@@ -86,7 +86,7 @@ export function PlanForm({
   }, [plan?.id]);
 
   return (
-    <Card>
+    <Card className="bg-white p-3">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="card-title font-bold">{title}</h3>

@@ -8,13 +8,14 @@ type BrandBlockProps = {
 };
 
 export function BrandBlock({
+  compact = false,
   tabletCollapsed,
   setTabletCollapsed,
   setSidebarOpen,
   sideBarOpen
 }: BrandBlockProps) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex min-w-0 items-center gap-3">
       <button
         type="button"
         aria-label="Toggle navigation"
@@ -23,14 +24,14 @@ export function BrandBlock({
           setTabletCollapsed(!tabletCollapsed);
           // setSidebarOpen(!sideBarOpen)
         }}
-        className="rounded-lg bg-slate-900 p-3 text-white"
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand text-brand-fg transition hover:bg-brand-hover"
       >
-        <HeartPulse size={24} />
+        <HeartPulse size={22} />
       </button>
 
-      {!tabletCollapsed && (
+      {!compact && !tabletCollapsed && (
         <div className="min-w-0">
-          <h1 className="text-sm font-bold">MedizinHub HMS</h1>
+          <h1 className="truncate text-sm font-black text-slate-950">MedizinHub HMS</h1>
           <p className="truncate text-xs text-slate-500">
             Healthcare Workspace
           </p>

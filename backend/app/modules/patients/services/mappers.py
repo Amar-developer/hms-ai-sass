@@ -2,7 +2,10 @@ from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollmentStatus,
 )
 from app.modules.patients.models import AlertSeverity, Patient
-from app.modules.patients.schemas import PatientSearchResult
+from app.modules.patients.schemas import (
+    PatientIntelligenceFlagCompact,
+    PatientSearchResult,
+)
 
 
 def normalize_mobile(value: str | None) -> str:
@@ -14,6 +17,7 @@ def patient_search_result(
     alert_counts: dict[str, int] | None = None,
     critical_counts: dict[str, int] | None = None,
     subscription_details: dict[str, dict[str, str]] | None = None,
+    intelligence_flags: dict[str, list[PatientIntelligenceFlagCompact]] | None = None,
 ) -> PatientSearchResult:
     subscription = (subscription_details or {}).get(patient.id, {})
     return PatientSearchResult(
@@ -30,12 +34,15 @@ def patient_search_result(
         gender=patient.gender,
         age_years=patient.age_years,
         status=patient.status,
+        created_by_user_id=patient.created_by_user_id,
+        updated_by_user_id=patient.updated_by_user_id,
         created_at=patient.created_at,
         updated_at=patient.updated_at,
         active_alert_count=(alert_counts or {}).get(patient.id, 0),
         critical_alert_count=(critical_counts or {}).get(patient.id, 0),
         subscription_plan_name=subscription.get("plan_name"),
         subscription_status=subscription.get("status"),
+        intelligence_flags=(intelligence_flags or {}).get(patient.id, []),
     )
 
 

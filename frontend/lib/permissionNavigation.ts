@@ -1,10 +1,7 @@
 const NAV_PERMISSION_PREFIXES: Record<string, string[]> = {
   dashboard: ["dashboard"],
   admin: [
-    "identity.users",
     "identity.roles",
-    "branches",
-    "departments",
     "settings",
     "files",
     "suppliers",
@@ -12,16 +9,16 @@ const NAV_PERMISSION_PREFIXES: Record<string, string[]> = {
     "discounts",
     "notifications",
     "communications",
+    "patient_subscriptions",
   ],
-  appointments: ["appointments"],
+  clinic: ["identity.users", "branches", "departments",],
+  opd: ["appointments", "consultations", "queue"],
   queue: ["queue"],
   patients: ["patients"],
   practitioners: ["practitioners"],
   scheduling: ["scheduling"],
   items: ["service_items"],
   ip: ["ip"],
-  doctor: ["consultations"],
-  consultation: ["consultations"],
   lab: ["lab"],
   pharmacy: ["pharmacy"],
   physiotherapy: ["physiotherapy"],
@@ -29,6 +26,7 @@ const NAV_PERMISSION_PREFIXES: Record<string, string[]> = {
   billing: ["billing", "invoices", "payments", "settlements"],
   subscriptions: ["patient_subscriptions"],
   reports: ["reports", "audit", "subscriptions.reports"],
+  expense: ["expense", "expenses", "expense_"],
   error_logs: ["error_logs"],
 };
 
@@ -59,6 +57,7 @@ export function navigationModulesForPermissions(
 
   if (isSuperAdmin || keys.some((key) => key.startsWith("platform."))) {
     modules.add("superadmin");
+    modules.add("clinic");
   }
 
   return Array.from(modules);

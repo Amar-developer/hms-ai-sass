@@ -1,4 +1,4 @@
-import { Activity, BarChart3, BedDouble, Building2, CalendarDays, ClipboardList, Clock, Dumbbell, FileText, FlaskConical, PackageOpen, Percent, Pill, Receipt, ReceiptIndianRupee, Settings, ShieldCheck, Stethoscope, Tags, Truck, UserCog, Users } from "lucide-react";
+import { Activity, BarChart3, BedDouble, Building2, ClipboardList, Clock, Dumbbell, FileText, FlaskConical, PackageOpen, Percent, Pill, Receipt, ReceiptIndianRupee, Settings, ShieldCheck, Stethoscope, Tags, Truck, UserCog, Users } from "lucide-react";
 
 export const SHORTCUT_CATEGORIES = [
   {
@@ -7,7 +7,7 @@ export const SHORTCUT_CATEGORIES = [
     headerColor: "text-blue-700",
     iconColor: "text-blue-500",
     modules: [
-      { id: "appointments", label: "Appointments", icon: CalendarDays },
+      { id: "opd", label: "OPD Workspace", icon: Stethoscope },
       { id: "queue", label: "Token Queue", icon: Clock },
       { id: "patients", label: "EMR / Patients", icon: Users },
     ],
@@ -20,8 +20,6 @@ export const SHORTCUT_CATEGORIES = [
     modules: [
       { id: "practitioners", label: "Doctors / Create", icon: UserCog },
       { id: "scheduling", label: "Scheduling", icon: ClipboardList },
-      { id: "doctor", label: "Doctor Dashboard", icon: Stethoscope },
-      { id: "consultation", label: "Consultation", icon: ClipboardList },
     ],
   },
   {

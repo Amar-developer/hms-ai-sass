@@ -1,20 +1,14 @@
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, CalendarClock } from "lucide-react";
 import {
   Button,
   Card,
   Input,
-  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { Pagination } from "@/app/components/common/Pagination";
 import { today } from "@/utils/helper";
-import { APPOINTMENT_STATUS_FILTER_OPTIONS } from "../constants";
 import { DataTable } from "@/app/components/common/DataTable";
-import {
-  FilterConfig,
-  FilterSection,
-} from "@/app/components/common/FilterSection";
 
 export function AppointmentList(props: any) {
   const {
@@ -28,21 +22,7 @@ export function AppointmentList(props: any) {
     rescheduleBusy,
     saveReschedule,
     openBooking,
-    platformTenantId,
-    setPlatformTenantId,
-    platformTenants,
-    query,
-    setQuery,
-    filterDate,
-    setFilterDate,
-    platformDepartment,
-    setPlatformDepartment,
-    normalizedPlatformDepartmentOptions,
-    filterDepartment,
-    setFilterDepartment,
-    normalizedDepartmentOptions,
-    filterStatus,
-    setFilterStatus,
+    showBookingAction = true,
     columns,
     rows,
     rowsLoading,
@@ -52,59 +32,8 @@ export function AppointmentList(props: any) {
     total,
     setPage,
   } = props;
-
-  const handleReset = () => {
-    setPlatformTenantId("");
-    setQuery("");
-    setFilterDate("");
-    setFilterDepartment("all");
-    setPlatformDepartment("all");
-    setFilterStatus("all");
-  };
-
-  const handleFilterChange = (key: string, value: string) => {
-    if (key == "department") {
-      if (isSuperAdmin) {
-        setPlatformDepartment(value);
-      }
-      setFilterDepartment(value);
-    }
-    if (key == "status") {
-      setFilterStatus(value);
-    }
-  };
-
-  const appointmentFilters: FilterConfig[] = [
-    {
-      key: "department",
-      label: "Department",
-      options: isSuperAdmin
-        ? normalizedPlatformDepartmentOptions
-        : [
-            { value: "all", label: "All Departments" },
-            ...normalizedDepartmentOptions,
-          ],
-    },
-    // Only show status for non-super-admin
-    ...(!isSuperAdmin
-      ? [
-          {
-            key: "status",
-            label: "Status",
-            options: APPOINTMENT_STATUS_FILTER_OPTIONS.map((o) => ({
-              value: o.value,
-              label: o.label,
-            })),
-          },
-        ]
-      : []),
-  ];
-  const filteredValues = {
-    department: isSuperAdmin ? platformDepartment : filterDepartment,
-    status: filterStatus,
-  };
   return (
-    <Card>
+    <Card className="">
       {rescheduleAppointment && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
           <Card className="w-full max-w-md">
@@ -164,66 +93,36 @@ export function AppointmentList(props: any) {
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div>
+        {/* <div>
           <h3 className="card-title font-bold">Appointments</h3>
           <p className="card-desc text-slate-500">
             {isSuperAdmin
               ? "Combined all-tenant appointment grid for MedizinHub HMS primary tenant."
               : "Row based OP appointment view with patient, mobile, medical department, doctor, date, and consultation status."}
           </p>
-        </div>
-        <Button
-          onClick={openBooking}
-          className="flex items-center justify-between rounded-lg gap-2 w-40 lg:w-44 text-xs  px-3 py-2 lg:px-4 lg:py-3"
-        >
-          <div className="flex justify-center">
-            <CalendarPlus size={16} />
-            <p className="pl-2">New Appointment </p>
-          </div>
-        </Button>
+        </div> */}
+        {showBookingAction && (
+          <Button
+            onClick={openBooking}
+            className="flex items-center justify-between rounded-lg gap-2 w-40 lg:w-44 text-xs px-3 py-2 lg:px-4 lg:py-3"
+          >
+            <div className="flex justify-center">
+              <CalendarPlus size={16} />
+              <p className="pl-2">New Appointment</p>
+            </div>
+          </Button>
+        )}
       </div>
-      <div className={`mt-4 grid gap-3  $`}>
-        <FilterSection
-          query={query}
-          setQuery={setQuery}
-          title="Patients"
-          className='lg:grid-cols-5'
-          searchPlaceholder="Search Patients"
-          onReset={handleReset}
-          filters={appointmentFilters}
-          filterValues={filteredValues}
-          onFilterChange={handleFilterChange}
-        >
-          {isSuperAdmin && (
-            <FormField label="Clinic / Tenant">
-              <SearchableSelect
-                value={platformTenantId}
-                onChange={setPlatformTenantId}
-                options={[
-                  { value: "", label: "All tenants" },
-                  ...platformTenants
-                    .filter((t: any) => !t.is_primary)
-                    .map((t: any) => ({ value: t.id, label: t.name })),
-                ]}
-              />
-            </FormField>
-          )}
-          <FormField label="Select date">
-            <Input
-              type="date"
-              value={filterDate}
-              onChange={(e: any) => setFilterDate(e.target.value)}
-            />
-          </FormField>
-        </FilterSection>
-      </div>
-      <div className="mt-4">
+      <div className="w-full overflow-x-auto">
         <DataTable
           columns={columns}
-          className="overflow-x-auto max-w-[1000px] scrollbar-thin"
+          className="w-full min-w-[700px] scrollbar-hidden"
           data={rows}
           loading={rowsLoading}
           emptyMessage="No appointments found."
+          emptyDescription="Booked OP appointments with patient, doctor, and consultation status will show up here."
+          emptyIcon={CalendarClock}
+          minBodyHeight={`${rows.length > 0 ?'':'220px'}`}
           onRowClick={onRowClick}
         />
       </div>

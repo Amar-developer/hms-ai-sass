@@ -54,6 +54,15 @@ services:
       MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-200}
       DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-20}
       MIN_POOL_SIZE: ${PGBOUNCER_MIN_POOL_SIZE:-5}
+      # See docker-compose.yml — without QUERY_WAIT_TIMEOUT the application's
+      # 503 + Retry-After load shedding never triggers, because the real wait
+      # moves from the app-side pool into PgBouncer's 120s default.
+      QUERY_WAIT_TIMEOUT: ${PGBOUNCER_QUERY_WAIT_TIMEOUT:-10}
+      RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-5}
+      RESERVE_POOL_TIMEOUT: ${PGBOUNCER_RESERVE_POOL_TIMEOUT:-3}
+      # See docker-compose.yml — enables SHOW CONFIG / SHOW POOLS / SHOW STATS
+      # on the admin console, which is where pool contention is measured.
+      ADMIN_USERS: ${POSTGRES_USER:?POSTGRES_USER is required}
       AUTH_TYPE: scram-sha-256
     depends_on:
       postgres:
@@ -74,7 +83,6 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8081/api/v1}
-        NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-false}
         APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
         BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
         BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
@@ -82,13 +90,13 @@ services:
     # Host ports 3000/8080 are already taken by another project on this EC2
     # box — 3001/8081 keep this stack from colliding with it.
     ports:
-      - "3001:3000"
+      - "${MEDIZINHUB_FRONTEND_PORT:-3001}:3000"
     depends_on:
       backend:
         condition: service_healthy
     environment:
       NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8081/api/v1}
-      NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-false}
+      MEDIZINHUB_INTERNAL_API_URL: ${MEDIZINHUB_INTERNAL_API_URL:-http://backend:8080/api/v1}
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
@@ -109,7 +117,7 @@ services:
     container_name: medizinhub-backend-staging
     # Host port 8080 is already taken by another project on this EC2 box.
     ports:
-      - "8081:8080"
+      - "${MEDIZINHUB_API_PORT:-8081}:8080"
     extra_hosts:
       - "local.healthcare:host-gateway"
     depends_on:
@@ -128,15 +136,25 @@ services:
       PYTHONPATH: /app
       # start_api.py serializes migrations with a PostgreSQL advisory lock and
       # uses PgBouncer only after the deployment gate succeeds.
-      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:5432/${POSTGRES_DB:?POSTGRES_DB is required}
-      MEDIZINHUB_MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
-      MEDIZINHUB_DB_POOL_SIZE: "10"
-      MEDIZINHUB_DB_MAX_OVERFLOW: "10"
-      MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+      # Same construction as docker-compose.yml so the two files stay
+      # comparable: one definition, host chosen by MEDIZINHUB_DB_HOST.
+      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${MEDIZINHUB_DB_HOST:-pgbouncer}:${MEDIZINHUB_DB_PORT:-5432}/${POSTGRES_DB:?POSTGRES_DB is required}
+      MEDIZINHUB_MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${MEDIZINHUB_MIGRATION_DB_HOST:-postgres}:${MEDIZINHUB_MIGRATION_DB_PORT:-5432}/${POSTGRES_DB:?POSTGRES_DB is required}
+      MEDIZINHUB_DB_POOL_SIZE: ${MEDIZINHUB_DB_POOL_SIZE:-10}
+      MEDIZINHUB_DB_MAX_OVERFLOW: ${MEDIZINHUB_DB_MAX_OVERFLOW:-10}
+      MEDIZINHUB_DB_POOL_TIMEOUT: ${MEDIZINHUB_DB_POOL_TIMEOUT:-5}
+      MEDIZINHUB_DB_STATEMENT_TIMEOUT_MS: ${MEDIZINHUB_DB_STATEMENT_TIMEOUT_MS:-30000}
+      MEDIZINHUB_DB_LOCK_TIMEOUT_MS: ${MEDIZINHUB_DB_LOCK_TIMEOUT_MS:-5000}
+      MEDIZINHUB_DB_IDLE_TRANSACTION_TIMEOUT_MS: ${MEDIZINHUB_DB_IDLE_TRANSACTION_TIMEOUT_MS:-60000}
+      MEDIZINHUB_DB_DISABLE_PREPARED_STATEMENTS: ${MEDIZINHUB_DB_DISABLE_PREPARED_STATEMENTS:-true}
+      MEDIZINHUB_REDIS_URL: redis://${MEDIZINHUB_REDIS_HOST:-redis}:${MEDIZINHUB_REDIS_PORT:-6379}/${MEDIZINHUB_REDIS_DB:-0}
+      MEDIZINHUB_WEB_CONCURRENCY: ${MEDIZINHUB_WEB_CONCURRENCY:-2}
+      MEDIZINHUB_WEB_LIMIT_CONCURRENCY: ${MEDIZINHUB_WEB_LIMIT_CONCURRENCY:-80}
+      MEDIZINHUB_WEB_THREAD_LIMIT: ${MEDIZINHUB_WEB_THREAD_LIMIT:-40}
       MEDIZINHUB_APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
       MEDIZINHUB_BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
       MEDIZINHUB_BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
-    stop_grace_period: 45s
+    stop_grace_period: ${MEDIZINHUB_STOP_GRACE_PERIOD:-45s}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).read()\""]
       interval: 30s
@@ -168,14 +186,19 @@ services:
     command: python -m app.modules.reports.worker
     environment:
       PYTHONPATH: /app
-      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:5432/${POSTGRES_DB:?POSTGRES_DB is required}
-      MEDIZINHUB_DB_POOL_SIZE: "5"
-      MEDIZINHUB_DB_MAX_OVERFLOW: "5"
-      MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${MEDIZINHUB_DB_HOST:-pgbouncer}:${MEDIZINHUB_DB_PORT:-5432}/${POSTGRES_DB:?POSTGRES_DB is required}
+      MEDIZINHUB_DB_POOL_SIZE: ${MEDIZINHUB_WORKER_DB_POOL_SIZE:-5}
+      MEDIZINHUB_DB_MAX_OVERFLOW: ${MEDIZINHUB_WORKER_DB_MAX_OVERFLOW:-5}
+      MEDIZINHUB_DB_POOL_TIMEOUT: ${MEDIZINHUB_DB_POOL_TIMEOUT:-5}
+      MEDIZINHUB_DB_STATEMENT_TIMEOUT_MS: ${MEDIZINHUB_DB_STATEMENT_TIMEOUT_MS:-30000}
+      MEDIZINHUB_DB_LOCK_TIMEOUT_MS: ${MEDIZINHUB_DB_LOCK_TIMEOUT_MS:-5000}
+      MEDIZINHUB_DB_IDLE_TRANSACTION_TIMEOUT_MS: ${MEDIZINHUB_DB_IDLE_TRANSACTION_TIMEOUT_MS:-60000}
+      MEDIZINHUB_DB_DISABLE_PREPARED_STATEMENTS: ${MEDIZINHUB_DB_DISABLE_PREPARED_STATEMENTS:-true}
+      MEDIZINHUB_REDIS_URL: redis://${MEDIZINHUB_REDIS_HOST:-redis}:${MEDIZINHUB_REDIS_PORT:-6379}/${MEDIZINHUB_REDIS_DB:-0}
       MEDIZINHUB_APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
       MEDIZINHUB_BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
       MEDIZINHUB_BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
-    stop_grace_period: 45s
+    stop_grace_period: ${MEDIZINHUB_STOP_GRACE_PERIOD:-45s}
     restart: unless-stopped
 
 volumes:

@@ -27,7 +27,7 @@ export function RolePermissions({
       </Card>
     );
   return (
-    <Card>
+    <Card className='mt-3'>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="text-lg font-bold">Role Permissions</h3>
@@ -38,7 +38,7 @@ export function RolePermissions({
         <button
           type="button"
           onClick={back}
-          className="rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="close-button"
         >
           Back to Roles
         </button>
@@ -58,7 +58,7 @@ export function RolePermissions({
           showHeading={false}
         />
         <div className="flex flex-wrap gap-2">
-          <Button disabled={busy}>
+          <Button disabled={busy} className='save-button'>
             <ButtonLoader loading={busy}>
               {busy ? "Saving..." : "Save Permissions"}
             </ButtonLoader>
@@ -66,7 +66,7 @@ export function RolePermissions({
           <button
             type="button"
             onClick={back}
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+            className="close-button font-bold"
           >
             Cancel
           </button>

@@ -15,6 +15,7 @@ CORE_HMS_MODULES = [
 
 FULL_HMS_MODULES = [
     *CORE_HMS_MODULES,
+    "expense",
     "billing_advanced",
     "patient_subscriptions",
     "home_care",
@@ -27,6 +28,7 @@ FULL_HMS_MODULES = [
     "reports",
     "physiotherapy",
     "ip",
+    "patient_intelligence",
 ]
 
 STARTER_HMS_MODULES = [
@@ -37,6 +39,7 @@ STARTER_HMS_MODULES = [
 
 GROWTH_HMS_MODULES = [
     *STARTER_HMS_MODULES,
+    "expense",
     "home_care",
     "lab",
     "pharmacy",
@@ -44,6 +47,7 @@ GROWTH_HMS_MODULES = [
     "sms",
     "whatsapp",
     "reports",
+    "patient_intelligence",
 ]
 
 PRO_HMS_MODULES = [
@@ -59,6 +63,7 @@ DEFAULT_PLANS = [
         "name": "Free Trial",
         "monthly_patient_limit": 50,
         "monthly_whatsapp_message_limit": 0,
+        "monthly_sms_segment_limit": 0,
         "included_branches": 999,
         "included_doctors": 999,
         "price_inr_monthly": 0,
@@ -69,6 +74,7 @@ DEFAULT_PLANS = [
         "name": "Starter Clinic",
         "monthly_patient_limit": 300,
         "monthly_whatsapp_message_limit": 0,
+        "monthly_sms_segment_limit": 0,
         "included_branches": 1,
         "included_doctors": 1,
         "price_inr_monthly": 999,
@@ -79,6 +85,7 @@ DEFAULT_PLANS = [
         "name": "Growth Clinic",
         "monthly_patient_limit": 1000,
         "monthly_whatsapp_message_limit": 1000,
+        "monthly_sms_segment_limit": 1000,
         "included_branches": 2,
         "included_doctors": 5,
         "price_inr_monthly": 2999,
@@ -89,6 +96,7 @@ DEFAULT_PLANS = [
         "name": "Pro Clinic",
         "monthly_patient_limit": 5000,
         "monthly_whatsapp_message_limit": 5000,
+        "monthly_sms_segment_limit": 5000,
         "included_branches": 5,
         "included_doctors": 20,
         "price_inr_monthly": 7999,
@@ -99,6 +107,7 @@ DEFAULT_PLANS = [
         "name": "Hospital",
         "monthly_patient_limit": 10000,
         "monthly_whatsapp_message_limit": 10000,
+        "monthly_sms_segment_limit": 10000,
         "included_branches": 999,
         "included_doctors": 999,
         "price_inr_monthly": 14999,
@@ -109,6 +118,7 @@ DEFAULT_PLANS = [
         "name": "Monthly Clinic",
         "monthly_patient_limit": 50,
         "monthly_whatsapp_message_limit": 1000,
+        "monthly_sms_segment_limit": 1000,
         "included_branches": 1,
         "included_doctors": 999,
         "price_inr_monthly": 2999,
@@ -119,6 +129,7 @@ DEFAULT_PLANS = [
         "name": "Half Yearly Clinic",
         "monthly_patient_limit": 300,
         "monthly_whatsapp_message_limit": 5000,
+        "monthly_sms_segment_limit": 5000,
         "included_branches": 999,
         "included_doctors": 999,
         "price_inr_monthly": 15999,
@@ -129,6 +140,7 @@ DEFAULT_PLANS = [
         "name": "Yearly Clinic",
         "monthly_patient_limit": 999999,
         "monthly_whatsapp_message_limit": 999999,
+        "monthly_sms_segment_limit": 999999,
         "included_branches": 999,
         "included_doctors": 999,
         "price_inr_monthly": 29999,
@@ -140,6 +152,24 @@ DEFAULT_PLANS = [
 # installations. Preserve that contractual entitlement without replacing any
 # other modules an administrator may have configured.
 HOME_CARE_DEFAULT_PLAN_KEYS = {
+    "growth",
+    "pro",
+    "hospital",
+    "monthly_clinic",
+    "half_yearly_clinic",
+    "yearly_clinic",
+}
+
+PATIENT_INTELLIGENCE_DEFAULT_PLAN_KEYS = {
+    "growth",
+    "pro",
+    "hospital",
+    "monthly_clinic",
+    "half_yearly_clinic",
+    "yearly_clinic",
+}
+
+EXPENSE_DEFAULT_PLAN_KEYS = {
     "growth",
     "pro",
     "hospital",

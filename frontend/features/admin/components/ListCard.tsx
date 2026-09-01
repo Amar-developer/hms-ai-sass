@@ -1,148 +1,93 @@
-import { FilterSection } from "@/app/components/common/FilterSection";
-import { Pagination } from "@/app/components/common/Pagination";
-import { Button, Card, RefreshButton } from "@/app/components/common/ui";
-import { Plus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
+import { Card } from "@/app/components/common/ui";
+import {
+  ShieldCheck,
+  ClipboardList,
+  Inbox,
+  Building2,
+  Truck,
+  PlusCircle,
+  Users,
+  Percent,
+  Tags,
+} from "lucide-react";
+import { DataTable } from "@/app/components/common/DataTable";
 
+// Search, sort, reset, and the "+ Add a Filter" custom builder now live in
+// the breadcrumb row (AdaptiveFilterTrigger/AdaptiveSortTrigger/
+// AdaptiveResultCount, rendered by TenantAdmin per section) — this stays a
+// header (title + create button) wrapped around a shared DataTable over
+// whatever pre-filtered/sorted `rows` it's given.
 export function ListCard({
   title,
   rows,
-  searchKeys,
-  filter_className,
   createLabel,
   onCreate,
   canCreate = true,
-  filters = [],
-  filterValues = {},
-  onFilterChange,
-  onRefresh,
   columns,
-  render,
+  onRowClick,
   loading = false,
 }: any) {
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const pageSize = 8;
-
-  const filtered = useMemo(() => {
-    return rows.filter((row: any) =>
-      searchKeys.some((key: string) =>
-        String(row[key] ?? "")
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-      ),
-    );
-  }, [rows, query, searchKeys]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-
-  const pageRows = filtered.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
-  );
-
-  useEffect(() => {
-    setPage(1);
-  }, [query, rows.length]);
-
   return (
-    <Card>
+    <Card className="p-0">
       {/* HEADER */}
-      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div>
-          <h3 className="card-title font-bold">{title}</h3>
-          <p className="card-desc text-slate-500">
-            Latest created or updated records appear first. Click a row to open
-            it.
-          </p>
+      <div className="flex flex-col rounded-lg mb-2 justify-between bg-white gap-3 lg:flex-row lg:items-center px-4 py-3 w-full mun-w-[700px">
+        <div className="flex justify-center items-center">
+          <div className="p-2 rounded-lg mr-2 text-emarald-900 bg-emerald-50">
+            {title == "Users" ? (
+              <Users className='text-emerald-600 '/>
+            ) : title == "Roles" ? (
+              <ShieldCheck className='text-emerald-600 '/>
+            ) : title == "Medical Departments" ? (
+              <ClipboardList className='text-emerald-600 '/>
+            ) : title == "Branches" ? (
+              <Building2 className='text-emerald-600 '/>
+            ) : title == "Suppliers" ? (
+              <Truck className='text-emerald-600 '/>
+            ) : title == "Tax Rules" ? (
+              <Percent className='text-emerald-600 '/>
+            ) : title == "Discounts & Offers" ? (
+              <Tags className='text-emerald-600 '/>
+            ) : (
+              ""
+            )}
+          </div>
+          <div className="flex flex-col">
+            <h3 className="card-title font-bold">{title}</h3>
+            <p className="card-desc text-slate-500">
+              Latest created or updated records appear first. Click a row to
+              open it.
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {onRefresh && <RefreshButton onRefresh={onRefresh} />}
-
-          {canCreate && onCreate && (
-            <button
-              type="button"
-              onClick={onCreate}
-              className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-xs bg-slate-900 font-bold text-white"
-            >
-              <Plus size={16} />
-              {createLabel}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* SEARCH & FILTERS */}
-      <FilterSection
-        title={title}
-        query={query}
-        setQuery={setQuery}
-        filters={filters}
-        filterValues={filterValues}
-        className={filter_className}
-        onFilterChange={onFilterChange}
-      />
-      <div>
-
+        {canCreate && onCreate && (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="primary-action gap-2 p-2 text-xs"
+          >
+            <PlusCircle size={16} />
+            {createLabel}
+          </button>
+        )}
       </div>
 
       {/* TABLE */}
-      <div className="mt-4 overflow-x-auto w-lg rounded-2xl border border-slate-200 ">
-        <table className="w-max min-w-full">
-          <thead className="font-bold uppercase text-slate-500 ">
-            <tr className="bg-slate-50">
-              {columns.map((column: any) => (
-                <th
-                  key={column.label}
-                  className="whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase text-slate-500"
-                >
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          {/* ROWS */}
-          <tbody className="divide-y divide-slate-200">
-            {loading ? (
-              <tr>
-                <td colSpan={columns.length} className="p-0">
-                  <TableSkeleton rows={5} />
-                </td>
-              </tr>
-            ) : (
-              <>
-                {pageRows.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={columns.length}
-                      className="px-4 py-4 text-xs text-slate-500 lg:text-sm"
-                    >
-                      <div className="rounded-lg bg-slate-50 p-4">
-                        No records match your search.
-                      </div>
-                    </td>
-                  </tr>
-                )}
-
-                {pageRows.map((row: any, index: number) => render(row, index))}
-              </>
-            )}
-          </tbody>
-        </table>
+      <div className="table-wrapper-width">
+        <DataTable
+          columns={columns}
+          data={rows}
+          loading={loading}
+          paginate
+          pageSize={8}
+          onRowClick={onRowClick}
+          emptyMessage="No records match your search."
+          emptyDescription="Items will show up here once added."
+          emptyIcon={Inbox}
+          minBodyHeight={`${rows.length > 0 ? "" : "220px"}`}
+          className="table-width"
+        />
       </div>
-
-      {/* PAGINATION */}
-      <Pagination
-        page={safePage}
-        totalPages={totalPages}
-        total={filtered.length}
-        pageSize={pageSize}
-        onPage={setPage}
-      />
     </Card>
   );
 }

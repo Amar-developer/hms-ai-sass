@@ -1,13 +1,8 @@
-import { Form, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { Actions } from "../components/Actions";
 import { Header } from "../components/Header";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Card,
-  Field,
-  Input,
-  SearchableSelect,
-} from "@/app/components/common/ui";
+import { Card, Input, SearchableSelect } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { isLocked } from "../helpers";
 import { BranchFormValues, branchSchema } from "../settings.schema";
@@ -66,7 +61,7 @@ export function BranchForm({
     Number.isFinite(Number(branchLimit)) &&
     activeBranchCount >= Number(branchLimit);
   return (
-    <Card>
+    <Card className="bg-white p-4">
       <Header
         title={title}
         subtitle={

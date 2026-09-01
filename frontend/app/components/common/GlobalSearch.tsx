@@ -72,10 +72,17 @@ export function GlobalSearch({ items }: GlobalSearchProps) {
 
   return (
     <div ref={rootRef} className="relative min-w-0">
-      <div className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 ">
-        <Search size={17} className="shrink-0 text-slate-400" />
+      <div className="flex h-9 min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3">
+        <Search size={16} className="shrink-0 text-slate-400" />
         <input
           ref={inputRef}
+          type="search"
+          name="global-search"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          data-1p-ignore
+          data-lpignore="true"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -99,7 +106,7 @@ export function GlobalSearch({ items }: GlobalSearchProps) {
             }
             if (event.key === "Escape") setOpen(false);
           }}
-          placeholder="Search a modules"
+          placeholder="Search or type a command (Ctrl + G)"
           className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:font-medium placeholder:text-slate-400 placeholder:text-xs"
         />
       </div>

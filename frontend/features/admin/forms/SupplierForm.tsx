@@ -47,7 +47,7 @@ export function SupplierForm({
     });
   }, [supplier, reset]);
   return (
-    <Card>
+    <Card className="p-4 bg-white">
       <Header
         title={title}
         subtitle={

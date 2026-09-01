@@ -6,11 +6,11 @@ test.describe("authentication", () => {
 
   test("@critical invalid credentials show a safe backend error", async ({ page }) => {
     await page.goto("/");
-    await page.getByPlaceholder("name@clinic.com").fill("missing@example.com");
+    await page.getByPlaceholder("username or name@clinic.com").fill("missing@example.com");
     await page.getByPlaceholder("Enter password").fill("WrongPassword123");
-    await page.getByRole("button", { name: "Sign In" }).click();
+    await page.getByRole("button", { name: /sign in/i }).click();
     await expect(page.getByText("Invalid login", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   });
 
   test("@critical login, refresh, logout, and session revocation", async ({
@@ -19,9 +19,9 @@ test.describe("authentication", () => {
   }) => {
     const actor = seed.actors["tenant-admin"];
     await page.goto("/");
-    await page.getByPlaceholder("name@clinic.com").fill(actor.email);
+    await page.getByPlaceholder("username or name@clinic.com").fill(actor.email);
     await page.getByPlaceholder("Enter password").fill(actor.password);
-    await page.getByRole("button", { name: "Sign In" }).click();
+    await page.getByRole("button", { name: /sign in/i }).click();
     await expect(page.getByTitle("Profile")).toBeVisible();
 
     await page.reload();
@@ -30,9 +30,9 @@ test.describe("authentication", () => {
 
     await page.getByTitle("Profile").click();
     await page.getByRole("button", { name: "Logout" }).click();
-    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   });
 });
 
@@ -46,6 +46,6 @@ test.describe("expired session", () => {
     await expect(page.getByTitle("Profile")).toBeVisible();
     await page.context().clearCookies();
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   });
 });

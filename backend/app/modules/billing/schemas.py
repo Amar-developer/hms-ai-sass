@@ -73,6 +73,7 @@ class PendingConsultationInvoiceRead(BaseModel):
 
     consultation_id: ConsultationId
     appointment_id: AppointmentId
+    appointment_number: str | None = None
     branch_id: BranchId
     patient_id: str
     patient_name: str
@@ -179,6 +180,15 @@ class InvoiceRead(BaseModel):
     created_by_user_id: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class InvoiceListSummary(BaseModel):
+    invoice_count: int = 0
+    due_amount: Decimal = Decimal("0")
+    discount_amount: Decimal = Decimal("0")
+    revenue_amount: Decimal = Decimal("0")
+    paid_amount: Decimal = Decimal("0")
+    settlement_amount: Decimal = Decimal("0")
 
 
 class InvoiceMembershipBenefitRead(BaseModel):
@@ -360,6 +370,7 @@ class TaxRuleRead(TaxRuleCreate):
     id: str
     tenant_id: str
     is_active: bool
+    updated_by_user_id: UserId | None = None
     created_at: datetime
 
 
@@ -410,6 +421,7 @@ class DiscountOfferRead(DiscountOfferCreate):
     id: str
     tenant_id: str
     is_active: bool
+    updated_by_user_id: UserId | None = None
     created_at: datetime
 
 
@@ -496,6 +508,11 @@ class CollectionReport(BaseModel):
 class DoctorSettlementFinalize(BaseModel):
     practitioner_id: PractitionerId | None = None
     branch_id: BranchId | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    payment_method: str | None = Field(default=None, max_length=40)
+    payment_reference: str | None = Field(default=None, max_length=120)
+    paid_at: datetime | None = None
     finalized_by_user_id: UserId | None = None
 
 
@@ -504,6 +521,34 @@ class DoctorSettlementRead(DoctorSettlementSummary):
     branch_id: str | None
     settlement_amount: Decimal
     status: SettlementStatus
+    finalized_by_user_id: str | None
+    finalized_at: datetime
+    period_start: date | None = None
+    period_end: date | None = None
+    payment_method: str | None = None
+    payment_reference: str | None = None
+    paid_at: datetime | None = None
+
+
+class VendorSettlementFinalize(BaseModel):
+    supplier_id: str = Field(min_length=1, max_length=80)
+    branch_id: BranchId | None = None
+    source_type: str = Field(default="all", pattern="^(all|lab|pharmacy|other)$")
+    period_start: date
+    period_end: date
+    gross_payable: Decimal = Field(default=Decimal("0"), ge=0)
+    adjustment_amount: Decimal = Decimal("0")
+    settlement_amount: Decimal = Field(gt=0)
+    payment_method: str | None = Field(default=None, max_length=40)
+    payment_reference: str | None = Field(default=None, max_length=120)
+    paid_at: datetime | None = None
+    notes: str | None = Field(default=None, max_length=500)
+
+
+class VendorSettlementRead(VendorSettlementFinalize):
+    id: str
+    tenant_id: str
+    status: str
     finalized_by_user_id: str | None
     finalized_at: datetime
 

@@ -63,6 +63,7 @@ class PharmacySupplier(SQLModel, table=True):
     address: str | None = Field(default=None, max_length=500)
     is_active: bool = Field(default=True, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -85,6 +86,8 @@ class PharmacyPurchase(SQLModel, table=True):
     gst_amount: int = Field(default=0, ge=0)
     total_amount: int = Field(default=0, ge=0)
     purchased_by_user_id: str | None = Field(default=None, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -142,6 +145,8 @@ class PharmacyReturn(SQLModel, table=True):
     reason: str = Field(min_length=2, max_length=500)
     total_amount: int = Field(default=0, ge=0)
     returned_by_user_id: str | None = Field(default=None, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
 
 
@@ -211,6 +216,8 @@ class PharmacyIssue(SQLModel, table=True):
     amount: int = Field(default=0, ge=0)
     billing_invoice_id: str | None = Field(default=None, index=True)
     issued_by_user_id: str | None = Field(default=None, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     dispensed_by_user_id: str | None = Field(default=None, index=True)
     dispensed_at: datetime | None = Field(default=None, index=True)
     cancelled_reason: str | None = Field(default=None, max_length=500)

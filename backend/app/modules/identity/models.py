@@ -12,6 +12,7 @@ class User(SQLModel, table=True):
     user_number: str | None = Field(default=None, index=True, max_length=60)
     user_type: str = Field(default="staff", index=True, max_length=60)
     name: str = Field(min_length=2, max_length=160)
+    username: str | None = Field(default=None, index=True, max_length=80)
     email: str = Field(index=True, max_length=220)
     mobile: str | None = Field(default=None, max_length=20)
     password_hash: str = Field(default="", max_length=260)

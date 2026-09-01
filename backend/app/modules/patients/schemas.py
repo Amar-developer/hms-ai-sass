@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 from typing import Literal
 
@@ -9,6 +11,7 @@ from app.modules.patients.models import (
     AlertType,
     Gender,
     PatientStatus,
+    SmsConsentStatus,
     WhatsAppConsentStatus,
 )
 
@@ -47,6 +50,15 @@ class PatientCreate(BaseModel):
     whatsapp_consent_status: WhatsAppConsentStatus = WhatsAppConsentStatus.NOT_RECORDED
     whatsapp_consent_source: str | None = Field(default=None, max_length=80)
     whatsapp_preferred_language: WhatsAppPatientLanguage = "en"
+    sms_consent_status: SmsConsentStatus = SmsConsentStatus.NOT_RECORDED
+    sms_consent_source: str | None = Field(default=None, max_length=80)
+    sms_preferred_language: WhatsAppPatientLanguage = "en"
+    monthly_tracking_enabled: bool = False
+    monthly_refill_on: date | None = None
+    monthly_refill_notes: str | None = Field(default=None, max_length=1000)
+    monthly_lab_on: date | None = None
+    monthly_lab_test_name: str | None = Field(default=None, max_length=180)
+    monthly_lab_notes: str | None = Field(default=None, max_length=1000)
 
     @field_validator("date_of_birth")
     @classmethod
@@ -74,6 +86,15 @@ class PatientUpdate(BaseModel):
     whatsapp_consent_status: WhatsAppConsentStatus | None = None
     whatsapp_consent_source: str | None = Field(default=None, max_length=80)
     whatsapp_preferred_language: WhatsAppPatientLanguage | None = None
+    sms_consent_status: SmsConsentStatus | None = None
+    sms_consent_source: str | None = Field(default=None, max_length=80)
+    sms_preferred_language: WhatsAppPatientLanguage | None = None
+    monthly_tracking_enabled: bool | None = None
+    monthly_refill_on: date | None = None
+    monthly_refill_notes: str | None = Field(default=None, max_length=1000)
+    monthly_lab_on: date | None = None
+    monthly_lab_test_name: str | None = Field(default=None, max_length=180)
+    monthly_lab_notes: str | None = Field(default=None, max_length=1000)
 
     @field_validator("date_of_birth")
     @classmethod
@@ -107,14 +128,30 @@ class PatientRead(BaseModel):
     whatsapp_consent_source: str | None
     whatsapp_consent_updated_at: datetime | None
     whatsapp_preferred_language: WhatsAppPatientLanguage
+    sms_consent_status: SmsConsentStatus
+    sms_consent_source: str | None
+    sms_consent_updated_at: datetime | None
+    sms_preferred_language: WhatsAppPatientLanguage
+    monthly_tracking_enabled: bool = False
+    monthly_refill_on: date | None = None
+    monthly_refill_notes: str | None = None
+    monthly_lab_on: date | None = None
+    monthly_lab_test_name: str | None = None
+    monthly_lab_notes: str | None = None
+    created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
+    subscription_plan_name: str | None = None
+    subscription_status: str | None = None
+    intelligence_flags: list[PatientIntelligenceFlagCompact] = Field(
+        default_factory=list
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def contact_mobile(self) -> str | None:
-        """Primary, else alternate, else guardian - the number the UI should
-        display and messaging will actually use."""
+        """Primary, else secondary/alternate patient-owned mobile."""
         return patient_contact_mobile(self)
 
 
@@ -134,6 +171,52 @@ class PatientAlertRead(PatientAlertCreate):
     created_at: datetime
 
 
+class PatientCommunicationRead(BaseModel):
+    id: str
+    channel: str
+    template_key: str | None
+    status: str
+    recipient_masked: str
+    resource_type: str | None
+    resource_id: str | None
+    created_at: datetime
+    sent_at: datetime | None
+    failure_reason: str | None = None
+
+
+class PatientFamilyRelationshipCreate(BaseModel):
+    related_patient_id: str
+    relationship: str = Field(default="family", min_length=1, max_length=80)
+    notes: str | None = Field(default=None, max_length=300)
+
+
+class PatientFamilyRelationshipRead(BaseModel):
+    id: str
+    tenant_id: str
+    patient_id: str
+    related_patient_id: str
+    related_patient_name: str | None = None
+    related_patient_number: str | None = None
+    relationship: str
+    notes: str | None = None
+    is_active: bool
+    created_by_user_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PatientIntelligenceFlagCompact(BaseModel):
+    flag_key: str
+    category: str
+    severity: str
+    explanation: str | None = None
+    label: str
+    background_color: str
+    text_color: str
+    border_color: str
+    priority: int
+
+
 class PatientSearchResult(BaseModel):
     id: str
     tenant_id: str
@@ -148,6 +231,8 @@ class PatientSearchResult(BaseModel):
     gender: Gender
     age_years: int | None
     status: PatientStatus
+    created_by_user_id: str | None = None
+    updated_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
     active_alert_count: int
@@ -156,11 +241,14 @@ class PatientSearchResult(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def contact_mobile(self) -> str | None:
-        """Primary, else alternate, else guardian."""
+        """Primary, else secondary/alternate patient-owned mobile."""
         return patient_contact_mobile(self)
 
     subscription_plan_name: str | None = None
     subscription_status: str | None = None
+    intelligence_flags: list[PatientIntelligenceFlagCompact] = Field(
+        default_factory=list
+    )
 
 
 class PatientDuplicateCandidate(PatientSearchResult):

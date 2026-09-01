@@ -12,6 +12,7 @@ from app.modules.patient_subscriptions.schemas import (
     PatientSubscriptionEnrollmentCreate,
     PatientSubscriptionEnrollmentRead,
     PatientSubscriptionEnrollmentUpdate,
+    PatientSubscriptionBenefitUsageUpdate,
     PatientSubscriptionPlanCreate,
     PatientSubscriptionPlanRead,
     PatientSubscriptionPlanUpdate,
@@ -175,6 +176,32 @@ def update_enrollment(
     ),
 ) -> PatientSubscriptionEnrollmentRead:
     return patient_subscription_service.update_enrollment(
+        session,
+        tenant_id=tenant_id,
+        enrollment_id=enrollment_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.patch(
+    "/enrollments/{enrollment_id}/benefit-usage",
+    response_model=PatientSubscriptionEnrollmentRead,
+)
+def update_benefit_usage(
+    enrollment_id: str,
+    payload: PatientSubscriptionBenefitUsageUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_EDIT,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> PatientSubscriptionEnrollmentRead:
+    return patient_subscription_service.update_benefit_usage(
         session,
         tenant_id=tenant_id,
         enrollment_id=enrollment_id,

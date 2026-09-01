@@ -45,6 +45,7 @@ class Appointment(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
+    appointment_number: str | None = Field(default=None, index=True, max_length=60)
     department_id: str | None = Field(
         default=None, index=True, foreign_key="department.id"
     )
@@ -71,6 +72,7 @@ class Appointment(SQLModel, table=True):
     intake_vitals: str | None = Field(default=None, max_length=1000)
     intake_complaints: str | None = Field(default=None, max_length=2000)
     created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 

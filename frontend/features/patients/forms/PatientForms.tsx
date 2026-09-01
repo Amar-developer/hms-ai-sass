@@ -7,6 +7,7 @@ import {
 import { FormField } from "../../../app/components/FormElements";
 import { NumberField, DateField } from "../../../app/components/FormElements";
 import { paymentMethodOptions } from "@/lib/options";
+import { ApiSession, apiFetch } from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateAgeYears,
@@ -19,6 +20,7 @@ import {
   bloodGroups,
   genders,
   language_options,
+  familyRelationshipOptions,
   source_options,
   statusOptions,
   whatsup_options,
@@ -37,7 +39,9 @@ export function PatientForm({
   error,
   onSubmit,
   back,
-}: any) {
+  apiSession,
+  familyRelationships = [],
+}: any & { apiSession?: ApiSession | null }) {
   const {
     register,
     getValues,
@@ -66,12 +70,12 @@ export function PatientForm({
             ),
           )
         : String(patientField(patient, "age_years", "ageYears") || ""),
+      alternateMobile:
+        patientField(patient, "alternate_mobile", "alternateMobile") || "",
       guardianName:
         patientField(patient, "guardian_name", "guardianName") || "",
       guardianMobile:
         patientField(patient, "guardian_mobile", "guardianMobile") || "",
-      alternateMobile:
-        patientField(patient, "alternate_mobile", "alternateMobile") || "",
       email: patientField(patient, "email") || "",
       area: patientField(patient, "area") || "",
       bloodGroup: patientField(patient, "blood_group", "bloodGroup") || "",
@@ -101,10 +105,56 @@ export function PatientForm({
               "whatsapp_preferred_language",
               "whatsappPreferredLanguage",
             ) || "en",
+      smsConsentStatus:
+        patientField(patient, "sms_consent_status", "smsConsentStatus") ||
+        "not_recorded",
+      smsConsentSource:
+        patientField(patient, "sms_consent_source", "smsConsentSource") || "",
+      smsPreferredLanguage:
+        (patientField(
+          patient,
+          "sms_preferred_language",
+          "smsPreferredLanguage",
+        ) || "en") === "tenant_default"
+          ? "en"
+          : patientField(
+              patient,
+              "sms_preferred_language",
+              "smsPreferredLanguage",
+            ) || "en",
+      monthlyTrackingEnabled: Boolean(
+        patientField(
+          patient,
+          "monthly_tracking_enabled",
+          "monthlyTrackingEnabled",
+        ),
+      ),
+      monthlyRefillOn: patientDateInputValue(
+        patientField(patient, "monthly_refill_on", "monthlyRefillOn"),
+      ),
+      monthlyRefillNotes:
+        patientField(patient, "monthly_refill_notes", "monthlyRefillNotes") ||
+        "",
+      monthlyLabOn: patientDateInputValue(
+        patientField(patient, "monthly_lab_on", "monthlyLabOn"),
+      ),
+      monthlyLabTestName:
+        patientField(patient, "monthly_lab_test_name", "monthlyLabTestName") ||
+        "",
+      monthlyLabNotes:
+        patientField(patient, "monthly_lab_notes", "monthlyLabNotes") || "",
+      familyRelatedPatientId: "",
+      familyRelationship: "father",
+      familyNotes: "",
     },
   });
   const today = todayInputValue();
   const updatingFromAge = useRef(false);
+  const monthlyTrackingEnabled = Boolean(watch("monthlyTrackingEnabled"));
+  const familyRelatedPatientId = watch("familyRelatedPatientId");
+  const [familyPatientOptions, setFamilyPatientOptions] = useState<any[]>([]);
+  const [familyPatientSearchLoading, setFamilyPatientSearchLoading] =
+    useState(false);
   // Set right before the resync effect below calls reset(), so the DOB
   // watch-effect further down knows the resulting dateOfBirth change came
   // from server data, not the user — otherwise it would call setValue with
@@ -152,12 +202,12 @@ export function PatientForm({
             ),
           )
         : String(patientField(patient, "age_years", "ageYears") || ""),
+      alternateMobile:
+        patientField(patient, "alternate_mobile", "alternateMobile") || "",
       guardianName:
         patientField(patient, "guardian_name", "guardianName") || "",
       guardianMobile:
         patientField(patient, "guardian_mobile", "guardianMobile") || "",
-      alternateMobile:
-        patientField(patient, "alternate_mobile", "alternateMobile") || "",
       email: patientField(patient, "email") || "",
       area: patientField(patient, "area") || "",
       bloodGroup: patientField(patient, "blood_group", "bloodGroup") || "",
@@ -187,8 +237,88 @@ export function PatientForm({
               "whatsapp_preferred_language",
               "whatsappPreferredLanguage",
             ) || "en",
+      smsConsentStatus:
+        patientField(patient, "sms_consent_status", "smsConsentStatus") ||
+        "not_recorded",
+      smsConsentSource:
+        patientField(patient, "sms_consent_source", "smsConsentSource") || "",
+      smsPreferredLanguage:
+        (patientField(
+          patient,
+          "sms_preferred_language",
+          "smsPreferredLanguage",
+        ) || "en") === "tenant_default"
+          ? "en"
+          : patientField(
+              patient,
+              "sms_preferred_language",
+              "smsPreferredLanguage",
+            ) || "en",
+      monthlyTrackingEnabled: Boolean(
+        patientField(
+          patient,
+          "monthly_tracking_enabled",
+          "monthlyTrackingEnabled",
+        ),
+      ),
+      monthlyRefillOn: patientDateInputValue(
+        patientField(patient, "monthly_refill_on", "monthlyRefillOn"),
+      ),
+      monthlyRefillNotes:
+        patientField(patient, "monthly_refill_notes", "monthlyRefillNotes") ||
+        "",
+      monthlyLabOn: patientDateInputValue(
+        patientField(patient, "monthly_lab_on", "monthlyLabOn"),
+      ),
+      monthlyLabTestName:
+        patientField(patient, "monthly_lab_test_name", "monthlyLabTestName") ||
+        "",
+      monthlyLabNotes:
+        patientField(patient, "monthly_lab_notes", "monthlyLabNotes") || "",
+      familyRelatedPatientId: "",
+      familyRelationship: "father",
+      familyNotes: "",
     });
   }, [patient, defaultBranchId, reset]);
+
+  async function searchFamilyPatients(query = "") {
+    if (!apiSession) return;
+    setFamilyPatientSearchLoading(true);
+    try {
+      const params = new URLSearchParams({
+        limit: "25",
+        active_only: "true",
+      });
+      if (query.trim()) params.set("q", query.trim());
+      const rows = await apiFetch(`/patients?${params.toString()}`, apiSession);
+      const linkedIds = new Set(
+        familyRelationships.map((row: any) => row.related_patient_id),
+      );
+      setFamilyPatientOptions(
+        (Array.isArray(rows) ? rows : [])
+          .filter(
+            (row: any) => row.id !== patient?.id && !linkedIds.has(row.id),
+          )
+          .map((row: any) => ({
+            value: row.id,
+            label: row.full_name || row.patient_number || row.id,
+            sublabel: `${row.patient_number || row.id}${row.contact_mobile || row.mobile ? ` · ${row.contact_mobile || row.mobile}` : ""}`,
+          })),
+      );
+    } catch {
+      setFamilyPatientOptions([]);
+    } finally {
+      setFamilyPatientSearchLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    setValue("familyRelatedPatientId" as any, "", { shouldDirty: false });
+    setValue("familyRelationship" as any, "father", { shouldDirty: false });
+    setValue("familyNotes" as any, "", { shouldDirty: false });
+    searchFamilyPatients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient?.id, apiSession?.tenantId, familyRelationships.length]);
 
   useEffect(() => {
     const currentBranchId = getValues("branchId");
@@ -214,6 +344,7 @@ export function PatientForm({
 
   const dateOfBirth = watch("dateOfBirth");
   const whatsappConsentStatus = watch("whatsappConsentStatus");
+  const smsConsentStatus = watch("smsConsentStatus");
   const dateOfBirthRegistration = register("dateOfBirth");
 
   // Skip the initial mount: defaultValues/reset already computed the
@@ -252,262 +383,430 @@ export function PatientForm({
   }, [dateOfBirth, setValue]);
 
   return (
-    <Card>
+    <Card className="p-0">
       {/* Header */}
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center ">
-        <div>
-          <h3 className="card-title font-bold">{title}</h3>
-          <p className="card-desc text-slate-500">
-            {patient?.patient_number || "Create tenant-scoped patient record."}
-          </p>
-        </div>
-        <button type="button" onClick={back} className="close-button font-bold">
-          Back
-        </button>
-      </div>
-      {error && (
-        <p className="mt-3 text-sm font-bold text-red-500">{error}</p>
-      )}
+
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+        className="space-y-3 bg-white rounded-lg p-4"
       >
-        <FormField label="Full Name" required>
-          <Input
-            {...register("fullName")}
-            placeholder="Enter patient full name"
-          />
-          <FormError error={errors.fullName?.message} />
-        </FormField>
-        <FormField label="Mobile Number">
-          <Input
-            type="text"
-            inputMode="numeric"
-            maxLength={10}
-            placeholder="Enter patient mobile number"
-            {...register("mobile", {
-              onChange: (e) => {
-                e.target.value = e.target.value.replace(/\D/g, "");
-              },
-            })}
-          />
-
-          <FormError error={errors.mobile?.message} />
-          <p className="mt-1 text-[11px] text-slate-500">
-            Primary mobile numbers must be unique for each patient.
-          </p>
-        </FormField>
-        <FormField label="Branch" required>
-          <SearchableSelect
-            value={watch("branchId")}
-            onChange={(value) =>
-              setValue("branchId", value, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-            searchable={branchOptions.length > 8}
-            placeholder="Select branch"
-            options={
-              branchOptions.length === 0
-                ? [{ value: "", label: "No branches available" }]
-                : branchOptions.map((branch) => ({
-                    value: branch.id,
-                    label: branch.name,
-                  }))
-            }
-          />
-          <FormError error={errors.branchId?.message} />
-        </FormField>
-        <FormField label="Gender" required>
-          <SearchableSelect
-            value={watch("gender")}
-            searchable={false}
-            options={genders.map(([value, label]) => ({
-              value,
-              label,
-            }))}
-            onChange={(value) =>
-              setValue("gender", value, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-          />
-          <FormError error={errors.gender?.message} />
-        </FormField>
-        <FormField label="Date of Birth">
-          <Input
-            type="date"
-            max={today}
-            name={dateOfBirthRegistration.name}
-            value={dateOfBirth || ""}
-            onChange={dateOfBirthRegistration.onChange}
-            onBlur={dateOfBirthRegistration.onBlur}
-          />
-        </FormField>
-        <FormField label="Age Years" required>
-          <Input
-            type="number"
-            min="0"
-            max="100"
-            placeholder="Age"
-            {...register("ageYears", {
-              onChange: (e) => {
-                const age = e.target.value;
-
-                if (!age) {
-                  setValue("dateOfBirth", "", {
+        <section className="rounded-lg bg-white">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center ">
+            <div>
+              <h3 className="card-title font-bold">{title}</h3>
+              <p className="card-desc text-slate-500">
+                {patient?.patient_number ||
+                  "Create tenant-scoped patient record."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={back}
+              className="close-button bg-white font-bold"
+            >
+              Back to patients
+            </button>
+          </div>
+          {error && (
+            <p className="mt-3 text-sm font-bold text-red-500">{error}</p>
+          )}
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <FormField label="Full Name" required>
+              <Input
+                {...register("fullName")}
+                placeholder="Enter patient full name"
+              />
+              <FormError error={errors.fullName?.message} />
+            </FormField>
+            <FormField label="Mobile Number">
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="Enter patient mobile number"
+                {...register("mobile", {
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\D/g, "");
+                  },
+                })}
+              />
+              <FormError error={errors.mobile?.message} />
+            </FormField>
+            <FormField label="Branch" required>
+              <SearchableSelect
+                value={watch("branchId")}
+                onChange={(value) =>
+                  setValue("branchId", value, {
                     shouldDirty: true,
-                  });
-                  return;
+                    shouldValidate: true,
+                  })
                 }
+                searchable={branchOptions.length > 8}
+                placeholder="Select branch"
+                options={
+                  branchOptions.length === 0
+                    ? [{ value: "", label: "No branches available" }]
+                    : branchOptions.map((branch) => ({
+                        value: branch.id,
+                        label: branch.name,
+                      }))
+                }
+              />
+              <FormError error={errors.branchId?.message} />
+            </FormField>
+            <FormField label="Gender" required>
+              <SearchableSelect
+                value={watch("gender")}
+                searchable={false}
+                options={genders.map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                onChange={(value) =>
+                  setValue("gender", value, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+              />
+              <FormError error={errors.gender?.message} />
+            </FormField>
+            <FormField label="Age Years" required>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                placeholder="Age"
+                {...register("ageYears", {
+                  onChange: (e) => {
+                    const age = e.target.value;
+                    if (!age) {
+                      setValue("dateOfBirth", "", {
+                        shouldDirty: true,
+                      });
+                      return;
+                    }
+                    const numericAge = Number(age);
+                    if (numericAge >= 0 && numericAge <= 100) {
+                      updatingFromAge.current = true;
+                      setValue("dateOfBirth", calculateDobFromAge(numericAge), {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }
+                  },
+                })}
+              />
+              <FormError error={errors.ageYears?.message} />
+            </FormField>
+            <FormField label="Date of Birth">
+              <Input
+                type="date"
+                max={today}
+                name={dateOfBirthRegistration.name}
+                value={dateOfBirth || ""}
+                onChange={dateOfBirthRegistration.onChange}
+                onBlur={dateOfBirthRegistration.onBlur}
+              />
+            </FormField>
+            <FormField label="Blood Group">
+              <SearchableSelect
+                value={watch("bloodGroup")}
+                searchable={false}
+                options={bloodGroups.map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                onChange={(value) => setValue("bloodGroup", value)}
+              />
+            </FormField>
+            <FormField label="Secondary Mobile Number">
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={10}
+                {...register("alternateMobile", {
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\D/g, "");
+                  },
+                })}
+                placeholder="Enter secondary patient mobile number"
+              />
+              <FormError error={errors.alternateMobile?.message} />
+            </FormField>
+            <FormField label="Guardian Name">
+              <Input
+                {...register("guardianName")}
+                placeholder="Enter guardian or caregiver name"
+              />
+            </FormField>
+            <FormField label="Guardian Mobile Number">
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={10}
+                {...register("guardianMobile", {
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\D/g, "");
+                  },
+                })}
+                placeholder="Enter guardian mobile number"
+              />
+              <FormError error={errors.guardianMobile?.message} />
+            </FormField>
+            <FormField label="Email">
+              <Input {...register("email")} placeholder="Enter patient email" />
+              <FormError error={errors.email?.message} />
+            </FormField>
+            {Boolean(patient) && (
+              <FormField label="Status">
+                <SearchableSelect
+                  value={watch("status")}
+                  onChange={(value) => setValue("status", value)}
+                  searchable={false}
+                  options={statusOptions}
+                />
+              </FormField>
+            )}
+            <div className="md:col-span-2 xl:col-span-3">
+              <FormField label="Address" required>
+                <Input
+                  {...register("address")}
+                  placeholder="Enter patient Address"
+                />
+                <FormError error={errors.address?.message} />
+              </FormField>
+            </div>
+          </div>
+        </section>
 
-                const numericAge = Number(age);
-
-                if (numericAge >= 0 && numericAge <= 100) {
-                  updatingFromAge.current = true;
-
-                  setValue("dateOfBirth", calculateDobFromAge(numericAge), {
+        <section className="rounded-lg border border-slate-200 bg-white p-3">
+          <div>
+            <h4 className="text-sm font-black text-slate-900">
+              WhatsApp Preference
+            </h4>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <FormField label="WhatsApp preference">
+              <SearchableSelect
+                value={whatsappConsentStatus}
+                searchable={false}
+                options={whatsup_options}
+                onChange={(value) => {
+                  setValue("whatsappConsentStatus", value as any, {
                     shouldDirty: true,
                     shouldValidate: true,
                   });
+                  if (value === "not_recorded") {
+                    setValue("whatsappConsentSource", "", {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                  }
+                }}
+              />
+            </FormField>
+            {whatsappConsentStatus !== "not_recorded" && (
+              <FormField label="Preference source (optional)">
+                <SearchableSelect
+                  value={watch("whatsappConsentSource") || ""}
+                  searchable={false}
+                  options={source_options}
+                  onChange={(value) =>
+                    setValue("whatsappConsentSource", value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                />
+                <FormError error={errors.whatsappConsentSource?.message} />
+              </FormField>
+            )}
+            <FormField label="Message language">
+              <SearchableSelect
+                value={watch("whatsappPreferredLanguage")}
+                searchable={false}
+                options={language_options}
+                onChange={(value) =>
+                  setValue("whatsappPreferredLanguage", value as any, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
                 }
-              },
-            })}
-          />
+              />
+            </FormField>
+          </div>
+        </section>
 
-          <FormError error={errors.ageYears?.message} />
-        </FormField>
-        <FormField label="Guardian Name">
-          <Input
-            {...register("guardianName")}
-            placeholder="Enter guardian name"
-          />
-        </FormField>
-        <FormField label="Guardian Mobile">
-          <Input
-            {...register("guardianMobile")}
-            placeholder="Enter guardian mobile"
-          />
-        </FormField>
-        <FormField label="Alternate Phone Number">
-          <Input
-            type="text"
-            inputMode="numeric"
-            maxLength={10}
-            {...register("alternateMobile", {
-              onChange: (e) => {
-                e.target.value = e.target.value.replace(/\D/g, "");
-              },
-            })}
-            placeholder="Enter shared family contact number"
-          />
+        <section className="rounded-lg border border-slate-200 bg-white p-3">
+          <div>
+            <h4 className="text-sm font-black text-slate-900">
+              SMS Preference
+            </h4>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <FormField label="SMS preference">
+              <SearchableSelect
+                value={smsConsentStatus}
+                searchable={false}
+                options={whatsup_options}
+                onChange={(value) => {
+                  setValue("smsConsentStatus", value as any, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                  if (value === "not_recorded") {
+                    setValue("smsConsentSource", "", {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                  }
+                }}
+              />
+            </FormField>
+            {smsConsentStatus !== "not_recorded" && (
+              <FormField label="Preference source" required>
+                <SearchableSelect
+                  value={watch("smsConsentSource") || ""}
+                  searchable={false}
+                  options={source_options}
+                  onChange={(value) =>
+                    setValue("smsConsentSource", value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                />
+                <FormError error={errors.smsConsentSource?.message} />
+              </FormField>
+            )}
+            <FormField label="SMS language">
+              <SearchableSelect
+                value={watch("smsPreferredLanguage")}
+                searchable={false}
+                options={language_options}
+                onChange={(value) =>
+                  setValue("smsPreferredLanguage", value as any, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+              />
+            </FormField>
+          </div>
+        </section>
 
-          <FormError error={errors.alternateMobile?.message} />
-
-          <p className="mt-1 text-[11px] text-slate-500">
-            A family member&apos;s existing mobile number can be used here.
-          </p>
-        </FormField>
-        <FormField label="Email">
-          <Input {...register("email")} placeholder="Enter patient email" />
-          <FormError error={errors.email?.message} />
-        </FormField>
-        <FormField label="WhatsApp preference">
-          <SearchableSelect
-            value={whatsappConsentStatus}
-            searchable={false}
-            options={whatsup_options}
-            onChange={(value) => {
-              setValue("whatsappConsentStatus", value as any, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-              if (value === "not_recorded") {
-                setValue("whatsappConsentSource", "", {
+        <section className="rounded-lg border border-blue-100 bg-white p-3">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+            <div>
+              <h4 className="text-sm font-black text-slate-900">
+                Monthly Patient Tracking
+              </h4>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={monthlyTrackingEnabled}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-black transition-colors ${
+                monthlyTrackingEnabled
+                  ? "border-emerald-300 bg-emerald-100 text-emerald-800"
+                  : "border-slate-300 bg-white text-slate-500"
+              }`}
+              onClick={() => {
+                const next = !monthlyTrackingEnabled;
+                setValue("monthlyTrackingEnabled", next, {
                   shouldDirty: true,
                   shouldValidate: true,
                 });
-              }
-            }}
-          />
-          <p className="mt-1 text-[11px] text-slate-500">
-            An explicit opt-out blocks every patient WhatsApp notification.
-          </p>
-        </FormField>
-        {whatsappConsentStatus !== "not_recorded" && (
-          <FormField label="Preference source (optional)">
-            <SearchableSelect
-              value={watch("whatsappConsentSource") || ""}
-              searchable={false}
-              options={source_options}
-              onChange={(value) =>
-                setValue("whatsappConsentSource", value, {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                })
-              }
-            />
-            <FormError error={errors.whatsappConsentSource?.message} />
-          </FormField>
-        )}
-        <FormField label="Message language">
-          <SearchableSelect
-            value={watch("whatsappPreferredLanguage")}
-            searchable={false}
-            options={language_options}
-            onChange={(value) =>
-              setValue("whatsappPreferredLanguage", value as any, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-          />
-          <p className="mt-1 text-[11px] text-slate-500">
-            English is used unless Tamil is selected for this patient.
-          </p>
-        </FormField>
-        <FormField label="Blood Group">
-          <SearchableSelect
-            value={watch("bloodGroup")}
-            searchable={false}
-            options={bloodGroups.map(([value, label]) => ({
-              value,
-              label,
-            }))}
-            onChange={(value) => setValue("bloodGroup", value)}
-          />
-        </FormField>
-        {Boolean(patient) && (
-          <FormField label="Status">
-            <SearchableSelect
-              value={watch("status")}
-              onChange={(value) => setValue("status", value)}
-              searchable={false}
-              options={statusOptions}
-            />
-          </FormField>
-        )}
-        <div className="md:col-span-2 xl:col-span-3">
-          <FormField label="Address" required>
-            <Input
-              {...register("address")}
-              placeholder="Enter patient Address"
-            />
-            <FormError error={errors.address?.message} />
-          </FormField>
-        </div>
+                if (!next) {
+                  setValue("monthlyRefillOn", "", { shouldDirty: true });
+                  setValue("monthlyRefillNotes", "", { shouldDirty: true });
+                  setValue("monthlyLabOn", "", { shouldDirty: true });
+                  setValue("monthlyLabTestName", "", { shouldDirty: true });
+                  setValue("monthlyLabNotes", "", { shouldDirty: true });
+                }
+              }}
+            >
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  monthlyTrackingEnabled ? "bg-emerald-600" : "bg-slate-400"
+                }`}
+              />
+              {monthlyTrackingEnabled
+                ? "Monthly Patient On"
+                : "Monthly Patient Off"}
+            </button>
+          </div>
+          {monthlyTrackingEnabled ? (
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <FormField label="Next monthly medicine refill">
+                <Input type="date" {...register("monthlyRefillOn")} />
+              </FormField>
+              <FormField label="Next monthly lab test">
+                <Input type="date" {...register("monthlyLabOn")} />
+              </FormField>
+            </div>
+          ) : null}
+        </section>
 
-        <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
-          <Button disabled={busy}>
+        {apiSession && (
+          <section className="rounded-lg border border-slate-200 bg-white p-3">
+            <div>
+              <h4 className="text-sm font-black text-slate-900">
+                Family Relationship
+              </h4>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_180px_1fr]">
+              <FormField label="Family Patient">
+                <SearchableSelect
+                  value={familyRelatedPatientId || ""}
+                  onChange={(value) =>
+                    setValue("familyRelatedPatientId" as any, value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                  options={familyPatientOptions}
+                  loading={familyPatientSearchLoading}
+                  onSearchChange={searchFamilyPatients}
+                  placeholder="Select existing patient"
+                  searchPlaceholder="Search by name, ID, or mobile"
+                  emptyText="No matching patient found."
+                />
+              </FormField>
+              <FormField label="Relationship">
+                <SearchableSelect
+                  value={watch("familyRelationship" as any) || "father"}
+                  onChange={(value) =>
+                    setValue("familyRelationship" as any, value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                  options={familyRelationshipOptions}
+                  searchable={false}
+                  placeholder="Select relationship"
+                />
+              </FormField>
+              <FormField label="Notes">
+                <Input
+                  {...register("familyNotes" as any)}
+                  placeholder="Optional note"
+                />
+              </FormField>
+            </div>
+          </section>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={busy} className="save-button">
             {busy ? "Saving..." : patient ? "Save Patient" : "Create Patient"}
           </Button>
 
           <button
             type="button"
             onClick={back}
-            className="close-button font-bold"
+            className="close-button font-bold bg-white"
           >
             Cancel
           </button>
@@ -523,8 +822,12 @@ export function MembershipEnrollForm({
   branches = [],
   loading,
   onSubmit,
+  excludedPlanIds = [],
 }: any) {
-  const activePlans = membershipPlans.filter((plan: any) => plan.is_active);
+  const excludedPlans = new Set(excludedPlanIds);
+  const activePlans = membershipPlans.filter(
+    (plan: any) => plan.is_active && !excludedPlans.has(plan.id),
+  );
   const [planId, setPlanId] = useState("");
   const [branchId, setBranchId] = useState(patient?.branch_id || "");
   const [startsOn, setStartsOn] = useState(todayInputValue());
@@ -615,9 +918,14 @@ export function MembershipEnrollForm({
         />
       </FormField>
       <div className="md:col-span-5">
-        <Button disabled={loading || !selectedPlan}>
+        <Button disabled={loading || !selectedPlan} className="save-button">
           {loading ? "Saving..." : "Enroll & Create Invoice"}
         </Button>
+        {activePlans.length === 0 && (
+          <p className="mt-2 text-xs font-semibold text-amber-700">
+            The current or queued membership plan cannot be enrolled again.
+          </p>
+        )}
       </div>
     </form>
   );

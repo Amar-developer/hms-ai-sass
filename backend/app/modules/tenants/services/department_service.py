@@ -1,6 +1,8 @@
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
+from app.core.list_filters import ListFilter, ListFilterOption, ListSort
+from app.core.pagination import Page
 from app.modules.audit.models import AuditEvent
 from app.modules.audit.repositories import AuditEventRepository
 from app.modules.identity.models import User
@@ -10,7 +12,11 @@ from app.modules.tenants.repositories import (
     DepartmentRepository,
     TenantRepository,
 )
-from app.modules.tenants.schemas import DepartmentCreate, DepartmentUpdate
+from app.modules.tenants.schemas import (
+    DepartmentCreate,
+    DepartmentRead,
+    DepartmentUpdate,
+)
 from app.modules.tenants.services.helpers import (
     assert_department_editable_by_actor,
     department_code,
@@ -203,6 +209,48 @@ def assign_department_to_tenant(
 
 def list_departments(session: Session, *, tenant_id: str) -> list[Department]:
     return DepartmentRepository(session).list_for_tenant(tenant_id)
+
+
+def list_department_page(
+    session: Session,
+    *,
+    tenant_id: str,
+    q: str | None,
+    list_filters: list[ListFilter],
+    list_sort: ListSort | None,
+    limit: int,
+    offset: int,
+) -> Page[DepartmentRead]:
+    repository = DepartmentRepository(session)
+    rows = repository.list_page(
+        tenant_id=tenant_id,
+        q=q,
+        list_filters=list_filters,
+        list_sort=list_sort,
+        limit=limit,
+        offset=offset,
+    )
+    total = repository.count_page(
+        tenant_id=tenant_id,
+        q=q,
+        list_filters=list_filters,
+    )
+    return Page(
+        items=[
+            DepartmentRead.model_validate(row, from_attributes=True) for row in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def list_department_filter_options(
+    session: Session,
+    *,
+    tenant_id: str,
+) -> dict[str, list[ListFilterOption]]:
+    return DepartmentRepository(session).filter_options(tenant_id=tenant_id)
 
 
 def get_department(

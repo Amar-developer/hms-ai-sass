@@ -70,7 +70,7 @@ test.describe("extended tenant modules", () => {
     adminHeaders,
   }) => {
     await page.goto("/");
-    await page.getByPlaceholder("Search a modules").fill("Error Logs");
+    await page.getByPlaceholder("Search or type a command (Ctrl + G)").fill("Error Logs");
     await page.getByRole("button", { name: "Error Logs", exact: true }).click();
     await page
       .getByPlaceholder("Message, event, route, request ID")

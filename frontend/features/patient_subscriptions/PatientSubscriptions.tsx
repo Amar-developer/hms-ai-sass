@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  PlusCircle,
+  ShieldCheck,
+} from "lucide-react";
+import {
   Button,
   Card,
   RefreshButton,
@@ -10,20 +17,22 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
+import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import { canDeleteMembershipPlans } from "../patients/helpers";
 import { ActiveEnrollmentsTable } from "../patients/components/ActiveEnrollmentsTable";
 import { PlanDetailPage } from "../patients/components/PlanDetailPage";
+import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { PlanForm } from "../patients/components/PlanForm";
 import { money } from "@/utils/helper";
-import { PlanTableRow } from "../patients/components/PlanTableRow";
 import { QueuedEnrollmentsTable } from "../patients/components/QueuedEnrollmentsTable";
 import { PatientSearchSelect } from "../patients/components/PatientSearchSelect";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { DataTable } from "@/app/components/common/DataTable";
+import { getPlanColumns } from "./Column";
 import {
   usePatientSubscriptionsActions,
   usePatientSubscriptionsData,
@@ -81,6 +90,10 @@ export function PatientSubscriptions({
   const [confirmDelete, setConfirmDelete] = useState("");
   const [planPage, setPlanPage] = useState(1);
   const [confirm, setConfirm] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<
+    "plans" | "active" | "queued"
+  >("plans");
+  const [activeEnrollmentPlanId, setActiveEnrollmentPlanId] = useState("all");
   const {
     plans,
     enrollments,
@@ -100,9 +113,9 @@ export function PatientSubscriptions({
   function goTo(nextView: string, id = "", opts: { replace?: boolean } = {}) {
     const path =
       nextView === "create"
-        ? "/admin/membership/new"
+        ? `/admin/membership/${newSegment("subscription")}`
         : nextView === "edit"
-          ? `/admin/membership/${id}/edit`
+          ? `/admin/membership/${id}/${editSegment("subscription")}`
           : nextView === "view"
             ? `/admin/membership/${id}`
             : "/admin/membership";
@@ -116,9 +129,7 @@ export function PatientSubscriptions({
   const editingPlan =
     view === "edit" ? plans.find((plan: any) => plan.id === selectedId) : null;
   const detailPlan =
-    view === "view"
-      ? plans.find((plan: any) => plan.id === selectedId)
-      : null;
+    view === "view" ? plans.find((plan: any) => plan.id === selectedId) : null;
 
   // Populate the edit-form working state once per target plan, not on
   // every render — editingPlan is re-derived from `plans` each render, but
@@ -150,8 +161,7 @@ export function PatientSubscriptions({
   // longer resolves to a real plan, but only once loading has actually
   // finished — otherwise this fires while `plans` is still empty.
   useEffect(() => {
-    if ((view !== "edit" && view !== "view") || !selectedId || loading)
-      return;
+    if ((view !== "edit" && view !== "view") || !selectedId || loading) return;
     if (!plans.some((plan: any) => plan.id === selectedId)) {
       goTo("list", "", { replace: true });
     }
@@ -180,8 +190,8 @@ export function PatientSubscriptions({
   const hasPermission = (...keys: string[]) =>
     Boolean(
       apiSession?.user?.is_super_admin ||
-        userPermissions.includes("*") ||
-        keys.some((key) => userPermissions.includes(key)),
+      userPermissions.includes("*") ||
+      keys.some((key) => userPermissions.includes(key)),
     );
   const canDeletePlans =
     canDeleteMembershipPlans(apiSession?.user) ||
@@ -190,6 +200,10 @@ export function PatientSubscriptions({
       "patient_subscriptions.delete",
       "settings.manage",
     );
+  const canAdjustBenefitUsage = Boolean(
+    apiSession?.user?.user_type === "tenant_admin" ||
+      apiSession?.user?.roles?.includes("tenant_admin"),
+  );
 
   const {
     createPlan,
@@ -198,6 +212,7 @@ export function PatientSubscriptions({
     togglePlanActive,
     deletePlan,
     updateEnrollment,
+    updateBenefitUsage,
     cancelEnrollment,
   } = usePatientSubscriptionsActions({
     apiSession,
@@ -206,6 +221,7 @@ export function PatientSubscriptions({
     medicines,
     patientMap,
     canDeletePlans,
+    canAdjustBenefitUsage,
     busy,
     selectedPatient,
     selectedPlan,
@@ -303,6 +319,26 @@ export function PatientSubscriptions({
     });
     return counts;
   }, [activeEnrollments]);
+  const activeEnrollmentPlanTabs = useMemo(
+    () => [
+      { id: "all", label: "All Plans", count: activeEnrollments.length },
+      ...plans.map((plan: any) => ({
+        id: plan.id,
+        label: plan.name,
+        count: activeEnrollmentCountByPlan.get(plan.id) || 0,
+      })),
+    ],
+    [activeEnrollments.length, activeEnrollmentCountByPlan, plans],
+  );
+  const planFilteredActiveEnrollments = useMemo(
+    () =>
+      activeEnrollmentPlanId === "all"
+        ? activeEnrollments
+        : activeEnrollments.filter(
+            (row: any) => row.plan_id === activeEnrollmentPlanId,
+          ),
+    [activeEnrollmentPlanId, activeEnrollments],
+  );
   const pagedPlans = plans.slice(
     (safePlanPage - 1) * pageSize,
     safePlanPage * pageSize,
@@ -311,6 +347,15 @@ export function PatientSubscriptions({
   function requestDeletePlan(plan: any) {
     setConfirmDelete(plan.id);
   }
+
+  useEffect(() => {
+    if (
+      activeEnrollmentPlanId !== "all" &&
+      !plans.some((plan: any) => plan.id === activeEnrollmentPlanId)
+    ) {
+      setActiveEnrollmentPlanId("all");
+    }
+  }, [activeEnrollmentPlanId, plans]);
 
   return (
     <div className="">
@@ -464,77 +509,84 @@ export function PatientSubscriptions({
             </Card>
           )}
 
-          <Card>
-            <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-              <div>
-                <h3 className="text-base lg:text-lg font-bold">Plans</h3>
-                <p className="card-desc text-slate-500">
-                  Create and manage branch-specific patient membership plans.
-                </p>
+          <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand ring-1 ring-emerald-100">
+                  <ShieldCheck className="h-4 w-4" />
+                </span>
+                <div>
+                  <h2 className="text-base font-black tracking-tight text-slate-950">
+                    Patient Membership Workspace
+                  </h2>
+                  <p className="text-xs font-medium text-slate-500">
+                    Plans, active memberships and queued enrollments
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <RefreshButton onRefresh={load} />
-                {canCreatePlan && (
-                  <Button
+              <div className="flex flex-wrap items-center gap-2">
+                <RefreshButton
+                  onRefresh={load}
+                  className="h-9 rounded-lg border border-slate-200 px-3 text-xs"
+                />
+                {activeTab === "plans" && canCreatePlan && (
+                  <button
                     type="button"
                     onClick={() => goTo("create")}
-                    className="save-button text-xs"
+                    className="primary-action h-9 gap-2 whitespace-nowrap px-4 text-xs"
                   >
+                    <PlusCircle className="h-4 w-4" />
                     Create Plan
-                  </Button>
+                  </button>
                 )}
               </div>
             </div>
-            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
-              {loading && <TableSkeleton />}
-              {!loading && plans.length === 0 && (
-                <p className="p-4 text-sm text-slate-500">
-                  No patient plans yet.
-                </p>
-              )}
-              {!loading && plans.length > 0 && (
-                <div>
-                  <div className="min-w-full overflow-x-auto lg:block">
-                    <table className="min-w-full text-left text-sm">
-                      <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                        <tr className="text-sm">
-                          <th className="px-4 py-3">Plan</th>
-                          <th className="px-4 py-3">Price</th>
-                          <th className="px-4 py-3">Duration</th>
-                          <th className="px-4 py-3">Consults</th>
-                          {/* <th className="px-4 py-3">Scope</th> */}
-                          <th className="px-4 py-3">Status</th>
-                          <th className="px-4 py-3">Enrolled</th>
-                          <th className="px-4 py-3 text-center">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {pagedPlans.map((plan: any) => {
-                          const activeEnrollmentCount =
-                            activeEnrollmentCountByPlan.get(plan.id) || 0;
-                          return (
-                            <PlanTableRow
-                              key={plan.id}
-                              plan={plan}
-                              activeEnrollmentCount={activeEnrollmentCount}
-                              busy={busy}
-                              confirmDelete={confirmDelete}
-                              setConfirmDelete={setConfirmDelete}
-                              deletePlan={deletePlan}
-                              requestDeletePlan={requestDeletePlan}
-                              startEdit={startEdit}
-                              togglePlanActive={togglePlanActive}
-                              canDeletePlans={canDeletePlans}
-                              canEditPlans={canEditPlans}
-                              openDetail={() => goTo("view", plan.id)}
-                            />
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+            <StatusTabsNav
+              ariaLabel="Patient membership sections"
+              activeId={activeTab}
+              onSelect={(id) =>
+                setActiveTab(id as "plans" | "active" | "queued")
+              }
+              tabs={[
+                { id: "plans", label: "Plans", icon: CreditCard, count: plans.length },
+                {
+                  id: "active",
+                  label: "Active Enrollments",
+                  icon: CheckCircle2,
+                  count: activeEnrollments.length,
+                },
+                {
+                  id: "queued",
+                  label: "Queued Enrollments",
+                  icon: Clock,
+                  count: queuedEnrollments.length,
+                },
+              ]}
+            />
+          </section>
+
+          {activeTab === "plans" && (
+          <Card className="mt-3">
+            <div className="max-w-[78vw]">
+              <DataTable
+                columns={getPlanColumns({
+                  activeEnrollmentCountByPlan,
+                  busy,
+                  requestDeletePlan,
+                  startEdit,
+                  togglePlanActive,
+                  canDeletePlans,
+                  canEditPlans,
+                  openDetail: (plan: any) => goTo("view", plan.id),
+                })}
+                data={pagedPlans}
+                loading={loading}
+                emptyMessage="No patient plans yet."
+                emptyDescription="Membership plans created for patients will show up here."
+                emptyIcon={CreditCard}
+                minBodyHeight={`${pagedPlans.length > 0 ?'':'220px'}`}
+                onRowClick={(plan: any) => goTo("view", plan.id)}
+              />
             </div>
             <Pagination
               page={safePlanPage}
@@ -543,18 +595,64 @@ export function PatientSubscriptions({
               onPage={setPlanPage}
             />
           </Card>
-          <ActiveEnrollmentsTable
-            rows={activeEnrollments}
-            patientMap={patientMap}
-            canManage={canDeletePlans}
-            busy={busy}
-            onUpdate={updateEnrollment}
-            onCancel={requestCancelEnrollment}
-          />
+          )}
+          {activeTab === "active" && (
+          <div>
+            <div className="mb-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <nav
+                className="scrollbar-hidden flex gap-1 overflow-x-auto bg-slate-50 px-3 py-1.5"
+                aria-label="Active enrollment plan sections"
+              >
+                {activeEnrollmentPlanTabs.map((tab) => {
+                  const active = activeEnrollmentPlanId === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      aria-current={active ? "page" : undefined}
+                      onClick={() => setActiveEnrollmentPlanId(tab.id)}
+                      className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors ${
+                        active
+                          ? "bg-brand text-brand-fg"
+                          : "text-slate-600 hover:bg-white hover:text-slate-900"
+                      }`}
+                    >
+                      {tab.label}
+                      <span
+                        className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${
+                          active
+                            ? "bg-white/20 text-brand-fg"
+                            : "bg-slate-200 text-slate-600"
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+            <ActiveEnrollmentsTable
+              rows={planFilteredActiveEnrollments}
+              patientMap={patientMap}
+              canManage={canDeletePlans}
+              canAdjustBenefits={canAdjustBenefitUsage}
+              busy={busy}
+              onUpdate={updateEnrollment}
+              onUpdateBenefits={updateBenefitUsage}
+              onCancel={requestCancelEnrollment}
+              labTests={labTests}
+              medicines={medicines}
+              hidePlanFilter
+            />
+          </div>
+          )}
+          {activeTab === "queued" && (
           <QueuedEnrollmentsTable
             rows={queuedEnrollments}
             patientMap={patientMap}
           />
+          )}
         </>
       )}
       {confirm && (
@@ -569,6 +667,23 @@ export function PatientSubscriptions({
           onConfirm={() => cancelEnrollmentAndClose(confirm)}
         />
       )}
+      {confirmDelete &&
+        (() => {
+          const planToDelete = plans.find(
+            (plan: any) => plan.id === confirmDelete,
+          );
+          if (!planToDelete) return null;
+          return (
+            <ConfirmModal
+              title="Deactivate Plan"
+              message={`Deactivate ${planToDelete.name}? Existing patient records are kept and the plan can be reactivated later.`}
+              confirmLabel="Yes, Deactivate"
+              busy={busy === `delete-${planToDelete.id}`}
+              onCancel={() => setConfirmDelete("")}
+              onConfirm={() => deletePlan(planToDelete.id)}
+            />
+          );
+        })()}
     </div>
   );
 }

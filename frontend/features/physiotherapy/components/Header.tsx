@@ -1,10 +1,10 @@
 import { Tab } from "./Tab";
 export function Header({ view, setView }: any) {
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between bg-white p-3 rounded-lg">
       <div>
-        <h3 className="text-xl lg:text-2xl font-bold">Physiotherapy</h3>
-        <p className="table-data text-slate-500">
+        <h3 className="card-title font-bold">Physiotherapy</h3>
+        <p className="card-desc text-slate-500">
           OP/IP assessment, electrotherapy, rehab sessions, equipment usage,
           progress, and billing.
         </p>

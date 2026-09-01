@@ -1,9 +1,11 @@
 from app.modules.subscriptions.services.catalog import (  # noqa: F401
     CORE_HMS_MODULES,
     DEFAULT_PLANS,
+    EXPENSE_DEFAULT_PLAN_KEYS,
     FULL_HMS_MODULES,
     GROWTH_HMS_MODULES,
     HOME_CARE_DEFAULT_PLAN_KEYS,
+    PATIENT_INTELLIGENCE_DEFAULT_PLAN_KEYS,
     PRO_HMS_MODULES,
     STARTER_HMS_MODULES,
     normalize_enabled_modules,

@@ -1,12 +1,13 @@
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
-
-from app.core.pagination import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
+from app.core.pagination import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
@@ -49,6 +50,10 @@ from app.modules.pharmacy.services.catalog_service import (
     create_supplier_record,
     delete_medicine_record,
     delete_supplier_record,
+    list_medicine_filter_options,
+    list_medicine_page,
+    list_supplier_filter_options,
+    list_supplier_page,
     list_supplier_records,
     update_medicine_record,
     update_supplier_record,
@@ -62,6 +67,8 @@ from app.modules.pharmacy.services.issues import (
 )
 from app.modules.pharmacy.services.issue_queries import (
     get_pharmacy_issue_service,
+    list_pharmacy_issue_filter_options,
+    list_pharmacy_issue_page,
     list_pharmacy_issues_service,
 )
 from app.modules.pharmacy.services.purchases import (
@@ -121,6 +128,62 @@ def list_medicines(
         search=search,
         actor=current_user,
     )
+
+
+@router.get("/medicines/page", response_model=Page[MedicineRead])
+def list_medicine_page_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    include_inactive: bool = False,
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.PHARMACY_MANAGE,
+            permissions.PHARMACY_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.SERVICE_ITEMS_MANAGE,
+            permissions.SERVICE_ITEMS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> Page[MedicineRead]:
+    return list_medicine_page(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        include_inactive=include_inactive,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/medicines/filter-options", response_model=dict[str, list[ListFilterOption]]
+)
+def list_medicine_filter_options_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.PHARMACY_MANAGE,
+            permissions.PHARMACY_READ,
+            permissions.SERVICE_ITEMS_MANAGE,
+            permissions.SERVICE_ITEMS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return list_medicine_filter_options(session, tenant_id=tenant_id)
 
 
 @router.get("/catalog/available-medicines")
@@ -214,7 +277,7 @@ def create_supplier(
     payload: SupplierCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(
+    current_user: User = Depends(
         require_any_permission(
             permissions.SUPPLIERS_MANAGE,
             permissions.SUPPLIERS_CREATE,
@@ -223,7 +286,12 @@ def create_supplier(
         )
     ),
 ) -> PharmacySupplier:
-    return create_supplier_record(session, tenant_id=tenant_id, payload=payload)
+    return create_supplier_record(
+        session,
+        tenant_id=tenant_id,
+        payload=payload,
+        actor=current_user,
+    )
 
 
 @router.get("/suppliers", response_model=list[SupplierRead])
@@ -252,13 +320,67 @@ def list_suppliers(
     )
 
 
+@router.get("/suppliers/page", response_model=Page[SupplierRead])
+def list_supplier_page_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    include_inactive: bool = False,
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.SUPPLIERS_MANAGE,
+            permissions.SUPPLIERS_READ,
+            permissions.PHARMACY_MANAGE,
+            permissions.BILLING_MANAGE,
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.SERVICE_ITEMS_MANAGE,
+            permissions.SERVICE_ITEMS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> Page[SupplierRead]:
+    return list_supplier_page(
+        session,
+        tenant_id=tenant_id,
+        include_inactive=include_inactive,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/suppliers/filter-options", response_model=dict[str, list[ListFilterOption]]
+)
+def list_supplier_filter_options_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.SUPPLIERS_MANAGE,
+            permissions.SUPPLIERS_READ,
+            permissions.PHARMACY_MANAGE,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return list_supplier_filter_options(session, tenant_id=tenant_id)
+
+
 @router.patch("/suppliers/{supplier_id}", response_model=SupplierRead)
 def update_supplier(
     supplier_id: str,
     payload: SupplierUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(
+    current_user: User = Depends(
         require_any_permission(
             permissions.SUPPLIERS_MANAGE,
             permissions.SUPPLIERS_EDIT,
@@ -268,7 +390,11 @@ def update_supplier(
     ),
 ) -> PharmacySupplier:
     return update_supplier_record(
-        session, tenant_id=tenant_id, supplier_id=supplier_id, payload=payload
+        session,
+        tenant_id=tenant_id,
+        supplier_id=supplier_id,
+        payload=payload,
+        actor=current_user,
     )
 
 
@@ -277,7 +403,7 @@ def delete_supplier(
     supplier_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(
+    current_user: User = Depends(
         require_any_permission(
             permissions.SUPPLIERS_MANAGE,
             permissions.SUPPLIERS_DELETE,
@@ -286,7 +412,12 @@ def delete_supplier(
         )
     ),
 ) -> PharmacySupplier:
-    return delete_supplier_record(session, tenant_id=tenant_id, supplier_id=supplier_id)
+    return delete_supplier_record(
+        session,
+        tenant_id=tenant_id,
+        supplier_id=supplier_id,
+        actor=current_user,
+    )
 
 
 @router.post(
@@ -397,6 +528,60 @@ def list_pharmacy_issues(
         tenant_id=tenant_id,
         patient_id=patient_id,
         status_filter=status_filter,
+        branch_id=branch_id,
+        actor=current_user,
+    )
+
+
+@router.get("/issues/page", response_model=Page[PharmacyIssueRead])
+def list_pharmacy_issue_page_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    patient_id: str | None = None,
+    status_filter: PharmacyIssueStatus | None = None,
+    branch_id: str | None = None,
+    q: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    filters: str | None = None,
+    sort: str | None = None,
+    limit: int = Query(default=DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_READ)
+    ),
+) -> Page[PharmacyIssueRead]:
+    return list_pharmacy_issue_page(
+        session,
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        status_filter=status_filter,
+        branch_id=branch_id,
+        q=q,
+        from_date=from_date,
+        to_date=to_date,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+        actor=current_user,
+    )
+
+
+@router.get("/issues/filter-options", response_model=dict[str, list[ListFilterOption]])
+def list_pharmacy_issue_filter_options_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    patient_id: str | None = None,
+    branch_id: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_READ)
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return list_pharmacy_issue_filter_options(
+        session,
+        tenant_id=tenant_id,
+        patient_id=patient_id,
         branch_id=branch_id,
         actor=current_user,
     )

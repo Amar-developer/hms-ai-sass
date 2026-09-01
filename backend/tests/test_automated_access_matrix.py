@@ -139,7 +139,11 @@ def test_granular_permissions_drive_actions_without_builtin_role_names(client):
     patient = client.post(
         "/api/v1/patients",
         headers=tenant_headers,
-        json={"full_name": "Granular Patient", "branch_id": branch["id"]},
+        json={
+            "full_name": "Granular Patient",
+            "branch_id": branch["id"],
+            "mobile": "9000000501",
+        },
     ).json()
     appointment = client.post(
         "/api/v1/appointments",
@@ -263,7 +267,11 @@ def test_branch_scope_matrix_blocks_cross_branch_records_and_queries(client):
     other_patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Other Branch Patient", "branch_id": other_branch["id"]},
+        json={
+            "full_name": "Other Branch Patient",
+            "branch_id": other_branch["id"],
+            "mobile": "9000000502",
+        },
     ).json()
     headers = _create_role_user_and_login(
         client,
@@ -304,7 +312,11 @@ def test_sensitive_action_audit_matrix_records_core_module_events(client):
     patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Audit Matrix Patient", "branch_id": branch["id"]},
+        json={
+            "full_name": "Audit Matrix Patient",
+            "branch_id": branch["id"],
+            "mobile": "9000000503",
+        },
     )
     lab = client.post(
         "/api/v1/lab/catalog/tests",

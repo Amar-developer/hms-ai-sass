@@ -1828,7 +1828,12 @@ def main() -> None:
                 "Then run the seed command again."
             ) from exc
         raise
-    print(json.dumps(summary, indent=2, sort_keys=True))
+    # Monetary totals in the summary are Decimal, which json cannot encode.
+    # `default=str` keeps their exact value rather than going through float,
+    # matching how JsonLogFormatter serialises arbitrary log payloads. Seeding
+    # has already committed by this point, so failing here left the database
+    # correctly populated and only lost the report.
+    print(json.dumps(summary, indent=2, sort_keys=True, default=str))
 
 
 if __name__ == "__main__":

@@ -35,12 +35,12 @@ export function PlanRowActions({
         <div
           className={`absolute ${className} z-50 mt-2 w-22 text-xs rounded-lg border bg-white shadow-lg`}
         >
-          <button
+          {/* <button
             onClick={stop(openDetail)}
             className="block w-full px-4 py-1 text-left hover:bg-slate-100"
           >
             View
-          </button>
+          </button> */}
 
           {canEditPlans && (
             <button

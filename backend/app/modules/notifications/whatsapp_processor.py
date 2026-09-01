@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+import json
 import logging
 from urllib.parse import urlparse
 
@@ -13,13 +14,14 @@ from app.modules.billing.models import CreditNote, Invoice, InvoiceItem
 from app.modules.consultations.models import Consultation
 from app.modules.files.models import FileDocument
 from app.modules.files.storage.factory import get_storage_backend_for_document
+from app.modules.home_care.models import HomeCareBooking, HomeCareBookingItem
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.integrations.invoice_receipts import (
     create_signed_invoice_receipt_url,
 )
 from app.modules.integrations.document_links import create_signed_document_url
 from app.modules.integrations.service import decode_config, get_tenant_plugin
-from app.infrastructure.integrations.adapters.messaging.http_template import (
+from app.infrastructure.integrations.ports.messaging import (
     normalize_mobile_number,
 )
 from app.infrastructure.integrations.factories import get_template_message_gateway
@@ -27,17 +29,22 @@ from app.infrastructure.integrations.ports.messaging import (
     TemplateMessageGateway,
     TemplateMessageResult,
 )
-from app.modules.integrations.whatsapp_entity_fields import build_entity_context
-from app.modules.integrations.whatsapp_field_catalog import default_field_order
-from app.modules.integrations.whatsapp_schemas import (
+from app.modules.integrations.whatsapp.entity_fields import build_entity_context
+from app.modules.integrations.whatsapp.field_catalog import (
+    default_field_order,
+    normalize_saved_field_order,
+)
+from app.modules.integrations.whatsapp.schemas import (
     WhatsAppCustomTemplateSettings,
     WhatsAppFlowSettings,
+    audience_notifications_enabled,
+    flow_audience,
 )
-from app.modules.integrations.whatsapp_templates import (
+from app.modules.integrations.whatsapp.templates import (
     DEFAULT_WHATSAPP_LANGUAGE,
     resolve_template_identifier,
 )
-from app.modules.integrations.whatsapp_consent import (
+from app.modules.integrations.whatsapp.consent import (
     patient_allows_whatsapp,
     patient_for_notification_resource,
     patient_notification_destination,
@@ -52,7 +59,22 @@ from app.modules.notifications.models import (
 )
 from app.modules.lab.models import LabOrder
 from app.modules.patients.models import Patient
+from app.modules.patient_intelligence.models import (
+    EngagementActionStatus,
+    PatientEngagementAction,
+    PatientMetricSnapshot,
+)
+from app.modules.patient_subscriptions.models import (
+    PatientSubscriptionEnrollment,
+    PatientSubscriptionEnrollmentStatus,
+    PatientSubscriptionPlan,
+)
+from app.modules.patient_subscriptions.services.reminder_summary import (
+    available_membership_benefits_summary,
+)
+from app.modules.integrations.whatsapp.consent import patient_allows_engagement_whatsapp
 from app.modules.practitioners.models import Practitioner
+from app.modules.pharmacy.models import PharmacyIssue
 from app.modules.queue.models import QueueEvent
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Tenant, now_utc
@@ -244,18 +266,198 @@ def _message_context(
     so a flow's available fields only need to be listed once.
     """
     language = None
-    if not str(event.template_key or "").endswith("_doctor"):
+    if event.template_key == "admin_daily_report":
+        try:
+            stored = json.loads(event.message or "{}")
+        except (TypeError, ValueError) as exc:
+            raise NotificationCancelled(
+                "The saved daily report snapshot is invalid."
+            ) from exc
+        required = default_field_order("admin_daily_report")
+        if not isinstance(stored, dict) or any(key not in stored for key in required):
+            raise NotificationCancelled(
+                "The saved daily report snapshot is incomplete."
+            )
+        recipient_name = str(stored.get("recipient_name") or "Tenant Admin")
+        return (
+            recipient_name,
+            {key: str(stored[key]) for key in required},
+            None,
+            None,
+            None,
+        )
+    if flow_audience(str(event.template_key or "")) == "patient":
         patient = patient_for_notification_resource(
             session,
             tenant_id=event.tenant_id,
             resource_type=event.resource_type or "",
             resource_id=event.resource_id or "",
         )
-        if not patient_allows_whatsapp(patient):
+        intelligence_engagement = event.resource_type == "patient_engagement_action"
+        if intelligence_engagement and not patient_allows_engagement_whatsapp(patient):
             raise NotificationCancelled(
-                "The patient has opted out of WhatsApp notifications."
+                "The patient has not explicitly opted in to engagement messages."
+            )
+        if not intelligence_engagement and not patient_allows_whatsapp(patient):
+            raise NotificationCancelled(
+                "The patient has opted out of WhatsApp communication."
             )
         language = patient_notification_language(patient) if patient else None
+    if event.resource_type == "patient_engagement_action":
+        action = session.get(PatientEngagementAction, event.resource_id or "")
+        if not action or action.tenant_id != event.tenant_id:
+            raise NotificationCancelled("The engagement action no longer exists.")
+        if action.status in {
+            EngagementActionStatus.CANCELLED,
+            EngagementActionStatus.SUPPRESSED,
+            EngagementActionStatus.FAILED,
+        }:
+            raise NotificationCancelled("The engagement action is no longer active.")
+        patient = session.get(Patient, action.patient_id)
+        if not patient or patient.tenant_id != event.tenant_id:
+            raise NotificationCancelled("The engagement patient no longer exists.")
+        tenant = session.get(Tenant, event.tenant_id)
+        snapshot = session.exec(
+            select(PatientMetricSnapshot).where(
+                PatientMetricSnapshot.tenant_id == event.tenant_id,
+                PatientMetricSnapshot.patient_id == patient.id,
+            )
+        ).first()
+        membership = session.exec(
+            select(PatientSubscriptionEnrollment)
+            .where(
+                PatientSubscriptionEnrollment.tenant_id == event.tenant_id,
+                PatientSubscriptionEnrollment.patient_id == patient.id,
+                PatientSubscriptionEnrollment.status
+                == PatientSubscriptionEnrollmentStatus.ACTIVE,
+            )
+            .order_by(PatientSubscriptionEnrollment.ends_on.desc())
+        ).first()
+        membership_plan = (
+            session.get(PatientSubscriptionPlan, membership.plan_id)
+            if membership
+            else None
+        )
+        membership_invoice = (
+            session.get(Invoice, membership.purchase_invoice_id)
+            if membership and membership.purchase_invoice_id
+            else None
+        )
+        latest_pharmacy_issue = session.exec(
+            select(PharmacyIssue)
+            .where(
+                PharmacyIssue.tenant_id == event.tenant_id,
+                PharmacyIssue.patient_id == patient.id,
+            )
+            .order_by(PharmacyIssue.created_at.desc())
+        ).first()
+        latest_lab_order = session.exec(
+            select(LabOrder)
+            .where(
+                LabOrder.tenant_id == event.tenant_id,
+                LabOrder.patient_id == patient.id,
+            )
+            .order_by(LabOrder.created_at.desc())
+        ).first()
+        values = json.loads(action.personalization_json or "{}")
+        entity_values = build_entity_context(
+            action.template_key,
+            {
+                "patient": patient,
+                "clinic": tenant,
+                "intelligence": snapshot,
+                "membership": membership,
+                "membership_plan": membership_plan,
+                "invoice": membership_invoice,
+                "pharmacy_issue": latest_pharmacy_issue,
+                "lab_order": latest_lab_order,
+                "engagement_action": action,
+            },
+        )
+        context = {
+            **entity_values,
+            "recipient_name": patient.full_name,
+            "clinic_name": tenant.name if tenant else "",
+            "action_key": action.action_key,
+            "action_channel": action.channel,
+            "action_template_key": action.template_key,
+            "action_status": action.status.value,
+            "action_reason": action.reason,
+            **{str(key): str(value) for key, value in values.items()},
+        }
+        if (
+            action.template_key == "unused_benefit_patient"
+            and membership
+            and membership_plan
+        ):
+            # Usage can change between action creation and delivery. Resolve the
+            # remaining-benefits parameter again so the patient never receives
+            # an already-consumed benefit in the monthly reminder.
+            context["unused_benefits_summary"] = available_membership_benefits_summary(
+                session,
+                enrollment=membership,
+                plan=membership_plan,
+            )
+        return patient.full_name, context, None, None, language
+    if event.template_key in {
+        "home_care_booking_patient",
+        "home_visit_booking_patient",
+    }:
+        booking = session.get(HomeCareBooking, event.resource_id or "")
+        if not booking or booking.tenant_id != event.tenant_id:
+            raise NotificationCancelled("The home care booking no longer exists.")
+        allowed_types = (
+            {"home_visit"}
+            if event.template_key == "home_visit_booking_patient"
+            else {"home_care", "home_visit"}
+        )
+        if booking.booking_type not in allowed_types:
+            raise NotificationCancelled(
+                "The booking type does not match the notification flow."
+            )
+        patient = session.get(Patient, booking.patient_id)
+        if not patient or patient.tenant_id != event.tenant_id:
+            raise NotificationCancelled("The booking patient no longer exists.")
+        tenant = session.get(Tenant, event.tenant_id)
+        items = session.exec(
+            select(HomeCareBookingItem)
+            .where(
+                HomeCareBookingItem.tenant_id == event.tenant_id,
+                HomeCareBookingItem.booking_id == booking.id,
+            )
+            .order_by(HomeCareBookingItem.created_at, HomeCareBookingItem.id)
+        ).all()
+        service_description = ", ".join(
+            dict.fromkeys(
+                item.description.strip()
+                for item in items
+                if item.description and item.description.strip()
+            )
+        )
+        if not service_description:
+            service_description = booking.booking_type.replace("_", " ").title()
+        end_date = booking.end_date or booking.start_date
+        return (
+            patient.full_name,
+            {
+                **build_entity_context(
+                    event.template_key,
+                    {
+                        "patient": patient,
+                        "clinic": tenant,
+                        "home_care_booking": booking,
+                    },
+                ),
+                "recipient_name": patient.full_name,
+                "clinic_name": tenant.name if tenant else "",
+                "service_description": service_description[:500],
+                "booking_start_date": booking.start_date.strftime("%d %B %Y"),
+                "booking_end_date": end_date.strftime("%d %B %Y"),
+            },
+            None,
+            None,
+            language,
+        )
     if event.template_key in {
         "appointment_booked_patient",
         "appointment_booked_doctor",
@@ -440,7 +642,7 @@ def _message_context(
             {
                 **build_entity_context(
                     event.template_key,
-                    {"patient": patient, "clinic": tenant},
+                    {"patient": patient, "clinic": tenant, "lab_order": order},
                 ),
                 "recipient_name": patient.full_name,
                 "report_name": order.tests[:500],
@@ -459,9 +661,21 @@ def _message_context(
         if not patient or patient.tenant_id != event.tenant_id:
             raise NotificationCancelled("The consultation patient no longer exists.")
         if event.template_key == "follow_up_advice_patient":
+            practitioner = session.get(Practitioner, consultation.practitioner_id or "")
             return (
                 patient.full_name,
                 {
+                    **build_entity_context(
+                        event.template_key,
+                        {
+                            "patient": patient,
+                            "doctor": practitioner,
+                            "clinic": _tenant_scoped(
+                                session, Tenant, event.tenant_id, None
+                            ),
+                            "consultation": consultation,
+                        },
+                    ),
                     "recipient_name": patient.full_name,
                     "follow_up_advice": consultation.follow_up_advice
                     or "Follow up as advised",
@@ -488,6 +702,7 @@ def _message_context(
                         "clinic": _tenant_scoped(
                             session, Tenant, event.tenant_id, None
                         ),
+                        "consultation": consultation,
                     },
                 ),
                 "recipient_name": patient.full_name,
@@ -534,6 +749,13 @@ def _cancel(session: Session, event: NotificationEvent, reason: str) -> None:
     event.processing_started_at = None
     event.updated_at = now_utc()
     session.add(event)
+    if event.resource_type == "patient_engagement_action":
+        action = session.get(PatientEngagementAction, event.resource_id or "")
+        if action and action.tenant_id == event.tenant_id:
+            action.status = EngagementActionStatus.CANCELLED
+            action.reason = reason[:1000]
+            action.updated_at = now_utc()
+            session.add(action)
     delivery = session.exec(
         select(DocumentDelivery).where(
             DocumentDelivery.notification_event_id == event.id
@@ -565,16 +787,7 @@ def _load_connection(
     flow_key = str(event.template_key or "")
     if not hasattr(flows, flow_key) or not getattr(flows, flow_key):
         raise NotificationCancelled("The notification flow is disabled.")
-    is_doctor = flow_key in {
-        "appointment_booked_doctor",
-        "appointment_cancelled_doctor",
-    }
-    if not config.get(
-        "doctor_notifications_enabled"
-        if is_doctor
-        else "patient_notifications_enabled",
-        True,
-    ):
+    if not audience_notifications_enabled(config, flow_key):
         raise NotificationCancelled(
             "Notifications for this recipient type are disabled."
         )
@@ -631,14 +844,17 @@ def _resolve_campaign_and_params(
     )
     if not campaign_name:
         raise NotificationCancelled("The notification template identifier is missing.")
-    configured_fields = (config.get("template_field_mappings") or {}).get(
-        flow_key
+    configured_fields = normalize_saved_field_order(
+        flow_key,
+        (config.get("template_field_mappings") or {}).get(flow_key),
     ) or default_field_order(flow_key)
     return campaign_name, [context.get(field, "") for field in configured_fields]
 
 
 def _delivery_recipient(session: Session, event: NotificationEvent) -> str:
-    if str(event.template_key or "").endswith("_doctor"):
+    # Admin and doctor flows carry their own recipient on the event; only a
+    # patient flow resolves the number from the patient record and consent.
+    if flow_audience(str(event.template_key or "")) != "patient":
         return event.recipient
     patient = patient_for_notification_resource(
         session,
@@ -653,7 +869,7 @@ def _delivery_recipient(session: Session, event: NotificationEvent) -> str:
     )
     if not recipient:
         raise NotificationCancelled(
-            "The patient does not have a valid primary or alternate mobile number."
+            "The patient does not have a valid primary, secondary, or legacy guardian mobile number."
         )
     return recipient
 
@@ -683,6 +899,21 @@ def _save_result(
         event.status = NotificationStatus.FAILED
         event.failure_reason = result.message[:500]
     session.add(event)
+    if event.resource_type == "patient_engagement_action":
+        action = session.get(PatientEngagementAction, event.resource_id or "")
+        if action and action.tenant_id == event.tenant_id:
+            action.status = (
+                EngagementActionStatus.SENT
+                if result.success
+                else (
+                    EngagementActionStatus.QUEUED
+                    if event.status == NotificationStatus.QUEUED
+                    else EngagementActionStatus.FAILED
+                )
+            )
+            action.reason = event.failure_reason or action.reason
+            action.updated_at = now
+            session.add(action)
     delivery = session.exec(
         select(DocumentDelivery).where(
             DocumentDelivery.notification_event_id == event.id

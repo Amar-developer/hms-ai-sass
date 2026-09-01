@@ -26,12 +26,20 @@ from app.modules.reports.service import (
 )
 from app.modules.reports.snapshots import archive_due_months
 from app.modules.tenants.models import Tenant, TenantStatus, now_utc
+from app.modules.identity.models import User
 from app.modules.notifications.whatsapp_processor import (
     process_due_whatsapp_notifications,
 )
 from app.modules.notifications.email_processor import process_due_email_deliveries
-from app.modules.integrations.whatsapp_reminders import (
+from app.modules.notifications.sms_processor import process_due_sms_notifications
+from app.modules.integrations.whatsapp.reminders import (
     queue_due_whatsapp_appointment_reminders,
+)
+from app.modules.integrations.whatsapp.daily_report import (
+    queue_due_whatsapp_admin_daily_reports,
+)
+from app.modules.patient_intelligence.service import (
+    refresh_due_patient_intelligence,
 )
 
 
@@ -47,6 +55,19 @@ def _heartbeat_loop() -> None:
         except Exception:
             logger.exception("report_worker.heartbeat_failed")
         _shutdown.wait(interval)
+
+
+def _tenant_admin_user_id(session: Session, tenant_id: str) -> str | None:
+    tenant_admin = session.exec(
+        select(User)
+        .where(
+            User.tenant_id == tenant_id,
+            User.user_type == "tenant_admin",
+            User.is_active == True,  # noqa: E712
+        )
+        .order_by(User.created_at)
+    ).first()
+    return tenant_admin.id if tenant_admin else None
 
 
 def enqueue_due_monthly_reports(session: Session) -> None:
@@ -80,6 +101,7 @@ def enqueue_due_monthly_reports(session: Session) -> None:
             recipients_json=json.dumps(config["recipients"]),
             cc_json=json.dumps(config["cc"]),
             filters_json=json.dumps(config["filters"]),
+            queued_by_user_id=_tenant_admin_user_id(session, tenant.id),
         )
         session.add(job)
         session.commit()
@@ -151,6 +173,21 @@ def run_once() -> None:
             # Delete error logs past retention (idempotent no-op most cycles).
             purge_expired_error_logs(session)
             queue_due_whatsapp_appointment_reminders(session)
+            daily_reports = queue_due_whatsapp_admin_daily_reports(session)
+            if daily_reports:
+                logger.info(
+                    "report_worker.whatsapp_admin_daily_reports_queued",
+                    extra={"report_count": daily_reports},
+                )
+            # Progressively adapt existing HMS records and refresh stale
+            # Patient 360 projections without a separate scheduler service.
+            refreshed = refresh_due_patient_intelligence(session, limit=500)
+            if refreshed:
+                logger.info(
+                    "report_worker.patient_intelligence_refreshed",
+                    extra={"patient_count": refreshed},
+                )
+            session.commit()
     with Session(engine) as session:
         recovered = recover_stale_report_jobs(session)
         if recovered:
@@ -159,6 +196,9 @@ def run_once() -> None:
                 extra={"recovered_count": recovered},
             )
         process_due_whatsapp_notifications(session)
+        process_due_sms_notifications(
+            session, limit=get_settings().sms_worker_batch_limit
+        )
         process_due_email_deliveries(session)
     try:
         job_id = dequeue_monthly_report_job(timeout=5)

@@ -1,3 +1,4 @@
+import { Stethoscope } from "lucide-react";
 import { DataTable } from "@/app/components/common/DataTable";
 import { AppointmentReportsProps } from "../types";
 import CollapsibleReportSection from "./CollapsibleReportSection";
@@ -14,10 +15,25 @@ const AppointmentReports = ({
     Number(value || 0) === 0 ? "-" : money(value);
   const columns = [
     {
+      key: "s.no",
+      header: "S.No",
+      width: "50px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index: number) => index + 1,
+    },
+    {
       key: "doctor",
       header: "Doctor",
       width: "140px",
-      render: (row: any) => <b>{row.doctor}</b>,
+      render: (row: any) =>(
+        <div className="max-w-[130px]">
+          <p className="truncate font-semibold" title={row.doctor}>
+            {row.doctor}
+          </p>
+        </div>
+      ),
     },
     {
       key: "consultations",
@@ -43,32 +59,39 @@ const AppointmentReports = ({
     },
     {
       key: "balance",
-      header: "Amount Due",
+      header: "Due",
       width: "110px",
       render: (row: any) => moneyOrDash(row.balance),
     },
     {
       key: "approvedDiscount",
-      header: "Admin Discount",
+      header: "Admin %",
       width: "130px",
       render: (row: any) => moneyOrDash(row.approvedDiscount),
     },
     {
       key: "offerDiscount",
-      header: "Offer Discount",
+      header: "Offer %",
       width: "100px",
       render: (row: any) => moneyOrDash(row.offerDiscount),
     },
     {
       key: "membershipBenefit",
-      header: "Membership Benefit",
+      header: "Membership",
       width: "140px",
       render: (row: any) => moneyOrDash(row.membershipBenefit),
     },
     {
       key: "paymentMode",
-      header: "Payment Method",
+      header: "Payment",
       width: "130px",
+      render: (row:any)=> (
+        <div className="max-w-[120px]">
+          <p className="truncate" title= {row.paymentMode}>
+            {row.paymentMode}
+          </p>
+        </div>
+      )
     },
     {
       key: "paidTax",
@@ -122,7 +145,7 @@ const AppointmentReports = ({
           setOpenSections((state: any) => ({ ...state, doctor: !state.doctor }))
         }
       >
-        <div className="mt-4 overflow-auto scrollbar-hidden rounded-2xl border">
+        <div className="overflow-auto scrollbar-hidden rounded-lg border border-slate-200">
           <DataTable
             columns={columns}
             data={doctorRows}
@@ -130,6 +153,9 @@ const AppointmentReports = ({
             paginate
             className="w-full min-w-[1280px] text-left text-sm"
             emptyMessage="No healthcare invoices match this filter."
+            emptyDescription="Doctor fee and profitability details will appear here once consultations are settled."
+            emptyIcon={Stethoscope}
+            minBodyHeight={`${doctorRows.length > 0 ?'':'220px'}`}
           />
         </div>
       </CollapsibleReportSection>

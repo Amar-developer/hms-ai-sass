@@ -29,6 +29,7 @@ type UseLabActionsParams = {
 };
 
 const MAX_REPORT_DOCUMENTS = 5;
+const MAX_REPORT_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 /**
  * Write / on-demand-read actions for the lab workspace: order lifecycle
@@ -169,6 +170,9 @@ export function useLabActions({
   }
 
   async function uploadOrderDocument(order: any, file: File) {
+    if (file.size > MAX_REPORT_UPLOAD_BYTES) {
+      throw new Error("Lab report exceeds the 50 MB intake limit.");
+    }
     const upload = new FormData();
     upload.append("file", file);
     upload.append("branch_id", order.branch_id || branchId || "");

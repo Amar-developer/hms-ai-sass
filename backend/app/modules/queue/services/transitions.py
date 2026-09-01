@@ -75,8 +75,10 @@ def sync_transition(
     now = datetime.now(timezone.utc)
     entry.status = to_status
     entry.updated_at = now
+    entry.updated_by_user_id = actor_user_id
     appointment.status = to_status
     appointment.updated_at = now
+    appointment.updated_by_user_id = actor_user_id
     if to_status == AppointmentStatus.CALLED:
         entry.called_at = now
     if to_status in {
@@ -128,6 +130,7 @@ def requeue_entry(
     from_status = entry.status
     original_position = max(int(entry.queue_position or 1), 1)
     entry.status = AppointmentStatus.REQUEUED
+    entry.updated_by_user_id = actor_user_id
     appointment.status = AppointmentStatus.REQUEUED
     active_rows = normalize_queue_positions(
         session, tenant_id=entry.tenant_id, branch_id=entry.branch_id
@@ -151,6 +154,7 @@ def requeue_entry(
         session.add(row)
     entry.updated_at = now_utc()
     appointment.updated_at = now_utc()
+    appointment.updated_by_user_id = actor_user_id
     session.add(entry)
     session.add(appointment)
     session.commit()

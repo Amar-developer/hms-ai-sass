@@ -1,5 +1,7 @@
 import json
 from datetime import timedelta
+from io import BytesIO
+from zipfile import ZipFile
 
 from sqlmodel import Session, select
 
@@ -28,19 +30,28 @@ def test_monthly_report_email_sends_settlement_attachments(test_engine):
 
     with Session(test_engine) as session:
         tenant = Tenant(name="Email Settlement Clinic")
+        actor = User(
+            tenant_id=tenant.id,
+            name="Tenant Admin",
+            email="tenant.admin@clinic.test",
+            user_type="tenant_admin",
+        )
         session.add(tenant)
+        session.add(actor)
         session.commit()
         session.refresh(tenant)
+        session.refresh(actor)
         job = ReportJob(
             tenant_id=tenant.id,
             status=ReportJobStatus.QUEUED,
             period_start="2026-04-01",
             period_end="2026-04-30",
             recipients_json=json.dumps(["owner@clinic.test"]),
-            cc_json=json.dumps([]),
+            cc_json=json.dumps(["accounts@clinic.test"]),
             filters_json=json.dumps(
                 {"overall": True, "doctor": True, "department": True, "invoice": True}
             ),
+            queued_by_user_id=actor.id,
         )
         session.add(job)
         session.commit()
@@ -57,33 +68,67 @@ def test_monthly_report_email_sends_settlement_attachments(test_engine):
         session.refresh(processed)
 
     attachment_names = [filename for filename, *_rest in sent["attachments"]]
+    assert sent["recipient"] == "owner@clinic.test"
+    assert sent["cc"] == ["accounts@clinic.test"]
+    assert sent["reply_to"] == "tenant.admin@clinic.test"
+    # The tenant's own admin is the sender, so a clinic's reports arrive from
+    # the clinic rather than from the shared platform address.
+    assert sent["from_email"] == "tenant.admin@clinic.test"
+    assert sent["from_name"] == "Email Settlement Clinic"
     assert processed.status == ReportJobStatus.SENT
     assert artifact_names == attachment_names
-    assert attachment_names[0].startswith(
-        "monthly-revenue-report-2026-04-01-2026-04-30"
+    assert attachment_names == ["monthly-revenue-settlement-2026-04-01-2026-04-30.xlsx"]
+    _filename, content_type, content = sent["attachments"][0]
+    assert content_type == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    assert any(
-        filename.startswith("doctor-settlement-") for filename in attachment_names
-    )
-    assert any(filename.startswith("lab-settlement-") for filename in attachment_names)
-    assert any(
-        filename.startswith("pharmacy-settlement-") for filename in attachment_names
-    )
-    assert any(
-        filename.startswith("invoice-profit-details-") for filename in attachment_names
-    )
-    report_files = {
-        filename: content.decode("utf-8")
-        for filename, _content_type, content in sent["attachments"]
-        if filename.endswith(".xls")
-    }
-    for filename, content in report_files.items():
-        assert "Mode of Payment" in content, filename
-        if filename.startswith("doctor-settlement-"):
-            assert "Doctor Fee %" in content, filename
-            assert "Settlement %" not in content, filename
-        elif not filename.startswith("monthly-revenue-report-"):
-            assert "Settlement %" in content, filename
+    with ZipFile(BytesIO(content)) as workbook:
+        names = set(workbook.namelist())
+        assert "xl/workbook.xml" in names
+        assert "xl/styles.xml" in names
+        workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
+        for sheet_name in (
+            "Executive Summary",
+            "Doctor Settlements",
+            "Doctor Ledger",
+            "Vendor Settlements",
+            "Vendor Ledger",
+            "Department Revenue",
+            "Invoice Detail",
+            "Collections",
+            "Reconciliation",
+            "Definitions",
+        ):
+            assert f'name="{sheet_name}"' in workbook_xml
+
+
+def test_manual_monthly_report_defaults_to_actor_email(test_engine):
+    from app.modules.reports.schemas import MonthlyReportSendRequest
+    from app.modules.reports.service import queue_monthly_report
+
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Manual Report Clinic")
+        actor = User(
+            tenant_id=tenant.id,
+            name="Tenant Admin",
+            email="manual.admin@clinic.test",
+            user_type="tenant_admin",
+        )
+        session.add(tenant)
+        session.add(actor)
+        session.commit()
+        session.refresh(tenant)
+        session.refresh(actor)
+
+        job = queue_monthly_report(
+            session,
+            tenant_id=tenant.id,
+            payload=MonthlyReportSendRequest(recipients=[], cc=[]),
+            actor=actor,
+        )
+
+        assert job.recipients == ["manual.admin@clinic.test"]
+        assert job.queued_by_user_id == actor.id
 
 
 def test_report_resend_reuses_permanent_artifacts(test_engine):
@@ -224,3 +269,64 @@ def test_report_queue_deduplicates_wakeup_hints(monkeypatch):
     assert len(cache.items) == 1
     assert dequeue_monthly_report_job(timeout=0) == "reportjob_1"
     assert enqueue_monthly_report_job("reportjob_1") is True
+
+
+def test_smtp_sender_falls_back_to_the_configured_identity_and_sets_a_message_id():
+    """A tenant with no admin address on file must still send, and every message
+    needs an id the provider's logs can be traced by."""
+    from unittest.mock import patch
+
+    from app.core.config import Settings
+    from app.infrastructure.integrations.adapters.email.smtp import SmtpEmailAdapter
+    from app.infrastructure.integrations.ports.email import EmailMessageRequest
+
+    captured = {}
+
+    class FakeSmtp:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def starttls(self):
+            pass
+
+        def login(self, *_args):
+            pass
+
+        def send_message(self, message):
+            captured["message"] = message
+
+    settings = Settings(
+        smtp_host="mail.example.com",
+        smtp_from_email="reports@medizinhub.local",
+        smtp_from_name="MedizinHub HMS Reports",
+    )
+    adapter = SmtpEmailAdapter(settings)
+    with patch("smtplib.SMTP", FakeSmtp):
+        tenant_id = adapter.send_message(
+            EmailMessageRequest(
+                recipients=["owner@clinic.test"],
+                subject="Monthly report",
+                body="body",
+                from_email="admin@sunrise.test",
+                from_name="Sunrise Clinic",
+            )
+        )
+        assert captured["message"]["From"] == "Sunrise Clinic <admin@sunrise.test>"
+        assert tenant_id.startswith("<") and "sunrise.test" in tenant_id
+
+        fallback_id = adapter.send_message(
+            EmailMessageRequest(
+                recipients=["owner@clinic.test"], subject="x", body="body"
+            )
+        )
+        assert (
+            captured["message"]["From"]
+            == "MedizinHub HMS Reports <reports@medizinhub.local>"
+        )
+        assert fallback_id.startswith("<")

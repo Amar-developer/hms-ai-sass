@@ -1,11 +1,13 @@
 from datetime import date, time
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 
 from app.core.access_control import current_doctor_practitioner_id
 from app.core.auth import require_any_permission
 from app.core.database import get_session
+from app.core.list_filters import ListFilterOption, parse_list_filters, parse_list_sort
+from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.core.validation import BranchId, DepartmentId, PractitionerId
 from app.modules.identity import permissions
@@ -39,7 +41,7 @@ def create_practitioner(
     payload: PractitionerCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(
+    current_user: User = Depends(
         require_any_permission(
             permissions.PRACTITIONERS_MANAGE,
             permissions.PRACTITIONERS_CREATE,
@@ -47,7 +49,7 @@ def create_practitioner(
     ),
 ) -> PractitionerRead:
     return practitioner_service.create_practitioner(
-        session, tenant_id=tenant_id, payload=payload
+        session, tenant_id=tenant_id, payload=payload, actor=current_user
     )
 
 
@@ -85,6 +87,67 @@ def list_practitioners(
     )
 
 
+@router.get("/page", response_model=Page[PractitionerRead])
+def list_practitioners_page(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: BranchId | None = None,
+    department_id: DepartmentId | None = None,
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_READ,
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_CREATE,
+            permissions.APPOINTMENTS_READ,
+            permissions.SCHEDULING_MANAGE,
+            permissions.SCHEDULING_CREATE,
+            permissions.SCHEDULING_READ,
+            permissions.SCHEDULING_EDIT,
+        )
+    ),
+) -> Page[PractitionerRead]:
+    doctor_practitioner_id = current_doctor_practitioner_id(
+        session, tenant_id, current_user
+    )
+    return practitioner_service.list_practitioner_page(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        department_id=department_id,
+        doctor_practitioner_id=doctor_practitioner_id,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/filter-options", response_model=dict[str, list[ListFilterOption]])
+def list_practitioner_filter_options(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_READ,
+            permissions.SCHEDULING_MANAGE,
+            permissions.SCHEDULING_READ,
+        )
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return practitioner_service.list_practitioner_filter_options(
+        session,
+        tenant_id=tenant_id,
+    )
+
+
 @router.get("/schedules", response_model=list[PractitionerScheduleRead])
 def list_all_practitioner_schedules(
     tenant_id: str = Depends(require_tenant_id),
@@ -109,20 +172,81 @@ def list_all_practitioner_schedules(
     )
 
 
+@router.get("/schedules/page", response_model=Page[PractitionerScheduleRead])
+def list_practitioner_schedule_page(
+    tenant_id: str = Depends(require_tenant_id),
+    practitioner_id: PractitionerId | None = None,
+    branch_id: BranchId | None = None,
+    department_id: DepartmentId | None = None,
+    is_active: bool | None = None,
+    weekday: int | None = Query(default=None, ge=0, le=6),
+    q: str | None = Query(default=None),
+    filters: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.SCHEDULING_MANAGE,
+            permissions.SCHEDULING_READ,
+            permissions.SCHEDULING_EDIT,
+        )
+    ),
+) -> Page[PractitionerScheduleRead]:
+    return practitioner_service.list_schedule_page(
+        session,
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+        department_id=department_id,
+        is_active=is_active,
+        weekday=weekday,
+        q=q,
+        list_filters=parse_list_filters(filters),
+        list_sort=parse_list_sort(sort),
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/schedules/filter-options", response_model=dict[str, list[ListFilterOption]]
+)
+def list_practitioner_schedule_filter_options(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.SCHEDULING_MANAGE,
+            permissions.SCHEDULING_READ,
+        )
+    ),
+) -> dict[str, list[ListFilterOption]]:
+    return practitioner_service.list_schedule_filter_options(
+        session,
+        tenant_id=tenant_id,
+    )
+
+
 @router.patch("/schedules/{schedule_id}", response_model=PractitionerScheduleRead)
 def update_practitioner_schedule(
     schedule_id: str,
     payload: PractitionerScheduleUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(
+    current_user: User = Depends(
         require_any_permission(
             permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_EDIT
         )
     ),
 ) -> PractitionerScheduleRead:
     return practitioner_service.update_schedule(
-        session, tenant_id=tenant_id, schedule_id=schedule_id, payload=payload
+        session,
+        tenant_id=tenant_id,
+        schedule_id=schedule_id,
+        payload=payload,
+        actor=current_user,
     )
 
 
@@ -167,7 +291,7 @@ def update_practitioner(
     payload: PractitionerUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(
+    current_user: User = Depends(
         require_any_permission(
             permissions.PRACTITIONERS_MANAGE, permissions.PRACTITIONERS_EDIT
         )
@@ -178,6 +302,7 @@ def update_practitioner(
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
         payload=payload,
+        actor=current_user,
     )
 
 
@@ -210,7 +335,7 @@ def create_practitioner_schedule(
     payload: PractitionerScheduleCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(
+    current_user: User = Depends(
         require_any_permission(
             permissions.SCHEDULING_MANAGE,
             permissions.SCHEDULING_CREATE,
@@ -222,6 +347,7 @@ def create_practitioner_schedule(
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
         payload=payload,
+        actor=current_user,
     )
 
 
@@ -253,7 +379,7 @@ def create_practitioner_leave(
     payload: PractitionerLeaveCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(
+    current_user: User = Depends(
         require_any_permission(
             permissions.PRACTITIONERS_MANAGE, permissions.SCHEDULING_CREATE
         )
@@ -264,6 +390,7 @@ def create_practitioner_leave(
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
         payload=payload,
+        actor=current_user,
     )
 
 
@@ -293,7 +420,7 @@ def create_practitioner_room_assignment(
     payload: PractitionerRoomAssignmentCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(
+    current_user: User = Depends(
         require_any_permission(
             permissions.PRACTITIONERS_MANAGE, permissions.SCHEDULING_CREATE
         )
@@ -304,6 +431,7 @@ def create_practitioner_room_assignment(
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
         payload=payload,
+        actor=current_user,
     )
 
 

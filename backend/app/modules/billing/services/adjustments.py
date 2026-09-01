@@ -199,6 +199,29 @@ def execute_billing_adjustment(
             actor_user_id=actor_user_id,
         )
         sync_invoice_source_after_reversal(session, invoice)
+        record_audit_event(
+            session,
+            tenant_id=invoice.tenant_id,
+            branch_id=invoice.branch_id,
+            actor_user_id=actor_user_id,
+            action="invoice.cancelled",
+            resource_type="invoice",
+            resource_id=invoice.id,
+            purpose="billing_cancellation",
+            metadata_json=json.dumps({"reason": reason}),
+            changes=diff_changes(
+                {
+                    "status": old_status,
+                    "paid_amount": old_paid,
+                    "balance_amount": old_balance,
+                },
+                {
+                    "status": invoice.status,
+                    "paid_amount": invoice.paid_amount,
+                    "balance_amount": invoice.balance_amount,
+                },
+            ),
+        )
         return invoice
 
     if request_type == BillingAdjustmentType.DISCOUNT:
@@ -245,6 +268,27 @@ def execute_billing_adjustment(
             reason=reason,
             actor_user_id=actor_user_id,
             related_credit_note_id=credit.id,
+        )
+        record_audit_event(
+            session,
+            tenant_id=invoice.tenant_id,
+            branch_id=invoice.branch_id,
+            actor_user_id=actor_user_id,
+            action="invoice.discount_applied",
+            resource_type="invoice",
+            resource_id=invoice.id,
+            purpose="billing_discount",
+            metadata_json=json.dumps(
+                {"amount": actual_reduction or discount_amount, "reason": reason},
+                default=str,
+            ),
+            changes=diff_changes(
+                {"total_amount": old_total, "balance_amount": old_balance},
+                {
+                    "total_amount": invoice.total_amount,
+                    "balance_amount": invoice.balance_amount,
+                },
+            ),
         )
         return invoice
 
@@ -302,8 +346,8 @@ def execute_billing_adjustment(
         action="payment.refunded"
         if request_type == BillingAdjustmentType.FULL_REFUND
         else "payment.partially_refunded",
-        resource_type="credit_note",
-        resource_id=credit.id,
+        resource_type="invoice",
+        resource_id=invoice.id,
         purpose="refund",
         metadata_json=json.dumps(
             {

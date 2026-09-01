@@ -22,7 +22,7 @@ test.describe("tenant administrator navigation and profile", () => {
       page.locator("aside").getByRole("button", { name: "Error Logs" }),
     ).toHaveCount(0);
 
-    await page.getByPlaceholder("Search a modules").fill("Error Logs");
+    await page.getByPlaceholder("Search or type a command (Ctrl + G)").fill("Error Logs");
     await expect(
       page.getByRole("button", { name: "Error Logs", exact: true }),
     ).toBeVisible();
@@ -53,7 +53,7 @@ test.describe("tenant administrator navigation and profile", () => {
   }) => {
     await page.goto("/");
     for (const section of ["Users", "Roles", "Medical Departments"]) {
-      await page.getByPlaceholder("Search a modules").fill(section);
+      await page.getByPlaceholder("Search or type a command (Ctrl + G)").fill(section);
       await expect(
         page
           .getByRole("button", { name: section, exact: true })
@@ -80,7 +80,7 @@ test.describe("restricted navigation", () => {
     ).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Create Patient" })).toHaveCount(0);
 
-    await page.getByPlaceholder("Search a modules").fill("Error Logs");
+    await page.getByPlaceholder("Search or type a command (Ctrl + G)").fill("Error Logs");
     await page.getByRole("button", { name: "Error Logs", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Error Logs" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Mark Resolved" })).toHaveCount(0);
@@ -141,7 +141,7 @@ test.describe("super administrator workspace", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.getByPlaceholder("Search a modules").fill("Tenants");
+    await page.getByPlaceholder("Search or type a command (Ctrl + G)").fill("Tenants");
     await expect(
       page.getByRole("button", { name: "Tenants", exact: true }).last(),
     ).toBeVisible();

@@ -213,13 +213,14 @@ export function usePharmacyActions(
     }
   }
 
-  async function createFromConsultation(a: any) {
+  async function createFromConsultation(a: any, pricePayload?: any) {
     if (!session) return false;
     setBusy(a.consultationId);
     setMessage("");
     try {
       await createPharmacyIssueFromConsultation(session, a.consultationId, {
-        amount: 0,
+        amount: Number(pricePayload?.amount || 0),
+        items: Array.isArray(pricePayload?.items) ? pricePayload.items : [],
         issued_by_user_id: session.user?.id,
       });
       await load();

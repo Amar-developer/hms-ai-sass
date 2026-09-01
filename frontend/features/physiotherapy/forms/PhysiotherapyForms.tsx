@@ -37,7 +37,7 @@ export function CaseForm({
   }));
 
   return (
-    <Card>
+    <Card className="bg-white p-3">
       <div>
         <h4 className="text-xl font-bold">{title}</h4>
         <p className="table-data text-slate-500">{subtitle}</p>
@@ -110,7 +110,7 @@ export function CaseForm({
           >
             Cancel
           </button>
-          <Button disabled={busy}>
+          <Button disabled={busy} className='save-button'>
             <ButtonLoader loading={busy}>
               {busy ? "Creating..." : "Create OP Physio Case"}
             </ButtonLoader>
@@ -146,10 +146,10 @@ export function IPCaseForm({
   }));
 
   return (
-    <Card>
+    <Card className="bg-white p-3">
       <div>
-        <h4 className="text-xl lg:text-xl font-bold">IP Bedside Physiotherapy Case</h4>
-        <p className="table-data text-slate-500">
+        <h4 className="card-title font-bold">IP Bedside Physiotherapy Case</h4>
+        <p className="card-desc text-slate-500">
           Use this for post-surgical rehab, bedridden patients, acute injury
           management, CPM, gait training, tilt table, and EMS workflows.
         </p>
@@ -210,7 +210,7 @@ export function IPCaseForm({
           >
             Cancel
           </button>
-          <Button disabled={busy}>
+          <Button disabled={busy} className='save-button'>
             <ButtonLoader loading={busy}>
               {busy ? "Creating..." : "Create IP Physio Case"}
             </ButtonLoader>

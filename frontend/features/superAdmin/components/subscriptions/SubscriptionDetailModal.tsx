@@ -14,11 +14,11 @@ export function SubscriptionDetailModal({
   const tenant = subscription.tenant || {};
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-3xl">
+      <Card className="w-full max-w-3xl p-3 bg-white overflow-y-auto scrollbar-hidden max-h-[90vh]">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
           <div>
-            <h3 className="text-lg font-bold">Subscription Details</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="card-title font-bold">Subscription Details</h3>
+            <p className="card-desc text-slate-500">
               {tenant.name ||
                 subscription.tenant_name ||
                 subscription.tenant_id}
@@ -27,7 +27,7 @@ export function SubscriptionDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+            className="close-button"
           >
             Close
           </button>
@@ -64,13 +64,13 @@ export function SubscriptionDetailModal({
           </div>
         )}
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button type="button" onClick={onUpgrade}>
+          <Button type="button" className='save-button' onClick={onUpgrade}>
             Upgrade
           </Button>
           <button
             type="button"
             onClick={onCredits}
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+            className="close-button"
           >
             Credits
           </button>

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
@@ -86,6 +86,7 @@ class TaxRule(SQLModel, table=True):
     service_scope: str = Field(default="all", index=True, max_length=40)
     is_active: bool = Field(default=True, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
 
 
@@ -331,6 +332,7 @@ class DiscountOffer(SQLModel, table=True):
     valid_until: datetime | None = Field(default=None, index=True)
     is_active: bool = Field(default=True, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
 
 
@@ -366,5 +368,34 @@ class DoctorSettlement(SQLModel, table=True):
         default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
     )
     status: SettlementStatus = Field(default=SettlementStatus.FINALIZED, index=True)
+    period_start: date | None = Field(default=None, index=True)
+    period_end: date | None = Field(default=None, index=True)
+    payment_method: str | None = Field(default=None, max_length=40)
+    payment_reference: str | None = Field(default=None, max_length=120)
+    paid_at: datetime | None = Field(default=None, index=True)
+    finalized_by_user_id: str | None = Field(default=None, index=True)
+    finalized_at: datetime = Field(default_factory=now_utc, index=True)
+
+
+class VendorSettlement(SQLModel, table=True):
+    """Auditable vendor payout recorded separately from estimated item cost."""
+
+    id: str = Field(default_factory=lambda: new_id("vendsettle"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str | None = Field(default=None, index=True, foreign_key="branch.id")
+    supplier_id: str = Field(index=True, foreign_key="pharmacysupplier.id")
+    source_type: str = Field(default="all", index=True, max_length=40)
+    period_start: date = Field(index=True)
+    period_end: date = Field(index=True)
+    gross_payable: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    adjustment_amount: Decimal = Field(default=Decimal("0"), sa_type=Numeric(14, 2))
+    settlement_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
+    status: str = Field(default="finalized", index=True, max_length=30)
+    payment_method: str | None = Field(default=None, max_length=40)
+    payment_reference: str | None = Field(default=None, max_length=120)
+    paid_at: datetime | None = Field(default=None, index=True)
+    notes: str | None = Field(default=None, max_length=500)
     finalized_by_user_id: str | None = Field(default=None, index=True)
     finalized_at: datetime = Field(default_factory=now_utc, index=True)

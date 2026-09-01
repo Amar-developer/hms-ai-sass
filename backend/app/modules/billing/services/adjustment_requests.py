@@ -91,8 +91,8 @@ def create_billing_adjustment_request(
         branch_id=invoice.branch_id,
         actor_user_id=actor.id,
         action="billing.adjustment_request.created",
-        resource_type="billing_adjustment_request",
-        resource_id=row.id,
+        resource_type="invoice",
+        resource_id=invoice.id,
         purpose="billing_adjustment",
         metadata_json=json.dumps(
             {
@@ -148,8 +148,8 @@ def approve_billing_adjustment_request(
         branch_id=row.branch_id,
         actor_user_id=actor.id,
         action="billing.adjustment_request.approved",
-        resource_type="billing_adjustment_request",
-        resource_id=row.id,
+        resource_type="invoice",
+        resource_id=row.invoice_id,
         purpose="billing_adjustment",
         metadata_json=json.dumps(
             {
@@ -211,8 +211,8 @@ def reject_billing_adjustment_request(
         branch_id=row.branch_id,
         actor_user_id=actor.id,
         action="billing.adjustment_request.rejected",
-        resource_type="billing_adjustment_request",
-        resource_id=row.id,
+        resource_type="invoice",
+        resource_id=row.invoice_id,
         purpose="billing_adjustment",
         metadata_json=json.dumps(
             {"invoice_id": row.invoice_id, "reason": payload.reason}
@@ -378,13 +378,21 @@ def cancel_invoice(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Invoice already cancelled"
         )
+    if invoice.status in {InvoiceStatus.REFUNDED, InvoiceStatus.PARTIALLY_REFUNDED}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Refunded invoices are already closed and cannot be cancelled",
+        )
     if money_value(invoice.paid_amount) > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Paid invoices cannot be cancelled; refund payments first",
         )
-    cancel_invoice_fields = ("status", "paid_amount", "balance_amount")
-    before = {key: getattr(invoice, key) for key in cancel_invoice_fields}
+    # execute_adjustment (billing.services.adjustments.execute_billing_adjustment)
+    # records the "invoice.cancelled" audit event itself, against the invoice
+    # resource — so every entry point (this direct cancel, and the
+    # request/approve/execute flow) gets one consistent trail instead of a
+    # duplicate here.
     invoice = execute_adjustment(
         session,
         invoice=invoice,
@@ -392,20 +400,6 @@ def cancel_invoice(
         amount=0,
         reason=payload.reason,
         actor_user_id=payload.actor_user_id or actor.id,
-    )
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=invoice.branch_id,
-        actor_user_id=payload.actor_user_id or actor.id,
-        action="invoice.cancelled",
-        resource_type="invoice",
-        resource_id=invoice.id,
-        purpose="billing_cancellation",
-        metadata_json=json.dumps({"reason": payload.reason}),
-        changes=diff_changes(
-            before, {key: getattr(invoice, key) for key in cancel_invoice_fields}
-        ),
     )
     return read_invoice_detail_full(session, invoice)
 

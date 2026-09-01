@@ -2,6 +2,9 @@ from datetime import date
 import json
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from app.modules.appointments.models import Appointment, AppointmentStatus
 
 
 def setup_booking(client: TestClient) -> dict:
@@ -119,6 +122,14 @@ def test_structured_consultation_rows_templates_and_signed_immutability(
             "content": {"complaints": ["Fever"], "diagnoses": ["Viral fever"]},
         },
     )
+    updated_template = client.patch(
+        f"/api/v1/consultations/clinical-templates/{template.json()['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "name": "Updated Fever Template",
+            "content": {"complaints": ["High fever"], "diagnoses": ["Viral fever"]},
+        },
+    )
     detail = client.get(
         f"/api/v1/consultations/{consultation.json()['id']}",
         headers={"X-Tenant-ID": tenant_id},
@@ -140,8 +151,24 @@ def test_structured_consultation_rows_templates_and_signed_immutability(
     assert detail.json()["medicines"][0]["medicine_name"] == "Paracetamol"
     assert template.status_code == 201
     assert template.json()["content"]["diagnoses"] == ["Viral fever"]
+    assert updated_template.status_code == 200
+    assert updated_template.json()["name"] == "Updated Fever Template"
+    assert updated_template.json()["content"]["complaints"] == ["High fever"]
     assert signed.json()["status"] == "signed"
     assert locked_update.status_code == 409
+
+    deleted_template = client.delete(
+        f"/api/v1/consultations/clinical-templates/{template.json()['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+    listed_templates = client.get(
+        "/api/v1/consultations/clinical-templates?department_id=general",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+    assert deleted_template.status_code == 200
+    assert deleted_template.json()["is_active"] is False
+    assert listed_templates.status_code == 200
+    assert template.json()["id"] not in {row["id"] for row in listed_templates.json()}
 
 
 def test_sign_requires_clinical_content(client: TestClient):
@@ -257,6 +284,95 @@ def test_duplicate_consultation_for_appointment_is_rejected(client: TestClient):
     assert duplicate.status_code == 409
     assert (
         duplicate.json()["detail"] == "Consultation already exists for this appointment"
+    )
+
+
+def test_clinical_templates_are_department_scoped_not_doctor_scoped(
+    client: TestClient,
+):
+    data = setup_booking(client)
+    tenant_id = data["tenant"]["id"]
+
+    template = client.post(
+        "/api/v1/consultations/clinical-templates",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "department_id": "general",
+            "name": "General fever care",
+            "content": {
+                "doctor_id": "doctor_demo",
+                "complaints": ["Fever"],
+                "diagnoses": ["Viral fever"],
+            },
+        },
+    )
+
+    assert template.status_code == 201
+    assert template.json()["department_id"] == "general"
+    assert "doctor_id" not in template.json()["content"]
+
+
+def test_cancelled_appointment_cannot_start_consultation(client: TestClient):
+    data = setup_booking(client)
+    tenant_id = data["tenant"]["id"]
+    appointment_id = data["booking"]["appointment"]["id"]
+    entry_id = data["booking"]["queue_entry"]["id"]
+    cancelled = client.post(
+        f"/api/v1/queue/{entry_id}/cancel",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"reason": "Patient cancelled"},
+    )
+
+    response = client.post(
+        "/api/v1/consultations",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "appointment_id": appointment_id,
+            "chief_complaint": "Fever",
+            "diagnosis": "Viral fever",
+            "clinical_notes": "Hydration advised",
+        },
+    )
+
+    assert cancelled.status_code == 200
+    assert response.status_code == 409
+    assert (
+        response.json()["detail"]
+        == "Cancelled or no-show appointments cannot be used for consultation"
+    )
+
+
+def test_cancelled_appointment_locks_existing_draft_consultation(
+    client: TestClient, test_engine
+):
+    data = setup_booking(client)
+    tenant_id = data["tenant"]["id"]
+    appointment_id = data["booking"]["appointment"]["id"]
+    consultation = create_consultation(client, tenant_id, appointment_id)
+
+    with Session(test_engine) as session:
+        appointment = session.get(Appointment, appointment_id)
+        assert appointment is not None
+        appointment.status = AppointmentStatus.CANCELLED
+        session.add(appointment)
+        session.commit()
+
+    updated = client.patch(
+        f"/api/v1/consultations/{consultation['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"diagnosis": "Should not save"},
+    )
+    signed = client.post(
+        f"/api/v1/consultations/{consultation['id']}/sign",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"signed_by_user_id": "doctor_demo"},
+    )
+
+    assert updated.status_code == 409
+    assert signed.status_code == 409
+    assert (
+        updated.json()["detail"]
+        == "Cancelled or no-show appointments cannot be used for consultation"
     )
 
 

@@ -79,7 +79,10 @@ def book_appointment(client, tenant_id, branch_id, patient_id):
     return response.json()
 
 
-def test_appointment_booked_auto_queues_whatsapp_and_sms(client):
+def test_appointment_booked_auto_queues_whatsapp_fallback_only(client):
+    """SMS has no free-text fallback (Phase 4): without a DLT-approved
+    template configured, booking queues only the WhatsApp free-text
+    fallback. See test_sms_p0_triggers.py for the templated SMS path."""
     tenant, branch = setup_notify_tenant(
         client, modules=["whatsapp", "sms"], providers=["whatsapp", "sms"]
     )
@@ -93,9 +96,8 @@ def test_appointment_booked_auto_queues_whatsapp_and_sms(client):
     assert booking["queue_entry"]["token_number"] == "N-001"
     assert [event["event_type"] for event in notifications] == [
         "appointment_reminder",
-        "appointment_reminder",
     ]
-    assert {event["provider"] for event in notifications} == {"whatsapp", "sms"}
+    assert {event["provider"] for event in notifications} == {"whatsapp"}
 
 
 def test_appointment_trigger_skips_when_provider_not_configured(client):
@@ -181,8 +183,11 @@ def test_invoice_generation_and_partial_payment_auto_queue_payment_pending(clien
         event for event in notifications if event["event_type"] == "payment_reminder"
     ]
 
-    assert len(payment_events) == 4
-    assert {event["provider"] for event in payment_events} == {"whatsapp", "sms"}
+    # SMS has no free-text fallback (Phase 4): without a DLT-approved
+    # template configured, only the WhatsApp free-text fallback fires, from
+    # both trigger sites (invoice creation and payment collection).
+    assert len(payment_events) == 2
+    assert {event["provider"] for event in payment_events} == {"whatsapp"}
 
 
 def test_sign_consultation_auto_queues_follow_up_due_when_advice_present(client):

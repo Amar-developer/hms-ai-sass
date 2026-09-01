@@ -9,11 +9,10 @@ import {
   ClipboardCheck,
   LayoutGrid,
   LockKeyhole,
-  Pencil,
   ShieldCheck,
 } from "lucide-react";
 import { useRef, useState } from "react";
-import { Badge, Button, Card, Field, Input, Select } from "@/app/components/common/ui";
+import { Badge, Button, Field, Input, Select } from "@/app/components/common/ui";
 import { tenantTypes } from "../../constants";
 import {
   readTenantOnboardingDraft,
@@ -32,10 +31,14 @@ export function CreateTenantForm({
   templates,
   busy,
   createTenant,
+  back,
 }: any) {
   const [branches, setBranches] = useState([{ id: Date.now() }]);
   const [step, setStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [attemptedSteps, setAttemptedSteps] = useState<Set<number>>(
     () => new Set(),
   );
   const [, setReviewTick] = useState(0);
@@ -105,10 +108,6 @@ export function CreateTenantForm({
     step === steps.length - 1 && setupStepsCompleted && !busy;
   const currentStepValid =
     step >= validSteps.length ? allSetupValid : validSteps[step];
-  const completedCount = validSteps.filter(
-    (valid, index) => valid && completedSteps.has(index),
-  ).length;
-
   function refreshDraft() {
     setReviewTick((value) => value + 1);
   }
@@ -122,7 +121,10 @@ export function CreateTenantForm({
     if (isStepUnlocked(index)) setStep(index);
   }
   function nextStep() {
-    if (!currentStepValid) return;
+    if (!currentStepValid) {
+      setAttemptedSteps((previous) => new Set(previous).add(step));
+      return;
+    }
     if (step < validSteps.length) {
       setCompletedSteps((previous) => {
         const next = new Set(previous);
@@ -160,50 +162,44 @@ export function CreateTenantForm({
   const CurrentStepIcon = currentStep.icon;
 
   return (
-    <Card className="overflow-hidden border-slate-200 bg-white p-0 shadow-sm">
-      <div className="border-b border-slate-200 bg-white px-5 py-4 lg:px-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="blue" className="rounded-md px-2 py-1 text-[10px] uppercase">
-                Tenant Setup
-              </Badge>
-              <span className="text-xs font-semibold text-slate-500">
-                Billing workspace provisioning
-              </span>
-            </div>
-            <h3 className="mt-2 text-lg font-black text-slate-950 lg:text-xl">
-              New Tenant Onboarding
-            </h3>
-            <p className="mt-1 text-xs text-slate-500 lg:text-sm">
-              Configure plan, branches, templates, and the first billing admin account.
-            </p>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[520px]">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="text-[10px] font-bold uppercase text-slate-500">Progress</p>
-              <p className="mt-1 text-sm font-black text-slate-950">{completedCount}/5 complete</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="text-[10px] font-bold uppercase text-slate-500">Branches</p>
-              <p className="mt-1 text-sm font-black text-slate-950">{branches.length} configured</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="text-[10px] font-bold uppercase text-slate-500">Plan</p>
-              <p className="mt-1 truncate text-sm font-black text-slate-950">{draft.planName || "Pending"}</p>
+    <div className="mt-3 space-y-3">
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-emerald-50 text-brand">
+              <Building2 size={19} />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-black tracking-tight text-slate-950">
+                  New Tenant Onboarding
+                </h2>
+                <Badge tone="green" className="normal-label">
+                  Step {step + 1} of {steps.length}
+                </Badge>
+              </div>
+              <p className="text-xs font-medium text-slate-500">
+                Create the tenant workspace, plan, branches, defaults, and first administrator.
+              </p>
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-lg bg-slate-100 px-3 py-2 font-bold text-slate-600">
+              {branches.length} {branches.length === 1 ? "branch" : "branches"}
+            </span>
+            <span className="max-w-[180px] truncate rounded-lg bg-emerald-50 px-3 py-2 font-bold text-emerald-700">
+              {draft.planName || "Plan pending"}
+            </span>
+            <button type="button" onClick={back} className="close-button h-9">
+              Back to Tenants
+            </button>
+          </div>
         </div>
-        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-blue-600 transition-all duration-300"
-            style={{ width: `${(completedCount / 5) * 100}%` }}
-          />
-        </div>
-      </div>
-      <div className="grid lg:grid-cols-[245px_minmax(0,1fr)]">
-        <aside className="border-b border-slate-200 bg-slate-50 p-3 lg:border-b-0 lg:border-r lg:p-4">
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-1">
+
+        <nav
+          className="scrollbar-hidden flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-1.5"
+          aria-label="Tenant onboarding steps"
+        >
           {steps.map(({ label, shortLabel, icon: StepIcon }, index) => {
             const stepValid =
               index < validSteps.length ? validSteps[index] : allSetupValid;
@@ -218,74 +214,54 @@ export function CreateTenantForm({
                 type="button"
                 onClick={() => goToStep(index)}
                 disabled={locked}
-                className={`group flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition disabled:cursor-not-allowed ${
+                aria-current={step === index ? "step" : undefined}
+                className={`inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-xs font-bold transition-colors disabled:cursor-not-allowed ${
                   step === index
-                    ? "border-blue-300 bg-white text-blue-950 shadow-sm"
+                    ? "bg-brand text-brand-fg"
                     : complete
-                      ? "border-emerald-200 bg-white text-emerald-900 hover:border-emerald-300"
+                      ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                       : locked
-                        ? "border-transparent bg-slate-100 text-slate-400"
-                        : "border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white"
+                        ? "text-slate-400"
+                        : "text-slate-600 hover:bg-white hover:text-slate-900"
                 }`}
               >
-                <span
-                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
-                    step === index
-                      ? "bg-blue-600 text-white"
-                      : complete
-                        ? "bg-emerald-600 text-white"
-                        : "bg-white text-slate-500"
-                  }`}
-                >
-                  {locked ? (
-                    <LockKeyhole size={14} />
-                  ) : complete ? (
-                    <Check size={16} />
-                  ) : (
-                    <StepIcon size={16} />
-                  )}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Step {index + 1}
-                  </span>
-                  <span className="hidden truncate text-xs font-bold lg:block">
-                    {label}
-                  </span>
-                  <span className="block truncate text-[10px] font-bold sm:text-xs lg:hidden">
-                    {shortLabel}
-                  </span>
-                </span>
-                {complete && index !== step && (
-                  <Pencil size={12} className="ml-auto hidden lg:block" />
+                {locked ? (
+                  <LockKeyhole size={14} />
+                ) : complete ? (
+                  <Check size={15} />
+                ) : (
+                  <StepIcon size={15} />
                 )}
+                <span className="hidden sm:inline">{label}</span>
+                <span className="sm:hidden">{shortLabel}</span>
               </button>
             );
           })}
-          </div>
-          <div className="mt-4 hidden rounded-lg border border-slate-200 bg-white p-3 lg:block">
-            <p className="text-xs font-bold text-slate-950">Provisioning rule</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
-              Tenant access follows the selected billing plan. The first admin receives tenant-wide access.
-            </p>
-          </div>
-        </aside>
+        </nav>
+        <div className="h-1 bg-slate-100">
+          <div
+            className="h-full bg-brand transition-all duration-300"
+            style={{ width: `${(step / (steps.length - 1)) * 100}%` }}
+          />
+        </div>
+      </section>
+
       <form
         ref={formRef}
         onSubmit={submitWizard}
         onChange={refreshDraft}
         onInput={refreshDraft}
         noValidate
-        className="min-w-0 bg-white"
+        className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
       >
         <input type="hidden" name="branchCount" value={branches.length} />
-        <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-4 lg:px-6">
+        <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-3 lg:px-5">
           <div className="flex items-start gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-blue-100 bg-white text-blue-700">
-              <CurrentStepIcon size={20} />
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-emerald-100 bg-white text-brand">
+              <CurrentStepIcon size={18} />
             </span>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand">
                 Step {step + 1} of {steps.length}
               </p>
               <h4 className="mt-1 text-lg font-black text-slate-950">
@@ -294,7 +270,7 @@ export function CreateTenantForm({
               <p className="mt-1 text-xs text-slate-500 ">
                 {stepHelp[step]}
               </p>
-              {!currentStepValid && step < 5 && (
+              {!currentStepValid && step < 5 && attemptedSteps.has(step) && (
                 <p className="mt-2 text-xs font-semibold text-red-600">
                   {validationMessages[step]}
                 </p>
@@ -302,7 +278,7 @@ export function CreateTenantForm({
             </div>
           </div>
         </div>
-        <div className="min-h-[430px] px-5 py-5 lg:px-6">
+        <div className="min-h-[330px] px-4 py-4 lg:px-5">
         <div className={step === 0 ? "grid gap-4 md:grid-cols-3" : "hidden"}>
           <FormField label="Tenant Name" required>
             <Input
@@ -577,7 +553,7 @@ export function CreateTenantForm({
             steps={steps.map((item) => item.label)}
             onEdit={setStep}
           />
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-xs lg:text-sm font-semibold text-blue-700">
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-xs font-semibold text-emerald-700 lg:text-sm">
             Submitting this wizard creates the tenant, assigns the selected
             catalog plan, copies selected defaults, creates the tenant admin
             user, and returns to the Tenants listing with the latest tenant
@@ -599,8 +575,8 @@ export function CreateTenantForm({
             <button
               type="button"
               onClick={nextStep}
-              disabled={step === steps.length - 1 || !currentStepValid}
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+              disabled={step === steps.length - 1}
+              className="primary-action inline-flex h-10 items-center gap-2 px-4 text-xs disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
             >
               Save & Continue
               <ChevronRight size={15} />
@@ -608,7 +584,7 @@ export function CreateTenantForm({
           </div>
           <Button
             disabled={!canComplete}
-            className="rounded-lg px-5 py-2.5 text-xs lg:text-sm"
+            className="save-button h-10 px-5 text-xs lg:text-sm"
           >
             <ButtonLoader loading={busy}>
               {busy ? "Onboarding..." : "Complete Onboarding"}
@@ -616,7 +592,6 @@ export function CreateTenantForm({
           </Button>
         </div>
       </form>
-      </div>
-    </Card>
+    </div>
   );
 }

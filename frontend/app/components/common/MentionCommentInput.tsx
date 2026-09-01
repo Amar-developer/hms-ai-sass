@@ -161,7 +161,7 @@ export function MentionCommentInput({
         aria-autocomplete="list"
         aria-expanded={showMenu}
         rows={2}
-        className="min-h-[76px] w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+        className="max-h-[50px] w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
       />
 
       {showMenu && (

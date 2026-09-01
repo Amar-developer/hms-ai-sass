@@ -7,30 +7,48 @@ from app.modules.billing.repositories.read_repository import BillingReadReposito
 from app.modules.billing.services.money import ZERO, money_value
 
 
+def calculate_invoice_payment_state(
+    *,
+    total_amount: Decimal,
+    collected_amount: Decimal,
+    refunded_amount: Decimal,
+) -> tuple[Decimal, Decimal, InvoiceStatus]:
+    collected = money_value(collected_amount)
+    refunded = money_value(refunded_amount)
+    effective_paid = max(collected - refunded, ZERO)
+    effective_total = max(money_value(total_amount), ZERO)
+    balance_amount = max(effective_total - effective_paid, ZERO)
+    if total_amount <= 0 or effective_total <= 0:
+        # Only an executed payment refund changes the invoice's financial
+        # status. Credit notes are informational audit documents.
+        status = InvoiceStatus.REFUNDED if refunded else InvoiceStatus.PAID
+    elif refunded >= collected and collected > 0:
+        status = InvoiceStatus.REFUNDED
+    elif refunded > 0 and effective_paid < effective_total:
+        status = InvoiceStatus.PARTIALLY_REFUNDED
+    elif balance_amount <= 0:
+        status = InvoiceStatus.PAID
+    elif effective_paid <= 0:
+        status = InvoiceStatus.ISSUED
+    elif effective_paid < effective_total:
+        status = InvoiceStatus.PARTIALLY_PAID
+    else:
+        status = InvoiceStatus.PAID
+    return effective_paid, balance_amount, status
+
+
 def update_invoice_payment_status(session: Session, invoice: Invoice) -> Invoice:
     read_repo = BillingReadRepository(session)
     collected = read_repo.payment_amount_total(invoice)
     refunded = read_repo.refunded_amount_total(invoice)
-    effective_paid = max(collected - refunded, ZERO)
-    effective_total = max(money_value(invoice.total_amount), ZERO)
-    invoice.paid_amount = effective_paid
-    invoice.balance_amount = max(effective_total - effective_paid, ZERO)
-    if invoice.total_amount <= 0 or effective_total <= 0:
-        # Only an executed payment refund changes the invoice's financial
-        # status. Credit notes are informational audit documents.
-        invoice.status = InvoiceStatus.REFUNDED if refunded else InvoiceStatus.PAID
-    elif refunded >= collected and collected > 0:
-        invoice.status = InvoiceStatus.REFUNDED
-    elif refunded > 0:
-        invoice.status = InvoiceStatus.PARTIALLY_REFUNDED
-    elif invoice.balance_amount <= 0:
-        invoice.status = InvoiceStatus.PAID
-    elif invoice.paid_amount <= 0:
-        invoice.status = InvoiceStatus.ISSUED
-    elif invoice.paid_amount < invoice.total_amount:
-        invoice.status = InvoiceStatus.PARTIALLY_PAID
-    else:
-        invoice.status = InvoiceStatus.PAID
+    paid_amount, balance_amount, invoice_status = calculate_invoice_payment_state(
+        total_amount=invoice.total_amount,
+        collected_amount=collected,
+        refunded_amount=refunded,
+    )
+    invoice.paid_amount = paid_amount
+    invoice.balance_amount = balance_amount
+    invoice.status = invoice_status
     session.add(invoice)
     session.commit()
     session.refresh(invoice)

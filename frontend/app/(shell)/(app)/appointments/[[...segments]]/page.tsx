@@ -1,21 +1,9 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
-import { useWorkspace } from "@/features/shell/WorkspaceContext";
-import { useShellChrome } from "@/features/shell/AppShell";
+import { redirect, useParams } from "next/navigation";
 
 export default function AppointmentsPage() {
-  const ctx = useWorkspace();
-  const { navigatePage } = useShellChrome();
   const params = useParams();
   const segments = (params?.segments as string[] | undefined) || [];
-  const mode = segments[0] === "new" ? "book" : "list";
-  return (
-    <AppointmentCalendarBooking
-      {...ctx}
-      setActive={navigatePage}
-      mode={mode}
-    />
-  );
+  redirect(segments[0] === "new" ? "/opd/new" : "/opd/appointments");
 }
