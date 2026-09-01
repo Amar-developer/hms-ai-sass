@@ -127,10 +127,10 @@ curl -X POST http://localhost:8000/api/v1/auth/bootstrap-super-admin \
 For a clean local development reset, delete all rows and recreate only the fresh SaaS setup:
 
 ```bash
-MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV python -m scripts.reset_demo_data
+MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV python -m database.reset_demo_data
 ```
 
-The reset script reads optional `MEDIZINHUB_SUPER_ADMIN_NAME` and `MEDIZINHUB_SUPER_ADMIN_EMAIL` values. `MEDIZINHUB_SUPER_ADMIN_PASSWORD` is optional only for local/development resets, where the script falls back to `ChangeMe@123`; production requires both `MEDIZINHUB_SUPER_ADMIN_PASSWORD` and `MEDIZINHUB_SUPER_ADMIN_CONFIRM=RESET_SUPER_ADMIN_PRODUCTION`. It does not create demo tenants, branches, patients, doctors, appointments, invoices, or staff users.
+The reset scripts live in `database/`. They do not hardcode a super admin email or password. They prompt for the email/password during interactive runs. For non-interactive Docker/CI usage, pass `MEDIZINHUB_SUPER_ADMIN_EMAIL` and `MEDIZINHUB_SUPER_ADMIN_PASSWORD` explicitly. `MEDIZINHUB_SUPER_ADMIN_NAME` remains optional. The reset script does not create demo tenants, branches, patients, doctors, appointments, invoices, or staff users.
 
 ## Useful API Groups
 

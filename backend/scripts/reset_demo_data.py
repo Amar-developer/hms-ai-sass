@@ -14,6 +14,7 @@ from scripts.reset_super_admin import (
     ensure_super_admin,
     ensure_super_admin_role,
     ensure_tenant_admin_template_role,
+    resolve_super_admin_credentials,
 )
 
 CONFIRM_VALUE = "RESET_MEDIZINHUB_DEV"
@@ -40,6 +41,7 @@ def main() -> None:
             "This command deletes all rows from the configured database and creates a fresh SaaS setup only.\n"
             f"Run with MEDIZINHUB_RESET_CONFIRM={CONFIRM_VALUE} only for a local/dev database."
         )
+    credentials = resolve_super_admin_credentials()
     init_db()
     reset_all_data()
     from sqlmodel import Session
@@ -47,7 +49,7 @@ def main() -> None:
     with Session(engine) as session:
         ensure_default_plans(session)
         tenant = ensure_primary_tenant(session)
-        user = ensure_super_admin(session, tenant)
+        user = ensure_super_admin(session, tenant, credentials)
         ensure_super_admin_role(session, tenant, user)
         ensure_tenant_admin_template_role(session, tenant, user)
         summary = {

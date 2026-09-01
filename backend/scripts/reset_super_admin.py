@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from getpass import getpass
 import os
+import sys
 
 from sqlmodel import Session, select
 
@@ -13,45 +16,58 @@ from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 
 
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
-DEFAULT_LOCAL_SUPER_ADMIN_EMAIL = "admin@medizinhub.local"
-DEFAULT_LOCAL_SUPER_ADMIN_PASSWORD = "ChangeMe@123"
-PRODUCTION_CONFIRM_VALUE = "RESET_SUPER_ADMIN_PRODUCTION"
+DEFAULT_SUPER_ADMIN_NAME = "Platform Super Admin"
+SUPER_ADMIN_NAME_ENV = "MEDIZINHUB_SUPER_ADMIN_NAME"
+SUPER_ADMIN_EMAIL_ENV = "MEDIZINHUB_SUPER_ADMIN_EMAIL"
+SUPER_ADMIN_PASSWORD_ENV = "MEDIZINHUB_SUPER_ADMIN_PASSWORD"
 
 
-def _is_production() -> bool:
-    return os.getenv("MEDIZINHUB_ENVIRONMENT", "local").strip().lower() in {
-        "production",
-        "prod",
-    }
+@dataclass(frozen=True)
+class SuperAdminCredentials:
+    name: str
+    email: str
+    password: str
 
 
-def _super_admin_name() -> str:
-    return os.getenv("MEDIZINHUB_SUPER_ADMIN_NAME", "Platform Super Admin").strip()
+def _read_env_value(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
 
 
-def _super_admin_email() -> str:
-    return os.getenv(
-        "MEDIZINHUB_SUPER_ADMIN_EMAIL", DEFAULT_LOCAL_SUPER_ADMIN_EMAIL
-    ).lower()
-
-
-def _super_admin_password() -> str:
-    password = os.getenv("MEDIZINHUB_SUPER_ADMIN_PASSWORD", "").strip()
-    if password:
-        return password
-    if _is_production():
-        raise RuntimeError("MEDIZINHUB_SUPER_ADMIN_PASSWORD is required in production")
-    return DEFAULT_LOCAL_SUPER_ADMIN_PASSWORD
-
-
-def _assert_reset_allowed() -> None:
-    if not _is_production():
-        return
-    if os.getenv("MEDIZINHUB_SUPER_ADMIN_CONFIRM") != PRODUCTION_CONFIRM_VALUE:
+def _prompt_required(label: str, *, secret: bool = False) -> str:
+    if not sys.stdin.isatty():
         raise SystemExit(
-            "Refusing to reset production super admin without "
-            f"MEDIZINHUB_SUPER_ADMIN_CONFIRM={PRODUCTION_CONFIRM_VALUE}"
+            f"{label} is required. Set the corresponding environment variable when "
+            "running this command non-interactively."
         )
+    value = getpass(f"{label}: ") if secret else input(f"{label}: ")
+    value = value.strip()
+    if not value:
+        raise SystemExit(f"{label} is required.")
+    return value
+
+
+def resolve_super_admin_credentials() -> SuperAdminCredentials:
+    name = _read_env_value(SUPER_ADMIN_NAME_ENV)
+    if name is None:
+        name = DEFAULT_SUPER_ADMIN_NAME
+
+    email = _read_env_value(SUPER_ADMIN_EMAIL_ENV)
+    if email is None:
+        email = _prompt_required("Super admin email")
+    email = email.lower()
+
+    password = _read_env_value(SUPER_ADMIN_PASSWORD_ENV)
+    if password is None:
+        password = _prompt_required("Super admin password", secret=True)
+        confirm_password = _prompt_required("Confirm super admin password", secret=True)
+        if password != confirm_password:
+            raise SystemExit("Super admin password confirmation does not match.")
+
+    return SuperAdminCredentials(name=name, email=email, password=password)
 
 
 def ensure_primary_tenant(session: Session) -> Tenant:
@@ -90,27 +106,26 @@ def ensure_permissions(session: Session) -> None:
     session.commit()
 
 
-def ensure_super_admin(session: Session, tenant: Tenant) -> User:
-    name = _super_admin_name()
-    email = _super_admin_email()
-    password = _super_admin_password()
-    user = session.exec(select(User).where(User.email == email)).first()
+def ensure_super_admin(
+    session: Session, tenant: Tenant, credentials: SuperAdminCredentials
+) -> User:
+    user = session.exec(select(User).where(User.email == credentials.email)).first()
     if not user:
         user = User(
             tenant_id=tenant.id,
             user_type="platform_admin",
-            name=name,
-            email=email,
-            password_hash=hash_password(password),
+            name=credentials.name,
+            email=credentials.email,
+            password_hash=hash_password(credentials.password),
             is_super_admin=True,
             is_active=True,
             must_change_password=False,
         )
     user.tenant_id = tenant.id
     user.user_type = "platform_admin"
-    user.name = name
-    user.email = email
-    user.password_hash = hash_password(password)
+    user.name = credentials.name
+    user.email = credentials.email
+    user.password_hash = hash_password(credentials.password)
     user.is_super_admin = True
     user.is_active = True
     user.must_change_password = False
@@ -207,19 +222,16 @@ def ensure_tenant_admin_template_role(
 
 
 def main() -> None:
-    _assert_reset_allowed()
+    credentials = resolve_super_admin_credentials()
     with Session(engine) as session:
         ensure_default_plans(session)
         tenant = ensure_primary_tenant(session)
-        user = ensure_super_admin(session, tenant)
+        user = ensure_super_admin(session, tenant, credentials)
         ensure_super_admin_role(session, tenant, user)
         ensure_tenant_admin_template_role(session, tenant, user)
         print("Super admin login repaired.")
-        print(f"Email: {user.email}")
-        if _is_production():
-            print("Password: read from MEDIZINHUB_SUPER_ADMIN_PASSWORD")
-        else:
-            print(f"Password: {_super_admin_password()}")
+        print(f"Email: {credentials.email}")
+        print("Password: <provided at runtime>")
         print(f"Tenant: {tenant.name} ({tenant.id})")
 
 
