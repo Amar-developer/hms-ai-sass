@@ -1,5 +1,7 @@
 from io import BytesIO
+import hashlib
 
+from PIL import Image
 from sqlmodel import Session, select
 
 from app.modules.audit.models import AuditEvent
@@ -7,13 +9,20 @@ from app.modules.settings.models import AdminSetting, SettingKey
 from app.modules.settings.service import decode_value
 from app.modules.tenants.models import Tenant
 
-# Uploads are validated by magic bytes (app/core/uploads.py), so fixtures must
-# carry a real PNG signature — the client-supplied content-type is not trusted.
-PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-
 
 def _png(payload: bytes = b"fake") -> BytesIO:
-    return BytesIO(PNG_SIGNATURE + payload)
+    """Return a decodable PNG; image optimization validates the full payload."""
+    digest = hashlib.sha256(payload).digest()
+    image = Image.new("RGB", (8, 8), tuple(digest[:3]))
+    output = BytesIO()
+    image.save(output, format="PNG")
+    output.seek(0)
+    return output
+
+
+def _assert_decodable_image(content: bytes) -> None:
+    with Image.open(BytesIO(content)) as image:
+        image.verify()
 
 
 def create_file_tenant_and_branch(client):
@@ -59,9 +68,9 @@ def test_file_upload_list_update_delete_and_audit(client, test_engine):
         f"/api/v1/files/{uploaded['id']}/download", headers=headers
     )
     assert static_file.status_code == 200
-    assert static_file.content == PNG_SIGNATURE + b"fake"
+    _assert_decodable_image(static_file.content)
     assert authorized_download.status_code == 200
-    assert authorized_download.content == PNG_SIGNATURE + b"fake"
+    assert authorized_download.content == static_file.content
     assert "patient-photo.png" in authorized_download.headers["content-disposition"]
 
     listed = client.get(
@@ -257,7 +266,7 @@ def test_file_registry_invoice_logo_attachment_updates_invoice_logo_setting(
     logo = client.get("/api/v1/files/invoice-logo", headers=headers)
     assert logo.status_code == 200
     assert logo.headers["content-type"] == "image/png"
-    assert logo.content.startswith(PNG_SIGNATURE)
+    _assert_decodable_image(logo.content)
 
     # A stale saved URL must fall back to the active registered invoice logo.
     with Session(test_engine) as db:
@@ -273,4 +282,4 @@ def test_file_registry_invoice_logo_attachment_updates_invoice_logo_setting(
 
     fallback_logo = client.get("/api/v1/files/invoice-logo", headers=headers)
     assert fallback_logo.status_code == 200
-    assert fallback_logo.content.startswith(PNG_SIGNATURE)
+    _assert_decodable_image(fallback_logo.content)

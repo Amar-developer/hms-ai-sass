@@ -18,6 +18,16 @@ class OptimizationResult:
     changed: bool
 
 
+def _original_extension(content_type: str) -> str:
+    return {
+        "application/pdf": ".pdf",
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+    }.get(content_type.lower(), "")
+
+
 def optimize_document(
     *, data: bytes, content_type: str, profile: OptimizationProfile
 ) -> OptimizationResult:
@@ -27,7 +37,7 @@ def optimize_document(
         return OptimizationResult(
             data=data,
             content_type=content_type,
-            extension=".pdf" if profile.kind == "pdf" else "",
+            extension=_original_extension(content_type),
             profile=profile.name,
             changed=False,
         )
@@ -52,7 +62,7 @@ def optimize_document(
         return OptimizationResult(
             data=data,
             content_type=content_type,
-            extension=".pdf" if profile.kind == "pdf" else extension,
+            extension=_original_extension(content_type) or extension,
             profile=profile.name,
             changed=False,
         )
