@@ -102,6 +102,18 @@ describe("delivery success rate", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Delivery queue/i }));
+
+    // The success-rate label is rendered with the initial zeroed state, so
+    // wait until the mocked queue counts have actually reached the UI.
+    await waitFor(() => {
+      for (const [status, count] of Object.entries(counts)) {
+        expect(
+          screen.getByRole("button", {
+            name: new RegExp(`^${status}\\s+${count}$`, "i"),
+          }),
+        ).toBeTruthy();
+      }
+    });
     return screen.findByText(/Delivery success rate/i);
   }
 

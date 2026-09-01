@@ -401,8 +401,12 @@ describe("WhatsApp integration settings design", () => {
       />,
     );
 
+    // Wait for the saved settings to replace the initially disabled draft.
+    // The button is rendered before loading finishes, so waiting for the role
+    // alone can race with the async settings request.
+    await screen.findByText("Patient appointment confirmation");
     fireEvent.click(
-      await screen.findByRole("button", { name: "Add Notification Template" }),
+      screen.getByRole("button", { name: "Add Notification Template" }),
     );
     const dialog = screen.getByRole("dialog", {
       name: "Add Notification Template",

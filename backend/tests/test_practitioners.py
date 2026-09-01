@@ -73,7 +73,7 @@ def setup_tenant_branch_departments_patient(client):
     patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Mapping Patient"},
+        json={"full_name": "Mapping Patient", "mobile": "9000000101"},
     ).json()
     return tenant, branch, other_branch, patient
 
@@ -1132,7 +1132,7 @@ def test_same_doctor_cannot_book_two_patients_across_departments_at_same_time(cl
     second_patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Second Department Patient"},
+        json={"full_name": "Second Department Patient", "mobile": "9000000102"},
     ).json()
     practitioner = client.post(
         "/api/v1/practitioners",

@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -24,9 +25,11 @@ def create_patient(
     name: str = "Ravi Kumar",
     mobile: str | None = None,
 ) -> dict:
-    payload = {"full_name": name, "age_years": 42}
-    if mobile:
-        payload["mobile"] = mobile
+    payload = {
+        "full_name": name,
+        "age_years": 42,
+        "mobile": mobile or f"9{uuid4().int % 10**9:09d}",
+    }
     response = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant_id},

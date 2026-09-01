@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -31,7 +32,7 @@ def create_patient(client, tenant_id: str, name: str):
     return client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant_id},
-        json={"full_name": name},
+        json={"full_name": name, "mobile": f"9{uuid4().int % 10**9:09d}"},
     )
 
 

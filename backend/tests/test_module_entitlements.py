@@ -12,7 +12,7 @@ def create_signed_consultation_on_trial(client):
     patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Trial Patient"},
+        json={"full_name": "Trial Patient", "mobile": "9000000301"},
     ).json()
     booking = client.post(
         "/api/v1/appointments",
