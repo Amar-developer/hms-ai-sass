@@ -1,5 +1,7 @@
 import json
 from datetime import timedelta
+from io import BytesIO
+from zipfile import ZipFile
 
 from sqlmodel import Session, select
 
@@ -75,31 +77,29 @@ def test_monthly_report_email_sends_settlement_attachments(test_engine):
     assert sent["from_name"] == "Email Settlement Clinic"
     assert processed.status == ReportJobStatus.SENT
     assert artifact_names == attachment_names
-    assert attachment_names[0].startswith(
-        "monthly-revenue-report-2026-04-01-2026-04-30"
+    assert attachment_names == ["monthly-revenue-settlement-2026-04-01-2026-04-30.xlsx"]
+    _filename, content_type, content = sent["attachments"][0]
+    assert content_type == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    assert any(
-        filename.startswith("doctor-settlement-") for filename in attachment_names
-    )
-    assert any(filename.startswith("lab-settlement-") for filename in attachment_names)
-    assert any(
-        filename.startswith("pharmacy-settlement-") for filename in attachment_names
-    )
-    assert any(
-        filename.startswith("invoice-profit-details-") for filename in attachment_names
-    )
-    report_files = {
-        filename: content.decode("utf-8")
-        for filename, _content_type, content in sent["attachments"]
-        if filename.endswith(".xls")
-    }
-    for filename, content in report_files.items():
-        assert "Mode of Payment" in content, filename
-        if filename.startswith("doctor-settlement-"):
-            assert "Doctor Fee %" in content, filename
-            assert "Settlement %" not in content, filename
-        elif not filename.startswith("monthly-revenue-report-"):
-            assert "Settlement %" in content, filename
+    with ZipFile(BytesIO(content)) as workbook:
+        names = set(workbook.namelist())
+        assert "xl/workbook.xml" in names
+        assert "xl/styles.xml" in names
+        workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
+        for sheet_name in (
+            "Executive Summary",
+            "Doctor Settlements",
+            "Doctor Ledger",
+            "Vendor Settlements",
+            "Vendor Ledger",
+            "Department Revenue",
+            "Invoice Detail",
+            "Collections",
+            "Reconciliation",
+            "Definitions",
+        ):
+            assert f'name="{sheet_name}"' in workbook_xml
 
 
 def test_manual_monthly_report_defaults_to_actor_email(test_engine):

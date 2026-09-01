@@ -8,7 +8,6 @@ from app.core.config import get_settings
 
 UPLOADS_DIR = get_settings().uploads_dir.expanduser().resolve()
 PRIVATE_UPLOADS_DIR = (UPLOADS_DIR.parent / "private_uploads").resolve()
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 _CHUNK = 1024 * 1024  # 1 MB streamed read
 
 # Content is validated by inspecting the actual bytes (magic numbers), never by
@@ -51,16 +50,18 @@ def _sniff(data: bytes) -> tuple[str, str]:
 async def _read_bounded(file: UploadFile) -> bytes:
     """Stream the upload in chunks, aborting as soon as the size cap is exceeded
     so an oversized body is never fully buffered in memory (DoS guard)."""
+    max_file_size_mb = get_settings().max_upload_size_mb
+    max_file_size = max_file_size_mb * 1024 * 1024
     buffer = bytearray()
     while True:
         chunk = await file.read(_CHUNK)
         if not chunk:
             break
         buffer.extend(chunk)
-        if len(buffer) > MAX_FILE_SIZE:
+        if len(buffer) > max_file_size:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="File too large (max 10 MB)",
+                detail=f"File too large (maximum intake size is {max_file_size_mb} MB)",
             )
     return bytes(buffer)
 

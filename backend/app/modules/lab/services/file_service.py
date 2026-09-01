@@ -16,6 +16,11 @@ from app.core.uploads import (
 )
 from app.modules.audit.service import record_audit_event
 from app.modules.files.models import FileDocument
+from app.modules.files.optimization import (
+    OptimizationError,
+    optimize_document,
+    select_optimization_profile,
+)
 from app.modules.files.repositories import FileDocumentRepository
 from app.modules.files.service import record_file_document
 from app.modules.files.services.file_service import FileService
@@ -151,10 +156,40 @@ async def upload_lab_order_files(
         for file in files:
             storage_values = {}
             document_id = new_id("file")
+            optimization_profile = None
+            optimization_status = "not_required"
+            extension = Path(file.filename or "upload").suffix or ".bin"
             if configured_backend.name == "s3":
                 data, verified_content_type, extension = await read_validated_upload(
                     file
                 )
+                original_size_bytes = len(data)
+                optimization_profile = select_optimization_profile(
+                    category=LAB_REPORT_CATEGORY,
+                    source_module="lab",
+                    attached_to_field=None,
+                    content_type=verified_content_type,
+                )
+                if optimization_profile and not optimization_profile.preserve_original:
+                    try:
+                        optimized = await run_in_threadpool(
+                            lambda: optimize_document(
+                                data=data,
+                                content_type=verified_content_type,
+                                profile=optimization_profile,
+                            )
+                        )
+                    except OptimizationError as exc:
+                        raise HTTPException(
+                            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=str(exc),
+                        ) from exc
+                    data = optimized.data
+                    verified_content_type = optimized.content_type
+                    extension = optimized.extension
+                    optimization_status = (
+                        "ready" if optimized.changed else "not_required"
+                    )
                 checksum = hashlib.sha256(data).hexdigest()
                 storage_key = build_storage_key(
                     environment=settings.environment,
@@ -195,7 +230,7 @@ async def upload_lab_order_files(
                     "storage_region": stored.region,
                     "storage_version_id": stored.version_id,
                     "checksum_sha256": checksum,
-                    "original_size_bytes": len(data),
+                    "original_size_bytes": original_size_bytes,
                     "stored_size_bytes": stored.size,
                     "storage_class": stored.storage_class,
                 }
@@ -214,7 +249,7 @@ async def upload_lab_order_files(
                 tenant_id=tenant_id,
                 branch_id=order.branch_id,
                 patient_id=order.patient_id,
-                file_name=file.filename or saved_filename,
+                file_name=file.filename or f"lab-report{extension}",
                 file_url=url_path,
                 content_type=verified_content_type,
                 file_size=file_size,
@@ -228,7 +263,10 @@ async def upload_lab_order_files(
                 uploaded_by_user_id=current_user.id,
                 is_private=True,
                 artifact_type="original",
-                optimization_status="not_required",
+                optimization_profile=(
+                    optimization_profile.name if optimization_profile else None
+                ),
+                optimization_status=optimization_status,
                 **storage_values,
             )
             rows.append(row)

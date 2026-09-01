@@ -35,7 +35,7 @@ def optimize_document(
         if profile.kind == "image":
             optimized, optimized_type, extension = optimize_image(data, profile)
         elif profile.kind == "pdf":
-            optimized = optimize_pdf(data)
+            optimized = optimize_pdf(data, target_size_bytes=profile.target_size_bytes)
             optimized_type = "application/pdf"
             extension = ".pdf"
         else:

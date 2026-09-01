@@ -395,7 +395,7 @@ class FileService:
             content_type=verified_content_type,
         )
         optimization_status = "not_required"
-        if optimization_profile and optimization_profile.name == "invoice_pdf":
+        if optimization_profile and not optimization_profile.preserve_original:
             try:
                 # CPU-bound PDF rewrite — off the event loop so it can't stall
                 # unrelated in-flight requests on this worker.

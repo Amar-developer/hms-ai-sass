@@ -63,6 +63,15 @@ def test_profile_selection_distinguishes_invoice_and_lab():
     assert lab == LAB_SCAN_DELIVERY
     assert lab.preserve_original is True
 
+    lab_pdf = select_optimization_profile(
+        category="lab_report",
+        source_module="lab",
+        attached_to_field="report_url",
+        content_type="application/pdf",
+    )
+    assert lab_pdf.name == "uploaded_lab_pdf"
+    assert lab_pdf.preserve_original is False
+
 
 def test_patient_photo_is_resized_and_metadata_free():
     source = _jpeg_bytes()
@@ -91,6 +100,24 @@ def test_pdf_is_reopenable_and_page_count_is_preserved():
 def test_password_protected_pdf_is_rejected():
     with pytest.raises(ValueError, match="Password-protected"):
         optimize_pdf(_pdf_bytes(encrypted=True))
+
+
+def test_digitally_signed_pdf_is_rejected_instead_of_invalidated():
+    output = BytesIO()
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page(page_size=(595, 842))
+    signature = pdf.make_indirect(
+        pikepdf.Dictionary(
+            FT=pikepdf.Name("/Sig"),
+            T="Approval",
+            V=pikepdf.Dictionary(Type=pikepdf.Name("/Sig")),
+        )
+    )
+    pdf.Root.AcroForm = pikepdf.Dictionary(Fields=pikepdf.Array([signature]))
+    pdf.save(output)
+
+    with pytest.raises(ValueError, match="invalidating the signature"):
+        optimize_pdf(output.getvalue())
 
 
 def test_small_lab_pdf_does_not_create_unhelpful_rendition():
