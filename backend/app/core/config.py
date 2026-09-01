@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     uploads_dir: Path = Field(
         default_factory=lambda: Path(__file__).resolve().parents[2] / "uploads"
     )
+    # This is an intake ceiling, not the desired stored-object size. Eligible
+    # PDFs are optimized after this bounded read and before object storage.
+    max_upload_size_mb: int = Field(default=50, ge=1, le=250)
     file_storage_backend: str = Field(default="local", pattern="^(local|s3)$")
     aws_s3_bucket: str | None = Field(default=None)
     aws_s3_region: str = Field(default="ap-south-1", min_length=1)

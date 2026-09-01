@@ -1,25 +1,110 @@
+from __future__ import annotations
+
+from collections import defaultdict
 from datetime import date, datetime
-from html import escape
+from decimal import Decimal
+from typing import Any
 
 from sqlmodel import Session
 
+from app.modules.billing.models import Invoice
+from app.modules.billing.repositories.settlement_report_repository import (
+    BillingSettlementReportRepository,
+)
+from app.modules.billing.services.read_models import invoice_read
 from app.modules.reports.repositories import ReportDataRepository
-from app.modules.reports.services.classification import ReportInvoiceClassifier
 from app.modules.reports.services.calculations import (
-    invoice_approved_discount,
     invoice_billing_discount,
     invoice_due_balance,
     invoice_item_total,
     invoice_membership_benefit,
-    invoice_offer_discount,
     is_paid_invoice,
     report_doctor_fee,
     report_settlement,
     tax_paid_basis,
 )
-from app.modules.billing.services.read_models import invoice_read
-from app.modules.reports.services.rendering import money as _money
-from app.modules.reports.services.rendering import table as _table
+from app.modules.reports.services.classification import ReportInvoiceClassifier
+from app.modules.reports.services.xlsx import (
+    Worksheet,
+    XlsxWorkbook,
+    cell_reference,
+    formula,
+    styled,
+)
+
+
+def _amount(value: Any) -> float:
+    return float(Decimal(str(value or 0)))
+
+
+def _sheet(
+    name: str,
+    title: str,
+    subtitle: str,
+    headers: list[str],
+    data: list[list[Any]],
+    widths: list[float],
+    money: set[int] = frozenset(),
+    percent: set[int] = frozenset(),
+) -> Worksheet:
+    rows: list[list[Any]] = [
+        [styled(title, "title")],
+        [styled(subtitle, "subtitle")],
+        [],
+        [styled(value, "header") for value in headers],
+    ]
+    for values in data:
+        rendered = []
+        for index, value in enumerate(values, 1):
+            style = (
+                "percent"
+                if index in percent
+                else "currency"
+                if index in money
+                else "date"
+                if isinstance(value, date)
+                else "text"
+            )
+            rendered.append(styled(value, style))
+        rows.append(rendered)
+    total_row = len(rows) + 1
+    total: list[Any] = [styled("TOTAL", "total_text")]
+    for column in range(2, len(headers) + 1):
+        values = [
+            row[column - 1]
+            for row in data
+            if len(row) >= column and isinstance(row[column - 1], (int, float))
+        ]
+        if column in percent:
+            total.append(None)
+        elif values:
+            style = "total_currency" if column in money else "total_integer"
+            total.append(
+                formula(
+                    f"SUM({cell_reference(5, column)}:{cell_reference(total_row - 1, column)})",
+                    sum(values),
+                    style,
+                )
+            )
+        elif column in money or headers[column - 1] in {
+            "Invoices",
+            "Invoice lines",
+            "Units",
+        }:
+            style = "total_currency" if column in money else "total_integer"
+            total.append(styled(0, style))
+        else:
+            total.append(None)
+    rows.append(total)
+    last_column = cell_reference(1, len(headers))[:-1]
+    return Worksheet(
+        name=name,
+        rows=rows,
+        widths=widths,
+        merges=[f"A1:{last_column}1", f"A2:{last_column}2"],
+        freeze_row=5,
+        auto_filter=f"A4:{last_column}{max(total_row - 1, 4)}",
+    )
 
 
 def build_monthly_revenue_report(
@@ -32,332 +117,578 @@ def build_monthly_revenue_report(
 ) -> tuple[str, bytes]:
     filters = filters or {}
     repo = ReportDataRepository(session)
+    settlement_repo = BillingSettlementReportRepository(session)
     tenant = repo.get_tenant(tenant_id)
+    subtitle = f"{tenant.name if tenant else tenant_id} · {start.isoformat()} to {end.isoformat()}"
     invoices = repo.list_invoices_for_period(
         tenant_id=tenant_id,
         start_at=datetime.combine(start, datetime.min.time()),
         end_at=datetime.combine(end, datetime.max.time()),
     )
-    paid_invoices = [invoice for invoice in invoices if is_paid_invoice(invoice)]
-    report_invoice_by_id = {
-        invoice.id: invoice_read(session, invoice) for invoice in paid_invoices
-    }
-    invoice_items_by_invoice = {invoice.id: [] for invoice in paid_invoices}
+    paid = [row for row in invoices if is_paid_invoice(row)]
+    invoice_by_id = {row.id: row for row in invoices}
+    reads = {row.id: invoice_read(session, row) for row in paid}
+    items: dict[str, list[Any]] = {row.id: [] for row in paid}
     for item in repo.list_invoice_items_by_invoice_ids(
-        tenant_id=tenant_id,
-        invoice_ids=[invoice.id for invoice in paid_invoices],
+        tenant_id=tenant_id, invoice_ids=list(items)
     ):
-        invoice_items_by_invoice.setdefault(item.invoice_id, []).append(item)
-    classifier = ReportInvoiceClassifier(invoice_items_by_invoice)
-
-    def invoice_doctor_fee(invoice) -> int:
-        return report_doctor_fee(invoice, classifier.classify(invoice))
-
-    def invoice_settlement(invoice) -> int:
-        invoice_kind = classifier.classify(invoice)
-        return report_settlement(
-            invoice, invoice_kind, invoice_items_by_invoice.get(invoice.id, [])
-        )
-
-    payment_modes_by_invoice: dict[str, set[str]] = {
-        invoice.id: set() for invoice in paid_invoices
-    }
-    for payment in repo.list_recorded_payments_by_invoice_ids(
-        tenant_id=tenant_id,
-        invoice_ids=[invoice.id for invoice in paid_invoices],
-    ):
-        method = (
-            payment.method.value if hasattr(payment.method, "value") else payment.method
-        )
-        payment_modes_by_invoice.setdefault(payment.invoice_id, set()).add(str(method))
-
-    def payment_mode(invoice) -> str:
-        modes = {
-            value.replace("_", " ").title()
-            for value in payment_modes_by_invoice.get(invoice.id, set())
-        }
-        if invoice_membership_benefit(invoice) > 0:
-            modes.add("Membership Benefit")
-        return " + ".join(sorted(modes)) if modes else "-"
-
-    def combined_payment_modes(values: set[str]) -> str:
-        modes = sorted(value for value in values if value and value != "-")
-        return " + ".join(modes) if modes else "-"
-
-    def percentage(value: int, total: int, fallback_total: int = 0) -> str:
-        basis = total or fallback_total
-        return "0%" if not basis else f"{round((value / basis) * 100)}%"
-
+        items.setdefault(item.invoice_id, []).append(item)
+    classifier = ReportInvoiceClassifier(items)
     appointments = {
         row.id: row
         for row in repo.list_appointments_by_ids(
             tenant_id=tenant_id,
-            appointment_ids=[
-                invoice.appointment_id
-                for invoice in paid_invoices
-                if invoice.appointment_id
-            ],
-        )
-    }
-    patients = {
-        row.id: row
-        for row in repo.list_patients_by_ids(
-            tenant_id=tenant_id,
-            patient_ids=[invoice.patient_id for invoice in paid_invoices],
+            appointment_ids=[row.appointment_id for row in paid if row.appointment_id],
         )
     }
     doctors = {row.id: row for row in repo.list_practitioners(tenant_id=tenant_id)}
     departments = {row.id: row for row in repo.list_departments(tenant_id=tenant_id)}
+    patients = {
+        row.id: row
+        for row in repo.list_patients_by_ids(
+            tenant_id=tenant_id, patient_ids=[row.patient_id for row in paid]
+        )
+    }
+    suppliers = {
+        row.id: row for row in repo.list_pharmacy_suppliers(tenant_id=tenant_id)
+    }
+    modes_by_invoice: dict[str, set[str]] = defaultdict(set)
+    for payment in repo.list_recorded_payments_by_invoice_ids(
+        tenant_id=tenant_id, invoice_ids=[row.id for row in paid]
+    ):
+        method = getattr(payment.method, "value", payment.method)
+        modes_by_invoice[payment.invoice_id].add(str(method).replace("_", " ").title())
 
-    total_paid = sum(int(invoice.paid_amount or 0) for invoice in paid_invoices)
-    total_invoice = sum(int(invoice.total_amount or 0) for invoice in paid_invoices)
-    total_item = sum(invoice_item_total(invoice) for invoice in paid_invoices)
-    total_approved = sum(
-        invoice_approved_discount(report_invoice_by_id[invoice.id])
-        for invoice in paid_invoices
-    )
-    total_offer = sum(
-        invoice_offer_discount(report_invoice_by_id[invoice.id])
-        for invoice in paid_invoices
-    )
-    total_membership = sum(
-        invoice_membership_benefit(invoice) for invoice in paid_invoices
-    )
-    total_billing_discount = sum(
-        invoice_billing_discount(report_invoice_by_id[invoice.id])
-        for invoice in paid_invoices
-    )
-    total_doctor = sum(invoice_doctor_fee(invoice) for invoice in paid_invoices)
-    total_settlement = sum(invoice_settlement(invoice) for invoice in paid_invoices)
-    total_paid_tax = sum(tax_paid_basis(invoice) for invoice in paid_invoices)
-    total_profit = total_paid - total_paid_tax - total_doctor - total_settlement
-    sections: list[str] = []
-    if filters.get("overall", True):
-        sections.append(
-            _table(
-                "Overall Summary",
-                ["Metric", "Value"],
-                [
-                    ["Tenant", tenant.name if tenant else tenant_id],
-                    ["Period", f"{start.isoformat()} to {end.isoformat()}"],
-                    ["Settled Invoices", len(paid_invoices)],
-                    ["Item Total", _money(total_item)],
-                    ["Admin Approved Discounts", _money(total_approved)],
-                    ["Offer Discounts Used", _money(total_offer)],
-                    ["Membership Benefits Used", _money(total_membership)],
-                    ["Total Billing Discounts", _money(total_billing_discount)],
-                    [
-                        "Payment Modes",
-                        combined_payment_modes(
-                            {payment_mode(invoice) for invoice in paid_invoices}
-                        ),
-                    ],
-                    ["Net Invoice Revenue", _money(total_invoice)],
-                    ["Paid Revenue", _money(total_paid)],
-                    ["GST from Paid Revenue", _money(total_paid_tax)],
-                    ["Doctor Fee", _money(total_doctor)],
-                    ["Settlement", _money(total_settlement)],
-                    [
-                        "Settlement %",
-                        percentage(total_settlement, total_paid, total_item),
-                    ],
-                    ["Clinic Profit", _money(total_profit)],
-                ],
+    def doctor_fee(invoice: Invoice) -> float:
+        return float(report_doctor_fee(invoice, classifier.classify(invoice)))
+
+    def vendor_cost(invoice: Invoice) -> float:
+        return float(
+            report_settlement(
+                invoice, classifier.classify(invoice), items.get(invoice.id, [])
             )
         )
 
-    def bucket_rows(group: str) -> list[list[object]]:
-        buckets: dict[str, dict] = {}
-        for invoice in paid_invoices:
-            appointment = appointments.get(invoice.appointment_id or "")
-            if group == "doctor":
-                key = appointment.practitioner_id if appointment else "unassigned"
-                label = doctors.get(key).full_name if key in doctors else "Unassigned"
-            elif group == "department":
-                key = appointment.department_id if appointment else "unassigned"
-                label = (
-                    departments.get(key).name if key in departments else "Unassigned"
-                )
-            else:
-                key = invoice.branch_id
-                label = key
-            bucket = buckets.setdefault(
-                key or "unassigned",
+    def payment_modes(invoice: Invoice) -> str:
+        values = set(modes_by_invoice.get(invoice.id, set()))
+        if invoice_membership_benefit(invoice):
+            values.add("Membership Benefit")
+        return " + ".join(sorted(values)) or "-"
+
+    metrics = {
+        "invoices": len(paid),
+        "gross": sum(invoice_item_total(row) for row in paid),
+        "discount": sum(invoice_billing_discount(reads[row.id]) for row in paid),
+        "net": sum(_amount(row.total_amount) for row in paid),
+        "paid": sum(_amount(row.paid_amount) for row in paid),
+        "balance": sum(invoice_due_balance(row) for row in paid),
+        "tax": sum(tax_paid_basis(row) for row in paid),
+        "doctor": sum(doctor_fee(row) for row in paid),
+        "vendor": sum(vendor_cost(row) for row in paid),
+    }
+    metrics["profit"] = (
+        metrics["paid"] - metrics["tax"] - metrics["doctor"] - metrics["vendor"]
+    )
+    collections = settlement_repo.list_collected_payments(
+        tenant_id=tenant_id, branch_id=None, from_date=start, to_date=end
+    )
+    cash_collected = sum(
+        _amount(row.amount) - _amount(row.refunded_amount) for row in collections
+    )
+    doctor_settlements = settlement_repo.list_doctor_settlements_for_period(
+        tenant_id=tenant_id, start=start, end=end
+    )
+    vendor_settlements = settlement_repo.list_vendor_settlements_for_period(
+        tenant_id=tenant_id, start=start, end=end
+    )
+    doctor_paid = sum(_amount(row.settlement_amount) for row in doctor_settlements)
+    vendor_paid = sum(_amount(row.settlement_amount) for row in vendor_settlements)
+    workbook = XlsxWorkbook()
+
+    if filters.get("overall", True):
+        summary = [
+            [
+                "Reporting period",
+                f"{start.isoformat()} to {end.isoformat()}",
+                "Three date bases are reported separately",
+            ],
+            ["Paid invoices", metrics["invoices"], "Invoice-date basis"],
+            ["Gross item value", metrics["gross"], "Before discounts"],
+            [
+                "Billing discounts",
+                metrics["discount"],
+                "All invoice discounts and benefits",
+            ],
+            ["Net invoice revenue", metrics["net"], "Invoice-date basis"],
+            [
+                "Paid revenue",
+                metrics["paid"],
+                "Payments applied to invoices raised in period",
+            ],
+            ["Cash collected", cash_collected, "Payment collected-date basis"],
+            ["GST from paid revenue", metrics["tax"], "Pro-rated paid basis"],
+            ["Doctor fee accrued", metrics["doctor"], "Invoice-date basis"],
+            ["Doctor settlements paid", doctor_paid, "Settlement finalized-date basis"],
+            [
+                "Vendor cost accrued",
+                metrics["vendor"],
+                "Supplier cost on invoice items",
+            ],
+            ["Vendor settlements paid", vendor_paid, "Settlement finalized-date basis"],
+            [
+                "Clinic profit",
+                metrics["profit"],
+                "Paid revenue − GST − doctor fee − vendor cost",
+            ],
+        ]
+        rows = [
+            [styled("Monthly Revenue & Settlement Report", "title")],
+            [styled(subtitle, "subtitle")],
+            [],
+            [styled("Executive Summary", "section")],
+            [
+                styled(value, "header")
+                for value in ["Metric", "Value", "Basis / definition"]
+            ],
+        ]
+        for index, row in enumerate(summary):
+            rows.append(
+                [
+                    row[0],
+                    styled(row[1], "integer" if index == 1 else "currency"),
+                    row[2],
+                ]
+            )
+        workbook.add_sheet(
+            Worksheet(
+                name="Executive Summary",
+                rows=rows,
+                widths=[31, 21, 58],
+                merges=["A1:C1", "A2:C2", "A4:C4"],
+                freeze_row=6,
+                landscape=False,
+            )
+        )
+
+    grouped: dict[str, dict[str, dict[str, Any]]] = {"doctor": {}, "department": {}}
+    invoice_rows, vendor_buckets = [], {}
+    include_patient = bool(filters.get("include_patient_details", False))
+    for invoice in paid:
+        appointment = appointments.get(invoice.appointment_id or "")
+        doctor_id = appointment.practitioner_id if appointment else None
+        department_id = appointment.department_id if appointment else None
+        doctor_name = (
+            doctors[doctor_id].full_name if doctor_id in doctors else "Unassigned"
+        )
+        department_name = (
+            departments[department_id].name
+            if department_id in departments
+            else "Unassigned"
+        )
+        values = {
+            "count": 1,
+            "gross": float(invoice_item_total(invoice)),
+            "discount": float(invoice_billing_discount(reads[invoice.id])),
+            "net": _amount(invoice.total_amount),
+            "paid": _amount(invoice.paid_amount),
+            "balance": float(invoice_due_balance(invoice)),
+            "tax": float(tax_paid_basis(invoice)),
+            "doctor": doctor_fee(invoice),
+            "vendor": vendor_cost(invoice),
+        }
+        values["profit"] = (
+            values["paid"] - values["tax"] - values["doctor"] - values["vendor"]
+        )
+        for kind, key, label in (
+            ("doctor", doctor_id or "unassigned", doctor_name),
+            ("department", department_id or "unassigned", department_name),
+        ):
+            bucket = grouped[kind].setdefault(
+                key, {"label": label, **{name: 0 for name in values}}
+            )
+            for name, value in values.items():
+                bucket[name] += value
+        patient = patients.get(invoice.patient_id)
+        invoice_rows.append(
+            [
+                invoice.invoice_number,
+                invoice.created_at.date(),
+                patient.full_name
+                if include_patient and patient
+                else ("Protected" if patient else "-"),
+                doctor_name,
+                department_name,
+                values["gross"],
+                values["discount"],
+                values["net"],
+                values["paid"],
+                values["balance"],
+                payment_modes(invoice),
+                values["tax"],
+                values["doctor"],
+                values["vendor"],
+                values["profit"],
+                values["profit"] / values["paid"] if values["paid"] else 0,
+            ]
+        )
+        for item in items.get(invoice.id, []):
+            if not item.supplier_id or not _amount(item.buying_amount):
+                continue
+            bucket = vendor_buckets.setdefault(
+                item.supplier_id,
                 {
-                    "label": label,
-                    "invoices": 0,
-                    "item": 0,
-                    "offer": 0,
-                    "approved": 0,
-                    "billing_discount": 0,
-                    "membership": 0,
-                    "invoice": 0,
-                    "paid": 0,
-                    "balance": 0,
-                    "payment_modes": set(),
-                    "doctor": 0,
-                    "settlement": 0,
-                    "tax": 0,
+                    "name": suppliers[item.supplier_id].name
+                    if item.supplier_id in suppliers
+                    else item.supplier_id,
+                    "lines": 0,
+                    "units": 0,
+                    "sales": 0.0,
+                    "cost": 0.0,
                 },
             )
-            bucket["invoices"] += 1
-            bucket["item"] += invoice_item_total(invoice)
-            report_invoice = report_invoice_by_id[invoice.id]
-            bucket["approved"] += invoice_approved_discount(report_invoice)
-            bucket["offer"] += invoice_offer_discount(report_invoice)
-            bucket["billing_discount"] += invoice_billing_discount(report_invoice)
-            bucket["membership"] += invoice_membership_benefit(invoice)
-            bucket["invoice"] += int(invoice.total_amount or 0)
-            bucket["paid"] += int(invoice.paid_amount or 0)
-            bucket["balance"] += invoice_due_balance(invoice)
-            bucket["payment_modes"].add(payment_mode(invoice))
-            bucket["doctor"] += invoice_doctor_fee(invoice)
-            bucket["settlement"] += invoice_settlement(invoice)
-            bucket["tax"] += tax_paid_basis(invoice)
-        return [
+            bucket["lines"] += 1
+            bucket["units"] += int(item.quantity)
+            bucket["sales"] += _amount(item.total_amount)
+            bucket["cost"] += _amount(item.buying_amount) * int(item.quantity)
+
+    group_headers = [
+        "Name",
+        "Invoices",
+        "Gross item value",
+        "Billing discounts",
+        "Net revenue",
+        "Paid revenue",
+        "Balance",
+        "GST",
+        "Doctor fee",
+        "Vendor cost",
+        "Clinic profit",
+        "Margin %",
+    ]
+    group_widths = [28, 12, 18, 18, 18, 18, 16, 15, 16, 16, 18, 13]
+
+    def group_rows(kind: str) -> list[list[Any]]:
+        result = []
+        for row in sorted(
+            grouped[kind].values(), key=lambda value: value["paid"], reverse=True
+        ):
+            result.append(
+                [
+                    row["label"],
+                    row["count"],
+                    row["gross"],
+                    row["discount"],
+                    row["net"],
+                    row["paid"],
+                    row["balance"],
+                    row["tax"],
+                    row["doctor"],
+                    row["vendor"],
+                    row["profit"],
+                    row["profit"] / row["paid"] if row["paid"] else 0,
+                ]
+            )
+        return result
+
+    if filters.get("doctor", True):
+        actual = [
             [
-                row["label"],
-                row["invoices"],
-                _money(row["item"]),
-                _money(row["approved"]),
-                _money(row["offer"]),
-                _money(row["membership"]),
-                _money(row["billing_discount"]),
-                _money(row["invoice"]),
-                _money(row["paid"]),
-                _money(row["balance"]),
-                combined_payment_modes(row["payment_modes"]),
-                _money(row["tax"]),
-                _money(row["doctor"]),
-                _money(row["settlement"]),
-                percentage(row["settlement"], row["paid"], row["item"]),
-                _money(row["paid"] - row["tax"] - row["doctor"] - row["settlement"]),
+                row.id,
+                doctors[row.practitioner_id].full_name
+                if row.practitioner_id in doctors
+                else "All / Unassigned",
+                row.period_start,
+                row.period_end,
+                row.finalized_at.date(),
+                row.invoice_count,
+                _amount(row.total_paid_amount),
+                _amount(row.total_doctor_share),
+                _amount(row.settlement_amount),
+                row.payment_method or "-",
+                row.payment_reference or "-",
             ]
-            for row in sorted(
-                buckets.values(), key=lambda item: item["paid"], reverse=True
+            for row in doctor_settlements
+        ]
+        workbook.add_sheet(
+            _sheet(
+                "Doctor Settlements",
+                "Doctor Settlements Paid",
+                subtitle,
+                [
+                    "Settlement ID",
+                    "Doctor",
+                    "Period start",
+                    "Period end",
+                    "Finalized date",
+                    "Invoices",
+                    "Paid revenue basis",
+                    "Doctor share",
+                    "Amount settled",
+                    "Payment method",
+                    "Reference",
+                ],
+                actual,
+                [24, 26, 14, 14, 15, 11, 19, 17, 18, 18, 22],
+                {7, 8, 9},
+            )
+        )
+        workbook.add_sheet(
+            _sheet(
+                "Doctor Ledger",
+                "Doctor Revenue & Accrued Settlement",
+                subtitle,
+                group_headers,
+                group_rows("doctor"),
+                group_widths,
+                set(range(3, 12)),
+                {12},
+            )
+        )
+    if filters.get("vendor", True):
+        paid_by_supplier: dict[str, float] = defaultdict(float)
+        for row in vendor_settlements:
+            paid_by_supplier[row.supplier_id] += _amount(row.settlement_amount)
+        ledger = [
+            [
+                value["name"],
+                value["lines"],
+                value["units"],
+                value["sales"],
+                value["cost"],
+                paid_by_supplier.get(key, 0),
+                value["cost"] - paid_by_supplier.get(key, 0),
+            ]
+            for key, value in sorted(
+                vendor_buckets.items(), key=lambda item: item[1]["cost"], reverse=True
             )
         ]
-
-    grouped_headers = [
-        "Name",
-        "Settled Invoices",
-        "Item Total",
-        "Admin Approved Discount",
-        "Offer Discount",
-        "Membership Benefit",
-        "Total Billing Discount",
-        "Net Invoice Revenue",
-        "Paid Revenue",
-        "Balance",
-        "Mode of Payment",
-        "GST from Paid Revenue",
-        "Doctor Fee",
-        "Settlement",
-        "Settlement %",
-        "Clinic Profit",
-    ]
-    if filters.get("doctor", True):
-        sections.append(
-            _table(
-                "Doctor Revenue and Settlement", grouped_headers, bucket_rows("doctor")
+        workbook.add_sheet(
+            _sheet(
+                "Vendor Ledger",
+                "Vendor Cost & Settlement Ledger",
+                subtitle,
+                [
+                    "Vendor",
+                    "Invoice lines",
+                    "Units",
+                    "Attributed sales",
+                    "Cost accrued",
+                    "Settlement paid",
+                    "Unsettled estimate",
+                ],
+                ledger,
+                [29, 14, 12, 19, 18, 18, 20],
+                {4, 5, 6, 7},
+            )
+        )
+        actual = [
+            [
+                row.id,
+                suppliers[row.supplier_id].name
+                if row.supplier_id in suppliers
+                else row.supplier_id,
+                row.source_type,
+                row.period_start,
+                row.period_end,
+                row.finalized_at.date(),
+                _amount(row.gross_payable),
+                _amount(row.adjustment_amount),
+                _amount(row.settlement_amount),
+                row.payment_method or "-",
+                row.payment_reference or "-",
+                row.notes or "-",
+            ]
+            for row in vendor_settlements
+        ]
+        workbook.add_sheet(
+            _sheet(
+                "Vendor Settlements",
+                "Vendor Settlements Paid",
+                subtitle,
+                [
+                    "Settlement ID",
+                    "Vendor",
+                    "Source",
+                    "Period start",
+                    "Period end",
+                    "Finalized date",
+                    "Gross payable",
+                    "Adjustment",
+                    "Amount settled",
+                    "Payment method",
+                    "Reference",
+                    "Notes",
+                ],
+                actual,
+                [24, 27, 14, 14, 14, 15, 18, 16, 18, 18, 22, 30],
+                {7, 8, 9},
             )
         )
     if filters.get("department", True):
-        sections.append(
-            _table(
-                "Medical Department Revenue", grouped_headers, bucket_rows("department")
+        workbook.add_sheet(
+            _sheet(
+                "Department Revenue",
+                "Medical Department Revenue",
+                subtitle,
+                group_headers,
+                group_rows("department"),
+                group_widths,
+                set(range(3, 12)),
+                {12},
             )
         )
     if filters.get("invoice", True):
-        invoice_rows = []
-        for invoice in paid_invoices:
-            appointment = appointments.get(invoice.appointment_id or "")
-            patient = patients.get(invoice.patient_id)
-            doctor = (
-                doctors.get(appointment.practitioner_id)
-                if appointment and appointment.practitioner_id
-                else None
-            )
-            department = (
-                departments.get(appointment.department_id)
-                if appointment and appointment.department_id
-                else None
-            )
-            doctor_fee = invoice_doctor_fee(invoice)
-            settlement = invoice_settlement(invoice)
-            paid = int(invoice.paid_amount or 0)
-            paid_tax = tax_paid_basis(invoice)
-            report_invoice = report_invoice_by_id[invoice.id]
-            invoice_rows.append(
-                [
-                    invoice.invoice_number,
-                    invoice.created_at.date().isoformat(),
-                    patient.full_name if patient else invoice.patient_id,
-                    doctor.full_name if doctor else "Unassigned",
-                    department.name if department else "Unassigned",
-                    _money(invoice_item_total(invoice)),
-                    _money(invoice_approved_discount(report_invoice)),
-                    _money(invoice_offer_discount(report_invoice)),
-                    _money(invoice_membership_benefit(invoice)),
-                    _money(invoice_billing_discount(report_invoice)),
-                    _money(int(invoice.total_amount or 0)),
-                    _money(paid),
-                    _money(invoice_due_balance(invoice)),
-                    payment_mode(invoice),
-                    _money(paid_tax),
-                    _money(doctor_fee),
-                    _money(settlement),
-                    percentage(settlement, paid, invoice_item_total(invoice)),
-                    _money(paid - paid_tax - doctor_fee - settlement),
-                ]
-            )
-        sections.append(
-            _table(
-                "Settled Invoice Profit Details",
+        workbook.add_sheet(
+            _sheet(
+                "Invoice Detail",
+                "Paid Invoice Profit Detail",
+                subtitle
+                + (
+                    " · Patient names included"
+                    if include_patient
+                    else " · Patient names protected"
+                ),
                 [
                     "Invoice",
                     "Date",
                     "Patient",
                     "Doctor",
-                    "Medical Department",
-                    "Item Total",
-                    "Admin Approved Discount",
-                    "Offer Discount",
-                    "Membership Benefit",
-                    "Total Billing Discount",
-                    "Net Total",
+                    "Department",
+                    "Gross item value",
+                    "Billing discounts",
+                    "Net total",
                     "Paid",
                     "Balance",
-                    "Mode of Payment",
-                    "GST from Paid Revenue",
-                    "Doctor Fee",
-                    "Settlement",
-                    "Settlement %",
-                    "Clinic Profit",
+                    "Payment modes",
+                    "GST",
+                    "Doctor fee",
+                    "Vendor cost",
+                    "Clinic profit",
+                    "Margin %",
                 ],
                 invoice_rows,
+                [20, 14, 20, 24, 24, 18, 18, 17, 17, 16, 22, 15, 16, 16, 18, 13],
+                set(range(6, 16)),
+                {16},
+            )
+        )
+    if filters.get("collections", True):
+        rows = []
+        for payment in collections:
+            invoice = invoice_by_id.get(payment.invoice_id) or session.get(
+                Invoice, payment.invoice_id
+            )
+            method = getattr(payment.method, "value", payment.method)
+            rows.append(
+                [
+                    payment.id,
+                    payment.collected_at.date(),
+                    invoice.invoice_number if invoice else payment.invoice_id,
+                    str(method).replace("_", " ").title(),
+                    _amount(payment.amount),
+                    _amount(payment.refunded_amount),
+                    _amount(payment.amount) - _amount(payment.refunded_amount),
+                    payment.reference_number or "-",
+                ]
+            )
+        workbook.add_sheet(
+            _sheet(
+                "Collections",
+                "Payment Collections",
+                subtitle + " · payment collected-date basis",
+                [
+                    "Payment ID",
+                    "Collected date",
+                    "Invoice",
+                    "Method",
+                    "Gross collected",
+                    "Refunded",
+                    "Net collected",
+                    "Reference",
+                ],
+                rows,
+                [24, 16, 20, 17, 18, 16, 18, 23],
+                {5, 6, 7},
             )
         )
 
-    html = f"""
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <style>
-          body {{ font-family: Arial, sans-serif; color: #0f172a; }}
-          h1 {{ margin: 0 0 8px; }}
-          h2 {{ margin: 24px 0 8px; }}
-          table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
-          th, td {{ border: 1px solid #cbd5e1; padding: 8px; text-align: left; }}
-          th {{ background: #f1f5f9; font-size: 12px; text-transform: uppercase; }}
-        </style>
-      </head>
-      <body>
-        <h1>Monthly Revenue and Settlement Report</h1>
-        <p>{escape(tenant.name if tenant else tenant_id)} · {start.isoformat()} to {end.isoformat()}</p>
-        {"".join(sections)}
-      </body>
-    </html>
-    """
-    filename = f"monthly-revenue-report-{start.isoformat()}-{end.isoformat()}.xls"
-    return filename, html.encode("utf-8")
+    checks = [
+        [
+            "Invoice profit identity",
+            metrics["profit"],
+            metrics["paid"] - metrics["tax"] - metrics["doctor"] - metrics["vendor"],
+            0.0,
+            "PASS",
+        ],
+        [
+            "Doctor accrued vs payout",
+            metrics["doctor"],
+            doctor_paid,
+            metrics["doctor"] - doctor_paid,
+            "INFORMATIONAL",
+        ],
+        [
+            "Vendor accrued vs payout",
+            metrics["vendor"],
+            vendor_paid,
+            metrics["vendor"] - vendor_paid,
+            "INFORMATIONAL",
+        ],
+        [
+            "Invoice paid vs cash collected",
+            metrics["paid"],
+            cash_collected,
+            metrics["paid"] - cash_collected,
+            "INFORMATIONAL",
+        ],
+    ]
+    workbook.add_sheet(
+        _sheet(
+            "Reconciliation",
+            "Control & Reconciliation Checks",
+            subtitle + " · variances may reflect different date bases",
+            [
+                "Check",
+                "Invoice / accrued basis",
+                "Compared basis",
+                "Variance",
+                "Status",
+            ],
+            checks,
+            [39, 23, 21, 18, 18],
+            {2, 3, 4},
+        )
+    )
+    definitions = [
+        ["Paid revenue", "Paid value on invoices created in the selected month."],
+        ["Cash collected", "Payments collected in the month, net of refunds."],
+        ["Doctor fee accrued", "Doctor share attributed to selected invoices."],
+        ["Doctor settlement paid", "Doctor settlements finalized during the month."],
+        [
+            "Vendor cost accrued",
+            "Buying cost on supplier-linked invoice items; not proof of payment.",
+        ],
+        ["Vendor settlement paid", "Vendor settlements finalized during the month."],
+        [
+            "Clinic profit",
+            "Paid revenue minus GST, accrued doctor fee, and accrued vendor cost.",
+        ],
+        [
+            "Patient privacy",
+            "Patient names are protected unless explicitly enabled for authorized recipients.",
+        ],
+    ]
+    workbook.add_sheet(
+        _sheet(
+            "Definitions",
+            "Report Definitions & Data Policy",
+            subtitle,
+            ["Term", "Definition"],
+            definitions,
+            [29, 90],
+        )
+    )
+    return (
+        f"monthly-revenue-settlement-{start.isoformat()}-{end.isoformat()}.xlsx",
+        workbook.to_bytes(),
+    )

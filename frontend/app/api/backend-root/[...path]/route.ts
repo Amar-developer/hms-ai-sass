@@ -29,18 +29,21 @@ async function forward(
   HOP_BY_HOP_HEADERS.forEach((header) => headers.delete(header));
 
   const suffix = path.map(encodeURIComponent).join("/");
+  const init: RequestInit & { duplex?: "half" } = {
+    method: request.method,
+    headers,
+    body:
+      request.method === "GET" || request.method === "HEAD"
+        ? undefined
+        : request.body,
+    duplex:
+      request.method === "GET" || request.method === "HEAD" ? undefined : "half",
+    cache: "no-store",
+    redirect: "manual",
+  };
   const response = await fetch(
     `${INTERNAL_API_ORIGIN}/${suffix}${request.nextUrl.search || ""}`,
-    {
-      method: request.method,
-      headers,
-      body:
-        request.method === "GET" || request.method === "HEAD"
-          ? undefined
-          : await request.arrayBuffer(),
-      cache: "no-store",
-      redirect: "manual",
-    },
+    init,
   );
 
   const responseHeaders = new Headers(response.headers);

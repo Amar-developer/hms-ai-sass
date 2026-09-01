@@ -9,8 +9,11 @@ from app.modules.reports.models import ReportJobStatus
 class MonthlyReportFilters(BaseModel):
     overall: bool = True
     doctor: bool = True
+    vendor: bool = True
     department: bool = True
     invoice: bool = True
+    collections: bool = True
+    include_patient_details: bool = False
 
 
 class MonthlyReportConfigRead(BaseModel):

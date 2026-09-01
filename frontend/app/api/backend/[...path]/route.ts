@@ -32,16 +32,19 @@ async function forward(
   const headers = new Headers(request.headers);
   HOP_BY_HOP_HEADERS.forEach((header) => headers.delete(header));
 
-  const response = await fetch(backendUrl(request, path), {
+  const init: RequestInit & { duplex?: "half" } = {
     method: request.method,
     headers,
     body:
       request.method === "GET" || request.method === "HEAD"
         ? undefined
-        : await request.arrayBuffer(),
+        : request.body,
+    duplex:
+      request.method === "GET" || request.method === "HEAD" ? undefined : "half",
     cache: "no-store",
     redirect: "manual",
-  });
+  };
+  const response = await fetch(backendUrl(request, path), init);
 
   const responseHeaders = new Headers(response.headers);
   HOP_BY_HOP_HEADERS.forEach((header) => responseHeaders.delete(header));

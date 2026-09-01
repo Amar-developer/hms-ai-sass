@@ -144,7 +144,7 @@ class FileOptimizationService:
             self.session.refresh(original)
             return _optimization_read(original)
         if (
-            profile.name == "invoice_pdf"
+            not profile.preserve_original
             and original.optimization_profile == profile.name
             and original.optimization_status in {"ready", "not_required"}
         ):

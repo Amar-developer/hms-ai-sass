@@ -13,12 +13,15 @@ from app.modules.billing.schemas import (
     DoctorSettlementSummary,
     DueCollectionReport,
     RevenueReport,
+    VendorSettlementFinalize,
+    VendorSettlementRead,
 )
 from app.modules.billing.services.settlements_reports import (
     collection_report,
     doctor_settlement_summary,
     due_collection_report,
     finalize_doctor_settlement,
+    finalize_vendor_settlement,
     revenue_report,
 )
 from app.modules.identity import permissions
@@ -57,6 +60,18 @@ def finalize_doctor_settlement_endpoint(
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> DoctorSettlementRead:
     return finalize_doctor_settlement(
+        session, tenant_id=tenant_id, payload=payload, actor=current_user
+    )
+
+
+@router.post("/vendor-settlements/finalize", response_model=VendorSettlementRead)
+def finalize_vendor_settlement_endpoint(
+    payload: VendorSettlementFinalize,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> VendorSettlementRead:
+    return finalize_vendor_settlement(
         session, tenant_id=tenant_id, payload=payload, actor=current_user
     )
 

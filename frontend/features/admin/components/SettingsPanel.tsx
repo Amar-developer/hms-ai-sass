@@ -534,9 +534,9 @@ export function SettingsPanel(props: any) {
           <div>
             <h3 className="card-title font-bold">Monthly Email Reports</h3>
             <p className="card-desc text-slate-500">
-              Send last month revenue, doctor settlement, medical department
-              revenue, and paid invoice profit as an Excel-compatible
-              spreadsheet through the Redis report worker.
+              Send one modern Excel workbook with revenue, doctor and vendor
+              settlements, payment collections, invoice profit, totals, and
+              reconciliation checks through the report worker.
             </p>
           </div>
           <Badge
@@ -585,12 +585,15 @@ export function SettingsPanel(props: any) {
             </Select>
           </FormField>
         </div>
-        <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-3">
           {[
             ["overall", "Overall summary"],
-            ["doctor", "Doctor revenue"],
+            ["doctor", "Doctor settlement"],
+            ["vendor", "Vendor settlement"],
             ["department", "Medical department revenue"],
             ["invoice", "Paid invoice details"],
+            ["collections", "Payment collections"],
+            ["include_patient_details", "Include patient names (restricted)"],
           ].map(([key, label]) => (
             <label
               key={key}

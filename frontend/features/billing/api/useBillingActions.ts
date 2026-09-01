@@ -31,7 +31,7 @@ import {
   updateInvoiceLifecycle,
 } from "./billing.api";
 
-const MAX_INVOICE_PDF_UPLOAD_BYTES = 5 * 1024 * 1024;
+const MAX_INVOICE_PDF_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 export function useBillingActions(
   session: ApiSession | null | undefined,
@@ -157,7 +157,7 @@ export function useBillingActions(
         );
         if (blob.size > MAX_INVOICE_PDF_UPLOAD_BYTES) {
           throw new Error(
-            `The generated invoice PDF is ${(blob.size / (1024 * 1024)).toFixed(1)} MB. The maximum allowed size is 5 MB.`,
+            `The generated invoice PDF is ${(blob.size / (1024 * 1024)).toFixed(1)} MB. The maximum intake size is 50 MB.`,
           );
         }
         const form = new FormData();
@@ -226,7 +226,9 @@ export function useBillingActions(
         queryClient,
       );
       if (blob.size > MAX_INVOICE_PDF_UPLOAD_BYTES) {
-        throw new Error("The regenerated invoice PDF exceeds the 5 MB limit.");
+        throw new Error(
+          "The regenerated invoice PDF exceeds the 50 MB intake limit.",
+        );
       }
       const form = new FormData();
       form.append("file", blob, filename);
