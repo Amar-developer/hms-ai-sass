@@ -613,6 +613,20 @@ All endpoints enforce the separate `patient_intelligence` plan entitlement. Exis
 | `GET` | `/api/v1/communications/whatsapp/queue` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
 | `POST` | `/api/v1/communications/whatsapp/queue/{event_id}/retry` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
 | `POST` | `/api/v1/communications/whatsapp/queue/{event_id}/cancel` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/sms/settings` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `PUT` | `/api/v1/communications/sms/settings` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/sms/readiness` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `PUT` | `/api/v1/communications/sms/readiness` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/sms/test` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/sms/queue` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/sms/queue/{event_id}/retry` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/sms/queue/{event_id}/cancel` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/sms/usage` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `GET` | `/api/v1/communications/sms/health` | `communications.sms.manage`, `communications.manage`, or `settings.manage` |
+| `POST` | `/api/v1/communications/sms/delivery-receipt/{tenant_id}` | Public provider callback authenticated by tenant-specific HMAC signature |
+| `GET` | `/api/v1/communications/email/settings` | `communications.manage` or `settings.manage` |
+| `PUT` | `/api/v1/communications/email/settings` | `communications.manage` or `settings.manage` |
+| `POST` | `/api/v1/communications/email/test` | `communications.manage` or `settings.manage` |
 | `POST` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events/page` | `audit.read` |
