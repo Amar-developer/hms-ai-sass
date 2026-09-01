@@ -1221,7 +1221,7 @@ def test_invoice_requires_signed_consultation(client: TestClient):
     patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Draft Patient"},
+        json={"full_name": "Draft Patient", "mobile": "9000000201"},
     ).json()
     booking = client.post(
         "/api/v1/appointments",

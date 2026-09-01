@@ -132,7 +132,7 @@ def test_patient_membership_enrollment_resolves_missing_branch(client: TestClien
     patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Membership Patient"},
+        json={"full_name": "Membership Patient", "mobile": "9000000401"},
     ).json()
     plan = client.post(
         "/api/v1/patient-subscriptions/plans",
@@ -207,7 +207,11 @@ def test_patient_membership_enrollment_resolves_missing_branch(client: TestClien
     paid_patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Paid Membership Patient", "branch_id": branch["id"]},
+        json={
+            "full_name": "Paid Membership Patient",
+            "branch_id": branch["id"],
+            "mobile": "9000000402",
+        },
     ).json()
     paid_enrollment = client.post(
         "/api/v1/patient-subscriptions/enrollments",
