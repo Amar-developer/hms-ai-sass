@@ -97,3 +97,24 @@ def test_patient_intelligence_enum_repair_casts_comparisons_and_values():
 
     assert "CAST(patientintelligencerule.category AS VARCHAR)" in sql
     assert "CAST(%(param_1)s AS intelligenceflagcategory)" in sql
+
+
+def test_sms_consent_repair_casts_enum_before_calling_upper():
+    scripts = _migration_scripts()
+    migration = scripts.get_revision("20260830_0131").module
+    consent_type = postgresql.ENUM(
+        "NOT_RECORDED",
+        "OPTED_IN",
+        "OPTED_OUT",
+        name="smsconsentstatus",
+    )
+    table = sa.table(
+        "patient",
+        sa.column("sms_consent_status", consent_type),
+    )
+
+    sql = str(migration._repair_statement(table).compile(dialect=postgresql.dialect()))
+
+    normalized = "upper(CAST(patient.sms_consent_status AS VARCHAR))"
+    assert normalized in sql
+    assert f"CAST({normalized} AS smsconsentstatus)" in sql

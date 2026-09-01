@@ -27,19 +27,31 @@ def _column_exists(table_name: str, column_name: str) -> bool:
     )
 
 
+def _repair_statement(table: sa.Table):
+    consent_status = table.c.sms_consent_status
+    consent_status_text = sa.cast(consent_status, sa.String())
+    normalized_status = sa.func.upper(consent_status_text)
+    return (
+        table.update()
+        .where(
+            consent_status.is_not(None),
+            consent_status_text != normalized_status,
+        )
+        .values(sms_consent_status=sa.cast(normalized_status, consent_status.type))
+    )
+
+
 def upgrade() -> None:
     if not _column_exists("patient", "sms_consent_status"):
         return
-    op.get_bind().execute(
-        sa.text(
-            """
-            UPDATE patient
-            SET sms_consent_status = UPPER(sms_consent_status)
-            WHERE sms_consent_status IS NOT NULL
-              AND sms_consent_status <> UPPER(sms_consent_status)
-            """
-        )
+    bind = op.get_bind()
+    table = sa.Table(
+        "patient",
+        sa.MetaData(),
+        autoload_with=bind,
+        include_columns=["sms_consent_status"],
     )
+    bind.execute(_repair_statement(table))
 
 
 def downgrade() -> None:
