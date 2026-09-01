@@ -16,10 +16,25 @@ def _table_exists(table_name: str) -> bool:
     return sa.inspect(op.get_bind()).has_table(table_name)
 
 
+def _repair_statement(table: sa.Table, old: str, new: str):
+    category = table.c.category
+    return (
+        table.update()
+        .where(sa.cast(category, sa.String()) == old)
+        .values(category=sa.cast(sa.literal(new), category.type))
+    )
+
+
 def _repair_table(table_name: str) -> None:
     if not _table_exists(table_name):
         return
-    table = sa.table(table_name, sa.column("category", sa.String()))
+    bind = op.get_bind()
+    table = sa.Table(
+        table_name,
+        sa.MetaData(),
+        autoload_with=bind,
+        include_columns=["category"],
+    )
     replacements = {
         "value": "VALUE",
         "recurring": "RECURRING",
@@ -29,7 +44,7 @@ def _repair_table(table_name: str) -> None:
         "membership": "MEMBERSHIP",
     }
     for old, new in replacements.items():
-        op.execute(table.update().where(table.c.category == old).values(category=new))
+        op.execute(_repair_statement(table, old, new))
 
 
 def upgrade() -> None:

@@ -3,8 +3,10 @@ from pathlib import Path
 import subprocess
 import sys
 
+import sqlalchemy as sa
 from alembic.config import Config
 from alembic.script import ScriptDirectory
+from sqlalchemy.dialects import postgresql
 
 
 BACKEND_ROOT = Path(__file__).parents[1]
@@ -71,3 +73,27 @@ def test_documented_alembic_cli_can_discover_revisions_without_pythonpath():
 
     assert completed.returncode == 0, completed.stderr
     assert "(head)" in completed.stdout
+
+
+def test_patient_intelligence_enum_repair_casts_comparisons_and_values():
+    scripts = _migration_scripts()
+    migration = scripts.get_revision("20260824_0124").module
+    category_type = postgresql.ENUM(
+        "VALUE",
+        "RECURRING",
+        "LOYALTY",
+        "ENGAGEMENT",
+        "CARE_OPERATIONAL",
+        "MEMBERSHIP",
+        name="intelligenceflagcategory",
+    )
+    table = sa.table(
+        "patientintelligencerule",
+        sa.column("category", category_type),
+    )
+    statement = migration._repair_statement(table, "value", "VALUE")
+
+    sql = str(statement.compile(dialect=postgresql.dialect()))
+
+    assert "CAST(patientintelligencerule.category AS VARCHAR)" in sql
+    assert "CAST(%(param_1)s AS intelligenceflagcategory)" in sql
