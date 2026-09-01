@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ReceiptText } from "lucide-react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Sidebar } from "./Sidebar";
+
+afterEach(cleanup);
 
 describe("Sidebar module navigation", () => {
   it("renders ordinary modules as links and records navigation intent without an imperative push", () => {
