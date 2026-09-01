@@ -37,6 +37,7 @@ def test_admin_report_configuration_can_be_saved_before_recipients_are_selected(
             "patient_notifications_enabled": False,
             "doctor_notifications_enabled": False,
             "admin_recipient_user_ids": [],
+            "templates": {"admin_daily_report": "hms_admin_daily_report"},
             "flows": {"admin_daily_report": True},
         }
     )
@@ -84,6 +85,7 @@ def test_admin_report_recipient_selection_rejects_another_tenants_user(
                 "patient_notifications_enabled": False,
                 "doctor_notifications_enabled": False,
                 "admin_recipient_user_ids": [foreign_user.id],
+                "templates": {"admin_daily_report": "hms_admin_daily_report"},
                 "flows": {"admin_daily_report": True},
             }
         )
