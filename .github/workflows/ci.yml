@@ -293,8 +293,46 @@ jobs:
           PYTHONPATH: .
         run: alembic -c alembic/alembic.ini upgrade head
 
-      - name: Full tests
-        run: pytest backend/tests -q
+      # Preserve pytest's last-failed state between pushes on the same branch.
+      # A clean/no-cache run executes the complete suite. After a failure, the
+      # next repair push executes only those failures; when they pass pytest
+      # clears the list, so the following backend change returns to a full run.
+      # Branch-scoped keys keep develop repair state out of main's production
+      # gate. A unique key is required because Actions caches are immutable.
+      - name: Restore Backend Full failure state
+        if: github.ref == 'refs/heads/develop'
+        uses: actions/cache/restore@v4
+        with:
+          path: .pytest_cache/v/cache/lastfailed
+          key: pytest-lastfailed-backend-full-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            pytest-lastfailed-backend-full-${{ github.ref_name }}-
+
+      # Continue temporarily so the updated last-failed state can be saved
+      # even when pytest fails. The explicit enforcement step below still
+      # fails the job and therefore keeps deployment blocked.
+      - name: Full tests or previous failures
+        id: backend-full-tests
+        continue-on-error: true
+        run: |
+          if [[ "${GITHUB_REF}" == "refs/heads/develop" ]]; then
+            pytest backend/tests -q \
+              --last-failed \
+              --last-failed-no-failures all
+          else
+            pytest backend/tests -q
+          fi
+
+      - name: Save Backend Full failure state
+        if: always() && github.ref == 'refs/heads/develop'
+        uses: actions/cache/save@v4
+        with:
+          path: .pytest_cache/v/cache/lastfailed
+          key: pytest-lastfailed-backend-full-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Enforce Backend Full result
+        if: always() && steps.backend-full-tests.outcome != 'success'
+        run: exit 1
 
       # Only reached when every step above succeeded, so the marker means
       # "this exact tree passed". A failing run writes nothing and the suite

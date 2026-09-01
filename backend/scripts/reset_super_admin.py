@@ -20,6 +20,8 @@ DEFAULT_SUPER_ADMIN_NAME = "Platform Super Admin"
 SUPER_ADMIN_NAME_ENV = "MEDIZINHUB_SUPER_ADMIN_NAME"
 SUPER_ADMIN_EMAIL_ENV = "MEDIZINHUB_SUPER_ADMIN_EMAIL"
 SUPER_ADMIN_PASSWORD_ENV = "MEDIZINHUB_SUPER_ADMIN_PASSWORD"
+SUPER_ADMIN_CONFIRM_ENV = "MEDIZINHUB_SUPER_ADMIN_CONFIRM"
+PRODUCTION_CONFIRM_VALUE = "RESET_SUPER_ADMIN_PRODUCTION"
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,23 @@ def _read_env_value(name: str) -> str | None:
         return None
     value = value.strip()
     return value or None
+
+
+def _is_production() -> bool:
+    return os.getenv("MEDIZINHUB_ENVIRONMENT", "local").strip().lower() in {
+        "production",
+        "prod",
+    }
+
+
+def _assert_reset_allowed() -> None:
+    if not _is_production():
+        return
+    if os.getenv(SUPER_ADMIN_CONFIRM_ENV) != PRODUCTION_CONFIRM_VALUE:
+        raise SystemExit(
+            "Refusing to reset production super admin without "
+            f"{SUPER_ADMIN_CONFIRM_ENV}={PRODUCTION_CONFIRM_VALUE}"
+        )
 
 
 def _prompt_required(label: str, *, secret: bool = False) -> str:
@@ -222,6 +241,7 @@ def ensure_tenant_admin_template_role(
 
 
 def main() -> None:
+    _assert_reset_allowed()
     credentials = resolve_super_admin_credentials()
     with Session(engine) as session:
         ensure_default_plans(session)

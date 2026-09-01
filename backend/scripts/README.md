@@ -17,7 +17,7 @@ This folder contains backend-only operational helpers. Keep scripts here when th
 
 | Script | Use case | Notes |
 | --- | --- | --- |
-| `reset_super_admin.py` | Repairs primary tenant, super admin, super admin role, tenant admin template role, and permissions. | Production requires `MEDIZINHUB_SUPER_ADMIN_PASSWORD` and `MEDIZINHUB_SUPER_ADMIN_CONFIRM=RESET_SUPER_ADMIN_PRODUCTION`. |
+| `reset_super_admin.py` | Repairs primary tenant, super admin, super admin role, tenant admin template role, and permissions. | Prompts for credentials interactively; non-interactive runs require explicit email/password. Production also requires `MEDIZINHUB_SUPER_ADMIN_CONFIRM=RESET_SUPER_ADMIN_PRODUCTION`. |
 | `reset_demo_data.py` | Deletes all rows from the configured DB and recreates fresh SaaS bootstrap data only. | Requires `MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV`. Use only local/dev databases. |
 | `seed_demo.py` | Creates rich demo clinic data for manual testing and demos. | Large but intentional; keep separate from reset logic. |
 
