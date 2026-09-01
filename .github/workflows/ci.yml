@@ -490,6 +490,7 @@ jobs:
           username: ${{ secrets.DEV_EC2_USER }}
           key: ${{ secrets.DEV_EC2_SSH_KEY }}
           port: ${{ secrets.DEV_EC2_SSH_PORT }}
+          command_timeout: 30m
           script_stop: true
           script: |
             cd "${{ secrets.DEV_EC2_APP_DIR }}"
