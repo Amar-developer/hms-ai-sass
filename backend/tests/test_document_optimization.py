@@ -85,6 +85,22 @@ def test_patient_photo_is_resized_and_metadata_free():
         assert not image.getexif()
 
 
+def test_small_png_keeps_png_extension_when_optimization_is_not_smaller():
+    output = BytesIO()
+    Image.new("RGB", (8, 8), (20, 40, 60)).save(output, format="PNG")
+
+    result = optimize_document(
+        data=output.getvalue(),
+        content_type="image/png",
+        profile=PATIENT_PHOTO,
+    )
+
+    assert result.changed is False
+    assert result.content_type == "image/png"
+    assert result.extension == ".png"
+    assert result.data == output.getvalue()
+
+
 def test_corrupted_image_is_rejected():
     with pytest.raises(ValueError, match="corrupted"):
         optimize_image(b"not-an-image", PATIENT_PHOTO)
