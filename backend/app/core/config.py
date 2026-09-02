@@ -179,6 +179,13 @@ class Settings(BaseSettings):
             )
         return normalized
 
+    @field_validator("build_time", mode="before")
+    @classmethod
+    def _normalize_optional_build_time(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @model_validator(mode="after")
     def _validate_storage_configuration(self):
         environment = self.environment.strip().lower()

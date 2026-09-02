@@ -57,9 +57,20 @@ compose+=(-f "${COMPOSE_FILE}")
 
 test -s "${temporary}"
 mv "${temporary}" "${backup}"
+
+# Consume the entire decrypted stream before asking pg_restore to inspect it.
+# Piping directly to `pg_restore --list` can make pg_restore close stdin after
+# reading the archive table of contents, which leaves OpenSSL writing to a
+# closed pipe and causes a misleading "error writing output file" failure.
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
   -pass env:MEDIZINHUB_BACKUP_PASSPHRASE -in "${backup}" \
-  | "${compose[@]}" exec -T postgres pg_restore --list >/dev/null
+  | "${compose[@]}" exec -T postgres sh -eu -c '
+      umask 077
+      archive="$(mktemp /tmp/medizinhub-backup-verify.XXXXXX)"
+      trap '\''rm -f -- "$archive"'\'' EXIT HUP INT TERM
+      cat > "$archive"
+      pg_restore --list "$archive" >/dev/null
+    '
 
 (
   cd "${OUTPUT_DIR}"
