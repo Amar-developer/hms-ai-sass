@@ -66,7 +66,7 @@ openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
   -pass env:MEDIZINHUB_BACKUP_PASSPHRASE -in "${backup}" \
   | "${compose[@]}" exec -T postgres sh -eu -c '
       umask 077
-      archive="$(mktemp /tmp/medizinhub-backup-verify.XXXXXX.dump)"
+      archive="$(mktemp /tmp/medizinhub-backup-verify.XXXXXX)"
       trap '\''rm -f -- "$archive"'\'' EXIT HUP INT TERM
       cat > "$archive"
       pg_restore --list "$archive" >/dev/null

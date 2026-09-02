@@ -29,6 +29,11 @@ def test_application_version_requires_semantic_versioning():
         Settings(app_version="release-12")
 
 
+def test_blank_build_time_is_reported_as_absent():
+    assert Settings(build_time="").build_time is None
+    assert Settings(build_time="   ").build_time is None
+
+
 def test_readiness_contract_starts_without_external_dependencies(client: TestClient):
     response = client.get("/api/v1/readiness")
 
