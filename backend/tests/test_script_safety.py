@@ -1,8 +1,20 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from scripts import reset_super_admin
+
+
+BACKUP_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "backup_postgres.sh"
+
+
+def test_postgres_backup_verification_is_busybox_and_pipe_safe():
+    script = BACKUP_SCRIPT.read_text(encoding="utf-8")
+
+    assert "mktemp /tmp/medizinhub-backup-verify.XXXXXX)" in script
+    assert 'cat > "$archive"' in script
+    assert "exec -T postgres pg_restore --list" not in script
 
 
 def test_reset_super_admin_requires_password_non_interactively(monkeypatch):
