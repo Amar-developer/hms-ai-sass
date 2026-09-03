@@ -261,6 +261,8 @@ Secondary tenant admins keep the existing tenant-scoped screens and APIs. They c
 | `DELETE` | `/api/v1/patients/{patient_id}/family-relationships/{relationship_id}` | `patients.edit` | Deactivates a family relationship link |
 | `POST` | `/api/v1/patients/{patient_id}/photo` | `patients.edit` | Uploads or replaces patient photo/document reference |
 | `GET` | `/api/v1/patients/{patient_id}/summary` | `patients.read` | Records patient history viewed audit |
+| `GET` | `/api/v1/patients/{patient_id}/vitals` | `patients.read` | Lists recorded patient vitals within an optional date range |
+| `POST` | `/api/v1/patients/{patient_id}/vitals` | `patients.edit` | Records a new patient vital entry |
 
 Patient APIs enforce the `patients` module entitlement and branch scope for branch-assigned users.
 
@@ -332,6 +334,7 @@ Appointment APIs enforce the `appointments` module entitlement. Queue APIs enfor
 | Method | Endpoint | Permission |
 | --- | --- | --- |
 | `POST` | `/api/v1/consultations` | `consultations.write` |
+| `GET` | `/api/v1/consultations/diagnoses` | `consultations.read` | Lists diagnoses recorded across a patient's consultations |
 | `GET` | `/api/v1/consultations/clinical-templates` | `consultations.read` |
 | `GET` | `/api/v1/consultations` | `consultations.read` |
 | `POST` | `/api/v1/consultations/clinical-templates` | `consultations.write` |
