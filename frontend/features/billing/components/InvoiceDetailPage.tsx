@@ -227,6 +227,13 @@ export function InvoiceDetailPage({
   ]);
   const [activeWorkspaceSection, setActiveWorkspaceSection] =
     useState("invoice-items");
+  // Deep-link tab selection — deliberately keyed on `invoice.id` alone so it
+  // fires exactly once per opened invoice. Keying it on `balance_amount`/
+  // `defaultPaymentMethod` too (as this used to) meant any later
+  // recalculation of those values (e.g. once supplier/payment data finishes
+  // loading) re-ran this effect, found the one-shot sessionStorage key
+  // already consumed, and reset the tab back to "invoice-items" — clobbering
+  // a "jump straight to Payments" deep link a moment after it was applied.
   useEffect(() => {
     const requestedSection =
       typeof window !== "undefined"
@@ -240,6 +247,10 @@ export function InvoiceDetailPage({
     if (requestedSection && typeof window !== "undefined") {
       window.sessionStorage.removeItem("medizinhub.billingInvoiceSection");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice.id]);
+
+  useEffect(() => {
     setPayRows([
       {
         method: defaultPaymentMethod,

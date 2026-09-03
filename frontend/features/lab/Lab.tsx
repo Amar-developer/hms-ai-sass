@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { newSegment } from "@/lib/routeSlugs";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import {
   ActionButton,
   Button,
@@ -155,12 +156,29 @@ export function Lab({
   const [selectedOrder, setSelectedOrder] = useState<LabOrderSummary | null>(
     null,
   );
+
+  // Deep-link from Patient History: it hands us the already-fetched order
+  // row directly (same shape as our own list rows) instead of just an id,
+  // so the detail modal opens immediately regardless of this page's current
+  // filters/pagination.
+  useEffect(() => {
+    if (!apiSession || typeof window === "undefined") return;
+    const stored = window.sessionStorage.getItem("medizinhub.labOrderPreview");
+    if (!stored) return;
+    window.sessionStorage.removeItem("medizinhub.labOrderPreview");
+    try {
+      setSelectedOrder(JSON.parse(stored));
+    } catch {
+      // ignore malformed payload
+    }
+  }, [apiSession?.tenantId]);
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [consultDetail, setConsultDetail] = useState<any>(null);
   const [removeDocPicker, setRemoveDocPicker] = useState<{
     order: any;
     docs: any[];
   } | null>(null);
+  const [cancelOrderConfirm, setCancelOrderConfirm] = useState<any>(null);
 
   function handleRemoveDocument(order: any) {
     const docs = reportDocuments[order.id] || [];
@@ -803,7 +821,21 @@ export function Lab({
     if (action === "view-invoice") return viewInvoice(order);
     if (action === "pdf") return openReport(order, downloadBlob);
     if (action === "send-report") return sendReport(order);
-    if (action === "cancel") return updateStatus(order, "cancelled");
+    if (action === "confirm-cancel") return setCancelOrderConfirm(order);
+  }
+
+  async function confirmCancelOrder() {
+    if (!cancelOrderConfirm) return;
+    await updateStatus(cancelOrderConfirm, "cancelled");
+    setCancelOrderConfirm(null);
+    // updateStatus only reloads useLabWorkspaceData's own `orders` list — the
+    // worklist table renders the separately server-paginated `labOrderRows`
+    // (plus the summary/tab-count rows behind the amount tiles and status
+    // tabs), which that reload never touches, so the cancelled status only
+    // showed up after a manual refresh/page reload. Refetch them here too.
+    await loadLabOrderPage();
+    await loadLabSummary();
+    await loadLabTabCounts();
   }
 
   const worklistColumns = useMemo(
@@ -894,7 +926,7 @@ export function Lab({
       {
         key: "actions",
         header: "Actions",
-        width: "140px",
+        width: "180px",
         className: "text-right",
         disableRowClick: true,
         render: (a: any) => (
@@ -1058,6 +1090,16 @@ export function Lab({
             setViewConsult(null);
             createFromConsultation(a);
           }}
+        />
+      )}
+      {cancelOrderConfirm && (
+        <ConfirmModal
+          busy={busy === cancelOrderConfirm.id}
+          title="Cancel Lab Order"
+          message="This will cancel the order. This action cannot be undone."
+          confirmLabel="Cancel Order"
+          onCancel={() => setCancelOrderConfirm(null)}
+          onConfirm={confirmCancelOrder}
         />
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />

@@ -24,6 +24,7 @@ from app.modules.patients.models import (
     PatientAlert,
     PatientFamilyRelationship,
     PatientStatus,
+    PatientVital,
 )
 from app.modules.identity.models import User
 from app.modules.tenants.models import Branch
@@ -455,6 +456,35 @@ class PatientFamilyRelationshipRepository:
             elif row.related_patient_id == patient_id:
                 related_ids.append(row.patient_id)
         return list(dict.fromkeys(related_ids))
+
+
+class PatientVitalRepository:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def add(self, vital: PatientVital) -> PatientVital:
+        self.session.add(vital)
+        return vital
+
+    def for_patient(
+        self,
+        *,
+        tenant_id: str,
+        patient_id: str,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> list[PatientVital]:
+        statement = select(PatientVital).where(
+            PatientVital.tenant_id == tenant_id,
+            PatientVital.patient_id == patient_id,
+        )
+        if from_date:
+            statement = statement.where(PatientVital.recorded_at >= from_date)
+        if to_date:
+            statement = statement.where(PatientVital.recorded_at <= to_date)
+        return list(
+            self.session.exec(statement.order_by(PatientVital.recorded_at)).all()
+        )
 
 
 class PatientSubscriptionReadRepository:

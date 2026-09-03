@@ -12,6 +12,7 @@ import {
   Stethoscope,
 } from "lucide-react";
 import { newSegment } from "@/lib/routeSlugs";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import {
   Button,
   Card,
@@ -138,7 +139,26 @@ export function Pharmacy({
   );
   const [selectedIssue, setSelectedIssue] =
     useState<PharmacyIssueSummary | null>(null);
+
+  // Deep-link from Patient History: it hands us the already-fetched issue
+  // row directly (same shape as our own list rows) instead of just an id,
+  // so the detail modal opens immediately regardless of this page's current
+  // filters/pagination.
+  useEffect(() => {
+    if (!apiSession || typeof window === "undefined") return;
+    const stored = window.sessionStorage.getItem(
+      "medizinhub.pharmacyIssuePreview",
+    );
+    if (!stored) return;
+    window.sessionStorage.removeItem("medizinhub.pharmacyIssuePreview");
+    try {
+      setSelectedIssue(JSON.parse(stored));
+    } catch {
+      // ignore malformed payload
+    }
+  }, [apiSession?.tenantId]);
   const [viewConsult, setViewConsult] = useState<any>(null);
+  const [cancelIssueConfirm, setCancelIssueConfirm] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [worklistQuery, setWorklistQuery] = useState("");
   const [worklistSort, setWorklistSort] = useState<SortState | null>({
@@ -708,7 +728,21 @@ export function Pharmacy({
     if (action === "partial") return updateStatus(issue, "partially_dispensed");
     if (action === "dispense") return updateStatus(issue, "dispensed");
     if (action === "invoice") return handleGenerateInvoice(issue);
-    if (action === "cancel") return updateStatus(issue, "cancelled");
+    if (action === "confirm-cancel") return setCancelIssueConfirm(issue);
+  }
+
+  async function confirmCancelIssue() {
+    if (!cancelIssueConfirm) return;
+    await updateStatus(cancelIssueConfirm, "cancelled");
+    setCancelIssueConfirm(null);
+    // updateStatus only reloads usePharmacyWorkspace's own `issues` list — the
+    // worklist table renders the separately server-paginated `issuePageRows`
+    // (plus the summary/tab-count rows behind the amount tiles and status
+    // tabs), which that reload never touches, so the cancelled status only
+    // showed up after a manual refresh/page reload. Refetch them here too.
+    await loadPharmacyIssuePage();
+    await loadPharmacySummary();
+    await loadPharmacyTabCounts();
   }
 
   function startEditAmount(issue: any) {
@@ -979,6 +1013,16 @@ export function Pharmacy({
             setViewConsult(null);
             createFromConsultation(a, pricePayload);
           }}
+        />
+      )}
+      {cancelIssueConfirm && (
+        <ConfirmModal
+          busy={busy === cancelIssueConfirm.id}
+          title="Cancel Pharmacy Issue"
+          message="This will cancel the order. This action cannot be undone."
+          confirmLabel="Cancel Order"
+          onCancel={() => setCancelIssueConfirm(null)}
+          onConfirm={confirmCancelIssue}
         />
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />

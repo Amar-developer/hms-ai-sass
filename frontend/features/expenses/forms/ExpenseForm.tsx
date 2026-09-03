@@ -268,7 +268,7 @@ export function ExpenseForm({
       </FormField>
 
       <div className="mt-2 flex justify-end gap-2">
-        <Button type="button" onClick={onCancel} className="close-button hover:bg-slate-300 bg-slate-500 text-slate-900">
+        <Button type="button" onClick={onCancel} className="close-button bg-slate-500 hover:bg-slate-600">
           Cancel
         </Button>
         <Button type="submit" disabled={busy} className='save-button'>

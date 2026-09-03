@@ -298,7 +298,7 @@ export function getLabColumns({
                 },
                 {
                   label: rowBusy ? "Cancelling..." : "Cancel order",
-                  onClick: () => handleOrderAction(o, "cancel"),
+                  onClick: () => handleOrderAction(o, "confirm-cancel"),
                   hidden: !canEditLabOrder,
                   disabled: actionsBusy || cancelled || invoiced,
                   danger: true,

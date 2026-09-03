@@ -32,41 +32,10 @@ export const defaultNumberingEntities: any = {
   supplier: "SUP",
 };
 
-export const parseNumberingRules = (value: any, fallbackPrefix = "SUN") => ({
-  prefix: String(value?.prefix || fallbackPrefix || "SUN").toUpperCase(),
-  digits: Number(value?.digits || 5),
-  entities: { ...defaultNumberingEntities, ...(value?.entities || {}) },
-});
-
 export const defaultCatalogIntegrations: any = {
   lab_items: { enabled: false, provider: "local" },
   medicine_items: { enabled: true, provider: "external_catalog" },
 };
-
-export const parseCatalogIntegrations = (value: any) => ({
-  lab_items: {
-    ...defaultCatalogIntegrations.lab_items,
-    ...(value?.lab_items || {}),
-  },
-  medicine_items: {
-    ...defaultCatalogIntegrations.medicine_items,
-    ...(value?.medicine_items || {}),
-  },
-});
-
-export const parseBankDetails = (value: any) => ({
-  account_name: String(value?.account_name || value?.name || ""),
-  branch_name: String(value?.branch_name || value?.branch || ""),
-  account_number: String(value?.account_number || value?.acc_number || ""),
-  ifsc: String(value?.ifsc || "").toUpperCase(),
-  upi_id: String(value?.upi_id || value?.upi || ""),
-  gstin: String(value?.gstin || "").toUpperCase(),
-});
-
-export const numberEntityLabel = (value: string) =>
-  String(value || "")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (part) => part.toUpperCase());
 
 export const userTypes = [
   ["tenant_admin", "Tenant Admin"],
@@ -228,27 +197,6 @@ export const superAdminClinicSections = superAdminSections.filter(([id]) =>
   (CLINIC_SECTION_IDS as readonly string[]).includes(id),
 );
 
-export function platformSectionsForUser(user: any) {
-  if (user?.is_super_admin) return [...superAdminSections];
-  if (user?.user_type === "support_admin") {
-    return superAdminSections.filter(([id]) => id === "privilegedAccess");
-  }
-  const permissions = new Set<string>(user?.permissions || []);
-  return superAdminSections.filter(([id]) => {
-    if (id === "overview") {
-      return [...permissions].some((key) => key.startsWith("platform."));
-    }
-    if (id === "tenants") return permissions.has("platform.tenants.manage");
-    if (id === "subscriptions") {
-      return permissions.has("platform.subscriptions.manage");
-    }
-    if (["roles", "departments", "branches"].includes(id)) {
-      return permissions.has("platform.templates.manage");
-    }
-    return false;
-  });
-}
-
 export const status_options = [
   { value: "all", label: "All status" },
   { value: "active", label: "Active" },
@@ -261,12 +209,12 @@ export const tenant_status_options = [
   { value: "active", label: "Active" },
 ];
 
-export const dateFieldOptions  = [
+export const dateFieldOptions = [
   { value: "updated_at", label: "Modified date" },
   { value: "created_at", label: "Created date" },
 ];
 
-export const subscriptin_status_options =[
+export const subscriptin_status_options = [
   { value: "all", label: "All status" },
   { value: "active", label: "Active" },
   { value: "scheduled", label: "Scheduled" },

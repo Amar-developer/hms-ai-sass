@@ -125,6 +125,26 @@ class PatientFamilyRelationship(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=now_utc)
 
 
+class PatientVital(SQLModel, table=True):
+    """Single source of truth for a patient's recorded vitals — captured from
+    both the appointment intake form and the patient Overview BMI widget, so
+    BMI reporting and any future vitals history read from this table alone."""
+
+    id: str = Field(default_factory=lambda: new_id("vital"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    patient_id: str = Field(index=True, foreign_key="patient.id")
+    recorded_at: datetime = Field(default_factory=now_utc, index=True)
+    height_cm: float | None = Field(default=None, gt=0, le=300)
+    weight_kg: float | None = Field(default=None, gt=0, le=500)
+    bp: str | None = Field(default=None, max_length=20)
+    pulse_bpm: int | None = Field(default=None, gt=0, le=300)
+    spo2_percent: float | None = Field(default=None, gt=0, le=100)
+    temperature_f: float | None = Field(default=None, gt=70, le=115)
+    notes: str | None = Field(default=None, max_length=300)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+
+
 class PatientAlert(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("alert"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")

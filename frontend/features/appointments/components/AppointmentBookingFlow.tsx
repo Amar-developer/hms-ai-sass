@@ -21,27 +21,7 @@ import { formatDisplayTime } from "../helpers";
 import { visit_type_options } from "../constants";
 import { PatientIntakeSummary } from "./PatientIntakeSummary";
 import { PatientFlagBadges } from "@/features/patients/components/PatientFlagBadges";
-
-function IntakeSuggestionChip({
-  value,
-  currentValue,
-  onApply,
-}: {
-  value?: string;
-  currentValue: string;
-  onApply: () => void;
-}) {
-  if (!value || value === currentValue) return null;
-  return (
-    <button
-      type="button"
-      onClick={onApply}
-      className="mt-1 inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
-    >
-      Use previous: {value}
-    </button>
-  );
-}
+import { VitalsFields } from "@/features/patients/components/workspace/VitalsFields";
 
 export function AppointmentBookingFlow(props: any) {
   const {
@@ -484,14 +464,44 @@ export function AppointmentBookingFlow(props: any) {
                   schedule when you save.
                 </div>
               )}
-              <details className="group rounded-xl border border-slate-200 bg-white">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-700">
+                  Vital Signs
+                </p>
+                <p className="mt-0.5 text-[10px] text-slate-500">
+                  Optional — fill in height &amp; weight to track BMI. Reused
+                  in consultation once saved.
+                </p>
+                <div className="mt-3">
+                  <VitalsFields
+                    value={{
+                      bp: intakeBp,
+                      pulse: intakePulse,
+                      spo2: intakeSpo2,
+                      temp: intakeTemp,
+                      height: intakeHeight,
+                      weight: intakeWeight,
+                    }}
+                    onChange={(next) => {
+                      setIntakeBp(next.bp);
+                      setIntakePulse(next.pulse);
+                      setIntakeSpo2(next.spo2);
+                      setIntakeTemp(next.temp);
+                      setIntakeHeight(next.height);
+                      setIntakeWeight(next.weight);
+                    }}
+                    previous={previousIntake}
+                  />
+                </div>
+              </div>
+              {/* <details className="group rounded-xl border border-slate-200 bg-white">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
                   <span>
                     <span className="block text-xs font-bold text-slate-800">
                       Optional intake details
                     </span>
                     <span className="mt-0.5 block text-[10px] text-slate-500">
-                      Vitals and complaints can be added now or during consultation.
+                      Complaints can be added now or during consultation.
                     </span>
                   </span>
                   <span className="text-xs font-bold text-emerald-700 group-open:hidden">
@@ -501,119 +511,8 @@ export function AppointmentBookingFlow(props: any) {
                     Hide
                   </span>
                 </summary>
-                <div className="grid gap-3 border-t border-slate-200 bg-slate-50/50 p-4 md:grid-cols-3">
-                  <div className="md:col-span-3">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-700">Vital Signs</p>
-                    <p className="mt-0.5 text-[10px] text-slate-500">Optional measurements can be captured now and reused in consultation.</p>
-                  </div>
-                  <FormField label="BP">
-                    <Input
-                      value={intakeBp}
-                      onChange={(e: any) => setIntakeBp(e.target.value)}
-                      placeholder="120/80 mmHg"
-                    />
-                    <IntakeSuggestionChip
-                      value={previousIntake?.bp}
-                      currentValue={intakeBp}
-                      onApply={() => setIntakeBp(previousIntake!.bp)}
-                    />
-                  </FormField>
-
-                  <FormField label="Pulse / PR">
-                    <Input
-                      value={intakePulse}
-                      onChange={(e: any) => setIntakePulse(e.target.value)}
-                      placeholder="78 bpm"
-                    />
-                    <IntakeSuggestionChip
-                      value={previousIntake?.pulse}
-                      currentValue={intakePulse}
-                      onApply={() => setIntakePulse(previousIntake!.pulse)}
-                    />
-                  </FormField>
-
-                  <FormField label="SpO2">
-                    <Input
-                      value={intakeSpo2}
-                      onChange={(e: any) => setIntakeSpo2(e.target.value)}
-                      placeholder="98%"
-                    />
-                    <IntakeSuggestionChip
-                      value={previousIntake?.spo2}
-                      currentValue={intakeSpo2}
-                      onApply={() => setIntakeSpo2(previousIntake!.spo2)}
-                    />
-                  </FormField>
-
-                  <FormField label="Temp">
-                    <Input
-                      value={intakeTemp}
-                      onChange={(e: any) => setIntakeTemp(e.target.value)}
-                      placeholder="98.6°F"
-                    />
-                    <IntakeSuggestionChip
-                      value={previousIntake?.temp}
-                      currentValue={intakeTemp}
-                      onApply={() => setIntakeTemp(previousIntake!.temp)}
-                    />
-                  </FormField>
-
-                  <FormField label="Height">
-                    <Input
-                      value={intakeHeight}
-                      onChange={(e: any) => setIntakeHeight(e.target.value)}
-                      placeholder="170cm"
-                    />
-                    <IntakeSuggestionChip
-                      value={previousIntake?.height}
-                      currentValue={intakeHeight}
-                      onApply={() => setIntakeHeight(previousIntake!.height)}
-                    />
-                  </FormField>
-
-                  <FormField label="Weight">
-                    <Input
-                      value={intakeWeight}
-                      onChange={(e: any) => setIntakeWeight(e.target.value)}
-                      placeholder="65kg"
-                    />
-                    <IntakeSuggestionChip
-                      value={previousIntake?.weight}
-                      currentValue={intakeWeight}
-                      onApply={() => setIntakeWeight(previousIntake!.weight)}
-                    />
-                  </FormField>
-
-                  {/* Auto-calculated BMI – only shown when height & weight are available */}
-                  {(() => {
-                    const heightNum = parseFloat(
-                      String(intakeHeight).replace(/[^\d.]/g, ""),
-                    );
-                    const weightNum = parseFloat(
-                      String(intakeWeight).replace(/[^\d.]/g, ""),
-                    );
-
-                    // Assume height in cm if > 3, otherwise metres
-                    const heightM =
-                      heightNum > 3
-                        ? heightNum / 100
-                        : heightNum > 0
-                          ? heightNum
-                          : 0;
-
-                    if (!heightM || !weightNum || weightNum <= 0) return null;
-
-                    const bmi = weightNum / (heightM * heightM);
-                    if (!Number.isFinite(bmi) || bmi <= 0) return null;
-
-                    return (
-                      <FormField label="BMI">
-                        <Input value={bmi.toFixed(1)} readOnly disabled />
-                      </FormField>
-                    );
-                  })()}
-
-                  <div className="md:col-span-3">
+                <div className="grid gap-3 border-t border-slate-200 bg-slate-50/50 p-4">
+                  <div>
                     <TextareaField
                       label="Complaint Rows"
                       value={intakeComplaints}
@@ -638,7 +537,7 @@ export function AppointmentBookingFlow(props: any) {
                       )}
                   </div>
                 </div>
-              </details>
+              </details> */}
               <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-4">
                 <Button
                   disabled={busy || !hasAvailableDoctor}

@@ -10,7 +10,8 @@ import { type ApiSession } from "@/lib/api";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { newSegment, editSegment } from "@/lib/routeSlugs";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
-import { PatientFlow, type PatientSectionId } from "./PatientFlow";
+import { PatientFlow } from "./PatientFlow";
+import { PatientSectionId } from "./types";
 import { PatientDetailSkeleton } from "./components/PatientDetailSkeleton";
 import { mapPatient } from "@/lib/liveData";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
@@ -552,7 +553,7 @@ export function Patient({
     canDeletePatient,
     onView: (id: string) => open("detail", id),
     onEdit: (id: string) => openPatientEdit(id),
-    onDelete: (row: any) => setConfirm({ row }),
+    onDelete: (row: any) => setConfirm({ kind: "delete", row }),
     onActivate: (row: any) => activatePatient(row),
   });
 
@@ -605,21 +606,21 @@ export function Patient({
         count={String(rows.length)}
       />
       <StatusToast message={message} onClose={() => setMessage("")} />
-        <div className="table-wrapper-width">
-          <DataTable
-            columns={patientColumns}
-            data={pageRows}
-            loading={busy}
-            emptyMessage="No patients match your search."
-            emptyDescription="Patients registered here will show up in this list once added."
-            emptyIcon={Users}
-            minBodyHeight={`${pageRows.length > 0 ? "" : "220px"}`}
-            onRowClick={(row: any) => open("detail", row.id)}
-            sort={sort ?? undefined}
-            onSortChange={handleSortChange}
-            className="table-width"
-          />
-        </div>
+      <div className="table-wrapper-width">
+        <DataTable
+          columns={patientColumns}
+          data={pageRows}
+          loading={busy}
+          emptyMessage="No patients match your search."
+          emptyDescription="Patients registered here will show up in this list once added."
+          emptyIcon={Users}
+          minBodyHeight={`${pageRows.length > 0 ? "" : "220px"}`}
+          onRowClick={(row: any) => open("detail", row.id)}
+          sort={sort ?? undefined}
+          onSortChange={handleSortChange}
+          className="table-width"
+        />
+      </div>
       <Pagination
         page={safePage}
         totalPages={totalPages}
@@ -633,7 +634,7 @@ export function Patient({
       {confirm && (
         <ConfirmModal
           busy={busy}
-          action={confirm.row}
+          action={confirm}
           onCancel={() => setConfirm(null)}
           onConfirm={() => deactivatePatient(confirm.row)}
         />

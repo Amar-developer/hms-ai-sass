@@ -19,6 +19,10 @@ export function fetchPatient(session: ApiSession, patientId: string) {
   return apiFetch(`/patients/${patientId}`, session);
 }
 
+export function searchPatients(session: ApiSession, params: URLSearchParams) {
+  return apiFetch(`/patients?${params.toString()}`, session);
+}
+
 export function fetchPatientSummary(session: ApiSession, patientId: string) {
   return apiFetch(`/patients/${patientId}/summary`, session);
 }
@@ -29,6 +33,10 @@ export function fetchPatientConsultations(session: ApiSession, patientId: string
 
 export function fetchPatientLabOrders(session: ApiSession, patientId: string) {
   return apiFetch(`/lab/orders?patient_id=${patientId}&limit=50`, session);
+}
+
+export function fetchPatientDiagnoses(session: ApiSession, patientId: string) {
+  return apiFetch(`/consultations/diagnoses?patient_id=${patientId}`, session);
 }
 
 export function fetchPatientPharmacyIssues(
@@ -125,6 +133,29 @@ export function fetchFamilyRelationships(
   patientId: string,
 ) {
   return apiFetch(`/patients/${patientId}/family-relationships`, session);
+}
+
+export function fetchPatientVitals(
+  session: ApiSession,
+  patientId: string,
+  params?: URLSearchParams,
+) {
+  const query = params?.toString();
+  return apiFetch(
+    `/patients/${patientId}/vitals${query ? `?${query}` : ""}`,
+    session,
+  );
+}
+
+export function createPatientVital(
+  session: ApiSession,
+  patientId: string,
+  payload: any,
+) {
+  return apiFetch(`/patients/${patientId}/vitals`, session, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function fetchPatientIntelligence(

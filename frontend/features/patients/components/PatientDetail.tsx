@@ -1,25 +1,19 @@
 import { useEffect, useState } from "react";
-import {
-  FlaskConical,
-  MessageCircle,
-  Pill,
-  ReceiptText,
-  Stethoscope,
-} from "lucide-react";
+import { MessageCircle, ReceiptText, Stethoscope } from "lucide-react";
 
-import { ApiSession, apiFetch } from "@/lib/api";
+import { ApiSession } from "@/lib/api";
 import {
-  clinicalRecordsWithUniqueItems,
+  deriveClinicalRows,
+  derivePatientBillingMembership,
   displayPatientGender,
   fmtDate,
-  uniqueClinicalRecords,
 } from "../helpers";
+import { usePatientFamilySearch, usePatientVitals } from "../api";
 import { MembershipEnrollForm } from "../forms/PatientForms";
 import { CompactMetric } from "./CompactMetric";
 import {
   invoicePatientDueAmount,
   invoiceSource,
-  isMembershipPlanInvoice,
 } from "@/features/billing/helpers";
 import { StatusBadge } from "./StatusBadge";
 import {
@@ -37,32 +31,24 @@ import { Info } from "@/app/components/common/Info";
 import { Empty } from "@/app/components/common/Empty";
 import { DetailSection } from "./DetailSection";
 import { AlertCard } from "./AlertCard";
-import { familyRelationshipOptions, hiddenScrollbar } from "../constants";
+import {
+  familyRelationshipOptions,
+  hiddenScrollbar,
+  message_language_options,
+  sms_language_options,
+} from "../constants";
 import { money } from "@/utils/helper";
 import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
 import { DataTable } from "@/app/components/common/DataTable";
 import { PatientFlagBadges, patientValueTierFlags } from "./PatientFlagBadges";
 import { MembershipBenefitUsageModal } from "./MembershipBenefitUsageModal";
 import {
+  getCommunicationColumns,
   getConsultationColumns,
   getInvoiceColumns,
-  getLabOrderColumns,
-  getMedicineColumns,
 } from "../Column";
-import { BmiTrendChart, type VitalReading } from "./workspace/BmiTrendChart";
-import { Column } from "@/utils/types";
-import { Pagination } from "@/app/components/common/Pagination";
-
-// Placeholder vitals — the patient schema has no height/weight/vitals model
-// yet, so the BMI trend renders illustrative data until that's added.
-const MOCK_VITALS: VitalReading[] = [
-  { date: "2026-03-01", heightCm: 168, weightKg: 82 },
-  { date: "2026-04-01", heightCm: 168, weightKg: 80 },
-  { date: "2026-05-01", heightCm: 168, weightKg: 78.5 },
-  { date: "2026-06-01", heightCm: 168, weightKg: 77 },
-  { date: "2026-07-01", heightCm: 168, weightKg: 75.5 },
-  { date: "2026-08-01", heightCm: 168, weightKg: 74 },
-];
+import { PatientOverviewDashboard } from "./workspace/PatientOverviewDashboard";
+import { SectionBody } from "./PatientDetailSkeleton";
 
 export function PatientDetail({
   apiSession,
@@ -97,6 +83,7 @@ export function PatientDetail({
   onSendEngagementAction,
   setActive,
   activeSection = "home",
+  sectionLoading = false,
 }: any & { apiSession?: ApiSession | null }) {
   const permissionKeys = apiSession?.user?.permissions || [];
   const hasAnyPermission = (keys: string[]) =>
@@ -134,52 +121,31 @@ export function PatientDetail({
   const [manualLabDate, setManualLabDate] = useState("");
   const [manualLabTestName, setManualLabTestName] = useState("");
   const [manualLabNotes, setManualLabNotes] = useState("");
-  const [familyPatientId, setFamilyPatientId] = useState("");
-  const [familyRelationship, setFamilyRelationship] = useState("father");
-  const [familyNotes, setFamilyNotes] = useState("");
-  const [familyPatientOptions, setFamilyPatientOptions] = useState<any[]>([]);
-  const [familyPatientSearchLoading, setFamilyPatientSearchLoading] =
-    useState(false);
   const [editingBenefitUsage, setEditingBenefitUsage] = useState<any | null>(
     null,
   );
+  const {
+    familyPatientId,
+    setFamilyPatientId,
+    familyRelationship,
+    setFamilyRelationship,
+    familyNotes,
+    setFamilyNotes,
+    familyPatientOptions,
+    familyPatientSearchLoading,
+    searchFamilyPatients,
+    resetFamilyForm,
+  } = usePatientFamilySearch({
+    apiSession,
+    patientId: patient.id,
+    familyRelationships,
+  });
+  const { vitals, vitalsLoading, savingVital, createVital, bmiReadings } =
+    usePatientVitals({
+      apiSession,
+      patientId: patient.id,
+    });
 
-  async function searchFamilyPatients(query = "") {
-    if (!apiSession) return;
-    setFamilyPatientSearchLoading(true);
-    try {
-      const params = new URLSearchParams({
-        limit: "25",
-        active_only: "true",
-      });
-      if (query.trim()) params.set("q", query.trim());
-      const rows = await apiFetch(`/patients?${params.toString()}`, apiSession);
-      const linkedIds = new Set(
-        familyRelationships.map((row: any) => row.related_patient_id),
-      );
-      setFamilyPatientOptions(
-        (Array.isArray(rows) ? rows : [])
-          .filter((row: any) => row.id !== patient.id && !linkedIds.has(row.id))
-          .map((row: any) => ({
-            value: row.id,
-            label: row.full_name || row.patient_number || row.id,
-            sublabel: `${row.patient_number || row.id}${row.contact_mobile || row.mobile ? ` · ${row.contact_mobile || row.mobile}` : ""}`,
-          })),
-      );
-    } catch {
-      setFamilyPatientOptions([]);
-    } finally {
-      setFamilyPatientSearchLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    setFamilyPatientId("");
-    setFamilyRelationship("father");
-    setFamilyNotes("");
-    searchFamilyPatients();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patient.id, familyRelationships.length, apiSession?.tenantId]);
   useEffect(() => {
     setManualPrescriptionDate(
       String(
@@ -221,133 +187,51 @@ export function PatientDetail({
     patientIntelligence?.manual_lab_test_name,
     patientIntelligence?.manual_lab_notes,
   ]);
+
+  if (sectionLoading) {
+    return (
+      <div className="relative space-y-5">
+        <div className="animate-pulse rounded-lg border border-slate-200 bg-white p-4">
+          <SectionBody section={activeSection} />
+        </div>
+      </div>
+    );
+  }
+
   const alerts = [
     ...(summary?.critical_alerts || []),
     ...(summary?.allergies || []),
   ];
   const risks = [...(summary?.risk_alerts || []), ...(summary?.notes || [])];
-  const uniqueLabOrders = uniqueClinicalRecords(
+  const { labServiceRows, medicineRows } = deriveClinicalRows({
     labOrders,
-    (order: any) =>
-      `${fmtDate(order.created_at)}|${order.status || ""}|${order.tests || ""}|${order.notes || ""}`,
-  );
-  const uniquePharmacyIssues = uniqueClinicalRecords(
+    homeCareBookings,
     pharmacyIssues,
-    (issue: any) =>
-      `${fmtDate(issue.created_at)}|${issue.status || ""}|${issue.medicine_text || ""}|${issue.notes || ""}|${issue.amount || ""}`,
-  );
-  const labRows = clinicalRecordsWithUniqueItems(
-    uniqueLabOrders,
-    (order: any) => order.tests,
-  ).map((bundle: any) => ({ ...bundle, source: "lab" }));
-  const homeCareRows = homeCareBookings.map((booking: any) => {
-    const serviceItems =
-      (booking.services || []).length > 0
-        ? booking.services
-        : booking.visit_logs || [];
-    const items = serviceItems
-      .map((item: any) => item.description || item.service_category)
-      .filter(Boolean);
-    return { row: booking, items, source: "home_care" };
   });
-  const labServiceRows = [...labRows, ...homeCareRows].sort(
-    (a: any, b: any) =>
-      new Date(
-        b.row.created_at || b.row.start_date || b.row.visit_date || 0,
-      ).getTime() -
-      new Date(
-        a.row.created_at || a.row.start_date || a.row.visit_date || 0,
-      ).getTime(),
-  );
-  const medicineRows = clinicalRecordsWithUniqueItems(
-    uniquePharmacyIssues,
-    (issue: any) => issue.medicine_text,
-  );
 
-  const membershipInvoices = patientInvoices.filter(isMembershipPlanInvoice);
-  const purchaseInvoiceFor = (enrollment: any) =>
-    membershipInvoices.find(
-      (invoice: any) => invoice.id === enrollment.purchase_invoice_id,
-    ) ||
-    membershipInvoices.find(
-      (invoice: any) =>
-        invoice.patient_subscription_enrollment_id === enrollment.id,
-    );
-  const isEnrollmentPaid = (enrollment: any) => {
-    const invoice = purchaseInvoiceFor(enrollment);
-    if (invoice) return Number(invoice.balance_amount || 0) <= 0;
-    return (
-      Number(enrollment.paid_amount || 0) >=
-      Number(enrollment.plan?.price_amount || 0)
-    );
-  };
-  const resolvedMembershipEnrollments = membershipEnrollments.map(
-    (enrollment: any) => ({
-      ...enrollment,
-      plan:
-        membershipPlans.find((plan: any) => plan.id === enrollment.plan_id) ||
-        enrollment.plan ||
-        null,
-    }),
-  );
-  const activeMembership = resolvedMembershipEnrollments.find(
-    (row: any) => row.status === "active" && isEnrollmentPaid(row),
-  );
-  const pendingMembership = resolvedMembershipEnrollments.find(
-    (row: any) => row.status === "active" && !isEnrollmentPaid(row),
-  );
-  const queuedMembership = resolvedMembershipEnrollments.find(
-    (row: any) => row.status === "queued",
-  );
-  const visibleMembership = activeMembership || pendingMembership;
-  const freeConsultationsAllocated = Number(
-    visibleMembership?.allocated_free_consultations ??
-      visibleMembership?.plan?.free_consultations ??
-      0,
-  );
-  const freeConsultationsUsed = Number(
-    visibleMembership?.used_consultations || 0,
-  );
-  const freeLabUsed = Number(visibleMembership?.used_free_lab_count || 0);
-  const freeLabRemaining = Number(
-    visibleMembership?.remaining_free_lab_count || 0,
-  );
-  const freeLabAllocated = freeLabUsed + freeLabRemaining;
-  const freeMedicineUsed = Number(
-    visibleMembership?.used_free_medicine_count || 0,
-  );
-  const freeMedicineRemaining = Number(
-    visibleMembership?.remaining_free_medicine_count || 0,
-  );
-  const freeMedicineAllocated = freeMedicineUsed + freeMedicineRemaining;
-  const membershipUsageInvoices = patientInvoices.filter(
-    (invoice: any) =>
-      Number(invoice.membership_discount_amount || 0) > 0 &&
-      !["cancelled", "refunded"].includes(
-        String(invoice.status || "").toLowerCase(),
-      ),
-  );
-  const membershipSavings = membershipUsageInvoices.reduce(
-    (sum: number, invoice: any) =>
-      sum + Number(invoice.membership_discount_amount || 0),
-    0,
-  );
-  const totalBilled = patientInvoices.reduce(
-    (sum: number, invoice: any) =>
-      sum +
-      (["cancelled", "refunded"].includes(String(invoice.status).toLowerCase())
-        ? 0
-        : Number(invoice.total_amount || 0)),
-    0,
-  );
-  const totalPaid = patientInvoices.reduce(
-    (sum: number, invoice: any) => sum + Number(invoice.paid_amount || 0),
-    0,
-  );
-  const totalDue = patientInvoices.reduce(
-    (sum: number, invoice: any) => sum + invoicePatientDueAmount(invoice),
-    0,
-  );
+  const {
+    purchaseInvoiceFor,
+    resolvedMembershipEnrollments,
+    activeMembership,
+    pendingMembership,
+    queuedMembership,
+    visibleMembership,
+    freeConsultationsAllocated,
+    freeConsultationsUsed,
+    freeLabUsed,
+    freeLabAllocated,
+    freeMedicineUsed,
+    freeMedicineAllocated,
+    membershipUsageInvoices,
+    membershipSavings,
+    totalBilled,
+    totalPaid,
+    totalDue,
+  } = derivePatientBillingMembership({
+    membershipEnrollments,
+    membershipPlans,
+    patientInvoices,
+  });
 
   function openConsultation(c: any) {
     if (!c?.appointment_id) return;
@@ -380,92 +264,7 @@ export function PatientDetail({
     onOpen: openConsultation,
   });
   const invoiceColumns = getInvoiceColumns({ onOpen: openInvoice });
-  const labOrderColumns = getLabOrderColumns({
-    onOpen: (bundle: any) =>
-      goToModule(bundle?.source === "home_care" ? "home_care" : "lab"),
-  });
-  const medicineColumns = getMedicineColumns({
-    onOpen: () => goToModule("pharmacy"),
-  });
-  const communicationFlowLabels: Record<string, string> = {
-    appointment_booked_patient: "Appointment",
-    appointment_reminder_patient: "Appointment reminder",
-    invoice_paid_patient: "Paid invoice",
-    payment_pending_patient: "Payment reminder",
-    lab_report_ready_patient: "Lab report ready",
-    medicine_refill_patient: "Monthly medicine reminder",
-    lab_test_reminder_patient: "Monthly lab test reminder",
-    membership_renewal_patient: "Membership renewal",
-    unused_benefit_patient: "Membership benefit reminder",
-    health_tip_patient: "Health tip",
-    patient_reengagement: "Patient re-engagement",
-    home_care_booking_patient: "Home care booking",
-    home_visit_reminder_patient: "Home visit reminder",
-    prescription_ready_patient: "Prescription ready",
-  };
-  const communicationColumns: Column<any>[] = [
-    {
-      key: "s.no",
-      header: "S.No",
-      width: "80px",
-      className: "text-center",
-      cellClassName: "text-center",
-      sortable: true,
-      render: (_, index) => index + 1,
-    },
-    {
-      key: "created_at",
-      header: "Date",
-      width: "120px",
-      render: (row) => fmtDate(row.sent_at || row.created_at),
-    },
-    {
-      key: "template_key",
-      header: "Template",
-      width: "120px",
-      render: (row) =>
-        communicationFlowLabels[row.template_key] || row.template_key || "-",
-    },
-    {
-      key: "status",
-      header: "Status",
-      width: "120px",
-      render: (row) => (
-        <Badge
-          tone={
-            row.status === "sent"
-              ? "green"
-              : row.status === "failed"
-                ? "red"
-                : row.status === "cancelled"
-                  ? "slate"
-                  : "blue"
-          }
-          className="normal-badge"
-        >
-          {row.status}
-        </Badge>
-      ),
-    },
-    {
-      key: "resource_type",
-      header: "Source",
-      width: "120px",
-      render: (row) => String(row.resource_type || "-").replaceAll("_", " "),
-    },
-    {
-      key: "recipient_masked",
-      header: "Recipient",
-      width: "120px",
-      render: (row) => row.recipient_masked || "-",
-    },
-    {
-      key: "failure_reason",
-      header: "Failure",
-      width: "auto",
-      render: (row) => row.failure_reason || "-",
-    },
-  ];
+  const communicationColumns = getCommunicationColumns();
   const monthlyTrackingCards = (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
       <h5 className="text-sm font-black text-slate-950">
@@ -589,83 +388,59 @@ export function PatientDetail({
       <Card className={activeSection === "home" ? "p-0 shadow-none" : ""}>
         <StatusToast message={message} onClose={onMessageClose} />
         {activeSection === "home" && (
-          <div className=" grid gap-3 md:grid-cols-3">
-            <Info
-              title="Age / Gender"
-              value={`${patient.age_years ?? "-"} / ${displayPatientGender(patient.gender)}`}
-            />
-            <Info title="Blood Group" value={patient.blood_group || "-"} />
-            <Info title="Mobile" value={patient.mobile || "-"} />
-            <Info title="Address" value={patient.address || "-"} />
-            <Info
-              title="Secondary Mobile"
-              value={patient.alternate_mobile || "-"}
-            />
-            <Info
-              title="WhatsApp Preference"
-              value={String(patient.whatsapp_consent_status || "not_recorded")
-                .replaceAll("_", " ")
-                .replace(/\b\w/g, (letter) => letter.toUpperCase())}
-            />
-            <Info
-              title="Preference Source"
-              value={String(patient.whatsapp_consent_source || "-")
-                .replaceAll("_", " ")
-                .replace(/\b\w/g, (letter) => letter.toUpperCase())}
-            />
-            <Info
-              title="Message Language"
-              value={
-                {
-                  tenant_default: "English",
-                  en: "English",
-                  hi: "Hindi",
-                  mr: "Marathi",
-                  gu: "Gujarati",
-                  ta: "Tamil",
-                  te: "Telugu",
-                  kn: "Kannada",
-                  ml: "Malayalam",
-                  bn: "Bengali",
-                  pa: "Punjabi",
-                  ur: "Urdu",
-                }[String(patient.whatsapp_preferred_language || "en")] ||
-                String(patient.whatsapp_preferred_language)
-              }
-            />
-            <Info
-              title="SMS Preference"
-              value={String(patient.sms_consent_status || "not_recorded")
-                .replaceAll("_", " ")
-                .replace(/\b\w/g, (letter) => letter.toUpperCase())}
-            />
-            <Info
-              title="SMS Preference Source"
-              value={String(patient.sms_consent_source || "-")
-                .replaceAll("_", " ")
-                .replace(/\b\w/g, (letter) => letter.toUpperCase())}
-            />
-            <Info
-              title="SMS Language"
-              value={
-                {
-                  tenant_default: "English",
-                  en: "English",
-                  hi: "Hindi",
-                  mr: "Marathi",
-                  gu: "Gujarati",
-                  ta: "Tamil",
-                  te: "Telugu",
-                  kn: "Kannada",
-                  ml: "Malayalam",
-                  bn: "Bengali",
-                  pa: "Punjabi",
-                  ur: "Urdu",
-                }[String(patient.sms_preferred_language || "en")] ||
-                String(patient.sms_preferred_language)
-              }
-            />
-          </div>
+            <div className="grid gap-2 grid-cols-5 bg-white p-3 rounded-lg">
+              <Info
+                title="Age / Gender"
+                value={`${patient.age_years ?? "-"} / ${displayPatientGender(patient.gender)}`}
+              />
+              <Info title="Blood Group" value={patient.blood_group || "-"} />
+              <Info title="Mobile" value={patient.mobile || "-"} />
+              <Info title="Address" value={patient.address || "-"} />
+              <Info
+                title="Secondary Mobile"
+                value={patient.alternate_mobile || "-"}
+              />
+              <Info
+                title="WhatsApp Preference"
+                value={String(patient.whatsapp_consent_status || "not_recorded")
+                  .replaceAll("_", " ")
+                  .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+              />
+              <Info
+                title="Preference Source"
+                value={String(patient.whatsapp_consent_source || "-")
+                  .replaceAll("_", " ")
+                  .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+              />
+              <Info
+                title="Message Language"
+                value={
+                  message_language_options[
+                    String(patient.whatsapp_preferred_language || "en")
+                  ] || String(patient.whatsapp_preferred_language)
+                }
+              />
+              <Info
+                title="SMS Preference"
+                value={String(patient.sms_consent_status || "not_recorded")
+                  .replaceAll("_", " ")
+                  .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+              />
+              <Info
+                title="SMS Preference Source"
+                value={String(patient.sms_consent_source || "-")
+                  .replaceAll("_", " ")
+                  .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+              />
+              <Info
+                title="SMS Language"
+                value={
+                  sms_language_options[
+                    String(patient.sms_preferred_language || "en")
+                  ] || String(patient.sms_preferred_language)
+                }
+              />
+            </div>
         )}
         {activeSection === "membership" && canReadMembership && (
           <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
@@ -820,9 +595,7 @@ export function PatientDetail({
                       notes: familyNotes.trim(),
                     });
                     if (ok) {
-                      setFamilyPatientId("");
-                      setFamilyRelationship("father");
-                      setFamilyNotes("");
+                      resetFamilyForm();
                       searchFamilyPatients();
                     }
                   }}
@@ -874,15 +647,32 @@ export function PatientDetail({
         )}
       </Card>
 
-      {activeSection === "home" && (
-        <Card className="p-4 bg-white">
-          <h3 className="mb-1 text-sm font-black text-slate-900">BMI Trend</h3>
-          <p className="mb-3 text-xs text-slate-500">
-            Updated to today from the patient&apos;s latest recorded vitals.
-          </p>
-          <BmiTrendChart readings={MOCK_VITALS} />
-        </Card>
-      )}
+      {/* {activeSection === "home" && (
+        <PatientOverviewDashboard
+          summary={summary}
+          vitals={vitals}
+          bmiReadings={bmiReadings}
+          vitalsLoading={vitalsLoading}
+          createVital={createVital}
+          savingVital={savingVital}
+          consultations={consultations}
+          labServiceRows={labServiceRows}
+          medicineRows={medicineRows}
+          patientInvoices={patientInvoices}
+          totalBilled={totalBilled}
+          totalDue={totalDue}
+          visibleMembership={visibleMembership}
+          freeConsultationsUsed={freeConsultationsUsed}
+          freeConsultationsAllocated={freeConsultationsAllocated}
+          freeLabUsed={freeLabUsed}
+          freeLabAllocated={freeLabAllocated}
+          freeMedicineUsed={freeMedicineUsed}
+          freeMedicineAllocated={freeMedicineAllocated}
+          patientIntelligence={patientIntelligence}
+          onOpenConsultation={openConsultation}
+          onOpenInvoice={openInvoice}
+        />
+      )} */}
 
       {activeSection === "home" && patientIntelligence && (
         <DetailSection
@@ -1083,32 +873,6 @@ export function PatientDetail({
           minBodyHeight={`${consultations.length > 0 ? "" : "220px"}`}
           onRowClick={openConsultation}
         />
-      )}
-
-      {activeSection === "labs" && (
-        <div className="grid gap-5">
-          <DataTable
-            columns={labOrderColumns}
-            data={labServiceRows}
-            emptyMessage="No lab or service orders found."
-            emptyDescription="Diagnostic tests, services, home care, and home visit bookings for this patient will show up here."
-            emptyIcon={FlaskConical}
-            minBodyHeight={`${labServiceRows.length > 0 ? "" : "220px"}`}
-          />
-        </div>
-      )}
-
-      {activeSection === "medicines" && (
-        <div className="grid gap-5">
-          <DataTable
-            columns={medicineColumns}
-            data={medicineRows}
-            emptyMessage="No pharmacy issues found."
-            emptyDescription="Medicines dispensed to this patient will show up here."
-            emptyIcon={Pill}
-            minBodyHeight={`${medicineRows.length > 0 ? "" : "220px"}`}
-          />
-        </div>
       )}
 
       {activeSection === "consultations" && physioCases.length > 0 && (

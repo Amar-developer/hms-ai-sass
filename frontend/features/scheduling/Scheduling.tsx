@@ -382,7 +382,7 @@ export function Scheduling({
     branches,
     departments,
     onEdit: (id) => open("edit", id),
-    onDelete: (row) => setConfirm({ row }),
+    onDelete: (row) => setConfirm({ kind: "delete", row }),
   });
   return (
     <Card className="p-0">
@@ -472,7 +472,7 @@ export function Scheduling({
       {confirm && (
         <ConfirmModal
           busy={busy}
-          action={confirm.row}
+          action={confirm}
           onCancel={() => setConfirm(null)}
           onConfirm={() => deleteSchedule(confirm.row)}
         />

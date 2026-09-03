@@ -199,6 +199,7 @@ export function getConsultationColumns({
     {
       key: "treatment_type",
       header: "Type",
+      width: "200px",
       render: (row: any) => (
         <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold capitalize text-slate-700">
           {String(row.treatment_type || "consultation").replaceAll("_", " ")}
@@ -310,8 +311,10 @@ export function getInvoiceColumns({
 // issue per row, with its own line items grouped underneath.
 export function getLabOrderColumns({
   onOpen,
+  showSource = true,
 }: {
   onOpen: (row: any) => void;
+  showSource?: boolean;
 }): Column<any>[] {
   return [
     {
@@ -344,6 +347,24 @@ export function getLabOrderColumns({
         </span>
       ),
     },
+    ...(showSource
+      ? [
+          {
+            key: "source",
+            header: "Source",
+            width: "100px",
+            render: (bundle: any) => (
+              <p>
+                {capitalizeFirst(
+                  bundle.row.source === "op_direct"
+                    ? "OP Direct"
+                    : bundle.row.source,
+                )}
+              </p>
+            ),
+          } as Column<any>,
+        ]
+      : []),
     {
       key: "services",
       header: "Services",
@@ -375,6 +396,89 @@ export function getLabOrderColumns({
           Open
         </button>
       ),
+    },
+  ];
+}
+
+const communicationFlowLabels: Record<string, string> = {
+  appointment_booked_patient: "Appointment",
+  appointment_reminder_patient: "Appointment reminder",
+  invoice_paid_patient: "Paid invoice",
+  payment_pending_patient: "Payment reminder",
+  lab_report_ready_patient: "Lab report ready",
+  medicine_refill_patient: "Monthly medicine reminder",
+  lab_test_reminder_patient: "Monthly lab test reminder",
+  membership_renewal_patient: "Membership renewal",
+  unused_benefit_patient: "Membership benefit reminder",
+  health_tip_patient: "Health tip",
+  patient_reengagement: "Patient re-engagement",
+  home_care_booking_patient: "Home care booking",
+  home_visit_reminder_patient: "Home visit reminder",
+  prescription_ready_patient: "Prescription ready",
+};
+
+export function getCommunicationColumns(): Column<any>[] {
+  return [
+    {
+      key: "s.no",
+      header: "S.No",
+      width: "80px",
+      className: "text-center",
+      cellClassName: "text-center",
+      sortable: true,
+      render: (_, index) => index + 1,
+    },
+    {
+      key: "created_at",
+      header: "Date",
+      width: "120px",
+      render: (row) => fmtDate(row.sent_at || row.created_at),
+    },
+    {
+      key: "template_key",
+      header: "Template",
+      width: "120px",
+      render: (row) =>
+        communicationFlowLabels[row.template_key] || row.template_key || "-",
+    },
+    {
+      key: "status",
+      header: "Status",
+      width: "120px",
+      render: (row) => (
+        <Badge
+          tone={
+            row.status === "sent"
+              ? "green"
+              : row.status === "failed"
+                ? "red"
+                : row.status === "cancelled"
+                  ? "slate"
+                  : "blue"
+          }
+          className="normal-badge"
+        >
+          {row.status}
+        </Badge>
+      ),
+    },
+    {
+      key: "resource_type",
+      header: "Source",
+      width: "120px",
+      render: (row) => String(row.resource_type || "-").replaceAll("_", " "),
+    },
+    {
+      key: "recipient_masked",
+      header: "Recipient",
+      width: "120px",
+      render: (row) => row.recipient_masked || "-",
+    },
+    {
+      key: "failure_reason",
+      header: "Failure",
+      width: "auto",
+      render: (row) => row.failure_reason || "-",
     },
   ];
 }

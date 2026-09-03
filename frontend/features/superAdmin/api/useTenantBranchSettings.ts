@@ -6,7 +6,7 @@ import {
   parseBankDetails,
   parseCatalogIntegrations,
   parseNumberingRules,
-} from "../constants";
+} from "../helpers";
 import { entitlementModules } from "../helpers";
 
 export function useTenantBranchSettings(

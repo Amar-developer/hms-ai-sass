@@ -83,7 +83,7 @@
 
 @layer components {
   .save-button {
-    @apply rounded-lg bg-brand px-4 py-2 text-brand-fg hover:bg-brand-hover lg:px-4 lg:py-2.5 md:text-sm lg:text-xs
+    @apply rounded-lg bg-brand px-4 py-2 text-brand-fg cursor-pointer hover:bg-brand-hover lg:px-4 lg:py-2.5 md:text-sm lg:text-xs
   }
 }
 

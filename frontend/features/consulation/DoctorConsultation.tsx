@@ -1,27 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { UsersRound,ListCollapse } from "lucide-react";
+import { ArrowRight, CalendarClock, ListCollapse, UserRound, UsersRound } from "lucide-react";
 import {
+  Badge,
   Button,
   Card,
   Input,
   SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
+import { DataTable } from "@/app/components/common/DataTable";
 import { FormField } from "@/app/components/FormElements";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { calculateConsultationCharge, sortQueue } from "@/lib/hmsLogic";
+import { humanizeOptionLabel } from "@/lib/options";
 import { displayDate, today } from "@/utils/helper";
+import type { Column } from "@/utils/types";
 import { ConsultationWorkspace } from "./components/ConsultationWorkspace";
-import { ScheduleList } from "./components/ScheduleList";
 import {
   asArray,
   appointmentDateKey,
+  displayTime,
   isCancelledAppointment,
   isCompletedAppointment,
   labTestNames,
   statusKey,
+  toneForQueue,
 } from "./helpers";
 import { appendLine, splitRows } from "@/utils/helper";
 import {
@@ -33,6 +38,107 @@ import {
 import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
 import { useAppointmentsQuery } from "@/features/appointments/api/useAppointmentsQuery";
 import { OPDPatientWorklist } from "@/features/opd/components/OPDPatientWorklist";
+
+function getScheduleColumns({
+  onConsult,
+}: {
+  onConsult: (id: string) => void;
+}): Column<any>[] {
+  return [
+    {
+      key: "patient",
+      header: "Patient & Token",
+      width:'180px',
+      render: (row: any) => (
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+            <UserRound className="h-5 w-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-black text-slate-950">
+              {row.patient || "Patient"}
+            </span>
+            <span className="mt-0.5 block text-[11px] font-semibold text-slate-500">
+              Token {row.token || "-"}
+            </span>
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: "queueStatus",
+      header: "Queue Status",
+      width: "180px",
+      render: (row: any) =>
+        row.queueStatus || row.status ? (
+          <Badge
+            tone={toneForQueue(row.queueStatus)}
+            className="inline-flex rounded-full px-2.5 py-1 text-[10px]"
+          >
+            {humanizeOptionLabel(row.queueStatus || row.status)}
+          </Badge>
+        ) : null,
+    },
+    {
+      key: "appointment-date",
+      header: "Date",
+      width: "150px",
+      render: (row: any) => (
+        <div>
+          <p className="text-xs font-bold text-slate-800">
+            {displayDate(row.appointmentDate || row.appointment_date)}
+          </p>
+        </div>
+      ),
+    },
+      {
+      key: "appointment-time",
+      header: "Time ",
+      width: "150px",
+      render: (row: any) => (
+        <div>
+
+          <p className="mt-0.5 text-xs text-slate-500">
+            {displayTime(row.time || row.appointment_time)}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "visitType",
+      header: "Visit Type",
+      width: "130px",
+      render: (row: any) => (
+        <Badge
+          tone={
+            row.tokenType === "Emergency" ? "red" : toneForQueue(row.queueStatus)
+          }
+          className="inline-flex rounded-full px-2.5 py-1 text-[10px]"
+        >
+          {humanizeOptionLabel(row.visitType || row.tokenType || "OP")}
+        </Badge>
+      ),
+    },
+    {
+      key: "action",
+      header: "Action",
+      width: "150px",
+      className: "text-right",
+      cellClassName: "text-right",
+      disableRowClick: true,
+      render: (row: any) => (
+        <button
+          type="button"
+          onClick={() => onConsult(row.id)}
+          className="primary-action inline-flex h-9 items-center gap-2 px-3 text-xs"
+        >
+          Open Visit
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      ),
+    },
+  ];
+}
 
 export function DoctorConsultation({
   clinic,
@@ -946,6 +1052,7 @@ export function DoctorConsultation({
       setLabNeeded(false);
       setReferDoctor(false);
     },
+    onOpenConsultationInvoices,
   });
   function callNext() {
     callNextAction(current);
@@ -1091,7 +1198,7 @@ export function DoctorConsultation({
       </div>
     );
   return (
-    <Card className="pt-2">
+    <Card className="p-3 bg-white">
       <div className="flex flex-col gap-4  pb-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h3 className="card-title font-bold">Doctor Schedule</h3>
@@ -1148,13 +1255,22 @@ export function DoctorConsultation({
       )}
       {/* </div> */}
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-4">
-        <ScheduleList
-          rows={scheduleRows}
+      <div className="table-wrapper-width">
+        <DataTable
+          columns={getScheduleColumns({ onConsult: openConsultation })}
+          data={scheduleRows}
           loading={appointmentsLoading}
-          selectedId={selected?.id}
-          onSelect={setSelectedAppointmentId}
-          onConsult={openConsultation}
+          onRowClick={(row: any) => setSelectedAppointmentId(row.id)}
+          rowClassName={(row: any) =>
+            selected?.id === row.id
+              ? "border-l-4 border-l-emerald-600 bg-emerald-50/60"
+              : ""
+          }
+          emptyMessage="No scheduled visits"
+          emptyDescription="Change the doctor or visit date to view another schedule."
+          emptyIcon={CalendarClock}
+          minBodyHeight="220px"
+          className="table-width"
         />
       </div>
     </Card>

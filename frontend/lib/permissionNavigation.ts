@@ -15,6 +15,7 @@ const NAV_PERMISSION_PREFIXES: Record<string, string[]> = {
   opd: ["appointments", "consultations", "queue"],
   queue: ["queue"],
   patients: ["patients"],
+  patient_history: ["patients"],
   practitioners: ["practitioners"],
   scheduling: ["scheduling"],
   items: ["service_items"],

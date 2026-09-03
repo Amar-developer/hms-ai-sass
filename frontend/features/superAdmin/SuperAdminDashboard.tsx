@@ -29,11 +29,11 @@ import {
   tenantSelectOptions,
 } from "./helpers";
 import {
-  platformSectionsForUser,
   superAdminSettingsSections,
   tenantTypes,
   tenant_status_options,
 } from "./constants";
+import { platformSectionsForUser } from "./helpers";
 import { Overview } from "./components/overview/Overview";
 import { TenantManagement } from "./components/tenants/TenantManagement";
 import { EditTenant } from "./components/tenants/EditTenant";
@@ -63,7 +63,6 @@ import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { canResetUserPassword } from "./helpers";
 
 export { superAdminSections } from "./constants";
-export { platformSectionsForUser } from "./constants";
 
 export function SuperAdminDashboard({
   apiSession,
@@ -121,7 +120,6 @@ export function SuperAdminDashboard({
 
   const selectedRoleId = selectedDetailId;
   const selectedUserId = selectedDetailId;
-  console.log(selectedUserId)
   const selectedDepartmentId = selectedDetailId;
   const selectedBranchId = selectedDetailId;
   const setSelectedRoleId = (id: string) => {

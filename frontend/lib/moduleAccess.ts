@@ -12,7 +12,9 @@ export function canOpenModule(
         ? "billing_basic"
         : id === "opd"
           ? "consultations"
-          : id;
+          : id === "patient_history"
+            ? "patients"
+            : id;
   const moduleEnabled =
     isModuleEnabled(clinic, moduleKey) ||
     (id === "subscriptions" && isModuleEnabled(clinic, "subscriptions")) ||

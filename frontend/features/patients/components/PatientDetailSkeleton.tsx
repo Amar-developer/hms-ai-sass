@@ -1,5 +1,6 @@
 import { ClipboardList } from "lucide-react";
-import { SECTION_TABS, type PatientSectionId } from "../PatientFlow";
+import { SECTION_TABS } from "../constants";
+import { PatientSectionId } from "../types";
 
 function Bar({ className = "" }: { className?: string }) {
   return <div className={`rounded bg-slate-200 ${className}`} />;
@@ -106,9 +107,9 @@ function TableSectionSkeleton({
 
 // Body shape follows PatientDetail.tsx's real markup per section, so the
 // swap from skeleton -> real content doesn't visibly jump: home is an info
-// grid, membership/family are card panels, consultations/labs/medicines/
-// billing are tables sized to their real column counts.
-function SectionBody({ section }: { section: PatientSectionId }) {
+// grid, membership/family are card panels, consultations/billing are tables
+// sized to their real column counts.
+export function SectionBody({ section }: { section: PatientSectionId }) {
   switch (section) {
     case "home":
       return <InfoGridSkeleton count={8} />;
@@ -118,14 +119,18 @@ function SectionBody({ section }: { section: PatientSectionId }) {
       return <ListRowsSkeleton rows={3} />;
     case "consultations":
       return <TableSectionSkeleton columns={5} rows={4} />;
-    case "labs":
-    case "medicines":
-      return <TableSectionSkeleton columns={4} rows={4} />;
     case "billing":
       return (
         <>
           <CardMetricsSkeleton metrics={3} />
           <TableSectionSkeleton columns={6} rows={5} />
+        </>
+      );
+    case "patient_tracking":
+      return (
+        <>
+          <CardMetricsSkeleton metrics={2} />
+          <TableSectionSkeleton columns={7} rows={4} />
         </>
       );
     default:

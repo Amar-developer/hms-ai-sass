@@ -16,7 +16,7 @@ export function TenantPicker({ tenants, selectedId, setSelectedId }: any) {
         }))}
         placeholder="Select tenant"
         searchable={false}
-        // className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+        className="text-xs"
       />
     </FormField>
  </div>

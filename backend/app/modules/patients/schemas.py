@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from app.modules.patients.contact import patient_contact_mobile
 from app.modules.patients.models import (
@@ -203,6 +203,65 @@ class PatientFamilyRelationshipRead(BaseModel):
     created_by_user_id: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class PatientVitalCreate(BaseModel):
+    recorded_at: datetime | None = None
+    height_cm: float | None = Field(default=None, gt=0, le=300)
+    weight_kg: float | None = Field(default=None, gt=0, le=500)
+    bp: str | None = Field(default=None, max_length=20)
+    pulse_bpm: int | None = Field(default=None, gt=0, le=300)
+    spo2_percent: float | None = Field(default=None, gt=0, le=100)
+    temperature_f: float | None = Field(default=None, gt=70, le=115)
+    notes: str | None = Field(default=None, max_length=300)
+
+    @field_validator("recorded_at")
+    @classmethod
+    def recorded_at_cannot_be_future(cls, value: datetime | None) -> datetime | None:
+        if value and value > datetime.now(value.tzinfo):
+            raise ValueError("Recorded date cannot be in the future")
+        return value
+
+    @model_validator(mode="after")
+    def at_least_one_reading(self) -> "PatientVitalCreate":
+        if not any(
+            [
+                self.height_cm,
+                self.weight_kg,
+                self.bp,
+                self.pulse_bpm,
+                self.spo2_percent,
+                self.temperature_f,
+            ]
+        ):
+            raise ValueError("Record at least one vital reading")
+        return self
+
+
+class PatientVitalRead(BaseModel):
+    id: str
+    tenant_id: str
+    patient_id: str
+    recorded_at: datetime
+    height_cm: float | None = None
+    weight_kg: float | None = None
+    bp: str | None = None
+    pulse_bpm: int | None = None
+    spo2_percent: float | None = None
+    temperature_f: float | None = None
+    notes: str | None = None
+    created_by_user_id: str | None = None
+    created_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def bmi(self) -> float | None:
+        if not self.height_cm or not self.weight_kg:
+            return None
+        height_m = self.height_cm / 100
+        if not height_m:
+            return None
+        return round(self.weight_kg / (height_m * height_m), 1)
 
 
 class PatientIntelligenceFlagCompact(BaseModel):

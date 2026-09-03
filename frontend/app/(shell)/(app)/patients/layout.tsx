@@ -6,8 +6,10 @@ import { Patient } from "@/features/patients/Patient";
 import { useWorkspace } from "@/features/shell/WorkspaceContext";
 import { useShellChrome } from "@/features/shell/AppShell";
 import { isNewSegment, isEditSegment } from "@/lib/routeSlugs";
-import { PATIENT_SECTION_IDS, type PatientSectionId } from "@/features/patients/PatientFlow";
-
+import {
+  PATIENT_SECTION_IDS,
+  type PatientSectionId,
+} from "@/features/patients/types";
 const DEFAULT_PATIENT_SECTION: PatientSectionId = "home";
 
 // Renders the actual patient workspace here instead of in page.tsx. Layouts

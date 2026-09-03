@@ -891,7 +891,7 @@ export function SearchableSelect<T = string>({
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <span
             title={displayLabel || undefined}
-            className={displayLabel ? "block truncate" : "block truncate text-slate-400"}
+            className={`${displayLabel ? "block truncate" : "block truncate text-slate-400"} ${className ?? ""}`}
           >
             {capitalizeFirst(displayLabel) || placeholder}
           </span>
@@ -902,7 +902,7 @@ export function SearchableSelect<T = string>({
               style={badge.style}
               className={`hidden shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-bold leading-none sm:inline-flex ${badge.className || "border-slate-300 bg-slate-100 text-slate-700"}`}
             >
-              {badge.label}
+              {badge.label} moses
             </span>
           ))}
         </span>
@@ -981,7 +981,7 @@ export function SearchableSelect<T = string>({
                       : ""
                   }`}
                 >
-                  <span className="block truncate">
+                  <span className={`block truncate ${className ?? ""}`}>
                     {capitalizeFirst(option.label)}
                   </span>
 

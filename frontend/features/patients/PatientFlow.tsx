@@ -1,16 +1,6 @@
 "use client";
 
-import type { ComponentType } from "react";
-import {
-  CreditCard,
-  FlaskConical,
-  Home,
-  Pill,
-  ReceiptText,
-  Stethoscope,
-  NotepadText,
-  Activity
-} from "lucide-react";
+import { useTransition } from "react";
 import { uploadAssetUrl } from "@/lib/api";
 import { patientDisplayMobile } from "./helpers";
 import {
@@ -21,64 +11,9 @@ import { Badge, Button } from "@/app/components/common/ui";
 import { StatusTabsNav } from "@/app/components/common/StatusTabsNav";
 import { PatientDetail } from "./components/PatientDetail";
 import { PatientFlagBadges } from "./components/PatientFlagBadges";
+import { PatientFlowProps, PatientSectionId } from "./types";
+import { SECTION_TABS } from "./constants";
 
-export type PatientSectionId =
-  | "home"
-  | "membership"
-  | "family"
-  | "consultations"
-  | "labs"
-  | "medicines"
-  | "billing"
-  | "patient_tracking"
-  | "diagonisis"
-
-export const PATIENT_SECTION_IDS: PatientSectionId[] = [
-  "home",
-  "membership",
-  "family",
-  "consultations",
-  "labs",
-  "medicines",
-  "billing",
-  "patient_tracking",
-  "diagonisis"
-];
-
-type SectionTab = {
-  id: PatientSectionId;
-  label: string;
-  icon: ComponentType<{ className?: string }>;
-};
-
-// Each tab renders a slice
-// of PatientDetail's content gated on `activeSection` (see PatientDetail.tsx)
-// rather than a separate component per tab, so every tab shares the same
-// data-fetch/permission logic that already existed on the single-page view.
-export const SECTION_TABS: SectionTab[] = [
-  { id: "home", label: "Home", icon: Home },
-  { id: "consultations", label: "Consultations", icon: Stethoscope },
-  { id: "labs", label: "Lab & Services", icon: FlaskConical },
-  { id: "medicines", label: "Medicines", icon: Pill },
-  { id: "billing", label: "Billing", icon: ReceiptText },
-  { id: "membership", label: "Membership & Family", icon: CreditCard },
-  { id: "patient_tracking", label: "Patient Tracking", icon:  NotepadText},
-  { id: "diagonisis", label: "Diagnosis", icon: Activity },
-];
-
-type PatientFlowProps = {
-  activeSection: PatientSectionId;
-  onSectionChange: (section: PatientSectionId) => void;
-  [key: string]: any;
-};
-
-/**
- * Route-driven tab shell for the Patient detail workspace — mirrors
- * OPDWorkspace.tsx's header + horizontal tab-nav pattern. Tabs are real
- * routes (`/patients/{id}/{section}`, wired in patients/[[...segments]]/
- * page.tsx), not local component state, so each tab is bookmarkable and
- * survives back/forward exactly like OPD's tabs.
- */
 export function PatientFlow({
   activeSection,
   onSectionChange,
@@ -93,11 +28,12 @@ export function PatientFlow({
   onUploadPhoto,
   ...detailProps
 }: PatientFlowProps) {
+  const [isSectionPending, startSectionTransition] = useTransition();
   const permissionKeys: string[] = apiSession?.user?.permissions || [];
   const canEditPatient = Boolean(
     apiSession?.user?.is_super_admin ||
-      permissionKeys.includes("*") ||
-      permissionKeys.includes("patients.edit"),
+    permissionKeys.includes("*") ||
+    permissionKeys.includes("patients.edit"),
   );
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const isAdmitted = (patientIpAdmissions || []).some(
@@ -105,8 +41,8 @@ export function PatientFlow({
   );
   const activeMembershipPlanName =
     patient?.subscription_plan_name ||
-    (membershipEnrollments || []).find((row: any) => row.status === "active")?.plan
-      ?.name ||
+    (membershipEnrollments || []).find((row: any) => row.status === "active")
+      ?.plan?.name ||
     (() => {
       const activeEnrollment = (membershipEnrollments || []).find(
         (row: any) => row.status === "active",
@@ -172,7 +108,10 @@ export function PatientFlow({
                   </Badge>
                 )}
                 {activeMembershipPlanName && (
-                  <Badge tone="purple" className="normal-label max-w-[180px] truncate">
+                  <Badge
+                    tone="purple"
+                    className="normal-label max-w-[180px] truncate"
+                  >
                     {activeMembershipPlanName}
                   </Badge>
                 )}
@@ -211,7 +150,11 @@ export function PatientFlow({
         <StatusTabsNav
           ariaLabel="Patient workspace sections"
           activeId={activeSection}
-          onSelect={(id) => onSectionChange(id as PatientSectionId)}
+          onSelect={(id) =>
+            startSectionTransition(() =>
+              onSectionChange(id as PatientSectionId),
+            )
+          }
           tabs={SECTION_TABS}
         />
       </section>
@@ -232,6 +175,7 @@ export function PatientFlow({
           onEdit={onEdit}
           onUploadPhoto={onUploadPhoto}
           activeSection={activeSection}
+          sectionLoading={isSectionPending}
         />
       </div>
     </div>

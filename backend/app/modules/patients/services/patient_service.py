@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 import re
 
 from fastapi import HTTPException, UploadFile, status
@@ -35,11 +35,13 @@ from app.modules.patients.models import (
     PatientAlert,
     PatientFamilyRelationship,
     PatientStatus,
+    PatientVital,
 )
 from app.modules.patients.repositories import (
     PatientAlertRepository,
     PatientFamilyRelationshipRepository,
     PatientRepository,
+    PatientVitalRepository,
 )
 from app.modules.patients.schemas import (
     PatientAlertCreate,
@@ -53,6 +55,8 @@ from app.modules.patients.schemas import (
     PatientSearchResult,
     PatientSummary,
     PatientUpdate,
+    PatientVitalCreate,
+    PatientVitalRead,
 )
 from app.modules.patients.services.duplicates import PatientDuplicateService
 from app.modules.patients.services.mappers import normalize_mobile
@@ -68,6 +72,7 @@ class PatientService:
         self.patients = PatientRepository(session)
         self.alerts = PatientAlertRepository(session)
         self.family = PatientFamilyRelationshipRepository(session)
+        self.vitals = PatientVitalRepository(session)
 
     def _get_or_404(self, tenant_id: str, patient_id: str) -> Patient:
         patient = self.patients.get_for_tenant(tenant_id, patient_id)
@@ -779,6 +784,60 @@ class PatientService:
             purpose="patient_family_membership_sharing",
         )
         return {"deleted": True, "relationship_id": row.id}
+
+    def create_vital(
+        self,
+        *,
+        tenant_id: str,
+        patient_id: str,
+        payload: PatientVitalCreate,
+        actor: User,
+    ) -> PatientVitalRead:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        patient = self._get_or_404(tenant_id, patient_id)
+        vital = PatientVital.model_validate(
+            payload,
+            update={
+                "tenant_id": tenant_id,
+                "patient_id": patient_id,
+                "recorded_at": payload.recorded_at or now_utc(),
+                "created_by_user_id": actor.id,
+            },
+        )
+        self.vitals.add(vital)
+        self.session.commit()
+        self.session.refresh(vital)
+        record_audit_event(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=patient.branch_id,
+            actor_user_id=actor.id,
+            action="patient.vital.created",
+            resource_type="patient_vital",
+            resource_id=vital.id,
+            purpose="patient_health_tracking",
+        )
+        return PatientVitalRead.model_validate(vital, from_attributes=True)
+
+    def list_vitals(
+        self,
+        *,
+        tenant_id: str,
+        patient_id: str,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> list[PatientVitalRead]:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        self._get_or_404(tenant_id, patient_id)
+        rows = self.vitals.for_patient(
+            tenant_id=tenant_id,
+            patient_id=patient_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        return [
+            PatientVitalRead.model_validate(row, from_attributes=True) for row in rows
+        ]
 
     def get_summary(self, *, tenant_id: str, patient_id: str) -> PatientSummary:
         enforce_entitlement(self.session, tenant_id, "patients")

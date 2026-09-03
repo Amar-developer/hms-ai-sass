@@ -12,6 +12,7 @@ export function DataTable<T>({
   emptyDescription,
   emptyIcon: EmptyIcon,
   minBodyHeight,
+  maxBodyHeight,
   className,
   tableClassName,
   rowClassName,
@@ -49,12 +50,15 @@ export function DataTable<T>({
     <div className={className}>
       <div
         className="overflow-auto scrollbar-hidden rounded-lg border border-slate-300 bg-white"
-        style={minBodyHeight ? { minHeight: minBodyHeight } : undefined}
+        style={{
+          ...(minBodyHeight ? { minHeight: minBodyHeight } : undefined),
+          ...(maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined),
+        }}
       >
         <table
           className={`w-full min-w-[700px] table-fixed text-left  text-sm ${tableClassName ?? ""}`}
         >
-        <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+        <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase text-slate-500">
           <tr>
             {columns.map((column) => (
               <th

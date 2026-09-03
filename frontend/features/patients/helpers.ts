@@ -1,4 +1,5 @@
 import { displayDate } from "@/utils/helper";
+import { invoicePatientDueAmount, isMembershipPlanInvoice } from "@/features/billing/helpers";
 
 export function toRow(patient: any) {
   return { ...patient, active_alert_count: 0, critical_alert_count: 0 };
@@ -160,9 +161,14 @@ export function clinicalRecordsWithUniqueItems(
   rows: any[],
   getValue: (row: any) => any,
 ) {
-  const seen = new Set<string>();
   return rows
     .map((row: any) => {
+      // De-dupe items within this one row's own list only (e.g. a test
+      // listed twice on the same order) — the `seen` set must reset per
+      // row, or a repeat test name on a later order (e.g. another CBC)
+      // gets filtered out as "already seen" and can silently drop that
+      // entire order once its items list becomes empty.
+      const seen = new Set<string>();
       const items = splitListText(getValue(row)).filter((item: string) => {
         const key = normalizeClinicalText(item);
         if (seen.has(key)) return false;
@@ -172,6 +178,196 @@ export function clinicalRecordsWithUniqueItems(
       return { row, items };
     })
     .filter(({ items }: any) => items.length > 0);
+}
+
+/**
+ * Lab & service orders (lab + home care, merged and date-sorted) and
+ * dispensed-medicine rows for a patient — shared by the patient detail
+ * "Lab & Services"/"Medicines" tabs and the Patient History single-page view
+ * so both read the same de-duplication/grouping logic.
+ */
+export function deriveClinicalRows({
+  labOrders = [],
+  homeCareBookings = [],
+  pharmacyIssues = [],
+}: {
+  labOrders?: any[];
+  homeCareBookings?: any[];
+  pharmacyIssues?: any[];
+}) {
+  // Keyed by id first: two orders can legitimately share the same date,
+  // status, and test/medicine text (e.g. a routine CBC ordered both during
+  // a consultation and again as a separate OP-direct walk-in the same day)
+  // — including `id` stops those distinct records from being collapsed
+  // into one and silently dropped, while same-id rows (true duplicates,
+  // e.g. from a join fan-out) still dedupe correctly.
+  const uniqueLabOrders = uniqueClinicalRecords(
+    labOrders,
+    (order: any) =>
+      `${order.id || ""}|${fmtDate(order.created_at)}|${order.status || ""}|${order.tests || ""}|${order.notes || ""}`,
+  );
+  const uniquePharmacyIssues = uniqueClinicalRecords(
+    pharmacyIssues,
+    (issue: any) =>
+      `${issue.id || ""}|${fmtDate(issue.created_at)}|${issue.status || ""}|${issue.medicine_text || ""}|${issue.notes || ""}|${issue.amount || ""}`,
+  );
+  const bundleDate = (bundle: any) =>
+    new Date(
+      bundle.row.created_at ||
+        bundle.row.start_date ||
+        bundle.row.visit_date ||
+        0,
+    ).getTime();
+  const byRecency = (a: any, b: any) => bundleDate(b) - bundleDate(a);
+
+  const labRows = clinicalRecordsWithUniqueItems(
+    uniqueLabOrders,
+    (order: any) => order.tests,
+  )
+    .map((bundle: any) => ({ ...bundle, source: "lab" }))
+    .sort(byRecency);
+  const homeCareRows = homeCareBookings
+    .map((booking: any) => {
+      const serviceItems =
+        (booking.services || []).length > 0
+          ? booking.services
+          : booking.visit_logs || [];
+      const items = serviceItems
+        .map((item: any) => item.description || item.service_category)
+        .filter(Boolean);
+      return { row: booking, items, source: "home_care" };
+    })
+    .sort(byRecency);
+  const labServiceRows = [...labRows, ...homeCareRows].sort(byRecency);
+  const medicineRows = clinicalRecordsWithUniqueItems(
+    uniquePharmacyIssues,
+    (issue: any) => issue.medicine_text,
+  );
+
+  return { labServiceRows, labRows, homeCareRows, medicineRows };
+}
+
+/**
+ * Membership enrollment resolution (which plan is active/pending/queued,
+ * free-benefit usage) and invoice totals for a patient — shared by the
+ * patient detail Membership tab and the Patient History overview dashboard
+ * so both read the same "which enrollment counts as active" logic.
+ */
+export function derivePatientBillingMembership({
+  membershipEnrollments = [],
+  membershipPlans = [],
+  patientInvoices = [],
+}: {
+  membershipEnrollments?: any[];
+  membershipPlans?: any[];
+  patientInvoices?: any[];
+}) {
+  const membershipInvoices = patientInvoices.filter(isMembershipPlanInvoice);
+  const purchaseInvoiceFor = (enrollment: any) =>
+    membershipInvoices.find(
+      (invoice: any) => invoice.id === enrollment.purchase_invoice_id,
+    ) ||
+    membershipInvoices.find(
+      (invoice: any) =>
+        invoice.patient_subscription_enrollment_id === enrollment.id,
+    );
+  const isEnrollmentPaid = (enrollment: any) => {
+    const invoice = purchaseInvoiceFor(enrollment);
+    if (invoice) return Number(invoice.balance_amount || 0) <= 0;
+    return (
+      Number(enrollment.paid_amount || 0) >=
+      Number(enrollment.plan?.price_amount || 0)
+    );
+  };
+  const resolvedMembershipEnrollments = membershipEnrollments.map(
+    (enrollment: any) => ({
+      ...enrollment,
+      plan:
+        membershipPlans.find((plan: any) => plan.id === enrollment.plan_id) ||
+        enrollment.plan ||
+        null,
+    }),
+  );
+  const activeMembership = resolvedMembershipEnrollments.find(
+    (row: any) => row.status === "active" && isEnrollmentPaid(row),
+  );
+  const pendingMembership = resolvedMembershipEnrollments.find(
+    (row: any) => row.status === "active" && !isEnrollmentPaid(row),
+  );
+  const queuedMembership = resolvedMembershipEnrollments.find(
+    (row: any) => row.status === "queued",
+  );
+  const visibleMembership = activeMembership || pendingMembership;
+  const freeConsultationsAllocated = Number(
+    visibleMembership?.allocated_free_consultations ??
+      visibleMembership?.plan?.free_consultations ??
+      0,
+  );
+  const freeConsultationsUsed = Number(
+    visibleMembership?.used_consultations || 0,
+  );
+  const freeLabUsed = Number(visibleMembership?.used_free_lab_count || 0);
+  const freeLabRemaining = Number(
+    visibleMembership?.remaining_free_lab_count || 0,
+  );
+  const freeLabAllocated = freeLabUsed + freeLabRemaining;
+  const freeMedicineUsed = Number(
+    visibleMembership?.used_free_medicine_count || 0,
+  );
+  const freeMedicineRemaining = Number(
+    visibleMembership?.remaining_free_medicine_count || 0,
+  );
+  const freeMedicineAllocated = freeMedicineUsed + freeMedicineRemaining;
+  const membershipUsageInvoices = patientInvoices.filter(
+    (invoice: any) =>
+      Number(invoice.membership_discount_amount || 0) > 0 &&
+      !["cancelled", "refunded"].includes(
+        String(invoice.status || "").toLowerCase(),
+      ),
+  );
+  const membershipSavings = membershipUsageInvoices.reduce(
+    (sum: number, invoice: any) =>
+      sum + Number(invoice.membership_discount_amount || 0),
+    0,
+  );
+  const totalBilled = patientInvoices.reduce(
+    (sum: number, invoice: any) =>
+      sum +
+      (["cancelled", "refunded"].includes(String(invoice.status).toLowerCase())
+        ? 0
+        : Number(invoice.total_amount || 0)),
+    0,
+  );
+  const totalPaid = patientInvoices.reduce(
+    (sum: number, invoice: any) => sum + Number(invoice.paid_amount || 0),
+    0,
+  );
+  const totalDue = patientInvoices.reduce(
+    (sum: number, invoice: any) => sum + invoicePatientDueAmount(invoice),
+    0,
+  );
+
+  return {
+    membershipInvoices,
+    purchaseInvoiceFor,
+    isEnrollmentPaid,
+    resolvedMembershipEnrollments,
+    activeMembership,
+    pendingMembership,
+    queuedMembership,
+    visibleMembership,
+    freeConsultationsAllocated,
+    freeConsultationsUsed,
+    freeLabUsed,
+    freeLabAllocated,
+    freeMedicineUsed,
+    freeMedicineAllocated,
+    membershipUsageInvoices,
+    membershipSavings,
+    totalBilled,
+    totalPaid,
+    totalDue,
+  };
 }
 
 export type BranchOption = {

@@ -174,3 +174,16 @@ class ConsultationDetailRead(BaseModel):
     medicines: list[MedicineRow]
     referrals: list[ReferralRow]
     lab_orders: list[ConsultationLabOrderRead] = []
+
+
+class PatientDiagnosisRead(BaseModel):
+    """One diagnosis row, flattened across all of a patient's consultations —
+    backs the Diagnosis history section of the Patient History module."""
+
+    id: str
+    consultation_id: str
+    diagnosis: str
+    diagnosis_type: str | None = None
+    notes: str | None = None
+    consultation_date: datetime
+    treatment_type: str | None = None

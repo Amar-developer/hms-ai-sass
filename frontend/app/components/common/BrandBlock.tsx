@@ -1,4 +1,7 @@
 import { HeartPulse } from "lucide-react";
+import Image from "next/image";
+// import clinic_logo1 from '@public/clinic_logo1'
+
 type BrandBlockProps = {
   compact?: boolean;
   tabletCollapsed: boolean;
@@ -24,9 +27,9 @@ export function BrandBlock({
           setTabletCollapsed(!tabletCollapsed);
           // setSidebarOpen(!sideBarOpen)
         }}
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand text-brand-fg transition hover:bg-brand-hover"
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-lg  text-brand-fg transition hover:bg-brand-hover"
       >
-        <HeartPulse size={22} />
+        <Image src="/clinic_logo.png" alt="Clinic Logo" width={40} height={40}/>
       </button>
 
       {!compact && !tabletCollapsed && (
