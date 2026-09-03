@@ -117,27 +117,27 @@ export default function TokenSlip({ data }: { data: TokenSlipData }) {
         </p>
         <div className="grid grid-cols-2">
           <div className="border-b-2 border-r-2 border-slate-900 px-3 py-1.5 text-[11px]">
-            <span className="font-semibold">BP: </span>
+            <span className="font-semibold">BP (mmHg): </span>
             <span>{data.intakeBp || "-"}</span>
           </div>
           <div className="border-b-2 border-r border-slate-900 px-3 py-1.5 text-[11px]">
-            <span className="font-semibold">PR: </span>
+            <span className="font-semibold">PR (bpm): </span>
             <span>{data.intakePulse || "-"}</span>
           </div>
           <div className="border-b-2 border-r-2 border-slate-900 px-3 py-1.5 text-[11px]">
-            <span className="font-semibold">SpO2: </span>
+            <span className="font-semibold">SpO2 (%): </span>
             <span>{data.intakeSpo2 || "-"}</span>
           </div>
           <div className="border-b-2 border-r border-slate-900 px-3 py-1.5 text-[11px]">
-            <span className="font-semibold">Temp: </span>
+            <span className="font-semibold">Temp (°F): </span>
             <span>{data.intakeTemp || "-"}</span>
           </div>
           <div className="border-r-2 border-slate-900 px-3 py-1.5 text-[11px]">
-            <span className="font-semibold">Height: </span>
+            <span className="font-semibold">Height (cm): </span>
             <span>{data.intakeHeight || "-"}</span>
           </div>
           <div className="border-r border-slate-900 px-3 py-1.5 text-[11px]">
-            <span className="font-semibold">Weight: </span>
+            <span className="font-semibold">Weight (kg): </span>
             <span>{data.intakeWeight || "-"}</span>
           </div>
         </div>

@@ -13,7 +13,11 @@ from app.core.pagination import Page
 from app.modules.audit.service import record_audit_event
 from app.modules.consultations.models import Consultation
 from app.modules.consultations.repositories import ConsultationRepository
-from app.modules.consultations.schemas import ConsultationDetailRead, ConsultationRead
+from app.modules.consultations.schemas import (
+    ConsultationDetailRead,
+    ConsultationRead,
+    PatientDiagnosisRead,
+)
 from app.modules.consultations.services.detail_builder import ConsultationDetailBuilder
 from app.modules.identity.models import User
 
@@ -114,6 +118,26 @@ class ConsultationQueryService:
             limit=limit,
             offset=offset,
         )
+
+    def list_patient_diagnoses(
+        self, *, tenant_id: str, patient_id: str, actor: User
+    ) -> list[PatientDiagnosisRead]:
+        enforce_entitlement(self.session, tenant_id, "consultations")
+        rows = self.consultations.list_diagnoses_for_patient(
+            tenant_id=tenant_id, patient_id=patient_id
+        )
+        return [
+            PatientDiagnosisRead(
+                id=diagnosis.id,
+                consultation_id=diagnosis.consultation_id,
+                diagnosis=diagnosis.diagnosis,
+                diagnosis_type=diagnosis.diagnosis_type,
+                notes=diagnosis.notes,
+                consultation_date=consultation.created_at,
+                treatment_type=consultation.treatment_type,
+            )
+            for diagnosis, consultation in rows
+        ]
 
     def list_consultation_filter_options(
         self, *, tenant_id: str

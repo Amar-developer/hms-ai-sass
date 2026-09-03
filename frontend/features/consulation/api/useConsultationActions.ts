@@ -44,6 +44,7 @@ type UseConsultationActionsParams = {
     finalFee: number;
   };
   resetAfterMarkDone: () => void;
+  onOpenConsultationInvoices?: () => void;
 };
 
 /**
@@ -80,6 +81,7 @@ export function useConsultationActions({
   setAddendums,
   markDoneFields,
   resetAfterMarkDone,
+  onOpenConsultationInvoices,
 }: UseConsultationActionsParams) {
   function updateAppt(id: string, patch: any) {
     setAppointments((current: any[]) =>
@@ -358,6 +360,7 @@ export function useConsultationActions({
       await refetchAppointments();
       setConsultationValidationAttempted(false);
       setMessage("Consultation Completed and locked in backend.");
+      onOpenConsultationInvoices?.();
     } catch (err: any) {
       setMessage(err.message || "Could not sign consultation.");
     } finally {

@@ -110,8 +110,6 @@ export function Sidebar(props: SidebarProps) {
     setPopupMenu(menu);
   };
 
-  console.log(props.visibleClinicSections,'visibleClinicsections')
-  console.log(props.clinicModuleSections,'clinicmoduleSection')
   return (
     <aside
       className={`

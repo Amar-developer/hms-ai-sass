@@ -12,7 +12,8 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { defaultNumberingEntities, numberEntityLabel } from "../../constants";
+import { defaultNumberingEntities } from "../../constants";
+import { numberEntityLabel } from "../../helpers";
 import { formatTenantType } from "../../helpers";
 import { Empty } from "@/app/components/common/Empty";
 import { Info } from "@/app/components/common/Info";

@@ -1,3 +1,6 @@
+import { CreditCard, Home, NotepadText, ReceiptText, Stethoscope } from "lucide-react";
+import { SectionTab } from "./types";
+
 export const hiddenScrollbar =
   "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
@@ -67,4 +70,45 @@ export const familyRelationshipOptions = [
   { value: "grandmother", label: "Grandmother" },
   { value: "guardian", label: "Guardian" },
   { value: "other_family", label: "Other Family" },
+];
+
+export const message_language_options = {
+  tenant_default: "English",
+  en: "English",
+  hi: "Hindi",
+  mr: "Marathi",
+  gu: "Gujarati",
+  ta: "Tamil",
+  te: "Telugu",
+  kn: "Kannada",
+  ml: "Malayalam",
+  bn: "Bengali",
+  pa: "Punjabi",
+  ur: "Urdu",
+};
+
+export const sms_language_options = {
+  tenant_default: "English",
+  en: "English",
+  hi: "Hindi",
+  mr: "Marathi",
+  gu: "Gujarati",
+  ta: "Tamil",
+  te: "Telugu",
+  kn: "Kannada",
+  ml: "Malayalam",
+  bn: "Bengali",
+  pa: "Punjabi",
+  ur: "Urdu",
+};
+
+// Lab & Services, Medicines, and Diagnosis moved to the dedicated Patient
+// History module (search a patient, see everything on one page) — dropped
+// here so they aren't duplicated as tabs.
+export const SECTION_TABS: SectionTab[] = [
+  { id: "home", label: "Overview", icon: Home},
+  { id: "consultations", label: "Consultations", icon: Stethoscope },
+  { id: "billing", label: "Billing", icon: ReceiptText },
+  { id: "membership", label: "Membership & Family", icon: CreditCard },
+  { id: "patient_tracking", label: "Patient Tracking", icon:  NotepadText},
 ];

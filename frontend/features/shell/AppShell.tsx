@@ -15,7 +15,7 @@ import { SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { canUseTenantAdminSection } from "../admin/permissions";
 import { tenantAdminSections, clinic_sections } from "../admin/constants";
-import { platformSectionsForUser } from "@/features/superAdmin/SuperAdminDashboard";
+import { platformSectionsForUser } from "../superAdmin/helpers";
 import { superAdminClinicSections } from "@/features/superAdmin/constants";
 import {
   parseSuperAdminSegments,
@@ -404,9 +404,7 @@ export function AppShell({
       ? "Error Logs"
       : visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
   const activeOPDSection =
-    activePage === "opd"
-      ? opdSectionFromSegment(pathSegments[1])
-      : "";
+    activePage === "opd" ? opdSectionFromSegment(pathSegments[1]) : "";
   const activeOPDBreadcrumbSection =
     activeOPDSection === "new" ? "appointments" : activeOPDSection;
 
@@ -414,34 +412,34 @@ export function AppShell({
     activePage === "opd"
       ? OPD_SECTION_LABELS[activeOPDBreadcrumbSection] || ""
       : activePage === "superadmin"
-      ? String(
-          visiblePlatformSections.find(
-            ([id]: any) =>
-              id ===
-              (superAdminSectionParents[activeSuperAdminSection] ||
-                activeSuperAdminSection),
-          )?.[1] ?? "",
-        )
-      : activePage === "admin"
         ? String(
-            visibleTenantAdminSections.find(
-              // only pure admin sections
-              ([id]: any) => id === activeTenantAdminSection,
+            visiblePlatformSections.find(
+              ([id]: any) =>
+                id ===
+                (superAdminSectionParents[activeSuperAdminSection] ||
+                  activeSuperAdminSection),
             )?.[1] ?? "",
           )
-        : activePage === "clinic"
+        : activePage === "admin"
           ? String(
-              visibleClinicSections.find(
-                ([id]: any) => id === activeClinicSection,
+              visibleTenantAdminSections.find(
+                // only pure admin sections
+                ([id]: any) => id === activeTenantAdminSection,
               )?.[1] ?? "",
             )
-          : activePage === "reports"
+          : activePage === "clinic"
             ? String(
-                reportSections.find(
-                  ([id]: any) => id === reportsSection,
+                visibleClinicSections.find(
+                  ([id]: any) => id === activeClinicSection,
                 )?.[1] ?? "",
               )
-            : "";
+            : activePage === "reports"
+              ? String(
+                  reportSections.find(
+                    ([id]: any) => id === reportsSection,
+                  )?.[1] ?? "",
+                )
+              : "";
   const activeSectionHref =
     activePage === "opd"
       ? OPD_SECTION_HREFS[activeOPDBreadcrumbSection] || "/opd/consultation"
@@ -626,7 +624,7 @@ export function AppShell({
                       ? clinicModulePath(id)
                       : id === "opd"
                         ? "/opd/consultation"
-                      : `/${id}`);
+                        : `/${id}`);
 
     if (id === activePage && pathname === destinationPath) return;
 
@@ -663,7 +661,7 @@ export function AppShell({
           ? clinicModulePath(resolvedActivePage)
           : resolvedActivePage === "opd"
             ? "/opd/consultation"
-          : `/${resolvedActivePage}`,
+            : `/${resolvedActivePage}`,
       );
     }
   }, [
@@ -843,9 +841,7 @@ export function AppShell({
         </div>
       )}
       <div className="min-h-0 flex-1 lg:flex">
-        <aside
-          className="scrollbar-hidden hidden h-full w-64 shrink-0 overflow-y-auto overflow-x-hidden bg-white px-0 py-2 lg:block"
-        >
+        <aside className="scrollbar-hidden hidden h-full w-64 shrink-0 overflow-y-auto overflow-x-hidden bg-white px-0 py-2 lg:block">
           {/* Desktop view */}
           {isDesktop && (
             <div
@@ -933,155 +929,107 @@ export function AppShell({
           )}
 
           <div className=" border-slate-100  px-4 py-2 lg:px-5 bg-[#f4f6f5d9]">
-              <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-center gap-2">
-                  {/* Back / Forward group */}
-                  {/* <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                  <button
+            <div className="flex min-w-0 flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-2">
+                {/* Breadcrumb */}
+                <div className="flex min-w-0 items-center gap-2 p-2 rounded-lg  ">
+                  <Button
                     type="button"
-                    onClick={() => router.back()}
-                    title="Previous page"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
+                    onClick={() => navigatePage("dashboard")}
+                    disabled={
+                      activePage === "dashboard" || !enabled("dashboard")
+                    }
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold hover:bg-white hover:text-emerald-600 disbaled:cursor-pointer disabled:bg-emerlad-600 disabled:text-white"
                   >
-                    <ArrowLeft size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => router.forward()}
-                    title="Forward"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
-                  >
-                    <ArrowRight size={14} />
-                  </button>
-                </div> */}
+                    <Home size={14} /> Dashboard
+                  </Button>
 
-                  {/* Divider */}
-
-                  {/* Breadcrumb */}
-                  <div className="flex min-w-0 items-center gap-2 p-2 rounded-lg  ">
-                    <Button
-                      type="button"
-                      onClick={() => navigatePage("dashboard")}
-                      disabled={
-                        activePage === "dashboard" || !enabled("dashboard")
-                      }
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-bold hover:bg-white hover:text-emerald-600 disbaled:cursor-pointer disabled:bg-emerlad-600 disabled:text-white"
-                    >
-                      <Home size={14} /> Dashboard
-                    </Button>
-
-                    {activePage !== "dashboard" && (
-                      <>
-                        <BreadcrumbSeparator />
-                        <BreadcrumbCrumb
-                          label={activeNavLabel}
-                          onClick={() => navigateBreadcrumb(activeModuleHref)}
-                          current={!activeSectionLabel && !activeViewLabel}
-                        />
-                      </>
-                    )}
-
-                    {activeSectionLabel && (
-                      <>
-                        <BreadcrumbSeparator className="hidden sm:block" />
-                        <BreadcrumbCrumb
-                          label={activeSectionLabel}
-                          onClick={() => navigateBreadcrumb(activeSectionHref)}
-                          current={!activeViewLabel}
-                          className="hidden sm:inline"
-                        />
-                      </>
-                    )}
-
-                    {activeViewLabel && (
-                      <>
-                        <BreadcrumbSeparator />
-                        <span className="truncate text-[11px] font-bold text-slate-900">
-                          {activeViewLabel}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {activePage === "admin" &&
-                  visibleTenantAdminSections.length > 0 && (
-                    <div className="flex shrink-0 items-center justify-end gap-2">
-                      <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
-                        Settings
-                      </span>
-                      <SearchableSelect
-                        value={activeTenantAdminSection}
-                        onChange={(value: string) => {
-                          setTenantAdminSettingsOpen(true);
-                          setTenantAdminSection(value);
-                        }}
-                        options={visibleTenantAdminSections.map(
-                          ([id, label]: any) => ({
-                            label,
-                            value: id,
-                          }),
-                        )}
-                        searchable={false}
-                        className="min-w-[200px] scrollbar-thin"
+                  {activePage !== "dashboard" && (
+                    <>
+                      <BreadcrumbSeparator />
+                      <BreadcrumbCrumb
+                        label={activeNavLabel}
+                        onClick={() => navigateBreadcrumb(activeModuleHref)}
+                        current={!activeSectionLabel && !activeViewLabel}
                       />
-                    </div>
+                    </>
                   )}
 
-                {/* {activePage === "clinic" &&
-                  visibleClinicSections.length > 0 && (
-                    <div className="flex shrink-0 items-center justify-end gap-2">
-                      <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
-                        Clinic
-                      </span>
-                      <SearchableSelect
-                        value={activeClinicSection}
-                        onChange={(value: string) => {
-                          setClinicOpen(true);
-                          setClinicSection(value);
-                        }}
-                        options={visibleClinicSections.map(
-                          ([id, label]: any) => ({
-                            label,
-                            value: id,
-                          }),
-                        )}
-                        searchable={false}
-                        className="min-w-[200px] scrollbar-thin"
+                  {activeSectionLabel && (
+                    <>
+                      <BreadcrumbSeparator className="hidden sm:block" />
+                      <BreadcrumbCrumb
+                        label={activeSectionLabel}
+                        onClick={() => navigateBreadcrumb(activeSectionHref)}
+                        current={!activeViewLabel}
+                        className="hidden sm:inline"
                       />
-                    </div>
-                  )} */}
+                    </>
+                  )}
 
-                {pageNeedsDepartmentFilter && departmentOptions.length > 0 && (
+                  {activeViewLabel && (
+                    <>
+                      <BreadcrumbSeparator />
+                      <span className="truncate text-[11px] font-bold text-slate-900">
+                        {activeViewLabel}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {activePage === "admin" &&
+                visibleTenantAdminSections.length > 0 && (
                   <div className="flex shrink-0 items-center justify-end gap-2">
                     <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
-                      Department
+                      Settings
                     </span>
                     <SearchableSelect
-                      value={departmentId}
-                      onChange={(value) => setDepartmentId(value)}
-                      options={departmentOptions.map((department: any) => ({
-                        value: department.id,
-                        label: department.name,
-                      }))}
-                      disabled={!canChangeDepartment}
-                      className=" min-w-[170px] "
-                      placeholder="Select department"
+                      value={activeTenantAdminSection}
+                      onChange={(value: string) => {
+                        setTenantAdminSettingsOpen(true);
+                        setTenantAdminSection(value);
+                      }}
+                      options={visibleTenantAdminSections.map(
+                        ([id, label]: any) => ({
+                          label,
+                          value: id,
+                        }),
+                      )}
                       searchable={false}
+                      className="min-w-[200px] scrollbar-thin"
                     />
                   </div>
                 )}
 
-                <div
-                  ref={setBreadcrumbSlotEl}
-                  className="flex shrink-0 items-center justify-end gap-2 empty:hidden"
-                />
-              </div>
-            </div>
+              {pageNeedsDepartmentFilter && departmentOptions.length > 0 && (
+                <div className="flex shrink-0 items-center justify-end gap-2">
+                  <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
+                    Department
+                  </span>
+                  <SearchableSelect
+                    value={departmentId}
+                    onChange={(value) => setDepartmentId(value)}
+                    options={departmentOptions.map((department: any) => ({
+                      value: department.id,
+                      label: department.name,
+                    }))}
+                    disabled={!canChangeDepartment}
+                    className=" min-w-[170px] "
+                    placeholder="Select department"
+                    searchable={false}
+                  />
+                </div>
+              )}
 
-          <section
-            className=" py-2 px-6 bg-[#f4f6f5d9]"
-          >
+              <div
+                ref={setBreadcrumbSlotEl}
+                className="flex shrink-0 items-center justify-end gap-2 empty:hidden"
+              />
+            </div>
+          </div>
+
+          <section className=" py-2 px-6 bg-[#f4f6f5d9]">
             <ShellChromeContext.Provider value={shellChromeValue}>
               {children}
             </ShellChromeContext.Provider>

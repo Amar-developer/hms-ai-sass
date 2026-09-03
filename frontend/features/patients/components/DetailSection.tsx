@@ -12,7 +12,7 @@ export function DetailSection({
       // open={defaultOpen}
       className="group rounded-lg border border-slate-200 bg-white"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/70 px-4 py-3 rounded-lg">
         <div>
           <h4 className="text-sm font-black text-slate-950 lg:text-base">{title}</h4>
           {description && (

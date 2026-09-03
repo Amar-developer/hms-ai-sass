@@ -19,7 +19,7 @@ export function ConsultReferralModal({
   const display = labOnly.length > 0 ? labOnly : referrals;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-3xl">
+      <Card className="w-full max-w-3xl bg-white p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-xl font-bold">Referral Detail</h3>

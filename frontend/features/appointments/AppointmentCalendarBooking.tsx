@@ -40,7 +40,7 @@ import {
 import type { QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
 
-const pageSize = 8;
+const pageSize = 10;
 const DEFAULT_SORT: SortState = { key: "updated_at", dir: "desc" };
 
 export function AppointmentCalendarBooking(props: Props) {
@@ -470,13 +470,18 @@ export function AppointmentCalendarBooking(props: Props) {
       return;
     }
     const byName = parseIntakeVitalsText(previous.intakeVitals || "");
+    // Pulse/SpO2/Temp/Height/Weight are now plain-number inputs (their units
+    // live in the field label, not the value) — older intake_vitals text may
+    // still carry a unit suffix ("78 bpm", "98.6°F"), so strip it here to a
+    // bare number before it's offered as a suggestion.
+    const numericPart = (value: string) => value.match(/^[\d.]+/)?.[0] || "";
     setPreviousIntake({
       bp: byName.bp || "",
-      pulse: byName.pulse || "",
-      spo2: byName.spo2 || "",
-      temp: byName.temp || "",
-      height: byName.height || "",
-      weight: byName.weight || "",
+      pulse: numericPart(byName.pulse || ""),
+      spo2: numericPart(byName.spo2 || ""),
+      temp: numericPart(byName.temp || ""),
+      height: numericPart(byName.height || ""),
+      weight: numericPart(byName.weight || ""),
       complaints: previous.intakeComplaints || "",
     });
   }, [selectedPatient?.id]);

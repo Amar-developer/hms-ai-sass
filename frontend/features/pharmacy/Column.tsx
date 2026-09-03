@@ -376,7 +376,7 @@ export function getPharmacyColumns({
                     rowBusy ||
                     invoiceBusy,
                   danger: true,
-                  onClick: () => handleIssueAction(issue, "cancel"),
+                  onClick: () => handleIssueAction(issue, "confirm-cancel"),
                 },
               ]}
             />

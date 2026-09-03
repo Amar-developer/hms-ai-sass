@@ -1,7 +1,7 @@
 """Add doctor payment details and vendor settlement ledger.
 
-Revision ID: 20260901_0136
-Revises: 20260831_0135
+Revision ID: 20260901_0138
+Revises: 20260901_0137
 Create Date: 2026-09-01
 """
 
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "20260901_0136"
-down_revision: str | None = "20260831_0135"
+revision: str = "20260901_0138"
+down_revision: str | None = "20260901_0137"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

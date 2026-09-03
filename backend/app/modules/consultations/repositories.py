@@ -120,6 +120,23 @@ class ConsultationRepository:
         ).subquery()
         return int(self.session.exec(select(func.count()).select_from(filtered)).one())
 
+    def list_diagnoses_for_patient(
+        self, *, tenant_id: str, patient_id: str
+    ) -> list[tuple[ConsultationDiagnosis, Consultation]]:
+        statement = (
+            select(ConsultationDiagnosis, Consultation)
+            .join(
+                Consultation,
+                Consultation.id == ConsultationDiagnosis.consultation_id,
+            )
+            .where(
+                ConsultationDiagnosis.tenant_id == tenant_id,
+                Consultation.patient_id == patient_id,
+            )
+            .order_by(Consultation.created_at.desc())
+        )
+        return list(self.session.exec(statement).all())
+
     def filter_options(self, *, tenant_id: str) -> dict[str, list[ListFilterOption]]:
         branches = (
             select(Branch.id, Branch.name)

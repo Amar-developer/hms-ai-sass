@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ClipboardPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { ClipboardPlus, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { FormField } from "@/app/components/FormElements";
 import {
@@ -26,6 +26,7 @@ import {
   listClinicalTemplates,
   updateClinicalTemplate,
 } from "@/features/consulation/api/consulation.api";
+import { treatment_type_options } from "@/features/consulation/constants";
 
 type MedicineRow = {
   name: string;
@@ -69,6 +70,9 @@ export function ClinicalTemplateManager({
   const [editingId, setEditingId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [name, setName] = useState("");
+  const [treatmentType, setTreatmentType] = useState(
+    treatment_type_options[0]?.value || "",
+  );
   const [complaints, setComplaints] = useState("");
   const [diagnoses, setDiagnoses] = useState("");
   const [notes, setNotes] = useState("");
@@ -140,7 +144,10 @@ export function ClinicalTemplateManager({
   }, [apiSession, departmentId]);
 
   function addMedicine() {
-    if (!medicineDraft.name.trim()) return;
+    // A medicine needs dosage and frequency before it can be signed off
+    // during a consultation (see signBackendConsultation), so a template
+    // can't add one without them either.
+    if (!medicineDraft.name.trim() || !medicineDraft.dosage.trim()) return;
     setMedicines((current) => [...current, { ...medicineDraft }]);
     setMedicineDraft(blankMedicine());
     setSelectedMedicineId("");
@@ -155,6 +162,7 @@ export function ClinicalTemplateManager({
 
   function resetForm() {
     setName("");
+    setTreatmentType(treatment_type_options[0]?.value || "");
     setComplaints("");
     setDiagnoses("");
     setNotes("");
@@ -171,6 +179,9 @@ export function ClinicalTemplateManager({
     const content = template.content || {};
     setEditingId(template.id);
     setName(template.name || "");
+    setTreatmentType(
+      content.treatment_type || treatment_type_options[0]?.value || "",
+    );
     setComplaints((content.complaints || []).join("\n"));
     setDiagnoses((content.diagnoses || []).join("\n"));
     setNotes(content.doctor_notes || "");
@@ -186,7 +197,35 @@ export function ClinicalTemplateManager({
 
   async function saveTemplate(event: React.FormEvent) {
     event.preventDefault();
-    if (!apiSession || !departmentId || !name.trim()) return;
+    if (!apiSession || !departmentId) return;
+    const complaintRows = complaints
+      .split("\n")
+      .map((row) => row.trim())
+      .filter(Boolean);
+    const diagnosisRows = diagnoses
+      .split("\n")
+      .map((row) => row.trim())
+      .filter(Boolean);
+    // Mirrors the fields required to sign a consultation (see
+    // signBackendConsultation) — a template pre-fills these, so it should
+    // never be able to save without them either.
+    const missingFields = [
+      !name.trim() ? "template name" : "",
+      !treatmentType ? "treatment type" : "",
+      complaintRows.length === 0 ? "complaints" : "",
+      diagnosisRows.length === 0 ? "diagnosis" : "",
+      !notes.trim() ? "doctor notes" : "",
+    ].filter(Boolean);
+    if (missingFields.length > 0) {
+      setMessage(`Add ${missingFields.join(", ")} before saving the template.`);
+      return;
+    }
+    if (medicines.some((row) => !row.dosage.trim() || !row.frequency.trim())) {
+      setMessage(
+        "Every medicine in the template needs dosage and frequency before saving.",
+      );
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -195,14 +234,9 @@ export function ClinicalTemplateManager({
         name: name.trim(),
         template_type: "consultation",
         content: {
-          complaints: complaints
-            .split("\n")
-            .map((row) => row.trim())
-            .filter(Boolean),
-          diagnoses: diagnoses
-            .split("\n")
-            .map((row) => row.trim())
-            .filter(Boolean),
+          treatment_type: treatmentType,
+          complaints: complaintRows,
+          diagnoses: diagnosisRows,
           doctor_notes: notes.trim(),
           medicines,
           labs,
@@ -271,8 +305,8 @@ export function ClinicalTemplateManager({
           }}
           className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap bg-brand px-4 py-0 text-xs hover:bg-brand-hover"
         >
-          <Plus className="h-4 w-4" />
-          {showForm ? "Close Form" : "New Template"}
+          {showForm ? <X className='h-4 w-4'/> : <Plus className="h-4 w-4" />}
+          {showForm ? "" : "New Template"}
         </Button>
       </div>
 
@@ -293,16 +327,27 @@ export function ClinicalTemplateManager({
                 className='search-input'
               />
             </FormField>
-            <FormField label="Complaints">
+            <FormField label="Treatment Type" required>
+              <SearchableSelect
+                required
+                value={treatmentType}
+                onChange={setTreatmentType}
+                options={treatment_type_options}
+                searchable={false}
+              />
+            </FormField>
+            <FormField label="Complaints" required>
               <textarea
+                required
                 value={complaints}
                 onChange={(event) => setComplaints(event.target.value)}
                 className="min-h-24 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
                 placeholder="One complaint per line"
               />
             </FormField>
-            <FormField label="Diagnosis">
+            <FormField label="Diagnosis" required>
               <textarea
+                required
                 value={diagnoses}
                 onChange={(event) => setDiagnoses(event.target.value)}
                 className="min-h-24 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
@@ -310,8 +355,9 @@ export function ClinicalTemplateManager({
               />
             </FormField>
           </div>
-          <FormField label="Doctor Notes">
+          <FormField label="Doctor Notes" required>
             <textarea
+              required
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               className="min-h-20 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
@@ -426,13 +472,19 @@ export function ClinicalTemplateManager({
                 }))}
                 searchable
               />
-              <button
+              <Button
                 type="button"
                 onClick={addMedicine}
-                className="h-9 whitespace-nowrap rounded-lg bg-brand px-4 text-xs font-bold text-brand-fg hover:bg-brand-hover"
+                disabled={!medicineDraft.name.trim() || !medicineDraft.dosage.trim()}
+                title={
+                  !medicineDraft.name.trim() || !medicineDraft.dosage.trim()
+                    ? "Medicine name and dosage are required"
+                    : undefined
+                }
+                className="save-button"
               >
                 Add Medicine
-              </button>
+              </Button>
             </div>
             <div className="mt-3 space-y-2">
               {medicines.map((medicine, index) => (
@@ -520,13 +572,13 @@ export function ClinicalTemplateManager({
                 ]}
                 searchable={false}
               />
-              <button
+              <Button
                 type="button"
                 onClick={addLab}
-                className="h-9 whitespace-nowrap rounded-lg bg-brand px-4 text-xs font-bold text-brand-fg hover:bg-brand-hover"
+                className="save-button"
               >
                 Add Lab
-              </button>
+              </Button>
             </div>
             <div className="mt-3 space-y-2">
               {labs.map((lab, index) => (
@@ -558,8 +610,15 @@ export function ClinicalTemplateManager({
 
           <Button
             type="submit"
-            disabled={busy || !name.trim()}
-            className="inline-flex h-10 items-center justify-center bg-brand px-5 py-0 text-xs hover:bg-brand-hover"
+            disabled={
+              busy ||
+              !name.trim() ||
+              !treatmentType ||
+              !complaints.trim() ||
+              !diagnoses.trim() ||
+              !notes.trim()
+            }
+            className="save-button"
           >
             <ButtonLoader loading={busy}>
               {busy

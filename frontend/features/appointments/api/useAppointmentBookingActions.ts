@@ -3,6 +3,7 @@
 import type { MutableRefObject } from "react";
 import { apiFetch, type ApiSession } from "@/lib/api";
 import { generatePatientId, generateToken } from "@/lib/hmsLogic";
+import { createPatientVital } from "@/features/patients/api/patients.api";
 
 interface IntakeVitals {
   intakeBp: string;
@@ -15,7 +16,9 @@ interface IntakeVitals {
 
 // Temp/Height/Weight are captured as separate inputs for a cleaner form, but
 // merged into the same free-text intake_vitals field the backend already
-// stores (consistent with how BP/Pulse are already recorded there).
+// stores (consistent with how BP/Pulse are already recorded there). This
+// stays purely a display/prefill convenience for the consultation page and
+// printed token slip — patientvital (below) is the authoritative store.
 // Keys here must match the aliases the consultation page's vitals grid
 // looks up (BP/Pulse/Spo2/Temp/Height/Weight) so everything filled in at
 // booking actually shows up pre-filled on the consultation page.
@@ -30,6 +33,27 @@ function combinedIntakeVitals(vitals: IntakeVitals) {
   ]
     .filter(Boolean)
     .join(", ");
+}
+
+// Vitals are recorded in patientvital going forward — this is the single
+// authoritative write. Any subset of fields may be filled (a BP-only triage
+// re-check is valid), so only the fields actually entered are sent.
+function patientVitalPayloadFromIntake(vitals: IntakeVitals) {
+  const bp = vitals.intakeBp.trim();
+  const pulse = vitals.intakePulse.trim();
+  const spo2 = vitals.intakeSpo2.trim();
+  const temp = vitals.intakeTemp.trim();
+  const height = vitals.intakeHeight.trim();
+  const weight = vitals.intakeWeight.trim();
+  if (!bp && !pulse && !spo2 && !temp && !height && !weight) return null;
+  return {
+    bp: bp || null,
+    pulse_bpm: pulse ? Number(pulse) : null,
+    spo2_percent: spo2 ? Number(spo2) : null,
+    temperature_f: temp ? Number(temp) : null,
+    height_cm: height ? Number(height) : null,
+    weight_kg: weight ? Number(weight) : null,
+  };
 }
 
 interface UseAppointmentBookingActionsArgs {
@@ -285,6 +309,21 @@ export function useAppointmentBookingActions({
             created_by_user_id: apiSession.user?.id || null,
           }),
         });
+        const vitalPayload = patientVitalPayloadFromIntake(vitals);
+        if (vitalPayload) {
+          // Best-effort: a vitals-save hiccup shouldn't fail a booking that
+          // already succeeded.
+          try {
+            await createPatientVital(
+              apiSession,
+              selectedPatient.id,
+              vitalPayload,
+            );
+          } catch {
+            // ignored — vitals can still be recorded from the patient's
+            // Overview tab.
+          }
+        }
         await loadLiveData(apiSession);
         if (isSuperAdmin) setListRefreshKey((current) => current + 1);
         setBooked(result);

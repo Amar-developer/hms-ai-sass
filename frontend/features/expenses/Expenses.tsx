@@ -315,7 +315,7 @@ export default function Expense({ setActive, clinic, apiSession }: any) {
               <Button
                 type="button"
                 onClick={() => setShowSubcategoryAdmin(true)}
-                className="border close-button rounded-lg  text-xs font-bold hover:bg-slate-100"
+                className="save-button"
               >
                 Manage Subcategories
               </Button>

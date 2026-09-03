@@ -37,7 +37,7 @@ export function ConsultPrescriptionModal({
   );
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-3xl">
+      <Card className="w-full max-w-3xl bg-white p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="card-title font-bold">Prescription Detail</h3>

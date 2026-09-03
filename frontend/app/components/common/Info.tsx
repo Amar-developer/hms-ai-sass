@@ -128,17 +128,17 @@ export function Info({ title, label, value, icon, tone }: any) {
   const iconTone = tone || presentation.tone;
 
   return (
-    <div className="flex min-h-[82px] items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:border-slate-300 hover:shadow-md">
+    <div className="flex min-h-[70px] max-w-48 items-center gap-3 rounded-lg border border-slate-200 bg-white p-2 shadow-sm transition-colors hover:border-slate-300 hover:shadow-md ">
       <span
-        className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ring-1 ${iconTone}`}
+        className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ring-1 ${iconTone}`}
       >
         <Icon className="h-4 w-4" />
       </span>
-      <div className="min-w-0">
-        <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+      <div className="min-w-0 max-w-[120px] rounded-lg">
+        <p className="truncate text-xs font-black uppercase tracking-wide text-slate-500" title={heading}>
           {heading}
         </p>
-        <p className="mt-1 break-words text-sm font-black leading-snug text-slate-950">
+        <p className="mt-1 truncate break-words text-xs font-black leading-snug text-slate-950" title={value}>
           {value}
         </p>
       </div>

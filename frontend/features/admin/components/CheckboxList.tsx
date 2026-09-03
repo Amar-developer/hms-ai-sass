@@ -29,7 +29,7 @@ export function CheckboxList({
                 event.preventDefault();
                 onRowOpen(row);
               }}
-              className={`flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-xs ${
+              className={`flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-xs ${
                 onRowOpen
                   ? "cursor-pointer transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300  border-red-400"
                   : ""

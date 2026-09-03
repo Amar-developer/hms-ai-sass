@@ -342,14 +342,14 @@ export function TokenQueue({
 
   return (
     <>
-      {apiSession && (
+      {/* {apiSession && (
         <BreadcrumbSlot>
           <RefreshButton
             onRefresh={() => refetch()}
             className="h-auto rounded-md px-2.5 py-1 text-[11px]"
           />
         </BreadcrumbSlot>
-      )}
+      )} */}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="space-y-3">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

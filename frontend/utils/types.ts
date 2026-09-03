@@ -24,6 +24,11 @@ export type DataTableProps<T> = {
   emptyDescription?: string;
   emptyIcon?: React.ComponentType<{ className?: string }>;
   minBodyHeight?: string;
+  // Caps the scrollable body at this height (e.g. "260px" for ~5 rows) and
+  // makes it scroll internally instead of growing the page — used with a
+  // "Load more" control so the table's footprint stays fixed as more rows
+  // are revealed.
+  maxBodyHeight?: string;
   className?: string;
   tableClassName?: string;
   rowClassName?: string | ((row: T, index: number) => string);

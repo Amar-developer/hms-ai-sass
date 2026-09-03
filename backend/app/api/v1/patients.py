@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlmodel import Session
@@ -23,6 +23,8 @@ from app.modules.patients.schemas import (
     PatientSearchResult,
     PatientSummary,
     PatientUpdate,
+    PatientVitalCreate,
+    PatientVitalRead,
 )
 from app.modules.patients.services.patient_service import PatientService
 
@@ -346,6 +348,47 @@ def delete_patient_family_relationship(
         tenant_id=tenant_id,
         patient_id=patient_id,
         relationship_id=relationship_id,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/{patient_id}/vitals",
+    response_model=list[PatientVitalRead],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
+def list_patient_vitals(
+    patient_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    from_date: datetime | None = Query(default=None),
+    to_date: datetime | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> list[PatientVitalRead]:
+    return PatientService(session).list_vitals(
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
+@router.post(
+    "/{patient_id}/vitals",
+    response_model=PatientVitalRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission(permissions.PATIENTS_EDIT))],
+)
+def create_patient_vital(
+    patient_id: str,
+    payload: PatientVitalCreate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_permission(permissions.PATIENTS_EDIT)),
+    session: Session = Depends(get_session),
+) -> PatientVitalRead:
+    return PatientService(session).create_vital(
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        payload=payload,
         actor=current_user,
     )
 

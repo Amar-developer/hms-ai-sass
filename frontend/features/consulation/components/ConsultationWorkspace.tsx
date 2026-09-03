@@ -1039,6 +1039,7 @@ export function ConsultationWorkspace(props: any) {
                 <Button
                   onClick={saveAddendum}
                   disabled={busy || !addendumNote.trim()}
+                  className='save-button'
                 >
                   Save Addendum
                 </Button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, FileText, ReceiptText } from "lucide-react";
+import { CheckCircle2, FileText } from "lucide-react";
 
 import { Button, Card, StatusToast } from "@/app/components/common/ui";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
@@ -111,6 +111,18 @@ export function OPDInvoiceQueue({
       setMessage(
         `Invoice ${result?.invoice?.invoice_number || ""} generated for ${row.patient_name || "patient"}.`,
       );
+      const invoiceId = result?.invoice?.id;
+      if (invoiceId && typeof window !== "undefined") {
+        // Land straight on the Payments tab — the reception flow right
+        // after generating an OPD invoice is almost always "collect
+        // payment now", not reviewing line items.
+        window.sessionStorage.setItem("medizinhub.billingInvoiceId", invoiceId);
+        window.sessionStorage.setItem(
+          "medizinhub.billingInvoiceSection",
+          "invoice-payment",
+        );
+        onOpenInvoices?.();
+      }
     } catch (error: any) {
       setMessage(error?.message || "Could not generate invoice.");
     } finally {
@@ -208,96 +220,18 @@ export function OPDInvoiceQueue({
   return (
     <Card className="pt-2">
       <StatusToast message={message} onClose={() => setMessage("")} />
-
-      {rows.length === 0 && !loading ? (
-        <div className="grid min-h-44 place-items-center px-6 text-center">
-          <div>
-            <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
-              <CheckCircle2 className="h-6 w-6" />
-            </span>
-            <p className="mt-3 text-sm font-black text-slate-900">
-              No invoices waiting
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Completed consultations, lab orders and prescription issues will
-              appear here until their invoice is generated.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="hidden grid-cols-[180px_100px_130px_130px_160px_180px] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
-            <span>Patient</span>
-            <span>Appointment</span>
-            <span>Type</span>
-            <span>Doctor</span>
-            <span>Date</span>
-            <span className="text-right">Action</span>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {rows.map((row) => {
-              const rowKey = `${row.queueType}-${
-                row.queueType === "consultation" ? row.consultation_id : row.id
-              }`;
-              const rowBusy = busyId === rowKey;
-              return (
-                <div
-                  key={rowKey}
-                  className="grid gap-3 px-4 py-2 md:grid-cols-[180px_100px_130px_130px_160px_180px] md:items-center"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-950">
-                      {row.patient_name || "Patient"}
-                    </p>
-                  </div>
-                  <div className="">
-                    <p className="mt-0.5 text-xs font-medium text-slate-500">
-                      {row.queueType === "lab"
-                        ? row.lab_order_number || "Lab order"
-                        : row.queueType === "pharmacy"
-                          ? row.issue_number || "Prescription issue"
-                          : row.appointment_number ||
-                            row.appointment_id ||
-                            "Appointment"}
-                    </p>
-                  </div>
-                  <span className="w-fit rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
-                    {row.queueType === "lab"
-                      ? "Lab"
-                      : row.queueType === "pharmacy"
-                        ? "Prescription"
-                        : "Consultation"}
-                  </span>
-                  <p className="truncate text-xs font-semibold text-slate-700">
-                    {row.practitioner_name || "Unassigned"}
-                  </p>
-                  <p className="text-xs text-slate-600">
-                    {displayDateTime(
-                      row.consultation_signed_at ||
-                        row.consultation_created_at ||
-                        row.order_date ||
-                        row.created_at,
-                    )}
-                  </p>
-                  <Button
-                    type="button"
-                    onClick={() => generateInvoice(row)}
-                    disabled={rowBusy}
-                    className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap bg-brand px-3 py-0 text-xs hover:bg-brand-hover"
-                  >
-                    <ButtonLoader loading={rowBusy}>
-                      <span className="inline-flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        {rowBusy ? "Generating…" : "Generate Invoice"}
-                      </span>
-                    </ButtonLoader>
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <div className="table-wrapper-width">
+        <DataTable
+          columns={columns}
+          data={rows}
+          loading={loading}
+          emptyMessage="No invoices waiting"
+          emptyDescription="Completed consultations, lab orders and prescription issues will appear here until their invoice is generated."
+          emptyIcon={CheckCircle2}
+          minBodyHeight={`${rows.length > 0 ? "" : "220px"}`}
+          className="table-width"
+        />
+      </div>
     </Card>
   );
 }

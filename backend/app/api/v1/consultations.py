@@ -18,6 +18,7 @@ from app.modules.consultations.schemas import (
     ConsultationTemplateRead,
     ConsultationTemplateUpdate,
     ConsultationUpdate,
+    PatientDiagnosisRead,
 )
 from app.modules.consultations.services.query_service import ConsultationQueryService
 from app.modules.consultations.services.record_service import ConsultationRecordService
@@ -154,6 +155,22 @@ def list_department_clinical_templates(
 ) -> list[ConsultationTemplateRead]:
     return ClinicalTemplateService(session).list_department_clinical_templates(
         tenant_id=tenant_id, department_id=department_id
+    )
+
+
+@router.get(
+    "/diagnoses",
+    response_model=list[PatientDiagnosisRead],
+    dependencies=[Depends(require_permission(permissions.CONSULTATIONS_READ))],
+)
+def list_patient_diagnoses(
+    patient_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_permission(permissions.CONSULTATIONS_READ)),
+    session: Session = Depends(get_session),
+) -> list[PatientDiagnosisRead]:
+    return ConsultationQueryService(session).list_patient_diagnoses(
+        tenant_id=tenant_id, patient_id=patient_id, actor=current_user
     )
 
 

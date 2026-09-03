@@ -67,12 +67,12 @@ export function PatientIntakeSummary({
       </p>
 
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-        {bp && <Info title="BP" value={bp} />}
-        {pulse && <Info title="Pulse / PR" value={pulse} />}
-        {spo2 && <Info title="SpO2" value={spo2} />}
-        {temp && <Info title="Temp" value={temp} />}
-        {height && <Info title="Height" value={height} />}
-        {weight && <Info title="Weight" value={weight} />}
+        {bp && <Info title="BP (mmHg)" value={bp} />}
+        {pulse && <Info title="Pulse / PR (bpm)" value={pulse} />}
+        {spo2 && <Info title="SpO2 (%)" value={spo2} />}
+        {temp && <Info title="Temp (°F)" value={temp} />}
+        {height && <Info title="Height (cm)" value={height} />}
+        {weight && <Info title="Weight (kg)" value={weight} />}
         {complaints && (
           <div className="md:col-span-2 lg:col-span-2">
             <Info title="Complaints" value={complaints} />

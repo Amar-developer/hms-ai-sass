@@ -59,7 +59,7 @@ export function NotificationWidget({ apiSession, setActive }: any) {
   }
 
   return (
-    <Card>
+    <Card className="p-3 bg-white">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-amber-100 p-2 text-amber-700">
@@ -67,7 +67,7 @@ export function NotificationWidget({ apiSession, setActive }: any) {
           </div>
           <div>
             <h3 className="card-title font-bold">Action Required</h3>
-            <p className="table-data text-slate-500">
+            <p className="card-desc text-slate-500">
               {unreadCount} unread appointment, request, or system update
               {unreadCount === 1 ? "" : "s"}.
             </p>

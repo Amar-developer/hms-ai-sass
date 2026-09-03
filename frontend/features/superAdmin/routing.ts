@@ -5,7 +5,12 @@
  */
 
 import { CLINIC_SECTION_IDS } from "@/lib/clinicSections";
-import { newSegment, editSegment, isNewSegment, isEditSegment } from "@/lib/routeSlugs";
+import {
+  newSegment,
+  editSegment,
+  isNewSegment,
+  isEditSegment,
+} from "@/lib/routeSlugs";
 
 const CLINIC_IDS: readonly string[] = CLINIC_SECTION_IDS;
 
@@ -63,15 +68,15 @@ export function superAdminPath(
   section: string,
   ids: SuperAdminRouteIds = {},
 ): string {
-  const detail = (
-    segment: string,
-    id: string | undefined,
-    suffix: string,
-  ) => {
+  const detail = (segment: string, id: string | undefined, suffix: string) => {
     const base = basePathFor(segment);
     const finalSuffix =
-      suffix === "edit" ? editSegment(ENTITY_SEGMENTS[segment] || segment) : suffix;
-    return id ? `${base}/${segment}/${id}/${finalSuffix}` : `${base}/${segment}`;
+      suffix === "edit"
+        ? editSegment(ENTITY_SEGMENTS[segment] || segment)
+        : suffix;
+    return id
+      ? `${base}/${segment}/${id}/${finalSuffix}`
+      : `${base}/${segment}`;
   };
 
   switch (section) {
@@ -116,7 +121,10 @@ export function parseSuperAdminSegments(
   {
     defaultSection = "overview",
     allowedSections = PLAIN_SUPER_ADMIN_SECTIONS,
-  }: { defaultSection?: string; allowedSections?: readonly string[] } = {},
+  }: {
+    defaultSection?: string;
+    allowedSections?: readonly string[];
+  } = {},
 ): {
   section: string;
   id: string;
@@ -124,7 +132,9 @@ export function parseSuperAdminSegments(
   const [first, second, third] = segments;
   if (!first) return { section: defaultSection, id: "" };
 
-  const entity = allowedSections.includes(first) ? ENTITY_SEGMENTS[first] : undefined;
+  const entity = allowedSections.includes(first)
+    ? ENTITY_SEGMENTS[first]
+    : undefined;
   if (entity) {
     if (isNewSegment(second)) {
       return {
