@@ -12,6 +12,9 @@ export type ExpenseListFilters = {
   category?: string;
   query?: string;
   branchId?: string;
+  fromDate?: string;
+  toDate?: string;
+  refreshTick?: number;
   queryFilters?: QueryFilterRow[];
   sort?: SortState | null;
 };
@@ -69,6 +72,8 @@ export function useExpensesData(
         }
         if (filters.query) params.set("q", filters.query);
         if (filters.branchId) params.set("branch_id", filters.branchId);
+        if (filters.fromDate) params.set("from_date", filters.fromDate);
+        if (filters.toDate) params.set("to_date", filters.toDate);
         const dynamicFilters = backendFilters(filters.queryFilters);
         if (dynamicFilters.length) {
           params.set("filters", JSON.stringify(dynamicFilters));
@@ -107,6 +112,9 @@ export function useExpensesData(
     filters.category,
     filters.query,
     filters.branchId,
+    filters.fromDate,
+    filters.toDate,
+    filters.refreshTick,
     JSON.stringify(filters.queryFilters || []),
     filters.sort?.key,
     filters.sort?.dir,

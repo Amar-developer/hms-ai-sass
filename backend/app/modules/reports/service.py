@@ -14,6 +14,7 @@ from app.modules.reports.services.config_service import (  # noqa: F401
     mark_report_period_sent,
     save_monthly_report_config,
 )
+from app.modules.reports.services.dashboard import build_live_dashboard_metrics  # noqa: F401
 from app.modules.reports.services.email_delivery import send_report_email  # noqa: F401
 from app.modules.reports.services.job_service import (  # noqa: F401
     download_monthly_report_job,
@@ -45,13 +46,13 @@ from app.modules.reports.services.snapshot_service import (  # noqa: F401
     get_monthly_snapshot,
     list_monthly_snapshots,
 )
-
 __all__ = [
     "allocated_line_membership_benefit",
     "allocated_line_offer_discount",
     "allocated_line_revenue",
     "archive_snapshot",
     "build_monthly_revenue_report",
+    "build_live_dashboard_metrics",
     "build_profit_report_email_attachments",
     "download_monthly_report_job",
     "get_monthly_snapshot",

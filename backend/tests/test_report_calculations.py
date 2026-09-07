@@ -5,7 +5,10 @@ from app.modules.billing.services.line_discounts import (
     allocate_amount,
     sync_invoice_item_discounts,
 )
-from app.modules.reports.services.calculations import allocate_values
+from app.modules.reports.services.calculations import (
+    allocate_values,
+    dashboard_profit_summary,
+)
 from app.modules.tenants.models import Tenant
 
 
@@ -20,6 +23,29 @@ def test_allocate_values_preserves_unmapped_subtotal_share():
     allocated = allocate_values([40, 40], 100, 90)
 
     assert sum(allocated) == 72
+
+
+def test_dashboard_profit_uses_paid_basis_without_double_counting_discounts():
+    summary = dashboard_profit_summary(
+        {
+            "paidRevenue": 10000,
+            "paidTax": 300,
+            "doctorFee": 1000,
+            "supplierSettlement": 1500,
+            "homeCareStaffSettlement": 400,
+            "monthlyExpenses": 500,
+            "membershipStandardDiscount": 300,
+            "membershipFreeItems": 200,
+            "approvedDiscount": 100,
+            "offerDiscount": 250,
+        }
+    )
+
+    assert summary["recognizedRevenue"] == 9700
+    assert summary["revenueAdjustments"] == 850
+    assert summary["profitDeductions"] == 3700
+    assert summary["grossProfit"] == 6300
+    assert round(summary["incomeMargin"], 2) == 64.95
 
 
 def test_invoice_line_allocation_reconciles_small_rupee_remainder():

@@ -12,8 +12,6 @@ type UseReportsActionsParams = {
   doctorId: string;
   typeFilter: string;
   supplierFilter: string;
-  emailLabSupplierIds: string[];
-  emailReportSections: string[];
   recipientInput: string;
   recentEmails: string[];
   setRecentEmails: (value: string[]) => void;
@@ -24,6 +22,18 @@ type UseReportsActionsParams = {
   setSnapshotMessage: (value: string) => void;
   setRecalculatingSnapshotId: (value: string | null) => void;
   refreshReports: () => Promise<void>;
+};
+
+export type EmailReportSnapshot = {
+  reportTitle: string;
+  tableTitle: string;
+  filterDescription: string;
+  summaryHeaders: string[];
+  summaryRows: any[][];
+  tableHeaders: string[];
+  tableRows: any[][];
+  exportName: string;
+  reportSection: string;
 };
 
 /**
@@ -38,8 +48,6 @@ export function useReportsActions({
   doctorId,
   typeFilter,
   supplierFilter,
-  emailLabSupplierIds,
-  emailReportSections,
   recipientInput,
   recentEmails,
   setRecentEmails,
@@ -70,7 +78,7 @@ export function useReportsActions({
     }
   }
 
-  async function sendEmailReport() {
+  async function sendEmailReport(snapshot: EmailReportSnapshot) {
     setSendMessage("");
     setSendError("");
     if (!fromDate || !toDate) {
@@ -78,10 +86,6 @@ export function useReportsActions({
       return;
     }
     const recipients = Array.from(new Set(parseEmailList(recipientInput)));
-    if (recipients.length === 0) {
-      setSendError("Enter at least one email address.");
-      return;
-    }
     const invalidEmail = recipients.find((email) => !isEmail(email));
     if (invalidEmail) {
       setSendError(`Check email address: ${invalidEmail}`);
@@ -92,21 +96,28 @@ export function useReportsActions({
       const result = await reportsApi.sendProfitEmailReport(
         apiSession as ApiSession,
         {
-          recipients,
+          recipients: recipients.length ? recipients : null,
+          cc: null,
           from_date: fromDate,
           to_date: toDate,
           doctor_id: doctorId === "all" ? null : doctorId,
           invoice_type: typeFilter,
           supplier_id: supplierFilter === "all" ? null : supplierFilter,
-          supplier_ids: emailLabSupplierIds.includes("all")
-            ? []
-            : emailLabSupplierIds,
-          report_sections: emailReportSections,
+          supplier_ids: [],
+          report_sections: [snapshot.reportSection],
           branch_id: branchId || null,
+          report_title: snapshot.reportTitle,
+          table_title: snapshot.tableTitle,
+          filter_description: snapshot.filterDescription,
+          summary_headers: snapshot.summaryHeaders,
+          summary_rows: snapshot.summaryRows,
+          table_headers: snapshot.tableHeaders,
+          table_rows: snapshot.tableRows,
+          export_name: snapshot.exportName,
         },
       );
       const nextRecent = Array.from(
-        new Set([...recipients, ...recentEmails]),
+        new Set([...(result.recipients || recipients), ...recentEmails]),
       ).slice(0, 6);
       setRecentEmails(nextRecent);
       if (typeof window !== "undefined" && apiSession?.tenantId) {
@@ -117,10 +128,10 @@ export function useReportsActions({
       }
       setSendPanelOpen(false);
       setSendMessage(
-        `Sent to ${result.recipients.join(", ")} with ${result.attachment_filenames.length} Excel files.`,
+        `Sent ${result.attachment_filenames.length} filtered report file${result.attachment_filenames.length === 1 ? "" : "s"} to ${result.recipients.join(", ")}.`,
       );
     } catch (err: any) {
-      setSendError(err.message || "Could not send report email.");
+      setSendError(err.message || "Could not send the filtered report email.");
     } finally {
       setSendBusy(false);
     }

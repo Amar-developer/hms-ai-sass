@@ -3,7 +3,7 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { apiFetch, type ApiSession } from "@/lib/api";
 import { mapWithConcurrency } from "@/lib/concurrency";
-import { activeTenantOptions, displayDate } from "@/utils/helper";
+import { activeTenantOptions } from "@/utils/helper";
 
 interface UseAppointmentBookingDataArgs {
   apiSession: ApiSession | null;
@@ -11,7 +11,6 @@ interface UseAppointmentBookingDataArgs {
   branchId: string;
   departmentId: string;
   appointmentDate: string;
-  selectedDepartmentName: string;
   query: string;
   filterDate: string;
   platformTenantId: string;
@@ -26,7 +25,6 @@ export function useAppointmentBookingData({
   branchId,
   departmentId,
   appointmentDate,
-  selectedDepartmentName,
   query,
   filterDate,
   platformTenantId,
@@ -180,7 +178,14 @@ export function useAppointmentBookingData({
         setDoctorId("");
         return;
       }
-      if (!branchId || !departmentId || !appointmentDate) {
+      // "all" is a list filter, not a bookable department — asking the API for
+      // its doctors returns nothing and makes the form look broken.
+      if (
+        !branchId ||
+        !departmentId ||
+        departmentId === "all" ||
+        !appointmentDate
+      ) {
         setLiveDoctors([]);
         setDoctorId("");
         return;
@@ -224,11 +229,9 @@ export function useAppointmentBookingData({
             ? current
             : availableRows[0]?.id || "",
         );
-        if (availableRows.length === 0) {
-          setMessage(
-            `No doctor is available for ${selectedDepartmentName} on ${displayDate(appointmentDate)}. Check doctor mapping and scheduling timings.`,
-          );
-        }
+        // An empty result is not an error: the booking form renders its own
+        // inline "no doctor available" hint next to the doctor field, so a
+        // toast here would fire on every tab switch that mounts this hook.
       } catch (err: any) {
         if (alive) {
           setLiveDoctors([]);
@@ -250,7 +253,6 @@ export function useAppointmentBookingData({
     branchId,
     departmentId,
     appointmentDate,
-    selectedDepartmentName,
   ]);
 
   return {

@@ -33,8 +33,13 @@ export function getPatient(session: ApiSession, patientId: string) {
 
 export function listClinicalTemplates(
   session: ApiSession,
-  departmentId: string,
+  departmentId?: string,
 ) {
+  // No department (or "All Departments") lists every template in the tenant;
+  // a department lists its own templates plus the shared ones.
+  if (!departmentId || departmentId === "all") {
+    return apiFetch("/consultations/clinical-templates", session);
+  }
   return apiFetch(
     `/consultations/by-department/${encodeURIComponent(departmentId)}/clinical-templates`,
     session,

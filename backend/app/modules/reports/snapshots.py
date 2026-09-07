@@ -1,13 +1,12 @@
 """Month-end income dashboard snapshots.
 
 These helpers freeze a finished month's income dashboard into
-``MonthlyRevenueSnapshot`` rows. The computed ``metrics`` dict mirrors exactly
-what the live dashboard renders in ``frontend/features/reports`` (the
-``aggregateInvoiceMetrics`` totals plus the gross/final profit and lab
-settlement summary), so a stored month can be re-opened in the same card
-layout. Snapshots are billed-cohort profitability records and are frozen once
-written. Cash collection and refund event months are reported separately by
-the billing collections dashboard.
+``MonthlyRevenueSnapshot`` rows. The computed ``metrics`` dict stores the
+split totals needed by ``frontend/features/reports`` plus the established
+accounting profit and lab settlement metrics, so a stored month can be
+re-opened in the same card layout. Snapshots are billed-cohort profitability
+records and are frozen once written. Cash collection and refund event months
+are reported separately by the billing collections dashboard.
 """
 
 from calendar import monthrange
@@ -16,13 +15,15 @@ from datetime import date, datetime
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
-from app.modules.billing.models import Invoice, InvoiceItem
-from app.modules.billing.services.read_models import invoice_read
+from app.modules.billing.models import Invoice, InvoiceItem, Payment, PaymentStatus
+from app.modules.billing.services.read_models import invoice_reads
+from app.modules.expenses.models import Expense, ExpenseCategory, ExpenseStatus
 from app.modules.home_care.models import HomeCareBooking
 from app.modules.lab.models import LabTestPackage
 from app.modules.reports.models import MonthlyRevenueSnapshot
 from app.modules.reports.services.calculations import (
     allocate_values,
+    dashboard_profit_summary,
     invoice_due_balance,
     invoice_report_total,
     is_paid_invoice,
@@ -49,6 +50,109 @@ MONTH_NAMES = [
 ]
 
 _HOME_VISIT_MARKERS = ("home_visit", "home visit", "hv_")
+
+
+def empty_dashboard_totals() -> dict:
+    """Create the canonical accumulator used by live reports and snapshots."""
+
+    return {
+        "invoices": 0,
+        "grossRevenue": 0,
+        "paidRevenue": 0,
+        "balance": 0,
+        "doctorFee": 0,
+        "settlement": 0,
+        "supplierSettlement": 0,
+        "homeCareStaffSettlement": 0,
+        "clinicFee": 0,
+        "tax": 0,
+        "paidTax": 0,
+        "membershipDiscount": 0,
+        "membershipStandardDiscount": 0,
+        "membershipFreeItems": 0,
+        "approvedDiscount": 0,
+        "offerDiscount": 0,
+        "monthlyExpenses": 0,
+        "expenseRent": 0,
+        "expenseUtilities": 0,
+        "expenseSupplies": 0,
+        "expenseTravel": 0,
+        "expenseMaintenance": 0,
+        "expenseOther": 0,
+        "serviceRevenue": 0,
+        "billingDiscount": 0,
+        "membershipPurchases": 0,
+        "membershipEnrollCount": 0,
+        "membershipEnrollAmount": 0,
+        "consultationRevenue": 0,
+        "labRevenue": 0,
+        "pharmacyRevenue": 0,
+        "homeCareRevenue": 0,
+        "homeVisitRevenue": 0,
+        "labPurchaseCost": 0,
+        "labPaidTax": 0,
+        "paymentModes": {"cash": 0, "upi": 0, "card": 0, "others": 0},
+        "membershipClaims": [],
+    }
+
+
+def merge_dashboard_totals(target: dict, source: dict) -> dict:
+    """Add one canonical dashboard accumulator into another."""
+
+    for key, value in source.items():
+        if key in {"paymentModes", "membershipClaims"}:
+            continue
+        if isinstance(value, (int, float)):
+            target[key] = target.get(key, 0) + value
+    for key, value in source.get("paymentModes", {}).items():
+        target.setdefault("paymentModes", {})[key] = (
+            target.setdefault("paymentModes", {}).get(key, 0) + value
+        )
+    claims = {
+        row["type"]: dict(row) for row in target.get("membershipClaims", [])
+    }
+    for row in source.get("membershipClaims", []):
+        current = claims.setdefault(
+            row["type"],
+            {"type": row["type"], "label": row["label"], "invoices": 0, "claimedAmount": 0},
+        )
+        current["invoices"] += row.get("invoices", 0)
+        current["claimedAmount"] += row.get("claimedAmount", 0)
+    target["membershipClaims"] = sorted(
+        claims.values(), key=lambda row: row["claimedAmount"], reverse=True
+    )
+    return target
+
+
+def dashboard_metrics_from_totals(totals: dict) -> dict:
+    """Build all derived values from an already aggregated totals object."""
+
+    profit_summary = dashboard_profit_summary(totals)
+    gross_profit = profit_summary["grossProfit"]
+    return {
+        "totals": totals,
+        "grossProfit": gross_profit,
+        "finalProfit": gross_profit,
+        "profitSummary": profit_summary,
+        "labSettlement": {
+            "revenue": totals.get("labRevenue", 0),
+            "purchaseCost": totals.get("labPurchaseCost", 0),
+            "profit": totals.get("labRevenue", 0)
+            - totals.get("labPaidTax", 0)
+            - totals.get("labPurchaseCost", 0),
+        },
+    }
+
+
+def _payment_mode_group(method: object) -> str:
+    value = str(getattr(method, "value", method) or "").lower()
+    if value == "cash":
+        return "cash"
+    if value in {"upi", "gpay", "paytm"}:
+        return "upi"
+    if value in {"credit_card", "debit_card", "card"}:
+        return "card"
+    return "others"
 
 
 def month_range(year: int, month: int) -> tuple[date, date]:
@@ -121,6 +225,7 @@ def compute_dashboard_metrics(
     branch_id: str | None,
     start: date,
     end: date,
+    include_daily_totals: bool = False,
 ) -> dict:
     """Aggregate the income dashboard figures for one period and branch.
 
@@ -145,9 +250,22 @@ def compute_dashboard_metrics(
         if is_paid_invoice(invoice)
         and (branch_id is None or invoice.branch_id == branch_id)
     ]
+    expenses = list(
+        session.exec(
+            select(Expense).where(
+                Expense.tenant_id == tenant_id,
+                Expense.incurred_on >= start,
+                Expense.incurred_on <= end,
+                Expense.status.in_([ExpenseStatus.APPROVED, ExpenseStatus.REIMBURSED]),
+            )
+        ).all()
+    )
+    if branch_id is not None:
+        expenses = [expense for expense in expenses if expense.branch_id == branch_id]
     invoice_items_by_invoice: dict[str, list[InvoiceItem]] = {
         invoice.id: [] for invoice in paid
     }
+    payments_by_invoice: dict[str, list[Payment]] = {invoice.id: [] for invoice in paid}
     if paid:
         for item in session.exec(
             select(InvoiceItem).where(
@@ -156,6 +274,16 @@ def compute_dashboard_metrics(
             )
         ).all():
             invoice_items_by_invoice.setdefault(item.invoice_id, []).append(item)
+        for payment in session.exec(
+            select(Payment).where(
+                Payment.tenant_id == tenant_id,
+                Payment.invoice_id.in_([invoice.id for invoice in paid]),
+            )
+        ).all():
+            payments_by_invoice.setdefault(payment.invoice_id, []).append(payment)
+    discount_reads_by_invoice = {
+        row.id: row for row in invoice_reads(session, paid)
+    }
 
     package_ids = {
         package.id
@@ -193,33 +321,38 @@ def compute_dashboard_metrics(
             if any(marker in blob for marker in _HOME_VISIT_MARKERS):
                 home_visit_invoice_ids.add(invoice.id)
 
-    totals = {
-        "invoices": 0,
-        "grossRevenue": 0,
-        "paidRevenue": 0,
-        "balance": 0,
-        "doctorFee": 0,
-        "settlement": 0,
-        "clinicFee": 0,
-        "tax": 0,
-        "paidTax": 0,
-        "membershipDiscount": 0,
-        "approvedDiscount": 0,
-        "offerDiscount": 0,
-        "serviceRevenue": 0,
-        "billingDiscount": 0,
-        "membershipPurchases": 0,
-        "membershipEnrollCount": 0,
-        "membershipEnrollAmount": 0,
-        "consultationRevenue": 0,
-        "labRevenue": 0,
-        "pharmacyRevenue": 0,
-        "homeCareRevenue": 0,
-        "homeVisitRevenue": 0,
-    }
+    totals = empty_dashboard_totals()
+    daily_totals: dict[str, dict] = {}
     membership_claims: dict[str, dict] = {}
 
+    expense_category_keys = {
+        ExpenseCategory.RENT: "expenseRent",
+        ExpenseCategory.UTILITIES: "expenseUtilities",
+        ExpenseCategory.SUPPLIES: "expenseSupplies",
+        ExpenseCategory.TRAVEL: "expenseTravel",
+        ExpenseCategory.MAINTENANCE: "expenseMaintenance",
+        ExpenseCategory.OTHER: "expenseOther",
+    }
+    for expense in expenses:
+        amount = max(float(expense.amount or 0), 0)
+        category_key = expense_category_keys.get(expense.category, "expenseOther")
+        expense_totals = empty_dashboard_totals()
+        expense_totals["monthlyExpenses"] = amount
+        expense_totals[category_key] = amount
+        merge_dashboard_totals(totals, expense_totals)
+        if include_daily_totals:
+            day = expense.incurred_on.isoformat()
+            merge_dashboard_totals(
+                daily_totals.setdefault(day, empty_dashboard_totals()), expense_totals
+            )
+
     for invoice in paid:
+        before = {
+            key: value
+            for key, value in totals.items()
+            if isinstance(value, (int, float))
+        }
+        before_payment_modes = dict(totals["paymentModes"])
         total = invoice_report_total(invoice)
         amount_paid = int(invoice.paid_amount or 0)
         balance = invoice_due_balance(invoice)
@@ -235,22 +368,62 @@ def compute_dashboard_metrics(
         totals["balance"] += balance
         totals["doctorFee"] += doctor_fee
         totals["settlement"] += settlement
+        if kind == "home_care":
+            totals["homeCareStaffSettlement"] += settlement
+        elif kind != "consultation":
+            totals["supplierSettlement"] += settlement
+        if kind == "lab":
+            totals["labPurchaseCost"] += settlement
         totals["clinicFee"] += int(invoice.clinic_share_amount or 0) or max(
             total - int(invoice.membership_discount_amount or 0) - doctor_share,
             0,
         )
         totals["tax"] += int(invoice.tax_amount or 0)
         totals["paidTax"] += tax_paid_basis(invoice)
-        discount_read = invoice_read(session, invoice)
+        if kind == "lab":
+            totals["labPaidTax"] += tax_paid_basis(invoice)
+        discount_read = discount_reads_by_invoice[invoice.id]
         membership_discount = float(invoice.membership_discount_amount or 0)
+        membership_free_items = float(invoice.membership_free_items_amount or 0)
+        membership_standard_discount = max(
+            membership_discount - membership_free_items, 0
+        )
         approved_discount = float(discount_read.approved_discount_amount or 0)
         offer_discount = float(discount_read.offer_discount_amount or 0)
         totals["membershipDiscount"] += membership_discount
+        totals["membershipStandardDiscount"] += membership_standard_discount
+        totals["membershipFreeItems"] += membership_free_items
         totals["approvedDiscount"] += approved_discount
         totals["offerDiscount"] += offer_discount
         totals["billingDiscount"] += (
             membership_discount + approved_discount + offer_discount
         )
+
+        payments = [
+            payment
+            for payment in payments_by_invoice.get(invoice.id, [])
+            if payment.status == PaymentStatus.RECORDED
+            and float(payment.amount or 0) - float(payment.refunded_amount or 0) > 0
+        ]
+        payment_total = sum(
+            float(payment.amount or 0) - float(payment.refunded_amount or 0)
+            for payment in payments
+        )
+        if payment_total > 0:
+            allocated = 0
+            for index, payment in enumerate(payments):
+                net_amount = float(payment.amount or 0) - float(
+                    payment.refunded_amount or 0
+                )
+                share = (
+                    amount_paid - allocated
+                    if index == len(payments) - 1
+                    else round(amount_paid * net_amount / payment_total)
+                )
+                totals["paymentModes"][_payment_mode_group(payment.method)] += share
+                allocated += share
+        elif amount_paid > 0:
+            totals["paymentModes"]["others"] += amount_paid
 
         if kind == "lab":
             invoice_items = invoice_items_by_invoice.get(invoice.id, [])
@@ -300,41 +473,38 @@ def compute_dashboard_metrics(
             row["invoices"] += 1
             row["claimedAmount"] += claim
 
+        if include_daily_totals:
+            contribution = empty_dashboard_totals()
+            for key, value in before.items():
+                contribution[key] = totals[key] - value
+            contribution["paymentModes"] = {
+                key: totals["paymentModes"][key] - before_payment_modes.get(key, 0)
+                for key in totals["paymentModes"]
+            }
+            if claim > 0:
+                contribution["membershipClaims"] = [
+                    {
+                        "type": kind,
+                        "label": _type_label(kind),
+                        "invoices": 1,
+                        "claimedAmount": claim,
+                    }
+                ]
+            day = invoice.created_at.date().isoformat()
+            merge_dashboard_totals(
+                daily_totals.setdefault(day, empty_dashboard_totals()), contribution
+            )
+
     totals["membershipClaims"] = sorted(
         membership_claims.values(),
         key=lambda row: row["claimedAmount"],
         reverse=True,
     )
 
-    chargeable_gross = max(totals["grossRevenue"] - totals["membershipDiscount"], 0)
-    total_cost = totals["doctorFee"] + totals["settlement"]
-    gross_profit = chargeable_gross - totals["tax"] - total_cost
-    final_profit = totals["paidRevenue"] - totals["paidTax"] - total_cost
-
-    lab_purchase_cost = sum(
-        report_settlement(
-            invoice,
-            "lab",
-            invoice_items_by_invoice.get(invoice.id, []),
-        )
-        for invoice in paid
-        if _invoice_type(invoice) == "lab"
-    )
-    lab_paid_tax = sum(
-        tax_paid_basis(invoice) for invoice in paid if _invoice_type(invoice) == "lab"
-    )
-    lab_settlement = {
-        "revenue": totals["labRevenue"],
-        "purchaseCost": lab_purchase_cost,
-        "profit": totals["labRevenue"] - lab_paid_tax - lab_purchase_cost,
-    }
-
-    return {
-        "totals": totals,
-        "grossProfit": gross_profit,
-        "finalProfit": final_profit,
-        "labSettlement": lab_settlement,
-    }
+    result = dashboard_metrics_from_totals(totals)
+    if include_daily_totals:
+        result["dailyTotals"] = daily_totals
+    return result
 
 
 def branch_ids_for_period(
@@ -355,6 +525,15 @@ def branch_ids_for_period(
         for invoice in invoices
         if is_paid_invoice(invoice) and invoice.branch_id
     }
+    expenses = session.exec(
+        select(Expense).where(
+            Expense.tenant_id == tenant_id,
+            Expense.incurred_on >= start,
+            Expense.incurred_on <= end,
+            Expense.status.in_([ExpenseStatus.APPROVED, ExpenseStatus.REIMBURSED]),
+        )
+    ).all()
+    branches.update(expense.branch_id for expense in expenses if expense.branch_id)
     return [None, *sorted(branches)]
 
 

@@ -24,7 +24,9 @@ export function scheduleRowsQueryKey(tenantId?: string) {
 }
 
 export function fetchAppointmentRows(session: ApiSession) {
-  return apiFetch<any[]>("/appointments", session);
+  // This snapshot feeds the OPD tab counts and consultation worklist. The
+  // endpoint defaults to 100 rows, which silently hid older pending visits.
+  return apiFetch<any[]>("/appointments?limit=500", session);
 }
 
 type ListPageParams = {

@@ -373,17 +373,7 @@ class ClinicalTemplateRepository:
     def list_active_for_department(
         self, *, tenant_id: str, department_id: str
     ) -> list[ClinicalTemplate]:
-        return list(
-            self.session.exec(
-                select(ClinicalTemplate)
-                .where(
-                    ClinicalTemplate.tenant_id == tenant_id,
-                    ClinicalTemplate.department_id == department_id,
-                    ClinicalTemplate.is_active == True,  # noqa: E712
-                )
-                .order_by(ClinicalTemplate.name)
-            ).all()
-        )
+        return self.list_active(tenant_id=tenant_id, department_id=department_id)
 
     def list_active(
         self, *, tenant_id: str, department_id: str | None = None
@@ -393,7 +383,14 @@ class ClinicalTemplateRepository:
             ClinicalTemplate.is_active == True,  # noqa: E712
         )
         if department_id:
-            statement = statement.where(ClinicalTemplate.department_id == department_id)
+            # A template without a department is shared across every
+            # department, so it belongs in each department's list too.
+            statement = statement.where(
+                or_(
+                    ClinicalTemplate.department_id == department_id,
+                    ClinicalTemplate.department_id.is_(None),
+                )
+            )
         return list(self.session.exec(statement.order_by(ClinicalTemplate.name)).all())
 
 

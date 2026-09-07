@@ -1,6 +1,9 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlmodel import Session
 
+from app.core.access_control import scoped_branch_id
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
@@ -8,6 +11,7 @@ from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.reports import service as reports_service
 from app.modules.reports.schemas import (
+    DashboardMetricsRead,
     MonthlyReportConfigRead,
     MonthlyReportConfigUpdate,
     MonthlyReportSendRequest,
@@ -20,6 +24,32 @@ from app.modules.reports.schemas import (
 )
 
 router = APIRouter(prefix="/reports")
+
+
+@router.get("/dashboard-metrics", response_model=DashboardMetricsRead)
+def get_dashboard_metrics(
+    from_date: date = Query(),
+    to_date: date = Query(),
+    series_from: date = Query(),
+    series_to: date = Query(),
+    branch_id: str | None = Query(default=None),
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.REPORTS_READ)),
+) -> DashboardMetricsRead:
+    """Canonical live Metrics Dashboard totals, comparisons, and chart data."""
+
+    return DashboardMetricsRead.model_validate(
+        reports_service.build_live_dashboard_metrics(
+            session,
+            tenant_id=tenant_id,
+            branch_id=scoped_branch_id(current_user, branch_id),
+            start=from_date,
+            end=to_date,
+            series_start=series_from,
+            series_end=series_to,
+        )
+    )
 
 
 @router.get(

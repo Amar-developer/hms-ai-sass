@@ -57,6 +57,7 @@ export type InvoiceProps = {
 
 export type LabReportsProps = {
   labSettlementRows: any;
+  reportKind?: string;
   openSections: any;
   setOpenSections: any;
   money: any;
@@ -67,15 +68,25 @@ export type LabReportsProps = {
 export type MetrixProps = {
   totals: any;
   previousTotals: any;
+  profitSummary: any;
+  previousProfitSummary: any;
   grossProfit: number;
   finalProfit: number;
   previousFinalProfit: number;
   labSettlementSummary: any;
   membershipClaimRows: any[];
+  trendRows: any[];
+  loading?: boolean;
+  error?: string;
   snapshots?: any[];
   recalculatingSnapshotId?: string | null;
   snapshotMessage?: string;
   onRecalculateSnapshot?: (snapshot: any) => void;
+  chartPeriod: string;
+  customStart: string;
+  customEnd: string;
+  onChartPeriodChange: (period: string) => void;
+  onCustomRangeChange: (start: string, end: string) => void;
   money: (value: number) => string;
   percent: (value: number, total: number, fallbackTotal?: number) => string;
 };
@@ -83,6 +94,8 @@ export type MetrixProps = {
 export type DashboardView = {
   totals: any;
   previousTotals: any;
+  profitSummary: any;
+  previousProfitSummary: any;
   grossProfit: number;
   finalProfit: number;
   previousFinalProfit: number;

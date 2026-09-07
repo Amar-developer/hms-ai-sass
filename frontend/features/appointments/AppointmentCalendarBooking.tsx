@@ -36,6 +36,7 @@ import { AppointmentList } from "./components/AppointmentList";
 import {
   getAppointmentQueryFields,
   getAppointmentTableSchema,
+  resolveAppointmentDepartmentId,
 } from "./filterSchema";
 import type { QueryFilterRow } from "@/utils/queryFilter";
 import type { SortState } from "@/utils/types";
@@ -166,7 +167,6 @@ export function AppointmentCalendarBooking(props: Props) {
     branchId,
     departmentId,
     appointmentDate,
-    selectedDepartmentName,
     query,
     filterDate,
     platformTenantId,
@@ -210,12 +210,17 @@ export function AppointmentCalendarBooking(props: Props) {
     }
     return rows;
   }, [queryFilters, filterStatus]);
+  const effectiveDepartmentId = resolveAppointmentDepartmentId(
+    departmentId,
+    filterDepartment,
+  );
   const appointmentPageQuery = useQuery({
     queryKey: [
       "appointments",
       "page",
       apiSession?.tenantId,
       branchId,
+      departmentId,
       filterDepartment,
       filterDate,
       query,
@@ -227,7 +232,7 @@ export function AppointmentCalendarBooking(props: Props) {
       fetchAppointmentPage(apiSession!, {
         q: query,
         branchId,
-        departmentId: filterDepartment,
+        departmentId: effectiveDepartmentId,
         appointmentDate: filterDate,
         queryFilters: effectiveAppointmentFilters,
         sort,
@@ -309,8 +314,8 @@ export function AppointmentCalendarBooking(props: Props) {
           appointment.appointmentDate || appointment.date || "",
         ).startsWith(filterDate) ||
         String(appointment.time || "").startsWith(filterDate)) &&
-      (filterDepartment === "all" ||
-        appointment.departmentId === filterDepartment) &&
+      (!effectiveDepartmentId ||
+        appointment.departmentId === effectiveDepartmentId) &&
       (filterStatus === "all" ||
         appointmentStatusInfo(appointment).key === filterStatus)
     );
@@ -378,9 +383,12 @@ export function AppointmentCalendarBooking(props: Props) {
   const doctor = doctors.find((item: any) => item.id === doctorId);
   const hasAvailableDoctor =
     appointmentType === "emergency" || doctors.length > 0;
-  const doctorAvailabilityMessage = hasAvailableDoctor
-    ? ""
-    : `No doctor is available for ${selectedDepartmentName} on ${displayDate(appointmentDate)}. Check doctor mapping and scheduling timings.`;
+  // Nothing to warn about until a real department is picked — "all" is a list
+  // filter, so no doctor lookup runs for it.
+  const doctorAvailabilityMessage =
+    hasAvailableDoctor || !departmentId || departmentId === "all"
+      ? ""
+      : `No doctor is available for ${selectedDepartmentName} on ${displayDate(appointmentDate)}. Check doctor mapping and scheduling timings.`;
   const selectedFeeRule = useMemo(() => {
     const candidates = doctorFeeRules.filter((rule: any) => {
       if (!rule.is_active) return false;
@@ -439,6 +447,13 @@ export function AppointmentCalendarBooking(props: Props) {
       sort,
     ],
   );
+  useEffect(() => {
+    setFilterDepartment("all");
+    setQueryFilters((rows) =>
+      rows.filter((row) => row.field !== "department_id"),
+    );
+    setPage(1);
+  }, [departmentId]);
   useEffect(
     () => setPage(1),
     [platformTenantId, platformDepartment, platformRows.length],
@@ -789,7 +804,7 @@ export function AppointmentCalendarBooking(props: Props) {
   });
   const platformColumns = getPlatformColumns({ canCopyIds });
   const appointmentFilterValues = {
-    department: filterDepartment,
+    department_id: effectiveDepartmentId || "all",
     status: filterStatus,
   };
 
@@ -806,9 +821,14 @@ export function AppointmentCalendarBooking(props: Props) {
 
   function handleAppointmentFilterChange(key: string, value: string) {
     setPage(1);
-    if (key === "department") {
+    if (key === "department_id") {
       if (isSuperAdmin) setPlatformDepartment(value);
-      else setFilterDepartment(value);
+      else {
+        setFilterDepartment(value);
+        if (value !== "all" && value !== departmentId) {
+          setDepartmentId(value);
+        }
+      }
       return;
     }
     if (key === "status") setFilterStatus(value);
@@ -874,7 +894,7 @@ export function AppointmentCalendarBooking(props: Props) {
             setQuery={setQuery}
             filterValues={
               isSuperAdmin
-                ? { department: platformDepartment }
+                ? { department_id: platformDepartment }
                 : appointmentFilterValues
             }
             onFilterChange={handleAppointmentFilterChange}

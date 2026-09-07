@@ -38,6 +38,10 @@ import {
 import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
 import { useAppointmentsQuery } from "@/features/appointments/api/useAppointmentsQuery";
 import { OPDPatientWorklist } from "@/features/opd/components/OPDPatientWorklist";
+import {
+  appointmentsForVisitDate,
+  pendingAppointments,
+} from "@/features/opd/consultationWorklist";
 
 function getScheduleColumns({
   onConsult,
@@ -167,6 +171,7 @@ export function DoctorConsultation({
     branchId,
     patients,
   });
+  const scopedDepartmentId = departmentId === "all" ? "" : departmentId;
   const isDoctorUser = Boolean(
     apiSession?.user?.user_type === "doctor" ||
     apiSession?.user?.roles?.includes("doctor"),
@@ -175,7 +180,7 @@ export function DoctorConsultation({
     useConsultationData({
       apiSession,
       branchId,
-      departmentId,
+      departmentId: scopedDepartmentId,
       doctorScopePractitionerId: doctorScope?.practitionerId,
     });
   // Keep the working doctor selector scoped, but retain the tenant-wide list
@@ -196,7 +201,8 @@ export function DoctorConsultation({
           practitioner.primary_specialty ||
           departmentNameById.get((practitioner.department_ids || [])[0]) ||
           "",
-        departmentId: (practitioner.department_ids || [])[0] || departmentId,
+        departmentId:
+          (practitioner.department_ids || [])[0] || scopedDepartmentId,
         departmentIds: practitioner.department_ids || [],
         branchIds: practitioner.branch_ids || [],
         registrationNumber: practitioner.registration_number || "",
@@ -249,9 +255,9 @@ export function DoctorConsultation({
     const departmentIds = asArray(doctor.departmentIds);
     return (
       (!branchId || branchIds.length === 0 || branchIds.includes(branchId)) &&
-      (!departmentId ||
+      (!scopedDepartmentId ||
         departmentIds.length === 0 ||
-        departmentIds.includes(departmentId))
+        departmentIds.includes(scopedDepartmentId))
     );
   });
   const practitioners = allDoctorList.map((doctor: any) => ({
@@ -327,7 +333,10 @@ export function DoctorConsultation({
   const [message, setMessage] = useState("");
   const [consultationValidationAttempted, setConsultationValidationAttempted] =
     useState(false);
-  const [selectedDate, setSelectedDate] = useState(() => today());
+  // Empty visit date means "every pending visit for this doctor", not "today".
+  // A doctor opening the schedule needs to see the whole pending backlog first
+  // and then narrow it down by picking a date.
+  const [selectedDate, setSelectedDate] = useState("");
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -397,9 +406,9 @@ export function DoctorConsultation({
       selectedAppointmentDoctorId &&
       selectedAppointmentDoctorAvailable &&
       (doctorScope?.practitionerId ||
-        !departmentId ||
+        !scopedDepartmentId ||
         !selectedAppointmentDepartmentId ||
-        selectedAppointmentDepartmentId === departmentId),
+        selectedAppointmentDepartmentId === scopedDepartmentId),
     );
     // `doctorList` merges two independently-loading async sources
     // (livePractitioners + scopedPractitioners) and is empty for a beat on
@@ -422,9 +431,9 @@ export function DoctorConsultation({
       const keepSelection = Boolean(
         selectedAppointment &&
         (doctorScope?.practitionerId ||
-          !departmentId ||
+          !scopedDepartmentId ||
           !selectedAppointmentDepartmentId ||
-          selectedAppointmentDepartmentId === departmentId) &&
+          selectedAppointmentDepartmentId === scopedDepartmentId) &&
         selectedAppointmentDoctorId === nextDoctorId,
       );
       setDoctorId(nextDoctorId);
@@ -436,7 +445,7 @@ export function DoctorConsultation({
   }, [
     doctorId,
     doctorScope?.practitionerId,
-    departmentId,
+    scopedDepartmentId,
     branchId,
     doctorList.length,
     selectedAppointmentId,
@@ -467,18 +476,18 @@ export function DoctorConsultation({
           a.doctorId === doctorScope.practitionerId ||
           a.practitioner_id === doctorScope.practitionerId
         );
-      if (departmentId && a.departmentId !== departmentId) return false;
+      if (scopedDepartmentId && a.departmentId !== scopedDepartmentId)
+        return false;
       if (doctor.id)
         return a.doctorId === doctor.id || a.practitioner_id === doctor.id;
       return true;
     }),
   );
-  const selectedDateQueue = doctorQueue.filter(
-    (a: any) => appointmentDateKey(a) === selectedDate,
+  const selectedDateQueue = appointmentsForVisitDate(
+    doctorQueue,
+    selectedDate,
   );
-  const activeQueue = selectedDateQueue.filter(
-    (a: any) => !isCompletedAppointment(a) && !isCancelledAppointment(a),
-  );
+  const activeQueue = pendingAppointments(selectedDateQueue);
   const current =
     activeQueue.find((a: any) => statusKey(a.queueStatus) === "called") ||
     activeQueue.find(
@@ -692,9 +701,9 @@ export function DoctorConsultation({
         statusKey(a.queueStatus) === "emergency_queue" ||
         String(a.visitType || "").toLowerCase() === "emergency"),
   ).length;
-  const scheduleRows = selectedDateQueue.filter(
-    (appointment: any) => !isCancelledAppointment(appointment),
-  );
+  // The schedule lists pending visits only: every pending visit for the doctor
+  // when no visit date is picked, and that day's pending visits once one is.
+  const scheduleRows = activeQueue;
   const selectedPatientHistory = selected
     ? appointments
         .filter((item: any) => {

@@ -54,6 +54,10 @@ const blankLab = (): LabRow => ({
   instructions: "",
 });
 
+// A template saved against "all" carries no department, which is how the API
+// marks it as usable from every department's consultation.
+const ALL_DEPARTMENTS = "all";
+
 export function ClinicalTemplateManager({
   apiSession,
   branchId,
@@ -70,8 +74,8 @@ export function ClinicalTemplateManager({
   const [editingId, setEditingId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [name, setName] = useState("");
-  const [treatmentType, setTreatmentType] = useState(
-    treatment_type_options[0]?.value || "",
+  const [templateDepartmentId, setTemplateDepartmentId] = useState(
+    () => departmentId || ALL_DEPARTMENTS,
   );
   const [complaints, setComplaints] = useState("");
   const [diagnoses, setDiagnoses] = useState("");
@@ -119,9 +123,23 @@ export function ClinicalTemplateManager({
   const department = allowedDepartments.find(
     (row: any) => String(row.id) === String(departmentId),
   );
+  const departmentOptions = [
+    { value: ALL_DEPARTMENTS, label: "All Departments" },
+    ...allowedDepartments.map((row: any) => ({
+      value: String(row.id),
+      label: row.name,
+    })),
+  ];
+  const departmentLabel = (templateDepartmentIdValue: string | null) => {
+    if (!templateDepartmentIdValue) return "All Departments";
+    const match = allowedDepartments.find(
+      (row: any) => String(row.id) === String(templateDepartmentIdValue),
+    );
+    return match?.name || "Department";
+  };
 
   useEffect(() => {
-    if (!apiSession || !departmentId) {
+    if (!apiSession) {
       setRows([]);
       setLoading(false);
       return;
@@ -160,9 +178,14 @@ export function ClinicalTemplateManager({
     setSelectedLabId("");
   }
 
+  // Keep a freshly opened form on the department the workspace is showing.
+  useEffect(() => {
+    if (!showForm) setTemplateDepartmentId(departmentId || ALL_DEPARTMENTS);
+  }, [departmentId, showForm]);
+
   function resetForm() {
     setName("");
-    setTreatmentType(treatment_type_options[0]?.value || "");
+    setTemplateDepartmentId(departmentId || ALL_DEPARTMENTS);
     setComplaints("");
     setDiagnoses("");
     setNotes("");
@@ -179,8 +202,8 @@ export function ClinicalTemplateManager({
     const content = template.content || {};
     setEditingId(template.id);
     setName(template.name || "");
-    setTreatmentType(
-      content.treatment_type || treatment_type_options[0]?.value || "",
+    setTemplateDepartmentId(
+      template.department_id ? String(template.department_id) : ALL_DEPARTMENTS,
     );
     setComplaints((content.complaints || []).join("\n"));
     setDiagnoses((content.diagnoses || []).join("\n"));
@@ -230,7 +253,10 @@ export function ClinicalTemplateManager({
     setMessage("");
     try {
       const payload = {
-        department_id: departmentId,
+        department_id:
+          templateDepartmentId === ALL_DEPARTMENTS
+            ? null
+            : templateDepartmentId,
         name: name.trim(),
         template_type: "consultation",
         content: {
@@ -245,12 +271,19 @@ export function ClinicalTemplateManager({
       const saved = editingId
         ? await updateClinicalTemplate(apiSession, editingId, payload)
         : await createClinicalTemplate(apiSession, payload);
-      setRows((current) =>
-        (editingId
-          ? current.map((row) => (row.id === saved.id ? saved : row))
-          : [...current, saved]
-        ).sort((a, b) => a.name.localeCompare(b.name)),
-      );
+      // A template can be saved for a department other than the one being
+      // listed — keep the list showing only what this scope can use.
+      const inCurrentScope =
+        !departmentId ||
+        departmentId === ALL_DEPARTMENTS ||
+        !saved.department_id ||
+        String(saved.department_id) === String(departmentId);
+      setRows((current) => {
+        const withoutSaved = current.filter((row) => row.id !== saved.id);
+        return (inCurrentScope ? [...withoutSaved, saved] : withoutSaved).sort(
+          (a, b) => a.name.localeCompare(b.name),
+        );
+      });
       const wasEditing = Boolean(editingId);
       resetForm();
       setShowForm(false);
@@ -294,7 +327,10 @@ export function ClinicalTemplateManager({
           <h3 className="card-title font-bold">Consultation Templates</h3>
           <p className="card-desc text-slate-500">
             Reusable clinical plans for{" "}
-            {department?.name || "the selected department"}.
+            {departmentId && departmentId !== ALL_DEPARTMENTS
+              ? department?.name || "the selected department"
+              : "every department"}
+            .
           </p>
         </div>
         <Button
@@ -327,16 +363,21 @@ export function ClinicalTemplateManager({
                 className='search-input'
               />
             </FormField>
-            <FormField label="Treatment Type" required>
+            <FormField label="Department" required>
               <SearchableSelect
-                required
-                value={treatmentType}
-                onChange={setTreatmentType}
-                options={treatment_type_options}
-                searchable={false}
+                value={templateDepartmentId}
+                onChange={(value) => setTemplateDepartmentId(value)}
+                options={departmentOptions}
+                searchable={departmentOptions.length > 8}
+                placeholder="Select department"
               />
+              <p className="mt-1 text-[11px] text-slate-500">
+                {templateDepartmentId === ALL_DEPARTMENTS
+                  ? "Available in every department's consultation."
+                  : `Only ${departmentLabel(templateDepartmentId)} consultations can use this template.`}
+              </p>
             </FormField>
-            <FormField label="Complaints" required>
+            <FormField label="Complaints">
               <textarea
                 required
                 value={complaints}
@@ -695,7 +736,7 @@ export function ClinicalTemplateManager({
                   </div>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  {department?.name || "Selected department"}
+                  {departmentLabel(template.department_id)}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600">
                   <span>{content.complaints?.length || 0} complaints</span>

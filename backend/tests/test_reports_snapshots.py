@@ -2,9 +2,17 @@ from datetime import date, datetime
 
 from sqlmodel import Session, select
 
-from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
+from app.modules.billing.models import (
+    Invoice,
+    InvoiceItem,
+    InvoiceStatus,
+    Payment,
+    PaymentMethod,
+)
+from app.modules.expenses.models import Expense, ExpenseCategory, ExpenseStatus
 from app.modules.lab.models import LabTestPackage
 from app.modules.reports.models import MonthlyRevenueSnapshot
+from app.modules.reports.services.dashboard import build_live_dashboard_metrics
 from app.modules.reports.snapshots import (
     archive_due_months,
     archive_month,
@@ -103,10 +111,189 @@ def test_compute_metrics_excludes_refunds_and_keeps_partial_net(test_engine):
     assert totals["consultationRevenue"] == 1800
     assert totals["doctorFee"] == 200 + 160
     assert totals["settlement"] == 0
+    assert totals["paymentModes"] == {
+        "cash": 0,
+        "upi": 0,
+        "card": 0,
+        "others": 1800,
+    }
     assert metrics["finalProfit"] == 1800 - (200 + 160)
     # INV-4's 200 balance is refunded money, not money still due from the
     # patient — it must not inflate the dashboard's outstanding balance.
     assert totals["balance"] == 0
+
+
+def test_compute_metrics_includes_recognized_expenses_in_profit(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Expense Metrics Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        session.add(_invoice(tenant.id, invoice_number="INV-EXPENSE"))
+        session.add_all(
+            [
+                Expense(
+                    tenant_id=tenant.id,
+                    branch_id="branch-1",
+                    category=ExpenseCategory.RENT,
+                    amount=150,
+                    incurred_on=date(2026, 5, 12),
+                    description="Clinic rent",
+                    status=ExpenseStatus.APPROVED,
+                    submitted_by="user-1",
+                ),
+                Expense(
+                    tenant_id=tenant.id,
+                    branch_id="branch-1",
+                    category=ExpenseCategory.UTILITIES,
+                    amount=50,
+                    incurred_on=date(2026, 5, 13),
+                    description="Electricity",
+                    status=ExpenseStatus.REIMBURSED,
+                    submitted_by="user-1",
+                ),
+                Expense(
+                    tenant_id=tenant.id,
+                    branch_id="branch-1",
+                    category=ExpenseCategory.SUPPLIES,
+                    amount=999,
+                    incurred_on=date(2026, 5, 14),
+                    description="Pending supplies",
+                    status=ExpenseStatus.PENDING,
+                    submitted_by="user-1",
+                ),
+                Expense(
+                    tenant_id=tenant.id,
+                    branch_id="branch-2",
+                    category=ExpenseCategory.TRAVEL,
+                    amount=75,
+                    incurred_on=date(2026, 5, 15),
+                    description="Other branch travel",
+                    status=ExpenseStatus.APPROVED,
+                    submitted_by="user-1",
+                ),
+            ]
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id="branch-1",
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    totals = metrics["totals"]
+    assert totals["monthlyExpenses"] == 200
+    assert totals["expenseRent"] == 150
+    assert totals["expenseUtilities"] == 50
+    assert totals["expenseSupplies"] == 0
+    assert totals["expenseTravel"] == 0
+    assert metrics["grossProfit"] == 600
+    assert metrics["finalProfit"] == 600
+
+
+def test_live_dashboard_uses_one_backend_series_for_selected_and_previous_periods(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Live Dashboard Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        session.add(
+            _invoice(
+                tenant.id,
+                invoice_number="INV-PREVIOUS",
+                created_at=datetime(2026, 4, 10, 12, 0, 0),
+                total_amount=500,
+                paid_amount=500,
+                doctor_share_amount=100,
+                clinic_share_amount=400,
+            )
+        )
+        session.add(
+            _invoice(
+                tenant.id,
+                invoice_number="INV-CURRENT",
+                created_at=datetime(2026, 5, 10, 12, 0, 0),
+            )
+        )
+        session.add(
+            Expense(
+                tenant_id=tenant.id,
+                branch_id="branch-1",
+                category=ExpenseCategory.RENT,
+                amount=150,
+                incurred_on=date(2026, 5, 12),
+                description="May rent",
+                status=ExpenseStatus.APPROVED,
+                submitted_by="user-1",
+            )
+        )
+        session.commit()
+
+        result = build_live_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id="branch-1",
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+            series_start=date(2026, 4, 1),
+            series_end=date(2026, 5, 31),
+        )
+
+    assert result["totals"]["paidRevenue"] == 1000
+    assert result["totals"]["monthlyExpenses"] == 150
+    assert result["profit_summary"]["grossProfit"] == 650
+    assert result["previous_totals"]["paidRevenue"] == 500
+    assert result["previous_profit_summary"]["grossProfit"] == 400
+    rows = {row["date"]: row for row in result["trend_rows"]}
+    assert rows["2026-05-10"]["paidRevenue"] == 1000
+    assert rows["2026-05-10"]["grossProfit"] == 800
+    assert rows["2026-05-12"]["monthlyExpenses"] == 150
+    assert rows["2026-05-12"]["grossProfit"] == -150
+
+
+def test_snapshot_profit_uses_paid_basis_without_subtracting_discount_twice(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Paid Basis Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        session.add(
+            _invoice(
+                tenant.id,
+                invoice_number="INV-DISCOUNTED",
+                subtotal_amount=1000,
+                discount_amount=100,
+                membership_discount_amount=100,
+                total_amount=900,
+                paid_amount=900,
+                clinic_share_amount=900,
+                doctor_share_amount=0,
+            )
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id="branch-1",
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    assert metrics["totals"]["membershipDiscount"] == 100
+    assert metrics["grossProfit"] == 900
+    assert metrics["finalProfit"] == 900
+    assert metrics["profitSummary"]["recognizedRevenue"] == 900
+    assert metrics["profitSummary"]["revenueAdjustments"] == 100
+    assert metrics["profitSummary"]["incomeMargin"] == 100
 
 
 def test_service_revenue_uses_paid_share_of_lab_package_items(test_engine):
@@ -173,6 +360,58 @@ def test_service_revenue_uses_paid_share_of_lab_package_items(test_engine):
         )
 
     assert metrics["totals"]["serviceRevenue"] == 480
+
+
+def test_payment_modes_use_recorded_net_split_amounts(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Payment Mode Report Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        invoice = _invoice(
+            tenant.id,
+            invoice_number="INV-SPLIT-PAYMENT",
+            total_amount=800,
+            paid_amount=800,
+        )
+        session.add(invoice)
+        session.flush()
+        session.add_all(
+            [
+                Payment(
+                    tenant_id=tenant.id,
+                    branch_id="branch-1",
+                    invoice_id=invoice.id,
+                    method=PaymentMethod.CASH,
+                    amount=400,
+                ),
+                Payment(
+                    tenant_id=tenant.id,
+                    branch_id="branch-1",
+                    invoice_id=invoice.id,
+                    method=PaymentMethod.UPI,
+                    amount=600,
+                    refunded_amount=200,
+                ),
+            ]
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id=None,
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    assert metrics["totals"]["paymentModes"] == {
+        "cash": 400,
+        "upi": 400,
+        "card": 0,
+        "others": 0,
+    }
 
 
 def test_free_membership_consultation_keeps_doctor_cost_and_reports_loss(
@@ -290,6 +529,8 @@ def test_free_membership_lab_keeps_supplier_cost_and_reports_loss(test_engine):
     assert metrics["totals"]["paidRevenue"] == 0
     assert metrics["totals"]["membershipDiscount"] == 500
     assert metrics["totals"]["settlement"] == 200
+    assert metrics["totals"]["supplierSettlement"] == 200
+    assert metrics["totals"]["homeCareStaffSettlement"] == 0
     assert metrics["labSettlement"] == {
         "revenue": 0,
         "purchaseCost": 200,

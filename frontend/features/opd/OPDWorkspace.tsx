@@ -37,6 +37,10 @@ import {
   listOrders,
 } from "@/features/lab/api/lab.api";
 import { fetchPharmacyIssues } from "@/features/pharmacy/api/pharmacy.api";
+import {
+  appointmentsInScope,
+  pendingConsultationCount,
+} from "./consultationWorklist";
 
 export type OPDSection =
   | "consultation"
@@ -261,6 +265,24 @@ export function OPDWorkspace({
     workspace.allowedDepartments || [],
     workspace.departmentId,
   );
+  const [opdDepartmentId, setOpdDepartmentId] = useState("all");
+  const bookingDepartmentId =
+    departmentOptions.find(
+      (department: any) => department.id === workspace.departmentId,
+    )?.id || departmentOptions[0]?.id || "";
+  const effectiveDepartmentId =
+    effectiveSection === "new" && opdDepartmentId === "all"
+      ? bookingDepartmentId
+      : opdDepartmentId;
+  const updateOpdDepartment = (departmentId: string) => {
+    setOpdDepartmentId(departmentId);
+    if (departmentId !== "all") workspace.setDepartmentId(departmentId);
+  };
+  const scopedWorkspace = {
+    ...workspace,
+    departmentId: effectiveDepartmentId,
+    setDepartmentId: updateOpdDepartment,
+  };
   const appointments = workspace.appointments || [];
   const [billingPendingCount, setBillingPendingCount] = useState(0);
   const [paymentPendingCount, setPaymentPendingCount] = useState(0);
@@ -363,14 +385,14 @@ export function OPDWorkspace({
   ]);
 
   const tabCounts: Record<string, number> = {
-    appointments: appointments.length,
-    consultation: appointments.filter((row: any) =>
-      ["waiting", "called", "in_consultation", "draft"].includes(
-        normalizedStatus(
-          row.consultationStatus || row.consultation_status || row.status,
-        ),
-      ),
-    ).length,
+    appointments: appointmentsInScope(appointments, {
+      branchId: workspace.branchId,
+      departmentId: opdDepartmentId,
+    }).length,
+    consultation: pendingConsultationCount(appointments, {
+      branchId: workspace.branchId,
+      departmentId: opdDepartmentId,
+    }),
     "lab-services": labReferralPendingCount,
     prescriptions: prescriptionPendingCount,
     invoices: billingPendingCount,
@@ -403,10 +425,9 @@ export function OPDWorkspace({
       appointment?.departmentId || appointment?.department_id || "";
     if (
       departmentId &&
-      departmentId !== workspace.departmentId &&
-      workspace.setDepartmentId
+      departmentId !== opdDepartmentId
     ) {
-      workspace.setDepartmentId(departmentId);
+      updateOpdDepartment(departmentId);
     }
     const path = opdAppointmentPath(id);
     beginNavigation("opd", path);
@@ -441,12 +462,15 @@ export function OPDWorkspace({
                 </span>
                 <div className="min-w-0 flex-1">
                   <SearchableSelect
-                    value={workspace.departmentId}
-                    onChange={workspace.setDepartmentId}
-                    options={departmentOptions.map((department: any) => ({
-                      value: department.id,
-                      label: department.name,
-                    }))}
+                    value={effectiveDepartmentId}
+                    onChange={updateOpdDepartment}
+                    options={[
+                      { value: "all", label: "All Departments" },
+                      ...departmentOptions.map((department: any) => ({
+                        value: department.id,
+                        label: department.name,
+                      })),
+                    ]}
                     searchable={false}
                     placeholder="Select department"
                   />
@@ -489,7 +513,7 @@ export function OPDWorkspace({
 
       {effectiveSection === "appointments" || effectiveSection === "new" ? (
         <AppointmentCalendarBooking
-          {...workspace}
+          {...scopedWorkspace}
           setActive={setActive}
           mode={effectiveSection === "new" ? "book" : "list"}
           routeBase="/opd"
@@ -497,7 +521,7 @@ export function OPDWorkspace({
         />
       ) : effectiveSection === "schedule" ? (
         <DoctorConsultation
-          {...workspace}
+          {...scopedWorkspace}
           setActive={setActive}
           view="dashboard"
           onOpenAppointment={openAppointment}
@@ -547,7 +571,7 @@ export function OPDWorkspace({
         />
       ) : (
         <DoctorConsultation
-          {...workspace}
+          {...scopedWorkspace}
           setActive={setActive}
           view="workspace"
           appointmentId={appointmentId}

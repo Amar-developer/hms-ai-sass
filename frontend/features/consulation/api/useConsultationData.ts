@@ -49,7 +49,7 @@ export function useConsultationData({
   }, [apiSession?.tenantId, branchId, departmentId, doctorScopePractitionerId]);
 
   useEffect(() => {
-    if (!apiSession || !departmentId) {
+    if (!apiSession) {
       setTemplates([]);
       return;
     }

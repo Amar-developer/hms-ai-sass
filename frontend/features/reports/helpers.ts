@@ -1,9 +1,14 @@
 import { displayDate } from "@/utils/helper";
-import { isMembershipPlanInvoice } from "@/features/billing/helpers";
+import {
+  invoicePatientDueAmount,
+  isMembershipPlanInvoice,
+} from "@/features/billing/helpers";
 import {
   approvedDiscountUsage,
   billingDiscountUsage,
   membershipBenefitUsage,
+  membershipDiscountUsage,
+  membershipFreeItemUsage,
   offerDiscountUsage,
   recognizedInvoiceRevenue,
   recognizedInvoiceTax,
@@ -107,6 +112,58 @@ export function settlementPaidBasis(invoice: any) {
   return Math.min(Math.round((doctorShare * paid) / total), paid);
 }
 
+export function dashboardPeriodRanges(
+  period: "current_month" | "last_month" | "current_week" | "last_week",
+  today = new Date(),
+) {
+  const isWeek = period === "current_week" || period === "last_week";
+  if (isWeek) {
+    const day = today.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    const periodOffset = period === "last_week" ? -7 : 0;
+    const start = new Date(today);
+    start.setDate(today.getDate() + mondayOffset + periodOffset);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    const comparisonStart = new Date(start);
+    comparisonStart.setDate(start.getDate() - 7);
+    const comparisonEnd = new Date(end);
+    comparisonEnd.setDate(end.getDate() - 7);
+    return {
+      range: [toInputDate(start), toInputDate(end)] as [string, string],
+      comparison: [
+        toInputDate(comparisonStart),
+        toInputDate(comparisonEnd),
+      ] as [string, string],
+    };
+  }
+
+  const monthOffset = period === "last_month" ? -1 : 0;
+  const start = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+  const end = new Date(
+    today.getFullYear(),
+    today.getMonth() + monthOffset + 1,
+    0,
+  );
+  const comparisonStart = new Date(
+    today.getFullYear(),
+    today.getMonth() + monthOffset - 1,
+    1,
+  );
+  const comparisonEnd = new Date(
+    today.getFullYear(),
+    today.getMonth() + monthOffset,
+    0,
+  );
+  return {
+    range: [toInputDate(start), toInputDate(end)] as [string, string],
+    comparison: [
+      toInputDate(comparisonStart),
+      toInputDate(comparisonEnd),
+    ] as [string, string],
+  };
+}
+
 export function rowDateKey(invoice: any) {
   return dateKey(
     invoice.invoice_date ||
@@ -123,8 +180,19 @@ export function rowDate(invoice: any) {
 export function isPaidInvoice(invoice: any) {
   const status = normalized(invoice.status);
   const paid = numberValue(invoice.paid_amount);
-  const balance = numberValue(invoice.balance_amount);
-  return status === "paid" || (paid > 0 && balance <= 0);
+  const balance = invoicePatientDueAmount(invoice);
+  const settledZeroInvoice =
+    numberValue(invoice.total_amount) === 0 &&
+    balance <= 0 &&
+    numberValue(invoice.discount_amount) > 0;
+  const refundedButSettled =
+    ["refunded", "partially_refunded"].includes(status) && paid > 0;
+  return (
+    status === "paid" ||
+    (paid > 0 && balance <= 0) ||
+    settledZeroInvoice ||
+    refundedButSettled
+  );
 }
 
 export function invoiceType(invoice: any) {
@@ -145,6 +213,15 @@ export function invoiceTypeLabel(type: string) {
   if (type === "ip") return "IP Billing";
   if (type === "membership") return "Membership";
   return "Consultation";
+}
+
+/** Match the Item List taxonomy: packages are Services; standalone tests are Lab. */
+export function labReportItemKind(item: any): "lab" | "service" {
+  const itemType = normalized(item?.item_type || item?.kind || item?.category);
+  return item?.package_id ||
+    ["lab_package", "lab_service", "service"].includes(itemType)
+    ? "service"
+    : "lab";
 }
 
 export function csvCell(value: any) {
@@ -197,7 +274,7 @@ export function htmlTable(headers: string[], rows: any[][]) {
           rows.length
             ? rows
                 .map((row, index) => {
-                  const isTotal = row[0] === "Total";
+                  const isTotal = String(row[0] || "").startsWith("Filtered Totals");
                   const background = isTotal ? "#e6f2ec" : index % 2 ? "#f8faf9" : "#ffffff";
                   return (
                     `<tr>${row
@@ -250,7 +327,7 @@ export function aggregateInvoiceMetrics(
     (acc: any, invoice: any) => {
       const total = reportedInvoiceTotal(invoice);
       const paid = recognizedInvoiceRevenue(invoice);
-      const balance = numberValue(invoice.balance_amount);
+      const balance = invoicePatientDueAmount(invoice);
       const doctorShare = numberValue(invoice.doctor_share_amount);
       const type = invoiceType(invoice);
       const doctorFee =
@@ -264,11 +341,15 @@ export function aggregateInvoiceMetrics(
       acc.balance += balance;
       acc.doctorFee += doctorFee;
       acc.settlement += settlement;
+      if (type === "home_care") acc.homeCareStaffSettlement += settlement;
+      else if (type !== "consultation") acc.supplierSettlement += settlement;
       acc.clinicFee +=
         numberValue(invoice.clinic_share_amount) ||
         Math.max(total - membershipBenefitUsage(invoice) - doctorShare, 0);
       acc.tax += numberValue(invoice.tax_amount);
       acc.membershipDiscount += membershipBenefitUsage(invoice);
+      acc.membershipStandardDiscount += membershipDiscountUsage(invoice);
+      acc.membershipFreeItems += membershipFreeItemUsage(invoice);
       acc.approvedDiscount += approvedDiscountUsage(invoice);
       acc.offerDiscount += offerDiscountUsage(invoice);
       acc.billingDiscount += billingDiscountUsage(invoice);
@@ -311,9 +392,13 @@ export function aggregateInvoiceMetrics(
       balance: 0,
       doctorFee: 0,
       settlement: 0,
+      supplierSettlement: 0,
+      homeCareStaffSettlement: 0,
       clinicFee: 0,
       tax: 0,
       membershipDiscount: 0,
+      membershipStandardDiscount: 0,
+      membershipFreeItems: 0,
       approvedDiscount: 0,
       offerDiscount: 0,
       billingDiscount: 0,

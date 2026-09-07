@@ -529,8 +529,20 @@ def build_profit_report_email_attachments(
                 balance_values[index],
                 tax_values[index],
             )
+    lab_item_mode: str | None = None
+    if invoice_type in {"lab", "service"}:
+        lab_item_mode = invoice_type
+    elif "overall" not in selected_sections:
+        if "lab" in selected_sections and "service" not in selected_sections:
+            lab_item_mode = "lab"
+        elif "service" in selected_sections and "lab" not in selected_sections:
+            lab_item_mode = "service"
     lab_buckets: dict[tuple[str, str], dict] = {}
     for item in lab_items:
+        if lab_item_mode == "service":
+            continue
+        if lab_item_mode == "lab" and item.package_id:
+            continue
         invoice = lab_invoice_by_order.get(item.lab_order_id)
         catalog_item = (
             lab_packages.get(item.package_id or "")
@@ -608,9 +620,84 @@ def build_profit_report_email_attachments(
         bucket["balance"] += allocation[5]
         bucket["purchase"] += purchase_price
         bucket["tax"] += allocation[6]
+    if lab_item_mode == "service":
+        for invoice in lab_invoices:
+            billed_items = [
+                row
+                for row in invoice_items_by_invoice.get(invoice.id, [])
+                if row.item_type in {"lab", "lab_service"}
+            ]
+            line_amounts = [int(row.total_amount or 0) for row in billed_items]
+            subtotal = invoice_item_total(invoice)
+            allocated = [
+                allocate_values(line_amounts, subtotal, value)
+                for value in (
+                    invoice_approved_discount(invoice),
+                    invoice_offer_discount(invoice),
+                    invoice_membership_benefit(invoice),
+                    invoice_billing_discount(invoice),
+                    int(invoice.paid_amount or 0),
+                    invoice_due_balance(invoice),
+                    tax_paid_basis(invoice),
+                )
+            ]
+            for index, billed_item in enumerate(billed_items):
+                if billed_item.item_type != "lab_service":
+                    continue
+                item_supplier_id = billed_item.supplier_id
+                if (
+                    supplier_filter_ids
+                    and (item_supplier_id or "none") not in supplier_filter_ids
+                ):
+                    continue
+                supplier_name = suppliers.get(
+                    item_supplier_id or "", "Tenant Hospital / In-house"
+                )
+                key = (item_supplier_id or "none", billed_item.description)
+                bucket = lab_buckets.setdefault(
+                    key,
+                    {
+                        "supplier": supplier_name,
+                        "item": billed_item.description,
+                        "orders": set(),
+                        "invoices": set(),
+                        "item_total": 0,
+                        "approved": 0,
+                        "offer": 0,
+                        "membership": 0,
+                        "billing_discount": 0,
+                        "revenue": 0,
+                        "balance": 0,
+                        "payment_modes": set(),
+                        "purchase": 0,
+                        "tax": 0,
+                    },
+                )
+                if invoice.lab_order_id:
+                    bucket["orders"].add(invoice.lab_order_id)
+                bucket["invoices"].add(invoice.id)
+                bucket["payment_modes"].add(payment_mode(invoice))
+                bucket["item_total"] += line_amounts[index]
+                bucket["approved"] += allocated[0][index]
+                bucket["offer"] += allocated[1][index]
+                bucket["membership"] += allocated[2][index]
+                bucket["billing_discount"] += allocated[3][index]
+                bucket["revenue"] += allocated[4][index]
+                bucket["balance"] += allocated[5][index]
+                bucket["tax"] += allocated[6][index]
+                bucket["purchase"] += int(billed_item.buying_amount or 0) * int(
+                    billed_item.quantity or 1
+                )
+    lab_item_heading = (
+        "Lab Test"
+        if lab_item_mode == "lab"
+        else "Service"
+        if lab_item_mode == "service"
+        else "Lab Test / Service"
+    )
     lab_settlement_headers = [
         "Supplier",
-        "Lab Test / Package",
+        lab_item_heading,
         "Orders",
         "Invoices",
         "Item Total",
@@ -867,11 +954,58 @@ def build_profit_report_email_attachments(
         )
     ]
 
-    period = f"{tenant.name if tenant else tenant_id} | {start.isoformat()} to {end.isoformat()}"
+    section_labels = {
+        "overall": "Overall",
+        "consultation": "Consultations",
+        "lab": "Lab",
+        "service": "Service",
+        "pharmacy": "Pharmacy",
+        "home_visit": "Home Visit",
+        "home_care": "Home Care",
+        "ip": "IP",
+        "physiotherapy": "Physiotherapy",
+        "lab_suppliers": "Lab Suppliers",
+    }
+    selected_section_labels = [
+        section_labels[section]
+        for section in section_labels
+        if section in selected_sections
+    ]
+    active_filter_labels = [
+        f"Categories: {', '.join(selected_section_labels)}",
+        f"Type: {section_labels.get(invoice_type, invoice_type.title())}",
+        f"Doctor: {doctors[doctor_id].full_name if doctor_id in doctors else 'All'}",
+    ]
+    if supplier_filter_ids:
+        active_filter_labels.append(
+            "Lab suppliers: "
+            + ", ".join(
+                "Tenant Hospital / In-house"
+                if supplier == "none"
+                else suppliers.get(supplier, supplier)
+                for supplier in sorted(supplier_filter_ids)
+            )
+        )
+    period = (
+        f"{tenant.name if tenant else tenant_id} | {start.isoformat()} to "
+        f"{end.isoformat()} | {' | '.join(active_filter_labels)}"
+    )
     doctor_suffix = f"-{doctor_id}" if doctor_id else "-all-doctors"
     type_suffix = f"-{invoice_type}" if invoice_type != "overall" else "-overall"
     base = f"{start.isoformat()}-{end.isoformat()}{doctor_suffix}{type_suffix}"
-    attachments: list[tuple[str, bytes]] = []
+    # Put the row-level filtered invoice file first. Settlement files are
+    # summaries (often one row per finalized batch/doctor) and must not appear
+    # to be the complete category result when an email client opens attachment 1.
+    attachments: list[tuple[str, bytes]] = [
+        (
+            f"invoice-profit-details-{base}.xls",
+            _xls_document(
+                "Invoice Profit Details",
+                period,
+                [_table("Invoice Profit Details", invoice_headers, invoice_rows)],
+            ),
+        )
+    ]
     if "overall" in selected_sections or "consultation" in selected_sections:
         attachments.append(
             (
@@ -895,15 +1029,29 @@ def build_profit_report_email_attachments(
         or "service" in selected_sections
         or "lab_suppliers" in selected_sections
     ):
+        lab_attachment_name = (
+            "service-settlement"
+            if lab_item_mode == "service"
+            else "lab-test-settlement"
+            if lab_item_mode == "lab"
+            else "lab-service-settlement"
+        )
+        lab_report_title = (
+            "Service Settlement"
+            if lab_item_mode == "service"
+            else "Lab Test Settlement"
+            if lab_item_mode == "lab"
+            else "Lab / Service Settlement"
+        )
         attachments.append(
             (
-                f"lab-settlement-{base}.xls",
+                f"{lab_attachment_name}-{base}.xls",
                 _xls_document(
-                    "Lab Settlement",
+                    lab_report_title,
                     period,
                     [
                         _table(
-                            "Lab Test Settlement and Profitability",
+                            f"{lab_report_title} and Profitability",
                             lab_settlement_headers,
                             lab_settlement_rows,
                         )
@@ -928,14 +1076,4 @@ def build_profit_report_email_attachments(
                 ),
             )
         )
-    attachments.append(
-        (
-            f"invoice-profit-details-{base}.xls",
-            _xls_document(
-                "Invoice Profit Details",
-                period,
-                [_table("Invoice Profit Details", invoice_headers, invoice_rows)],
-            ),
-        )
-    )
     return attachments

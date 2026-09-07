@@ -13,6 +13,18 @@ type AppointmentTableSchemaParams = {
   includeStatus?: boolean;
 };
 
+export function resolveAppointmentDepartmentId(
+  workspaceDepartmentId: string,
+  listDepartmentId: string,
+) {
+  if (listDepartmentId && listDepartmentId !== "all") {
+    return listDepartmentId;
+  }
+  return workspaceDepartmentId && workspaceDepartmentId !== "all"
+    ? workspaceDepartmentId
+    : undefined;
+}
+
 function distinctFieldOptions(
   rows: any[],
   key: string,
@@ -39,7 +51,7 @@ export function getAppointmentTableSchema({
     searchPlaceholder: "Search patient, mobile, token",
     filters: [
       {
-        key: "department",
+        key: "department_id",
         label: "Department",
         options: [{ value: "all", label: "All Departments" }, ...departmentOptions],
       },

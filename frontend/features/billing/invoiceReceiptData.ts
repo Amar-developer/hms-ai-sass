@@ -55,6 +55,11 @@ export function toInvoiceProps(
   bankValue: unknown,
 ): InvoiceProps {
   const invoice = detail.invoice || {};
+  // `loadInvoiceReceiptProps` passes an explicitly empty string when the
+  // configured logo is missing or unreadable. Do not fall back to the same
+  // stale branding URL after the authenticated resolver has rejected it.
+  const effectiveLogoValue =
+    logoValue === undefined ? branding?.logo_url || "" : logoValue;
   const bank =
     bankValue && typeof bankValue === "object"
       ? (bankValue as Record<string, unknown>)
@@ -68,7 +73,7 @@ export function toInvoiceProps(
       address: branding?.address || "",
       phone: branding?.phone || "",
       gstin: String(bank.gstin || ""),
-      logoUrl: uploadAssetUrl(String(logoValue || branding?.logo_url || "")),
+      logoUrl: uploadAssetUrl(String(effectiveLogoValue || "")),
     },
     invoiceNo: invoice.invoice_number || invoice.id || "",
     invoiceDate: invoiceDate(invoice),

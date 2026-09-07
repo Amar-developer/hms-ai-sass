@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   aggregateInvoiceMetrics,
   currentRange,
+  dashboardPeriodRanges,
+  isPaidInvoice,
+  labReportItemKind,
   percent,
   toInputDate,
 } from "./helpers";
@@ -21,6 +24,49 @@ describe("report cost accounting", () => {
     expect(currentRange("yearly")).toEqual(["2026-01-01", "2026-12-31"]);
 
     vi.useRealTimers();
+  });
+
+  it("builds dashboard month and week ranges with prior comparisons", () => {
+    const today = new Date(2026, 8, 3, 12);
+
+    expect(dashboardPeriodRanges("current_month", today)).toEqual({
+      range: ["2026-09-01", "2026-09-30"],
+      comparison: ["2026-08-01", "2026-08-31"],
+    });
+    expect(dashboardPeriodRanges("last_month", today)).toEqual({
+      range: ["2026-08-01", "2026-08-31"],
+      comparison: ["2026-07-01", "2026-07-31"],
+    });
+    expect(dashboardPeriodRanges("current_week", today)).toEqual({
+      range: ["2026-08-31", "2026-09-06"],
+      comparison: ["2026-08-24", "2026-08-30"],
+    });
+    expect(dashboardPeriodRanges("last_week", today)).toEqual({
+      range: ["2026-08-24", "2026-08-30"],
+      comparison: ["2026-08-17", "2026-08-23"],
+    });
+  });
+
+  it("classifies Lab Tests and Services with the Item List taxonomy", () => {
+    expect(labReportItemKind({ test_id: "test-1", item_type: "lab_test" })).toBe(
+      "lab",
+    );
+    expect(
+      labReportItemKind({ package_id: "package-1", item_type: "lab" }),
+    ).toBe("service");
+    expect(labReportItemKind({ item_type: "lab_service" })).toBe("service");
+  });
+
+  it("keeps partially refunded invoices while clearing their false due balance", () => {
+    const invoice = {
+      status: "partially_refunded",
+      total_amount: 1000,
+      paid_amount: 800,
+      balance_amount: 200,
+    };
+
+    expect(isPaidInvoice(invoice)).toBe(true);
+    expect(aggregateInvoiceMetrics([invoice]).balance).toBe(0);
   });
 
   it("keeps consultation doctor fee separate from other settlements", () => {
@@ -136,5 +182,40 @@ describe("report cost accounting", () => {
     expect(totals.offerDiscount).toBe(25);
     expect(totals.membershipDiscount).toBe(25);
     expect(totals.billingDiscount).toBe(150);
+  });
+
+  it("splits profit deductions into dashboard card totals", () => {
+    const totals = aggregateInvoiceMetrics(
+      [
+        {
+          appointment_id: "appointment-1",
+          total_amount: 1000,
+          paid_amount: 1000,
+          doctor_share_amount: 200,
+          approved_discount_amount: 50,
+          membership_discount_amount: 250,
+          membership_free_items_amount: 150,
+        },
+        {
+          lab_order_id: "lab-1",
+          total_amount: 500,
+          paid_amount: 500,
+        },
+        {
+          home_care_booking_id: "home-1",
+          total_amount: 300,
+          paid_amount: 300,
+        },
+      ],
+      new Set(),
+      new Set(),
+      (invoice: any) => (invoice.lab_order_id ? 125 : 75),
+    );
+
+    expect(totals.supplierSettlement).toBe(125);
+    expect(totals.homeCareStaffSettlement).toBe(75);
+    expect(totals.membershipStandardDiscount).toBe(100);
+    expect(totals.membershipFreeItems).toBe(150);
+    expect(totals.approvedDiscount).toBe(50);
   });
 });

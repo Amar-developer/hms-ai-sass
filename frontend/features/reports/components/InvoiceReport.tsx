@@ -1,9 +1,8 @@
 import { ReceiptText } from "lucide-react";
 import { Badge } from "@/app/components/common/ui";
 import {
-  approvedDiscountUsage,
-  offerDiscountUsage,
   recognizedInvoiceTax,
+  recognizedInvoiceRevenue,
   reportedInvoiceTotal,
 } from "../financials";
 import { Pagination } from "@/app/components/common/Pagination";
@@ -47,11 +46,8 @@ const InvoiceReport = ({
   const filteredTotals = filteredInvoices.reduce(
     (totals: any, row: any) => {
       totals.total += reportedInvoiceTotal(row);
-      totals.paid += numberValue(row.paid_amount);
+      totals.paid += recognizedInvoiceRevenue(row);
       totals.due += invoicePatientDueAmount(row);
-      totals.adminDiscount += approvedDiscountUsage(row);
-      totals.offerDiscount += offerDiscountUsage(row);
-      totals.membershipBenefit += numberValue(row.membership_discount_amount);
       totals.doctorCost += invoiceDoctorFeeAmount(row);
       totals.paidGst += recognizedInvoiceTax(row);
       totals.settlement += invoiceSettlementAmount(row);
@@ -62,9 +58,6 @@ const InvoiceReport = ({
       total: 0,
       paid: 0,
       due: 0,
-      adminDiscount: 0,
-      offerDiscount: 0,
-      membershipBenefit: 0,
       doctorCost: 0,
       paidGst: 0,
       settlement: 0,
@@ -72,6 +65,7 @@ const InvoiceReport = ({
     },
   );
   const filteredProfitBasis = filteredTotals.paid - filteredTotals.paidGst;
+  const filteredCost = filteredTotals.doctorCost + filteredTotals.settlement;
   const filteredProfitMargin = filteredProfitBasis
     ? `${Math.round((filteredTotals.profit / filteredProfitBasis) * 100)}%`
     : "-";
@@ -108,7 +102,12 @@ const InvoiceReport = ({
       header: "Type",
       width: "160px",
       className: "text-center",
-      render: (row: any) => invoiceTypeLabel(invoiceType(row)),
+      render: (row: any) =>
+        row.report_item_kind === "lab"
+          ? "Lab Test"
+          : row.report_item_kind === "service"
+            ? "Service"
+            : invoiceTypeLabel(invoiceType(row)),
     },
     {
       key: "patient",
@@ -186,27 +185,9 @@ const InvoiceReport = ({
       render: (row: any) => moneyOrDash(invoicePatientDueAmount(row)),
     },
     {
-      key: "approved_discount_amount",
-      header: "Admin %",
-      width: "125px",
-      render: (row: any) => moneyOrDash(approvedDiscountUsage(row)),
-    },
-    {
-      key: "offer_discount_amount",
-      header: "Offer %",
-      width: "105px",
-      render: (row: any) => moneyOrDash(offerDiscountUsage(row)),
-    },
-    {
-      key: "membership_discount_amount",
-      header: "Membership",
-      width: "110px",
-      render: (row: any) => moneyOrDash(row.membership_discount_amount),
-    },
-    {
       key: "payment_mode",
-      header: "Payment Method",
-      width: "170px",
+      header: "Payment",
+      width: "150px",
       render: (row: any) =>(
         <div className="max-w-[160px]">
           <p className="truncate" title={ invoicePaymentMode(row)}>
@@ -216,10 +197,11 @@ const InvoiceReport = ({
       ),
     },
     {
-      key: "doctor_fee",
-      header: "Doctor Cost",
+      key: "cost",
+      header: "Cost",
       width: "140px",
-      render: (row: any) => moneyOrDash(invoiceDoctorFeeAmount(row)),
+      render: (row: any) =>
+        moneyOrDash(invoiceDoctorFeeAmount(row) + invoiceSettlementAmount(row)),
     },
     {
       key: "tax_amount",
@@ -227,13 +209,6 @@ const InvoiceReport = ({
       width: "110px",
       render: (row: any) => moneyOrDash(recognizedInvoiceTax(row)),
     },
-    {
-      key: "settlement",
-      header: "Settlement",
-      width: "120px",
-      render: (row: any) => moneyOrDash(invoiceSettlementAmount(row)),
-    },
-
     {
       key: "clinic_profit",
       header: "Profit",
@@ -281,30 +256,18 @@ const InvoiceReport = ({
           loading={loading}
           footer={
             <tr className="font-bold text-slate-900">
-              <td colSpan={6} className="px-4 py-4 text-right">
+              <td colSpan={7} className="px-4 py-4 text-right">
                 Filtered Totals ({filteredInvoices.length})
               </td>
               <td className="px-4 py-4">{moneyOrDash(filteredTotals.total)}</td>
               <td className="px-4 py-4">{moneyOrDash(filteredTotals.paid)}</td>
               <td className="px-4 py-4">{moneyOrDash(filteredTotals.due)}</td>
-              <td className="px-4 py-4">
-                {moneyOrDash(filteredTotals.adminDiscount)}
-              </td>
-              <td className="px-4 py-4">
-                {moneyOrDash(filteredTotals.offerDiscount)}
-              </td>
-              <td className="px-4 py-4">
-                {moneyOrDash(filteredTotals.membershipBenefit)}
-              </td>
               <td className="px-4 py-4">-</td>
               <td className="px-4 py-4">
-                {moneyOrDash(filteredTotals.doctorCost)}
+                {moneyOrDash(filteredCost)}
               </td>
               <td className="px-4 py-4">
                 {moneyOrDash(filteredTotals.paidGst)}
-              </td>
-              <td className="px-4 py-4">
-                {moneyOrDash(filteredTotals.settlement)}
               </td>
               <td className="px-4 py-4">
                 {moneyOrDash(filteredTotals.profit)}

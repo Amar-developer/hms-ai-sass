@@ -43,7 +43,7 @@ class MonthlyReportSendRequest(BaseModel):
 
 class ProfitReportEmailRequest(BaseModel):
     recipients: list[str] | None = None
-    cc: list[str] = Field(default_factory=list)
+    cc: list[str] | None = None
     from_date: date
     to_date: date
     doctor_id: str | None = None
@@ -52,6 +52,18 @@ class ProfitReportEmailRequest(BaseModel):
     supplier_ids: list[str] = Field(default_factory=list)
     report_sections: list[str] = Field(default_factory=list)
     branch_id: str | None = None
+    report_title: str | None = Field(default=None, max_length=160)
+    table_title: str | None = Field(default=None, max_length=160)
+    filter_description: str | None = Field(default=None, max_length=1000)
+    summary_headers: list[str] = Field(default_factory=list, max_length=20)
+    summary_rows: list[list[str | int | float | bool | None]] = Field(
+        default_factory=list, max_length=100
+    )
+    table_headers: list[str] = Field(default_factory=list, max_length=50)
+    table_rows: list[list[str | int | float | bool | None]] = Field(
+        default_factory=list, max_length=10000
+    )
+    export_name: str | None = Field(default=None, max_length=180)
 
 
 class ProfitReportEmailRead(BaseModel):
@@ -114,3 +126,20 @@ class MonthlySnapshotArchiveRequest(BaseModel):
     year: int | None = None
     month: int | None = Field(default=None, ge=1, le=12)
     overwrite: bool = False
+
+
+class DashboardMetricsRead(BaseModel):
+    period_start: str
+    period_end: str
+    previous_period_start: str
+    previous_period_end: str
+    totals: dict
+    previous_totals: dict
+    profit_summary: dict
+    previous_profit_summary: dict
+    gross_profit: float
+    final_profit: float
+    previous_final_profit: float
+    lab_settlement_summary: dict
+    membership_claim_rows: list[dict]
+    trend_rows: list[dict]

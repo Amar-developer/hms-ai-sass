@@ -41,7 +41,6 @@ describe("useAppointmentBookingData platform scope", () => {
         branchId: "",
         departmentId: "",
         appointmentDate: "2026-08-31",
-        selectedDepartmentName: "",
         query: "",
         filterDate: "",
         platformTenantId,
@@ -95,5 +94,70 @@ describe("useAppointmentBookingData platform scope", () => {
         )
         .every(([path]) => String(path).includes("tenant_id=")),
     ).toBe(true);
+  });
+});
+
+describe("useAppointmentBookingData doctor availability", () => {
+  beforeEach(() => apiFetchMock.mockReset());
+
+  it("does not look up doctors or toast for the All Departments filter", async () => {
+    apiFetchMock.mockResolvedValue([]);
+    const setMessage = vi.fn();
+
+    renderHook(() =>
+      useAppointmentBookingData({
+        apiSession: { ...apiSession, user: {} },
+        isSuperAdmin: false,
+        branchId: "branch-1",
+        departmentId: "all",
+        appointmentDate: "2026-09-02",
+        query: "",
+        filterDate: "",
+        platformTenantId: "",
+        setPlatformTenantId: vi.fn(),
+        listRefreshKey: 0,
+        setMessage,
+      }),
+    );
+
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalled());
+    expect(
+      apiFetchMock.mock.calls.some(([path]) =>
+        String(path).startsWith("/practitioners"),
+      ),
+    ).toBe(false);
+    expect(setMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps an empty doctor list quiet instead of toasting", async () => {
+    apiFetchMock.mockImplementation(async (path: string) =>
+      String(path).startsWith("/practitioners?") ? [] : [],
+    );
+    const setMessage = vi.fn();
+
+    renderHook(() =>
+      useAppointmentBookingData({
+        apiSession: { ...apiSession, user: {} },
+        isSuperAdmin: false,
+        branchId: "branch-1",
+        departmentId: "department-1",
+        appointmentDate: "2026-09-02",
+        query: "",
+        filterDate: "",
+        platformTenantId: "",
+        setPlatformTenantId: vi.fn(),
+        listRefreshKey: 0,
+        setMessage,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        apiFetchMock.mock.calls.some(([path]) =>
+          String(path).startsWith("/practitioners?"),
+        ),
+      ).toBe(true),
+    );
+    expect(setMessage).not.toHaveBeenCalled();
   });
 });

@@ -252,6 +252,7 @@ class PaymentRead(BaseModel):
     invoice_id: str
     method: PaymentMethod
     amount: Decimal
+    refunded_amount: Decimal = Decimal("0")
     reference_number: str | None
     status: PaymentStatus
     collected_by_user_id: str | None

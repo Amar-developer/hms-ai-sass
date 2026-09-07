@@ -30,7 +30,11 @@ def table(title: str, headers: list[str], rows: list[list[object]]) -> str:
     )
 
     def td(cell: object, row_index: int) -> str:
-        is_total = rows[row_index][0] == "Total" if rows[row_index] else False
+        is_total = (
+            str(rows[row_index][0]).startswith("Filtered Totals")
+            if rows[row_index]
+            else False
+        )
         base_style = (
             number_style
             if isinstance(cell, int | float) and not isinstance(cell, bool)

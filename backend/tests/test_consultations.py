@@ -312,6 +312,44 @@ def test_clinical_templates_are_department_scoped_not_doctor_scoped(
     assert "doctor_id" not in template.json()["content"]
 
 
+def test_templates_without_department_are_shared_with_every_department(
+    client: TestClient,
+):
+    data = setup_booking(client)
+    tenant_id = data["tenant"]["id"]
+    headers = {"X-Tenant-ID": tenant_id}
+
+    shared = client.post(
+        "/api/v1/consultations/clinical-templates",
+        headers=headers,
+        json={"name": "Shared fever care", "content": {"complaints": ["Fever"]}},
+    )
+    ent_only = client.post(
+        "/api/v1/consultations/clinical-templates",
+        headers=headers,
+        json={"department_id": "ent", "name": "ENT care", "content": {}},
+    )
+
+    assert shared.status_code == 201
+    assert shared.json()["department_id"] is None
+
+    general = client.get(
+        "/api/v1/consultations/by-department/general/clinical-templates",
+        headers=headers,
+    )
+    ent = client.get(
+        "/api/v1/consultations/by-department/ent/clinical-templates",
+        headers=headers,
+    )
+
+    general_ids = {row["id"] for row in general.json()}
+    ent_ids = {row["id"] for row in ent.json()}
+    assert shared.json()["id"] in general_ids
+    assert shared.json()["id"] in ent_ids
+    assert ent_only.json()["id"] in ent_ids
+    assert ent_only.json()["id"] not in general_ids
+
+
 def test_cancelled_appointment_cannot_start_consultation(client: TestClient):
     data = setup_booking(client)
     tenant_id = data["tenant"]["id"]

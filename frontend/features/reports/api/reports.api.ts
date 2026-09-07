@@ -44,6 +44,26 @@ export function listMonthlySnapshots(session: ApiSession, branchId?: string) {
   );
 }
 
+export function getDashboardMetrics(
+  session: ApiSession,
+  params: {
+    fromDate: string;
+    toDate: string;
+    seriesFrom: string;
+    seriesTo: string;
+    branchId?: string;
+  },
+) {
+  const query = new URLSearchParams({
+    from_date: params.fromDate,
+    to_date: params.toDate,
+    series_from: params.seriesFrom,
+    series_to: params.seriesTo,
+  });
+  if (params.branchId) query.set("branch_id", params.branchId);
+  return apiFetch(`/reports/dashboard-metrics?${query}`, session);
+}
+
 export function archiveMonthlySnapshot(session: ApiSession, payload: any) {
   return apiFetch("/reports/monthly-snapshots/archive", session, {
     method: "POST",

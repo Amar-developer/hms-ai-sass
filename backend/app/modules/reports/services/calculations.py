@@ -1,6 +1,81 @@
 from app.modules.billing.models import Invoice, InvoiceStatus
 
 
+def _number(value: object) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def dashboard_profit_summary(totals: dict) -> dict:
+    """Return the canonical paid-basis management profit calculation.
+
+    Invoice ``paid_amount`` already includes the effect of discounts, so
+    membership, approved-request and offer discounts are disclosed as revenue
+    adjustments but are not subtracted again. Collected GST is excluded from
+    revenue before costs and recognized Expense-module claims are deducted.
+    """
+
+    paid_revenue = max(_number(totals.get("paidRevenue")), 0)
+    paid_tax = min(max(_number(totals.get("paidTax")), 0), paid_revenue)
+    recognized_revenue = max(paid_revenue - paid_tax, 0)
+    doctor_settlement = _number(totals.get("doctorFee", totals.get("doctor")))
+    supplier_settlement = _number(
+        totals.get(
+            "supplierSettlement",
+            totals.get("supplier", totals.get("settlement")),
+        )
+    )
+    home_care_staff_settlement = _number(
+        totals.get("homeCareStaffSettlement", totals.get("homeCareStaff"))
+    )
+    monthly_expenses = _number(totals.get("monthlyExpenses"))
+    membership_free_items = _number(totals.get("membershipFreeItems"))
+    membership_discount = _number(
+        totals.get(
+            "membershipStandardDiscount",
+            max(
+                _number(totals.get("membershipDiscount")) - membership_free_items,
+                0,
+            ),
+        )
+    )
+    manual_discount = _number(
+        totals.get("approvedDiscount", totals.get("requestDiscount"))
+    )
+    offer_discount = _number(totals.get("offerDiscount"))
+    revenue_adjustments = (
+        membership_discount + membership_free_items + manual_discount + offer_discount
+    )
+    profit_deductions = (
+        paid_tax
+        + doctor_settlement
+        + supplier_settlement
+        + home_care_staff_settlement
+        + monthly_expenses
+    )
+    gross_profit = paid_revenue - profit_deductions
+    income_margin = gross_profit / recognized_revenue * 100 if recognized_revenue else 0
+    return {
+        "paidRevenue": paid_revenue,
+        "paidTax": paid_tax,
+        "recognizedRevenue": recognized_revenue,
+        "doctorSettlement": doctor_settlement,
+        "supplierSettlement": supplier_settlement,
+        "homeCareStaffSettlement": home_care_staff_settlement,
+        "monthlyExpenses": monthly_expenses,
+        "membershipDiscount": membership_discount,
+        "membershipFreeItems": membership_free_items,
+        "manualDiscount": manual_discount,
+        "offerDiscount": offer_discount,
+        "revenueAdjustments": revenue_adjustments,
+        "profitDeductions": profit_deductions,
+        "grossProfit": gross_profit,
+        "incomeMargin": income_margin,
+    }
+
+
 def settlement_paid_basis(invoice: Invoice) -> int:
     total = int(invoice.total_amount or 0)
     paid = int(invoice.paid_amount or 0)

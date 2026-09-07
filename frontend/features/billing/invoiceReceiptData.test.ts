@@ -80,4 +80,19 @@ describe("invoice receipt line pricing", () => {
       bank: { qrImageUrl: expect.stringContaining("/uploads/tenant-upi-qr.png") },
     });
   });
+
+  it("does not restore a stale branding logo after resolution fails", () => {
+    const props = toInvoiceProps(
+      { invoice: {}, items: [] },
+      null,
+      {
+        name: "MedizinHub",
+        logo_url: "http://localhost:8080/uploads/missing-logo.png",
+      },
+      "",
+      null,
+    );
+
+    expect(props.company.logoUrl).toBe("");
+  });
 });

@@ -90,24 +90,6 @@ const HomeCareReports = ({
       width: "100px",
     },
     {
-      key: "approvedDiscount",
-      header: "Admin %",
-      width: "100px",
-      render: (row: any) => moneyOrDash(row.approvedDiscount),
-    },
-    {
-      key: "offerDiscount",
-      header: "Offer %",
-      width: "100px",
-      render: (row: any) => moneyOrDash(row.offerDiscount),
-    },
-    {
-      key: "membershipBenefit",
-      header: "Membership",
-      render: (row: any) => moneyOrDash(row.membershipBenefit),
-      width: "120px",
-    },
-    {
       key: "paymentMode",
       header: "Payment",
       width: "130px",
@@ -140,6 +122,16 @@ const HomeCareReports = ({
         Number(row.grossProfit || 0) === 0 ? "-" : row.grossProfitPercent,
     },
   ];
+  const totals = homeCareReportRows.reduce(
+    (sum: any, row: any) => {
+      for (const key of ["totalAmount", "paidAmount", "balance", "paidTax", "settlement", "grossProfit"]) {
+        sum[key] += Number(row[key] || 0);
+      }
+      return sum;
+    },
+    { totalAmount: 0, paidAmount: 0, balance: 0, paidTax: 0, settlement: 0, grossProfit: 0 },
+  );
+  const profitBasis = totals.paidAmount - totals.paidTax;
 
   return (
     <CollapsibleReportSection
@@ -178,6 +170,21 @@ const HomeCareReports = ({
           minBodyHeight={`${homeCareReportRows.length > 0 ?'':'220px'}`}
           className="w-full min-w-[1280px] text-left text-sm"
           loading={loading}
+          footer={
+            <tr className="font-bold text-slate-900">
+              <td colSpan={6} className="px-4 py-4 text-right">Filtered Totals ({homeCareReportRows.length})</td>
+              <td className="px-4 py-4">{moneyOrDash(totals.totalAmount)}</td>
+              <td className="px-4 py-4">{moneyOrDash(totals.paidAmount)}</td>
+              <td className="px-4 py-4">{moneyOrDash(totals.balance)}</td>
+              <td className="px-4 py-4">-</td>
+              <td className="px-4 py-4">{moneyOrDash(totals.paidTax)}</td>
+              <td className="px-4 py-4">{moneyOrDash(totals.settlement)}</td>
+              <td className="px-4 py-4">{moneyOrDash(totals.grossProfit)}</td>
+              <td className="px-4 py-4">
+                {profitBasis ? `${Math.round((totals.grossProfit / profitBasis) * 100)}%` : "-"}
+              </td>
+            </tr>
+          }
         />
       </div>
     </CollapsibleReportSection>

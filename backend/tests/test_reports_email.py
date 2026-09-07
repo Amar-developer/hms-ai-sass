@@ -131,6 +131,147 @@ def test_manual_monthly_report_defaults_to_actor_email(test_engine):
         assert job.queued_by_user_id == actor.id
 
 
+def test_manual_report_uses_saved_monthly_recipients_when_not_overridden(
+    test_engine,
+):
+    from app.modules.reports.schemas import MonthlyReportSendRequest
+    from app.modules.reports.service import (
+        queue_monthly_report,
+        save_monthly_report_config,
+    )
+
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Configured Report Clinic")
+        actor = User(
+            tenant_id=tenant.id,
+            name="Report User",
+            email="report.user@clinic.test",
+            user_type="tenant_admin",
+        )
+        session.add(tenant)
+        session.add(actor)
+        session.commit()
+        session.refresh(tenant)
+        session.refresh(actor)
+        save_monthly_report_config(
+            session,
+            tenant_id=tenant.id,
+            recipients=["owner@clinic.test"],
+            cc=["accounts@clinic.test"],
+            enabled=True,
+            send_day=1,
+            filters={"overall": True, "invoice": True},
+            actor_user_id=actor.id,
+        )
+
+        job = queue_monthly_report(
+            session,
+            tenant_id=tenant.id,
+            payload=MonthlyReportSendRequest(
+                recipients=None,
+                cc=None,
+                from_date="2026-08-01",
+                to_date="2026-08-31",
+            ),
+            actor=actor,
+        )
+
+        assert job.recipients == ["owner@clinic.test"]
+        assert job.cc == ["accounts@clinic.test"]
+        assert job.period_start == "2026-08-01"
+        assert job.period_end == "2026-08-31"
+
+
+def test_filtered_profit_report_reuses_monthly_email_recipients(
+    test_engine, monkeypatch
+):
+    from datetime import date
+
+    from app.modules.reports.schemas import ProfitReportEmailRequest
+    from app.modules.reports.services import profit_email_service
+    from app.modules.reports.services.config_service import (
+        save_monthly_report_config,
+    )
+
+    sent = {}
+    monkeypatch.setattr(
+        profit_email_service,
+        "build_profit_report_email_attachments",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("visible table payload must not be recalculated")
+        ),
+    )
+    monkeypatch.setattr(
+        profit_email_service,
+        "send_report_email",
+        lambda **kwargs: sent.update(kwargs) or "message-filtered-1",
+    )
+
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Filtered Email Clinic")
+        actor = User(
+            tenant_id=tenant.id,
+            name="Report User",
+            email="report.user@clinic.test",
+            user_type="staff",
+        )
+        session.add(tenant)
+        session.add(actor)
+        session.commit()
+        session.refresh(tenant)
+        session.refresh(actor)
+        save_monthly_report_config(
+            session,
+            tenant_id=tenant.id,
+            recipients=["owner@clinic.test"],
+            cc=["accounts@clinic.test"],
+            enabled=True,
+            send_day=1,
+            filters={"overall": True},
+            actor_user_id=actor.id,
+        )
+
+        result = profit_email_service.send_profit_report(
+            session,
+            tenant_id=tenant.id,
+            payload=ProfitReportEmailRequest(
+                recipients=None,
+                cc=None,
+                from_date=date(2026, 7, 1),
+                to_date=date(2026, 9, 30),
+                invoice_type="overall",
+                report_sections=["consultation"],
+                report_title="Invoice Profit Report",
+                table_title="Invoice Profit Details",
+                filter_description="Period: 2026-07-01 to 2026-09-30",
+                summary_headers=["Metric", "Value"],
+                summary_rows=[["Invoices", 2]],
+                table_headers=["S.No", "Invoice No.", "Total"],
+                table_rows=[
+                    [1, "MHB-INV-00001", 500],
+                    [2, "MHB-INV-00002", 700],
+                    ["Filtered Totals (2)", "", 1200],
+                ],
+                export_name="invoice-report-2026-07-01-2026-09-30",
+            ),
+            actor=actor,
+        )
+
+    assert result.recipients == ["owner@clinic.test"]
+    assert result.cc == ["accounts@clinic.test"]
+    assert result.attachment_filenames == [
+        "invoice-report-2026-07-01-2026-09-30.xls"
+    ]
+    assert sent["recipients"] == ["owner@clinic.test"]
+    assert sent["cc"] == ["accounts@clinic.test"]
+    assert "Selected categories: Consultations" in sent["body"]
+    assert "same columns, filtered rows" in sent["body"]
+    attachment = sent["attachments"][0][1].decode("utf-8")
+    assert "Invoice Profit Details" in attachment
+    assert "MHB-INV-00001" in attachment
+    assert "Filtered Totals (2)" in attachment
+
+
 def test_report_resend_reuses_permanent_artifacts(test_engine):
     with Session(test_engine) as session:
         tenant = Tenant(name="Report Resend Clinic")
